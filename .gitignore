@@ -45,8 +45,5 @@ node_modules
 
 oclif.manifest.json
 
-# github workflows
-.github
-
 # bin folder
 /bin
