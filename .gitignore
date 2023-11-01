@@ -44,3 +44,9 @@ node_modules
 .idea
 
 oclif.manifest.json
+
+# github workflows
+.github
+
+# bin folder
+/bin
