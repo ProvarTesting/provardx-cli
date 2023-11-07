@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { cli } from 'cli-ux';
-import { DEFAULT_PROPERTIES_FILE_CONTENT } from '../../../../constants/PropertyFileContent';
+import { generatePropertyFile, getExtension } from '../../../../Utility/FileSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
@@ -31,7 +31,6 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     let result: SfProvarConfigGenerateResult = { success: true };
     let errorMessage: string = ''; // eslint-disable-line
     let errorCode: string = ''; // eslint-disable-line
-    this.log();
 
     if (getExtension(PropertiesFileName) !== '.json') {
       errorCode = 'INVALID_FILE_EXTENSION';
@@ -42,12 +41,12 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
       )) as string;
 
       if (selection.toLowerCase() === 'y') {
-        generatePropertyFile(PropertiesFileName);
+        generatePropertyFile(PropertiesFileName, this.log.bind(this));
       }
     } else {
       try {
-        generatePropertyFile(PropertiesFileName);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generatePropertyFile(PropertiesFileName, this.log.bind(this));
+        // eslint-disable-next-line
       } catch (error: any) {
         errorMessage = error.message; // eslint-disable-line
         errorCode = error.code; // eslint-disable-line
@@ -74,15 +73,4 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     }
     return result;
   }
-}
-
-function getExtension(filename: string): string {
-  const i = filename.lastIndexOf('.');
-  return i < 0 ? '' : filename.substr(i);
-}
-
-function generatePropertyFile(filePath: string): void {
-  fs.writeFileSync(filePath, DEFAULT_PROPERTIES_FILE_CONTENT);
-  // console.log('The properties file was generated successfully.');
-  return;
 }

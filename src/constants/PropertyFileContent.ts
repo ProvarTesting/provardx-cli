@@ -1,5 +1,5 @@
 export const DEFAULT_PROPERTIES_FILE_CONTENT = `{
-  "provarHome":"{env.ProvarHome}",
+   "provarHome":"{env.ProvarHome}",
    "projectPath":"{env.ProvarProjectPath}",
    "resultsPath":"{env.ProvarResultsPath}",
    "smtpPath": "",
