@@ -18,8 +18,8 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
   public static readonly examples = messages.getMessages('examples');
 
   public static readonly flags = {
-    propertiesfile: Flags.string({
-      summary: messages.getMessage('flags.propertiesfile.summary'),
+    'properties-file': Flags.string({
+      summary: messages.getMessage('flags.properties-file.summary'),
       char: 'p',
       required: true,
     }),
@@ -27,7 +27,7 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
 
   public async run(): Promise<SfProvarConfigGenerateResult> {
     const { flags } = await this.parse(SfProvarConfigGenerate);
-    const PropertiesFileName = flags['propertiesfile'];
+    const PropertiesFileName = flags['properties-file'];
     let result: SfProvarConfigGenerateResult = { success: true };
     let errorMessage: string = ''; // eslint-disable-line
     let errorCode: string = ''; // eslint-disable-line

@@ -18,7 +18,7 @@ More information about a flag. Don't repeat the summary.
 
 - <%= config.bin %> <%= command.id %>
 
-# flags.propertiesfile.summary
+# flags.properties-file.summary
 
 Provardx-properties file in json format.
 
