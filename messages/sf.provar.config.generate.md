@@ -4,23 +4,21 @@ Summary of a command.
 
 # description
 
-More information about a command. Don't repeat the summary.
-
-# flags.name.summary
-
-Description of a flag.
-
-# flags.name.description
-
-More information about a flag. Don't repeat the summary.
+Generate a boilerplate property file.
 
 # examples
 
-- <%= config.bin %> <%= command.id %>
+- Generates the bpiler plate properties.json at the given path :
+
+  <%= config.bin %> <%= command.id %> --properties-file 'propertiesFile path'
 
 # flags.properties-file.summary
 
-Provardx-properties file in json format.
+Provardx-properties file path.
+
+# flags.no-prompt.summary
+
+Don't prompt to confirm overwriting of the properties file if it already exists and overwrite it by default.
 
 # error.INVALID_PATH
 

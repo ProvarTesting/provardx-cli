@@ -23,6 +23,10 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
       char: 'p',
       required: true,
     }),
+    'no-prompt': Flags.boolean({
+      summary: messages.getMessage('flags.no-prompt.summary'),
+      char: 'n',
+    }),
   };
 
   public async run(): Promise<SfProvarConfigGenerateResult> {
@@ -35,11 +39,10 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     if (getExtension(PropertiesFileName) !== '.json') {
       errorCode = 'INVALID_FILE_EXTENSION';
       errorMessage = 'Only the .json file extension is supported.';
-    } else if (fs.existsSync(PropertiesFileName)) {
+    } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
       const selection: string = (await cli.prompt(
         '[FILE_ALREADY_EXISTS] A file with the same name already exists in that location. Do you want to overwrite it? Y/N'
       )) as string;
-
       if (selection.toLowerCase() === 'y') {
         generatePropertyFile(PropertiesFileName, this.log.bind(this));
       }
@@ -60,7 +63,7 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
       }
     }
     if (errorCode !== '') {
-      if (!Object.prototype.hasOwnProperty.call(flags, 'json')) {
+      if (!flags['json']) {
         throw messages.createError('error.' + errorCode);
       }
       result = {
