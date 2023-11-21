@@ -45,6 +45,9 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
       )) as string;
       if (selection.toLowerCase() === 'y') {
         generatePropertyFile(PropertiesFileName, this.log.bind(this));
+      } else {
+        errorMessage = 'The operation was cancelled.';
+        errorCode = 'GENERATE_OPERATION_DENIED';
       }
     } else {
       try {

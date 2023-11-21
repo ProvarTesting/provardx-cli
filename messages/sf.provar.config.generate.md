@@ -8,7 +8,7 @@ Generate a boilerplate property file.
 
 # examples
 
-- Generates the bpiler plate properties.json at the given path :
+- Generates the boiler plate properties.json at the given path :
 
   <%= config.bin %> <%= command.id %> --properties-file 'propertiesFile path'
 
@@ -31,3 +31,7 @@ INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file
 # error.INVALID_FILE_EXTENSION
 
 INVALID_FILE_EXTENSION - Only the .json file extension is supported.
+
+# error.GENERATE_OPERATION_DENIED
+
+GENERATE_OPERATION_DENIED - The operation was cancelled.
