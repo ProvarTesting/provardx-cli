@@ -67,17 +67,14 @@
       "@oclif/plugin-help"
     ],
     "topics": {
-      "hello": {
-        "description": "Commands to say hello."
-      },
       "sf": {
-        "description": "description for sf",
+        "description": "commands to automate salesforce",
         "subtopics": {
           "provar": {
-            "description": "description for sf.provar",
+            "description": "commands to manipulate properties file & automate salesforce using provardx",
             "subtopics": {
               "config": {
-                "description": "description for sf.provar.config"
+                "description": "commands to generate and manipulate provardx-properties file"
               }
             }
           }
