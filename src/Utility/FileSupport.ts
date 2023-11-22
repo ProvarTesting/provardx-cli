@@ -1,10 +1,8 @@
 import * as fs from 'fs';
-import { DEFAULT_PROPERTIES_FILE_CONTENT } from '../constants/PropertyFileContent';
+import PropertyFileContent from '../constants/PropertyFileContent.json';
 
-//  eslint-disable-next-line
-export function generatePropertyFile(filePath: string, log: Function): void {
-  fs.writeFileSync(filePath, DEFAULT_PROPERTIES_FILE_CONTENT);
-  log('The properties file was generated successfully.');
+export function generateFile(filePath: string): void {
+  fs.writeFileSync(filePath, JSON.stringify(PropertyFileContent, null, 3));
 }
 
 export function getExtension(filename: string): string {

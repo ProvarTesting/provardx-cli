@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { cli } from 'cli-ux';
-import { generatePropertyFile, getExtension } from '../../../../Utility/FileSupport';
+import { generateFile, getExtension } from '../../../../Utility/FileSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
@@ -29,54 +29,60 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     }),
   };
 
+  private errorMessage: string = ''; // eslint-disable-line
+  private errorCode: string = ''; // eslint-disable-line
+
   public async run(): Promise<SfProvarConfigGenerateResult> {
     const { flags } = await this.parse(SfProvarConfigGenerate);
     const PropertiesFileName = flags['properties-file'];
     let result: SfProvarConfigGenerateResult = { success: true };
-    let errorMessage: string = ''; // eslint-disable-line
-    let errorCode: string = ''; // eslint-disable-line
 
     if (getExtension(PropertiesFileName) !== '.json') {
-      errorCode = 'INVALID_FILE_EXTENSION';
-      errorMessage = 'Only the .json file extension is supported.';
+      this.errorCode = 'INVALID_FILE_EXTENSION';
+      this.errorMessage = 'Only the .json file extension is supported.';
     } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
       const selection: string = (await cli.prompt(
         '[FILE_ALREADY_EXISTS] A file with the same name already exists in that location. Do you want to overwrite it? Y/N'
       )) as string;
       if (selection.toLowerCase() === 'y') {
-        generatePropertyFile(PropertiesFileName, this.log.bind(this));
+        this.generatePropertiesFile(PropertiesFileName);
       } else {
-        errorMessage = 'The operation was cancelled.';
-        errorCode = 'GENERATE_OPERATION_DENIED';
+        this.errorCode = 'GENERATE_OPERATION_DENIED';
+        this.errorMessage = 'The operation was cancelled.';
       }
     } else {
-      try {
-        generatePropertyFile(PropertiesFileName, this.log.bind(this));
-        // eslint-disable-next-line
-      } catch (error: any) {
-        errorMessage = error.message; // eslint-disable-line
-        errorCode = error.code; // eslint-disable-line
-        if (errorMessage.includes('no such file or directory')) {
-          errorCode = 'INVALID_PATH';
-          errorMessage = 'The provided path does not exist or is invalid.';
-        } else if (errorMessage.includes('operation not permitted')) {
-          errorCode = 'INSUFFICIENT_PERMISSIONS';
-          errorMessage = 'The user does not have permissions to create the file.';
-        }
-      }
+      this.generatePropertiesFile(PropertiesFileName);
     }
-    if (errorCode !== '') {
+    if (this.errorCode !== '') {
       if (!flags['json']) {
-        throw messages.createError('error.' + errorCode);
+        throw messages.createError('error.' + this.errorCode);
       }
       result = {
         success: false,
         error: {
-          code: errorCode,
-          message: errorMessage,
+          code: this.errorCode,
+          message: this.errorMessage,
         },
       };
     }
     return result;
+  }
+
+  private generatePropertiesFile(PropertiesFileName: string): void {
+    try {
+      generateFile(PropertiesFileName);
+      this.log('The properties file was generated successfully.');
+      // eslint-disable-next-line
+    } catch (error: any) {
+      this.errorMessage = error.message; // eslint-disable-line
+      this.errorCode = error.code; // eslint-disable-line
+      if (this.errorMessage.includes('no such file or directory')) {
+        this.errorCode = 'INVALID_PATH';
+        this.errorMessage = 'The provided path does not exist or is invalid.';
+      } else if (this.errorMessage.includes('operation not permitted')) {
+        this.errorCode = 'INSUFFICIENT_PERMISSIONS';
+        this.errorMessage = 'The user does not have permissions to create the file.';
+      }
+    }
   }
 }
