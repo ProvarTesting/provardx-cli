@@ -148,10 +148,9 @@
       "output": []
     },
     "test:compile": {
-      "command": "tsc -p \"./test\" --pretty",
+      "command": "tsc -p \"./test\" --pretty ",
       "files": [
-        "test/**/*.ts",
-        "**/tsconfig.json"
+        "test/**/*.ts"
       ],
       "output": []
     },
