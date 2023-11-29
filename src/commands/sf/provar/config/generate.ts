@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { cli } from 'cli-ux';
 import { generateFile, getExtension } from '../../../../Utility/FileSupport';
 
 Messages.importMessagesDirectory(__dirname);
@@ -41,14 +40,11 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
       this.errorCode = 'INVALID_FILE_EXTENSION';
       this.errorMessage = 'Only the .json file extension is supported.';
     } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
-      const selection: string = (await cli.prompt(
-        '[FILE_ALREADY_EXISTS] A file with the same name already exists in that location. Do you want to overwrite it? Y/N'
-      )) as string;
-      if (selection.toLowerCase() === 'y') {
-        this.generatePropertiesFile(PropertiesFileName);
-      } else {
+      if (!(await this.confirm(messages.getMessage('PropertiesFileOverwritePromptConfirm')))) {
         this.errorCode = 'GENERATE_OPERATION_DENIED';
         this.errorMessage = 'The operation was cancelled.';
+      } else {
+        this.generatePropertiesFile(PropertiesFileName);
       }
     } else {
       this.generatePropertiesFile(PropertiesFileName);

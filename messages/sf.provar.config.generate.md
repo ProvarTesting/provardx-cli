@@ -35,3 +35,7 @@ INVALID_FILE_EXTENSION - Only the .json file extension is supported.
 # error.GENERATE_OPERATION_DENIED
 
 GENERATE_OPERATION_DENIED - The operation was cancelled.
+
+# PropertiesFileOverwritePromptConfirm
+
+FILE_ALREADY_EXISTS - A file with the same name already exists in that location. Do you want to overwrite it? Y/N
