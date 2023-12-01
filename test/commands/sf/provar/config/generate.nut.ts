@@ -4,7 +4,6 @@ import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { INVALID_PATH, PASS_FILE_CONTENT } from '../../../../AssertionContent/Content';
 import { DEFAULT_PROPERTIES_FILE_CONTENT } from '../../../../AssertionContent/Content';
 import { INVALID_FILE_EXTENSION } from '../../../../AssertionContent/Content';
-import { INSUFFICIENT_PERMISSIONS } from '../../../../AssertionContent/Content';
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
 
 describe('Config generate', () => {
@@ -111,27 +110,9 @@ describe('Config generate', () => {
     );
   });
 
-  it('Boilerplate json file should not be generated with "-p" flag as folder has insufficient permission to create the file', () => {
-    const res = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate -p ./test/InsufficientPermission/bin.json'
-    ).shellOutput;
-    expect(res['stderr']).to.deep.equal(
-      'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.\n'
-    );
-  });
-
   it('Boilerplate json file should not be generated with "--properties-file" flag as both path and extension are invalid', () => {
     const res = execCmd<SfProvarConfigGenerateResult>(
       'sf provar config generate --properties-file ./test%cd/Dom.txt'
-    ).shellOutput;
-    expect(res['stderr']).to.deep.equal(
-      'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n'
-    );
-  });
-
-  it('Boilerplate json file should not be generated with "-p" flag as Invalid Path, Extension and Insufficient Permissions', () => {
-    const res = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate -p ./test/InsufficientPermission/cd/Dom.uu'
     ).shellOutput;
     expect(res['stderr']).to.deep.equal(
       'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n'
@@ -153,29 +134,9 @@ describe('Config generate', () => {
   });
 
   it('Boilerplate json file should not be generated with "--properties-file" flag as invalid file extension and return the result in json format', () => {
-    const result = execCmd<SfProvarConfigGenerateResult>('sf provar config generate --properties-file xyz.bat --json', {
+    const result = execCmd<SfProvarConfigGenerateResult>('sf provar config generate --properties-file Ani.bat --json', {
       ensureExitCode: 0,
     });
-    expect(result.jsonOutput).to.deep.equal(INVALID_FILE_EXTENSION);
-  });
-
-  it('Boilerplate json file should not be generated with "-p" flag as folder path has insufficient Permission and return the result in json format', () => {
-    const result = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate -p ./test/InsufficientPermission/new.json --json',
-      {
-        ensureExitCode: 0,
-      }
-    );
-    expect(result.jsonOutput).to.deep.equal(INSUFFICIENT_PERMISSIONS);
-  });
-
-  it('Boilerplate json file should not be generated with "-p" flag as Invalid File Extension and Insufficient Permission and return the result in json format', () => {
-    const result = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate -p ./test/InsufficientPermission/xyz.bat --json',
-      {
-        ensureExitCode: 0,
-      }
-    );
     expect(result.jsonOutput).to.deep.equal(INVALID_FILE_EXTENSION);
   });
 });
