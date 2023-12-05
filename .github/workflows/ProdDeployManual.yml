@@ -1,0 +1,19 @@
+name: Manually Publish Release version to NPM Repository
+
+# Controls when the workflow will run
+on:  
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      project_name:
+        description: 'Version number'
+        required: true
+        default: '1.0.0'
+
+jobs:
+  copy_release_manually:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+             
