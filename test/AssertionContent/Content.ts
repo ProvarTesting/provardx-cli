@@ -1,7 +1,7 @@
 export const DEFAULT_PROPERTIES_FILE_CONTENT = {
-  provarHome: '{env.ProvarHome}',
-  projectPath: '{env.ProvarProjectPath}',
-  resultsPath: '{env.ProvarResultsPath}',
+  provarHome: '${PROVAR_HOME}',
+  projectPath: '${PROVAR_PROJECT_PATH}',
+  resultsPath: '${PROVAR_RESULTS_PATH}',
   smtpPath: '',
   resultsPathDisposition: 'Increment',
   testOutputLevel: 'BASIC',
@@ -14,13 +14,13 @@ export const DEFAULT_PROPERTIES_FILE_CONTENT = {
     cachePath: '../.provarCaches',
   },
   environment: {
-    testEnvironment: '{env.ProvarTestEnvironment}',
+    testEnvironment: '${PROVAR_TEST_ENVIRONMENT}',
     webBrowser: 'Chrome',
     webBrowserConfig: 'Full Screen',
     webBrowserProviderName: 'Desktop',
     webBrowserDeviceName: 'Full Screen',
   },
-  testprojectSecrets: '{env.ProvarSecretsPassword}',
+  testprojectSecrets: '${PROVAR_TEST_PROJECT_SECRETS}',
 };
 
 export const PASS_FILE_CONTENT = {
