@@ -14,32 +14,39 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   provardx-ci-execution:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        nodeversion: [18]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
-      
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: ${{ matrix.nodeversion }}
       - name: 'Cache node_modules'
         uses: actions/cache@v3
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-node-v18-${{ hashFiles('**/package.json') }}
+          key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
-            ${{ runner.os }}-node-v18-
+            ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
       - name: Install Dependencies
         run: |
           yarn
       - name: Build the project
-        run: 
-          |
+        run: |
           yarn prepack
           yarn add @salesforce/cli@latest-rc
-          export TESTKIT_EXECUTABLE_PATH='./node_modules/.bin/sf'
-          ./node_modules/.bin/sf plugins link .
-      - name: Run NUTS Tests
-        run: 
-          |
-          yarn run test:nuts
+      - name: Execute NUTS
+        run: |
+             export TESTKIT_EXECUTABLE_PATH='./node_modules/.bin/sf'
+             ./node_modules/.bin/sf plugins link .
+             yarn run test:nuts
+      - name: Archive NUTS results
+        uses: actions/upload-artifact@v3
+        with:
+          name: nuts-report
+          path: |
+             mochawesome-report
           
