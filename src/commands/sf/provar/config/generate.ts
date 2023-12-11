@@ -72,10 +72,10 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     } catch (error: any) {
       this.errorMessage = error.message; // eslint-disable-line
       this.errorCode = error.code; // eslint-disable-line
-      if (this.errorMessage.includes('no such file or directory')) {
+      if (this.errorCode === 'ENOENT') {
         this.errorCode = 'INVALID_PATH';
         this.errorMessage = 'The provided path does not exist or is invalid.';
-      } else if (this.errorMessage.includes('operation not permitted')) {
+      } else if (this.errorCode === 'EPERM' || this.errorCode === 'EACCES') {
         this.errorCode = 'INSUFFICIENT_PERMISSIONS';
         this.errorMessage = 'The user does not have permissions to create the file.';
       }
