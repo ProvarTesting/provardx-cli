@@ -89,6 +89,9 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
   } else if (process.platform === 'linux') {
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag', () => {
       const folderPath = './test/InsufficientPermission';
+       if (!fs.existsSync(folderPath)) {
+           fs.mkdirSync(folderPath);
+       }
       fs.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarConfigGenerateResult>(
         'sf provar config generate --properties-file ./test/InsufficientPermission/Test.json',
@@ -102,8 +105,11 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
     });
 
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag and return the result in json format', () => {
-     const folderPath = './test/InsufficientPermission';
-     fs.chmodSync(folderPath, '555');
+      const folderPath = './test/InsufficientPermission';
+      if (!fs.existsSync(folderPath)) {
+           fs.mkdirSync(folderPath);
+       }
+      fs.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarConfigGenerateResult>(
         'sf provar config generate -p ./test/InsufficientPermission/Dummy.json --json',
         {
