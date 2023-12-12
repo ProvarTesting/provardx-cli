@@ -42,6 +42,8 @@ jobs:
         run: |
              export TESTKIT_EXECUTABLE_PATH='./node_modules/.bin/sf'
              ./node_modules/.bin/sf plugins link .
+             mkdir -p test/InsufficientPermission
+             chmod 555 test/InsufficientPermission
              yarn run test:nuts
       - name: Archive NUTS results
         uses: actions/upload-artifact@v3
