@@ -96,10 +96,10 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           ensureExitCode: 0,
         }
       ).shellOutput;
-      console.log('result'+res); // eslint-disable-line
-      console.log('stderr'+res['stderr']); // eslint-disable-line
-      console.log('stdout'+res['stdout']); // eslint-disable-line
-      expect(res['stderr']).to.deep.equal(
+      console.log('result'); // eslint-disable-line
+      console.log('stderr'+res.stderr); // eslint-disable-line
+      console.log('stdout'+res.stdout); // eslint-disable-line
+      expect(res.stderr).to.deep.equal(
         'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.\n'
       );
     });
