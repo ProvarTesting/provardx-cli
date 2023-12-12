@@ -1,0 +1,52 @@
+name: CI for feature branches on PR creation
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on opened pull request events but only for the "develop" branch
+  pull_request:
+    branches:
+      - develop
+    types: ["opened", "edited"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  provardx-ci-execution:
+    strategy:
+      matrix:
+        os: [windows-latest]
+        nodeversion: [18]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.nodeversion }}
+      - name: 'Cache node_modules'
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
+      - name: Install Dependencies
+        run: |
+          yarn
+      - name: Build the project
+        run: |
+          yarn prepack
+          yarn add @salesforce/cli@latest-rc
+      - name: Execute NUTS
+        run: |
+             set TESTKIT_EXECUTABLE_PATH='node_modules/.bin/sf'
+             node_modules/.bin/sf plugins link .
+             yarn run test:nuts
+      - name: Archive NUTS results
+        uses: actions/upload-artifact@v3
+        with:
+          name: nuts-report
+          path: |
+             mochawesome-report
+          
