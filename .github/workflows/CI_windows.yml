@@ -16,7 +16,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, linux-latest]
+        os: [windows-latest]
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
