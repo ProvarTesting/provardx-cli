@@ -1,4 +1,4 @@
-name: CI for feature branches on PR creation
+name: CI windows for feature branches on PR creation
 
 # Controls when the workflow will run
 on:
