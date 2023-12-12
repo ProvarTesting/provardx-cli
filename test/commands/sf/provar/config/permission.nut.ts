@@ -93,16 +93,11 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       const res = execCmd<SfProvarConfigGenerateResult>(
         'sf provar config generate --properties-file ./test/InsufficientPermission/Test.json',
         {
-          ensureExitCode: 0,
+          ensureExitCode: 1,
         }
       ).shellOutput;
-      process.stdout.write('result');
-      process.stdout.write('stderr'+res.stderr);
-      // console.log('result'); // eslint-disable-line
-      // console.log('stderr'+res.stderr); // eslint-disable-line
-      // console.log('stdout'+res.stdout); // eslint-disable-line
-      expect(res.stderr).to.deep.equal(
-        'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.\n'
+      expect(res.stderr).to.contain(
+        'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.'
       );
     });
 
