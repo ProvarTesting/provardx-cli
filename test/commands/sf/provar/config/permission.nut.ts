@@ -1,4 +1,4 @@
-// import * as fs from 'fs';
+import * as fs from 'fs';
 import { exec } from 'child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
