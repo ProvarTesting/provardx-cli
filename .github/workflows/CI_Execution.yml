@@ -44,9 +44,6 @@ jobs:
               chmod 777 ./bin/run
          elif [ "$RUNNER_OS" == "macOS" ]; then
               chmod 777 ./bin/run
-         else
-              echo "$RUNNER_OS not supported"
-              exit 1
          fi
         shell: bash
       - name: Execute NUTS
