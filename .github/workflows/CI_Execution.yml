@@ -37,7 +37,7 @@ jobs:
       - name: Build the project
         run: |
           yarn prepack
-          yarn global add @salesforce/cli@latest-rc
+          npm install -g @salesforce/cli
       - name: Install plugin and execute NUTS
         run:   |
          if [ "$RUNNER_OS" == "Linux" ]; then
