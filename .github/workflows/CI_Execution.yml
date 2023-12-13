@@ -38,24 +38,21 @@ jobs:
         run: |
           yarn prepack
           npm install -g @salesforce/cli
-      - name: Install plugin and execute NUTS
+      - name: Change permissions
         run:   |
          if [ "$RUNNER_OS" == "Linux" ]; then
-              sf plugins link .
               chmod 777 ./bin/run
-              yarn run test:nuts
-         elif [ "$RUNNER_OS" == "Windows" ]; then
-              sf plugins link .
-              yarn run test:nuts
          elif [ "$RUNNER_OS" == "macOS" ]; then
-              sf plugins link .
               chmod 777 ./bin/run
-              yarn run test:nuts
          else
               echo "$RUNNER_OS not supported"
               exit 1
          fi
         shell: bash
+      - name: Execute NUTS
+        run: |
+          sf plugins link.
+          yarn run test:nuts
       - name: Archive NUTS results
         uses: actions/upload-artifact@v3
         with:
