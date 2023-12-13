@@ -16,7 +16,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, linux-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
@@ -46,6 +46,10 @@ jobs:
               yarn run test:nuts
          elif [ "$RUNNER_OS" == "Windows" ]; then
               sf plugins link .
+              yarn run test:nuts
+         elif [ "$RUNNER_OS" == "macOS" ]; then
+              sf plugins link .
+              chmod 777 ./bin/run
               yarn run test:nuts
          else
               echo "$RUNNER_OS not supported"
