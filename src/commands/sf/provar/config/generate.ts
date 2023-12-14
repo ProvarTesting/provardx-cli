@@ -28,8 +28,8 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     }),
   };
 
-  private errorMessage: string = ''; // eslint-disable-line
-  private errorCode: string = ''; // eslint-disable-line
+  private errorMessage = '';
+  private errorCode = '';
 
   public async run(): Promise<SfProvarConfigGenerateResult> {
     const { flags } = await this.parse(SfProvarConfigGenerate);
