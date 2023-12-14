@@ -14,7 +14,6 @@ yarn-error.log
 # compile source
 lib
 test/lib
-yarn.lock
 
 # test artifacts
 *xunit.xml
@@ -47,8 +46,6 @@ node_modules
 
 oclif.manifest.json
 
-# bin folder
-/bin
 
 #Mocha Report Directory
 mochawesome-report
