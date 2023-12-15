@@ -48,12 +48,12 @@ jobs:
         shell: bash
       - name: Execute NUTS
         run: |
-          sf plugins link.
+          sf plugins link .
           yarn run test:nuts
       - name: Archive NUTS results
         uses: actions/upload-artifact@v3
         with:
-          name: nuts-report
+          name: nuts-report-${{ matrix.os }}
           path: |
              mochawesome-report
           
