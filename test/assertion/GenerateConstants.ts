@@ -1,27 +1,9 @@
-export const DEFAULT_PROPERTIES_FILE_CONTENT = {
-  provarHome: '${PROVAR_HOME}',
-  projectPath: '${PROVAR_PROJECT_PATH}',
-  resultsPath: '${PROVAR_RESULTS_PATH}',
-  smtpPath: '',
-  resultsPathDisposition: 'Increment',
-  testOutputLevel: 'BASIC',
-  pluginOutputlevel: 'WARNING',
-  stopOnError: false,
-  lightningMode: true,
-  connectionRefreshType: 'Reload',
-  metadata: {
-    metadataLevel: 'Reuse',
-    cachePath: '../.provarCaches',
-  },
-  environment: {
-    testEnvironment: '${PROVAR_TEST_ENVIRONMENT}',
-    webBrowser: 'Chrome',
-    webBrowserConfig: 'Full Screen',
-    webBrowserProviderName: 'Desktop',
-    webBrowserDeviceName: 'Full Screen',
-  },
-  testprojectSecrets: '${PROVAR_TEST_PROJECT_SECRETS}',
-};
+export const successMessage = 'The properties file was generated successfully.\n';
+export const errorInvalidPath = 'Error (1): INVALID_PATH - The provided path does not exist or is invalid.\n';
+export const errorInvalidFileExtension =
+  'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n';
+export const errorInsufficientPermissions =
+  'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.\n';
 
 export const PASS_FILE_CONTENT = {
   status: 0,

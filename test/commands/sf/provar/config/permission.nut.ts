@@ -3,7 +3,8 @@ import { exec } from 'child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
-import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../AssertionContent/Content';
+import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../assertion/GenerateConstants';
+import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../../assertion/GenerateConstants';
 
 describe('Handling Insufficient Permissions scenarios as write permission is removed from a folder', () => {
   let testSession: TestSession;
@@ -26,9 +27,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           const res = execCmd<SfProvarConfigGenerateResult>(
             'sf provar config generate -p ./test/InsufficientPermission/bin.json'
           ).shellOutput;
-          expect(res.stderr).to.deep.equal(
-            'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.\n'
-          );
+          expect(res.stderr).to.deep.equal(errorInsufficientPermissions);
           done();
         }
       });
@@ -47,9 +46,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           const res = execCmd<SfProvarConfigGenerateResult>(
             'sf provar config generate -p ./test/InsufficientPermission/cd/Dom.uu'
           ).shellOutput;
-          expect(res.stderr).to.deep.equal(
-            'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n'
-          );
+          expect(res.stderr).to.deep.equal(errorInvalidFileExtension);
           done();
         }
       });
@@ -111,9 +108,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           ensureExitCode: 1,
         }
       ).shellOutput;
-      expect(res.stderr).to.contain(
-        'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.'
-      );
+      expect(res.stderr).to.contain(errorInsufficientPermissions);
     });
 
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag and return the result in json format', () => {
@@ -131,31 +126,29 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       expect(result.jsonOutput).to.deep.equal(INSUFFICIENT_PERMISSIONS);
     });
   } else if (process.platform === 'darwin') {
-    it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag', () => {
+    it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag', () => {
       const folderPath = './test/InsufficientPermission';
       if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath);
       }
       fs.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarConfigGenerateResult>(
-        'sf provar config generate --properties-file ./test/InsufficientPermission/Test.json',
+        'sf provar config generate -p ./test/InsufficientPermission/Test1.json',
         {
           ensureExitCode: 1,
         }
       ).shellOutput;
-      expect(res.stderr).to.contain(
-        'Error (1): INSUFFICIENT_PERMISSIONS - The user does not have permissions to create the file.'
-      );
+      expect(res.stderr).to.contain(errorInsufficientPermissions);
     });
 
-    it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag and return the result in json format', () => {
+    it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag and return the result in json format', () => {
       const folderPath = './test/InsufficientPermission';
       if (!fs.existsSync(folderPath)) {
         fs.mkdirSync(folderPath);
       }
       fs.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarConfigGenerateResult>(
-        'sf provar config generate -p ./test/InsufficientPermission/Dummy.json --json',
+        'sf provar config generate --properties-file ./test/InsufficientPermission/Dummy1.json --json',
         {
           ensureExitCode: 0,
         }

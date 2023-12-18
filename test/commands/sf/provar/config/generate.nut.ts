@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
-import { INVALID_PATH, PASS_FILE_CONTENT } from '../../../../AssertionContent/Content';
-import { DEFAULT_PROPERTIES_FILE_CONTENT } from '../../../../AssertionContent/Content';
-import { INVALID_FILE_EXTENSION } from '../../../../AssertionContent/Content';
+import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/GenerateConstants';
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
+import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../../assertion/GenerateConstants';
+import PropertyFileContent from '../../../../../src/constants/PropertyFileContent.json';
 
 describe('Config generate', () => {
   let testSession: TestSession;
@@ -17,28 +17,28 @@ describe('Config generate', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p provardx-properties.json', {
       ensureExitCode: 0,
     }).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Properties defined inside boilerplate json file are matched', () => {
     const filePath = './provardx-properties.json';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const expectedJsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    expect(expectedJsonData).to.deep.equal(DEFAULT_PROPERTIES_FILE_CONTENT);
+    expect(expectedJsonData).to.deep.equal(PropertyFileContent);
   });
 
   it('Boilerplate json file should be generated with "--properties-file" flag when no path is defined', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate --properties-file test_file.json', {
       ensureExitCode: 0,
     }).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should be overwritten when "-n" flag is provided with flag "-p" ', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p provardx-properties.json -n', {
       ensureExitCode: 0,
     }).shellOutput;
-    expect(res.stdout).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res.stdout).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should be overwritten when "--no-prompt" flag is provided with flag "--properties-file" ', () => {
@@ -48,7 +48,7 @@ describe('Config generate', () => {
         ensureExitCode: 0,
       }
     ).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should be overwritten when "--no-prompt" flag is provided with flag "-p" ', () => {
@@ -73,50 +73,43 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "--properties-file"  when file name has space', () => {
     const res = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate --properties-file "./test/AssertionContent bbb.json"',
+      'sf provar config generate --properties-file "./test/assertion bbb.json"',
       {
         ensureExitCode: 0,
       }
     ).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should be generated with "-p" flag using relative path', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p ./test/XYZ.json', {
       ensureExitCode: 0,
     }).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should be generated with "-p" flag and with special char in file name', () => {
-    const res = execCmd<SfProvarConfigGenerateResult>(
-      'sf provar config generate -p .\\test\\AssertionContent\\D#um$.json',
-      {
-        ensureExitCode: 0,
-      }
-    ).shellOutput;
-    expect(res['stdout']).to.deep.equal('The properties file was generated successfully.\n');
+    const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p .\\test\\assertion\\D#um$.json', {
+      ensureExitCode: 0,
+    }).shellOutput;
+    expect(res['stdout']).to.deep.equal(successMessage);
   });
 
   it('Boilerplate json file should not be generated with "-p" flag as path is invalid', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p a/aa.json').shellOutput;
-    expect(res['stderr']).to.deep.equal('Error (1): INVALID_PATH - The provided path does not exist or is invalid.\n');
+    expect(res['stderr']).to.deep.equal(errorInvalidPath);
   });
 
   it('Boilerplate json file should not be generated with "-p" flag as extension is invalid', () => {
     const res = execCmd<SfProvarConfigGenerateResult>('sf provar config generate -p ./test/Dom.txt').shellOutput;
-    expect(res['stderr']).to.deep.equal(
-      'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n'
-    );
+    expect(res['stderr']).to.deep.equal(errorInvalidFileExtension);
   });
 
   it('Boilerplate json file should not be generated with "--properties-file" flag as both path and extension are invalid', () => {
     const res = execCmd<SfProvarConfigGenerateResult>(
       'sf provar config generate --properties-file ./test%cd/Dom.txt'
     ).shellOutput;
-    expect(res['stderr']).to.deep.equal(
-      'Error (1): INVALID_FILE_EXTENSION - Only the .json file extension is supported.\n'
-    );
+    expect(res['stderr']).to.deep.equal(errorInvalidFileExtension);
   });
 
   it('Boilerplate json file should be generated with "-p" flag and return the result in json format', () => {
