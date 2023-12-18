@@ -4,11 +4,8 @@ import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
 import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../assertion/GenerateConstants';
-import {
-  sfCmd,
-  errorInsufficientPermissions,
-  errorInvalidFileExtension,
-} from '../../../../assertion/GenerateConstants';
+import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../../assertion/GenerateConstants';
+import { sfCmd } from '../../../../assertion/GenerateConstants';
 
 describe('Handling Insufficient Permissions scenarios as write permission is removed from a folder', () => {
   let testSession: TestSession;

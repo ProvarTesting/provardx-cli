@@ -3,12 +3,8 @@ import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/GenerateConstants';
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
-import {
-  sfCmd,
-  successMessage,
-  errorInvalidPath,
-  errorInvalidFileExtension,
-} from '../../../../assertion/GenerateConstants';
+import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../../assertion/GenerateConstants';
+import { sfCmd } from '../../../../assertion/GenerateConstants';
 import PropertyFileContent from '../../../../../src/constants/PropertyFileContent.json';
 
 describe('Config generate', () => {
