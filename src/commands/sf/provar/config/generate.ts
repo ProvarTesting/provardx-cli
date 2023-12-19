@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { generateFile, getExtension } from '../../../../Utility/FileSupport';
+import { generateFile, getExtension } from '../../../../Utility/fileSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
