@@ -5,7 +5,7 @@ import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../.
 import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
 import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../../assertion/generateConstants';
 import { sfProvarConfigGenerateCommand } from '../../../../assertion/generateConstants';
-import PropertyFileContent from '../../../../../src/constants/PropertyFileContent.json';
+import PropertyFileContent from '../../../../../src/constants/propertyFileContent.json';
 
 describe('Config generate', () => {
   let testSession: TestSession;
