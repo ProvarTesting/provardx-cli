@@ -1,7 +1,9 @@
 {
-  "extends": "@salesforce/dev-config/tsconfig-test-strict",
-  "include": ["./**/*.ts"],
+  "extends": "@salesforce/dev-config/tsconfig-strict",
   "compilerOptions": {
-    "skipLibCheck": true
-  }
+    "outDir": "lib",
+    "esModuleInterop": true,
+    "resolveJsonModule": true
+  },
+  "include": ["./**/*.ts"]
 }
