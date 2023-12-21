@@ -5,6 +5,7 @@ import { Validator, ValidatorResult } from 'jsonschema';
 import { schema } from '../../../../constants/propertyFileSchema';
 import { Error } from '../../../../Utility/errorHandler';
 import ErrorHandler from '../../../../Utility/errorHandler';
+import { substringAfter } from '../../../../Utility/stringSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
@@ -42,7 +43,8 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         if (validationResults.errors.length > 0) {
           for (const validationError of validationResults.errors) {
             if (validationError.name === 'required') {
-              missingRequiredProperties.push(validationError.argument);
+              let property: string = validationError.argument;
+              missingRequiredProperties.push(substringAfter(validationError.property, '.') + property);
             }
             if (validationError.name === 'enum') {
               const property: string = validationError.path[0].toString();
