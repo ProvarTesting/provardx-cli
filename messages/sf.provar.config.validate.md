@@ -28,6 +28,14 @@ Validating provardx-properties.json against the schema for all the needed proper
 
 [INVALID_VALUE] The property %s value is not valid.
 
+# error.MISSING_PROPERTIES
+
+[MISSING_PROPERTIES] The properties %s are missing.
+
+# error.INVALID_VALUES
+
+[INVALID_VALUES] The properties %s are not valid.
+
 # error.MULTIPLE_ERRORS
 
 %s

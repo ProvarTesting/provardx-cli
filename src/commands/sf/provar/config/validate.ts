@@ -18,67 +18,87 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
+  private errorHandler: ErrorHandler = new ErrorHandler();
 
   public async run(): Promise<SfProvarConfigValidateResult> {
     const { flags } = await this.parse(SfProvarConfigValidate);
 
     const envFilePath = process.env.PROVARDX_PROPERTIES_FILE_PATH;
-    const errorHandler: ErrorHandler = new ErrorHandler();
     let validationResults: ValidatorResult;
-    let result: SfProvarConfigValidateResult = { success: true };
 
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
 
     if (envFilePath === undefined || !fs.existsSync(envFilePath)) {
-      errorHandler.addErrorsToList({
-        errorCode: 'MISSING_FILE',
-        errorMessage: 'The properties file has not been loaded or cannot be accessed.',
-      });
+      this.errorHandler.addErrorsToList(
+        'MISSING_FILE',
+        'The properties file has not been loaded or cannot be accessed.'
+      );
     } else {
+      /* eslint-disable */
       const jsonValidator = new Validator();
       try {
         validationResults = jsonValidator.validate(JSON.parse(fs.readFileSync(envFilePath).toString()), schema);
         if (validationResults.errors.length > 0) {
           for (const validationError of validationResults.errors) {
             if (validationError.name === 'required') {
-              missingRequiredProperties.push(validationError.property);
+              missingRequiredProperties.push(validationError.argument);
             }
             if (validationError.name === 'enum') {
               const property: string = validationError.path[0].toString();
               invalidPropertiesValue.push(property);
             }
           }
-        } // eslint-disable-next-line
+        }
       } catch (errors: any) {
-        errorHandler.addErrorsToList({
-          errorCode: 'MALFORMED_FILE',
-          errorMessage: 'The properties file is not a valid JSON.',
-        });
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', 'The properties file is not a valid JSON.');
       }
+      const missingPropertiesCount = missingRequiredProperties.length;
+      const invalidValuesCount = invalidPropertiesValue.length;
 
-      if (missingRequiredProperties.length > 0) {
-        errorHandler.addErrorsToList({
-          errorCode: 'MISSING_PROPERTY',
-          errorMessage: 'The property ' + missingRequiredProperties.toString() + ' is missing.',
-        });
+      if (missingPropertiesCount > 0) {
+        if (missingPropertiesCount > 1) {
+          this.errorHandler.addErrorsToList(
+            'MISSING_PROPERTIES',
+            'The properties ' + this.addQuotesAround(missingRequiredProperties).join(', ') + ' are missing.'
+          );
+        } else {
+          this.errorHandler.addErrorsToList(
+            'MISSING_PROPERTY',
+            'The property ' + this.addQuotesAround(missingRequiredProperties) + ' is missing.'
+          );
+        }
       }
-      if (invalidPropertiesValue.length > 0) {
-        errorHandler.addErrorsToList({
-          errorCode: 'INVALID_VALUE',
-          errorMessage: 'The property ' + invalidPropertiesValue.toString() + ' value is not valid.',
-        });
+      if (invalidValuesCount > 0) {
+        if (invalidValuesCount > 1) {
+          this.errorHandler.addErrorsToList(
+            'INVALID_VALUES',
+            'The properties ' + this.addQuotesAround(invalidPropertiesValue).join(', ') + ' are not valid.'
+          );
+        } else {
+          this.errorHandler.addErrorsToList(
+            'INVALID_VALUE',
+            'The property ' + this.addQuotesAround(invalidPropertiesValue) + ' value is not valid.'
+          );
+        }
       }
     }
+    const k = this.populateResult(flags);
 
-    if (errorHandler.getErrors().length > 0) {
-      const e: Error[] = errorHandler.getErrors();
+    return k;
+  }
+
+  private populateResult(flags: any): SfProvarConfigValidateResult {
+    let result: SfProvarConfigValidateResult = { success: true };
+
+    if (this.errorHandler.getErrors().length > 0) {
+      const errorObjects: Error[] = this.errorHandler.getErrors();
       if (!flags['json']) {
-        throw messages.createError('error.MULTIPLE_ERRORS', errorHandler.errorsToString());
+        throw messages.createError('error.MULTIPLE_ERRORS', this.errorHandler.errorsToString());
       }
       result = {
         success: false,
-        errors: e,
+        errors: errorObjects,
       };
     } else {
       this.log('The properties file was validated successfully.');
@@ -87,5 +107,9 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
       };
     }
     return result;
+  }
+
+  private addQuotesAround(array: string[]): string[] {
+    return array.map((item) => "'" + item + "'");
   }
 }
