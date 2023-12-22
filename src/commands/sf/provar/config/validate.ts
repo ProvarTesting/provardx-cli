@@ -47,8 +47,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
               missingRequiredProperties.push(substringAfter(validationError.property, '.') + property);
             }
             if (validationError.name === 'enum') {
-              const property: string = validationError.path[0].toString();
-              invalidPropertiesValue.push(property);
+              invalidPropertiesValue.push(substringAfter(validationError.property, '.'));
             }
           }
         }
@@ -85,9 +84,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         }
       }
     }
-    const k = this.populateResult(flags);
-
-    return k;
+    return this.populateResult(flags);
   }
 
   private populateResult(flags: any): SfProvarConfigValidateResult {
