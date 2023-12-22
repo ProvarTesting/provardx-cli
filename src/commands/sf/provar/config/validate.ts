@@ -87,7 +87,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
     if (this.errorHandler.getErrors().length > 0) {
       const errorObjects: Error[] = this.errorHandler.getErrors();
       if (!flags['json']) {
-        throw messages.createError('error.MULTIPLE_ERRORS', this.errorHandler.errorsToString());
+        throw messages.createError('error.MULTIPLE_ERRORS', this.errorHandler.errorsToStringArray());
       }
       result = {
         success: false,

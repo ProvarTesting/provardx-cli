@@ -17,7 +17,7 @@ export default class ErrorHandler {
     return this.errors;
   }
 
-  public errorsToString(): string[] {
+  public errorsToStringArray(): string[] {
     const errorStrings: string[] = [];
     let errorString = '';
 
