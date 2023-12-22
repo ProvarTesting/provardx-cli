@@ -12,3 +12,6 @@ export function substringAfter(str: string, separator: string): string {
 
   return str.substring(pos + separator.length) + separator;
 }
+export function addQuotesAround(array: string[]): string[] {
+  return array.map((item) => "'" + item + "'");
+}

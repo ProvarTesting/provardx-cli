@@ -12,6 +12,18 @@ Validating provardx-properties.json against the schema for all the needed proper
 
   <%= config.bin %> <%= command.id %>'
 
+# success_message
+
+The properties file was validated successfully.
+
+# malformedJSON_message
+
+The properties file is not a valid JSON.
+
+# missingFile_message
+
+The properties file has not been loaded or cannot be accessed.
+
 # error.MISSING_FILE
 
 [MISSING_FILE] The properties file has not been loaded or cannot be accessed.

@@ -1,11 +1,11 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { Validator, ValidatorResult } from 'jsonschema';
 import { schema } from '../../../../constants/propertyFileSchema';
 import { Error } from '../../../../Utility/errorHandler';
 import ErrorHandler from '../../../../Utility/errorHandler';
-import { substringAfter } from '../../../../Utility/stringSupport';
+import { addQuotesAround, substringAfter } from '../../../../Utility/stringSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
@@ -30,16 +30,13 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
 
-    if (envFilePath === undefined || !fs.existsSync(envFilePath)) {
-      this.errorHandler.addErrorsToList(
-        'MISSING_FILE',
-        'The properties file has not been loaded or cannot be accessed.'
-      );
+    if (envFilePath === undefined || !fileSystem.existsSync(envFilePath)) {
+      this.errorHandler.addErrorsToList('MISSING_FILE', messages.getMessage('missingFile_message'));
     } else {
       /* eslint-disable */
       const jsonValidator = new Validator();
       try {
-        validationResults = jsonValidator.validate(JSON.parse(fs.readFileSync(envFilePath).toString()), schema);
+        validationResults = jsonValidator.validate(JSON.parse(fileSystem.readFileSync(envFilePath).toString()), schema);
         if (validationResults.errors.length > 0) {
           for (const validationError of validationResults.errors) {
             if (validationError.name === 'required') {
@@ -52,36 +49,33 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
           }
         }
       } catch (errors: any) {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', 'The properties file is not a valid JSON.');
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', messages.getMessage('malformedJSON_message'));
       }
       const missingPropertiesCount = missingRequiredProperties.length;
       const invalidValuesCount = invalidPropertiesValue.length;
 
-      if (missingPropertiesCount > 0) {
-        if (missingPropertiesCount > 1) {
-          this.errorHandler.addErrorsToList(
-            'MISSING_PROPERTIES',
-            'The properties ' + this.addQuotesAround(missingRequiredProperties).join(', ') + ' are missing.'
-          );
-        } else {
-          this.errorHandler.addErrorsToList(
-            'MISSING_PROPERTY',
-            'The property ' + this.addQuotesAround(missingRequiredProperties) + ' is missing.'
-          );
-        }
+      if (missingPropertiesCount > 1) {
+        this.errorHandler.addErrorsToList(
+          'MISSING_PROPERTIES',
+          'The properties ' + addQuotesAround(missingRequiredProperties).join(', ') + ' are missing.'
+        );
+      } else if (missingPropertiesCount == 1) {
+        this.errorHandler.addErrorsToList(
+          'MISSING_PROPERTY',
+          'The property ' + addQuotesAround(missingRequiredProperties) + ' is missing.'
+        );
       }
-      if (invalidValuesCount > 0) {
-        if (invalidValuesCount > 1) {
-          this.errorHandler.addErrorsToList(
-            'INVALID_VALUES',
-            'The properties ' + this.addQuotesAround(invalidPropertiesValue).join(', ') + ' are not valid.'
-          );
-        } else {
-          this.errorHandler.addErrorsToList(
-            'INVALID_VALUE',
-            'The property ' + this.addQuotesAround(invalidPropertiesValue) + ' value is not valid.'
-          );
-        }
+
+      if (invalidValuesCount > 1) {
+        this.errorHandler.addErrorsToList(
+          'INVALID_VALUES',
+          'The properties ' + addQuotesAround(invalidPropertiesValue).join(', ') + ' are not valid.'
+        );
+      } else if (invalidValuesCount == 1) {
+        this.errorHandler.addErrorsToList(
+          'INVALID_VALUE',
+          'The property ' + addQuotesAround(invalidPropertiesValue) + ' value is not valid.'
+        );
       }
     }
     return this.populateResult(flags);
@@ -100,15 +94,11 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         errors: errorObjects,
       };
     } else {
-      this.log('The properties file was validated successfully.');
+      this.log(messages.getMessage('success_message'));
       result = {
         success: true,
       };
     }
     return result;
-  }
-
-  private addQuotesAround(array: string[]): string[] {
-    return array.map((item) => "'" + item + "'");
   }
 }
