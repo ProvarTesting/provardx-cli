@@ -18,13 +18,6 @@ export default class ErrorHandler {
   }
 
   public errorsToStringArray(): string[] {
-    const errorStrings: string[] = [];
-    let errorString = '';
-
-    this.errors.forEach((e) => {
-      errorString = '[' + e.errorCode + '] ' + e.errorMessage;
-      errorStrings.push(errorString);
-    });
-    return errorStrings;
+    return this.errors.map((e) => `[${e.errorCode}] ${e.errorMessage}`);
   }
 }
