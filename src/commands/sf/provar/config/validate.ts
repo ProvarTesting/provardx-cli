@@ -40,8 +40,11 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         if (validationResults.errors.length > 0) {
           for (const validationError of validationResults.errors) {
             if (validationError.name === 'required') {
-              let property: string = validationError.argument;
-              missingRequiredProperties.push(substringAfter(validationError.property, '.') + property);
+              let substring = substringAfter(validationError.property, '.');
+              if (substring) {
+                substring = substring.concat('.');
+              }
+              missingRequiredProperties.push(substring + validationError.argument);
             }
             if (validationError.name === 'enum') {
               invalidPropertiesValue.push(substringAfter(validationError.property, '.'));

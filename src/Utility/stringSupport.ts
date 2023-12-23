@@ -10,7 +10,7 @@ export function substringAfter(str: string, separator: string): string {
     return '';
   }
 
-  return str.substring(pos + separator.length) + separator;
+  return str.substring(pos + separator.length);
 }
 export function addQuotesAround(array: string[]): string[] {
   return array.map((item) => "'" + item + "'");
