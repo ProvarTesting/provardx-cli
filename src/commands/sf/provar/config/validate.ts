@@ -50,6 +50,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         }
       } catch (errors: any) {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', messages.getMessage('malformedJSON_message'));
+        return this.populateResult(flags);
       }
       const missingPropertiesCount = missingRequiredProperties.length;
       const invalidValuesCount = invalidPropertiesValue.length;
