@@ -35,6 +35,7 @@ export const schema = {
     testOutputLevel: {
       description: 'Controls the amount of test output logged to the DX test log.',
       type: 'string',
+      enum: ['BASIC', 'DETAILED', 'DIAGNOSTIC'],
     },
     pluginOutputlevel: {
       description: 'Controls the amount of plugin output logged to the DX test log.',
@@ -86,7 +87,7 @@ export const schema = {
         webBrowser: {
           description: 'The web browser to be used for UI testing',
           type: 'string',
-          enum: ['Chrome', 'SAFARI', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless'],
+          enum: ['Chrome', 'Safari', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless'],
         },
         webBrowserConfig: {
           description: 'The web browser window size. Browser configurations are defined in Test Settings',
