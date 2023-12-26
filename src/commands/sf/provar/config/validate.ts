@@ -61,24 +61,24 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
       if (missingPropertiesCount > 1) {
         this.errorHandler.addErrorsToList(
           'MISSING_PROPERTIES',
-          'The properties ' + addQuotesAround(missingRequiredProperties).join(', ') + ' are missing.'
+          `The properties ${addQuotesAround(missingRequiredProperties).join(', ')} are missing.`
         );
       } else if (missingPropertiesCount == 1) {
         this.errorHandler.addErrorsToList(
           'MISSING_PROPERTY',
-          'The property ' + addQuotesAround(missingRequiredProperties) + ' is missing.'
+          `The property ${addQuotesAround(missingRequiredProperties)} is missing.`
         );
       }
 
       if (invalidValuesCount > 1) {
         this.errorHandler.addErrorsToList(
           'INVALID_VALUES',
-          'The properties ' + addQuotesAround(invalidPropertiesValue).join(', ') + ' are not valid.'
+          `The properties ${addQuotesAround(invalidPropertiesValue).join(', ')} values are not valid.`
         );
       } else if (invalidValuesCount == 1) {
         this.errorHandler.addErrorsToList(
           'INVALID_VALUE',
-          'The property ' + addQuotesAround(invalidPropertiesValue) + ' value is not valid.'
+          `The property ${addQuotesAround(invalidPropertiesValue)} value is not valid.`
         );
       }
     }

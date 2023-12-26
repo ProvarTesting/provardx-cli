@@ -1,12 +1,19 @@
+export type ErrorCode =
+  | 'MISSING_FILE'
+  | 'MALFORMED_FILE'
+  | 'MISSING_PROPERTY'
+  | 'MISSING_PROPERTIES'
+  | 'INVALID_VALUES'
+  | 'INVALID_VALUE';
 export type Error = {
-  errorCode: string;
+  errorCode: ErrorCode;
   errorMessage: string;
 };
 
 export default class ErrorHandler {
   private errors: Error[] = [];
 
-  public addErrorsToList(eCode: string, eMessage: string): void {
+  public addErrorsToList(eCode: ErrorCode, eMessage: string): void {
     this.errors.push({
       errorCode: eCode,
       errorMessage: eMessage,
