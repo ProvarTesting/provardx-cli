@@ -6,8 +6,8 @@ export type ErrorCode =
   | 'INVALID_VALUES'
   | 'INVALID_VALUE';
 export type Error = {
-  errorCode: ErrorCode;
-  errorMessage: string;
+  code: ErrorCode;
+  message: string;
 };
 
 export default class ErrorHandler {
@@ -15,8 +15,8 @@ export default class ErrorHandler {
 
   public addErrorsToList(eCode: ErrorCode, eMessage: string): void {
     this.errors.push({
-      errorCode: eCode,
-      errorMessage: eMessage,
+      code: eCode,
+      message: eMessage,
     });
   }
 
@@ -25,6 +25,6 @@ export default class ErrorHandler {
   }
 
   public errorsToStringArray(): string[] {
-    return this.errors.map((e) => `[${e.errorCode}] ${e.errorMessage}`);
+    return this.errors.map((e) => `[${e.code}] ${e.message}`);
   }
 }
