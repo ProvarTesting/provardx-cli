@@ -16,10 +16,10 @@ export const invalidValueError =
   "Error (1): [INVALID_VALUE] The property 'resultsPathDisposition' value is not valid.\n";
 
 export const invalidValuesError =
-  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
+  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
 
 export const multipleErrors =
-  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
+  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
 
 export const validateSuccessJson = {
   status: 0,
@@ -35,8 +35,8 @@ export const missingFileJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'MISSING_FILE',
-        errorMessage: 'The properties file has not been loaded or cannot be accessed.',
+        code: 'MISSING_FILE',
+        message: 'The properties file has not been loaded or cannot be accessed.',
       },
     ],
   },
@@ -49,8 +49,8 @@ export const malformedFileJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'MALFORMED_FILE',
-        errorMessage: 'The properties file is not a valid JSON.',
+        code: 'MALFORMED_FILE',
+        message: 'The properties file is not a valid JSON.',
       },
     ],
   },
@@ -63,8 +63,8 @@ export const missingPropertyJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'MISSING_PROPERTY',
-        errorMessage: "The property 'provarHome' is missing.",
+        code: 'MISSING_PROPERTY',
+        message: "The property 'provarHome' is missing.",
       },
     ],
   },
@@ -77,8 +77,8 @@ export const missingPropertiesJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'MISSING_PROPERTIES',
-        errorMessage:
+        code: 'MISSING_PROPERTIES',
+        message:
           "The properties 'provarHome', 'projectPath', 'resultsPath', 'metadata.metadataLevel', 'metadata.cachePath', 'environment.webBrowser', 'environment.webBrowserConfig', 'environment.webBrowserProviderName', 'environment.webBrowserDeviceName' are missing.",
       },
     ],
@@ -92,8 +92,8 @@ export const invalidValueJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'INVALID_VALUE',
-        errorMessage: "The property 'resultsPathDisposition' value is not valid.",
+        code: 'INVALID_VALUE',
+        message: "The property 'resultsPathDisposition' value is not valid.",
       },
     ],
   },
@@ -106,9 +106,9 @@ export const invalidValuesJsonError = {
     success: false,
     errors: [
       {
-        errorCode: 'INVALID_VALUES',
-        errorMessage:
-          "The properties 'resultsPathDisposition', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
+        code: 'INVALID_VALUES',
+        message:
+          "The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
       },
     ],
   },
@@ -121,13 +121,13 @@ export const multipleJsonErrors = {
     success: false,
     errors: [
       {
-        errorCode: 'MISSING_PROPERTY',
-        errorMessage: "The property 'provarHome' is missing.",
+        code: 'MISSING_PROPERTY',
+        message: "The property 'provarHome' is missing.",
       },
       {
-        errorCode: 'INVALID_VALUES',
-        errorMessage:
-          "The properties 'resultsPathDisposition', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
+        code: 'INVALID_VALUES',
+        message:
+          "The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
       },
     ],
   },

@@ -213,7 +213,7 @@ describe('sf provar config validate NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValueJsonError);
   });
 
-  it('updating value of property pluginOutputlevel in json file', () => {
+  it('updating value of properties pluginOutputlevel,testOutputLevel in json file', () => {
     interface MyJsonData {
       [key: string]: string | boolean | MyJsonData;
     }
@@ -221,6 +221,7 @@ describe('sf provar config validate NUTs', () => {
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
     jsonData.pluginOutputlevel = 'Error';
+    jsonData.testOutputLevel = 'BASICC';
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
   });
@@ -245,7 +246,7 @@ describe('sf provar config validate NUTs', () => {
 
     if (jsonData.metadata) {
       jsonData.metadata = jsonData.metadata || {};
-      jsonData.metadata.metadataLevel = 'REUSE';
+      jsonData.metadata.metadataLevel = 'Reusee';
     }
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
