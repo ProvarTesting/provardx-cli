@@ -1,0 +1,7 @@
+export type ErrorCode =
+  | 'MISSING_FILE'
+  | 'MALFORMED_FILE'
+  | 'MISSING_PROPERTY'
+  | 'MISSING_PROPERTIES'
+  | 'INVALID_VALUES'
+  | 'INVALID_VALUE';
