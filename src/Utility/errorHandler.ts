@@ -1,4 +1,4 @@
-import { ErrorCode } from './errorCodes';
+import { ErrorCode } from './errorCode';
 
 export type Error = {
   code: ErrorCode;

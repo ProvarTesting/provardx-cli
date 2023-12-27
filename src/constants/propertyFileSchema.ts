@@ -105,7 +105,7 @@ export const schema = {
       required: ['webBrowser', 'webBrowserConfig', 'webBrowserProviderName', 'webBrowserDeviceName'],
     },
     testprojectSecrets: {
-      description: 'Testproject secret encryption password.',
+      description: 'Test project secret encryption password.',
       type: 'string',
     },
     environmentsSecrets: {
