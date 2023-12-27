@@ -45,8 +45,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
                 substring = substring.concat('.');
               }
               missingRequiredProperties.push(substring + validationError.argument);
-            }
-            if (validationError.name === 'enum') {
+            } else if (validationError.name === 'enum' || validationError.name === 'type') {
               invalidPropertiesValue.push(substringAfter(validationError.property, '.'));
             }
           }
