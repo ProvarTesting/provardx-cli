@@ -3,25 +3,20 @@ import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { Validator, ValidatorResult } from 'jsonschema';
 import { schema } from '../../../../constants/propertyFileSchema';
-import { Error } from '../../../../Utility/errorHandler';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { addQuotesAround, substringAfter } from '../../../../Utility/stringSupport';
+import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
 
-export type SfProvarConfigValidateResult = {
-  success: boolean;
-  errors?: Error[];
-};
-
-export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigValidateResult> {
+export default class SfProvarConfigValidate extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
   private errorHandler: ErrorHandler = new ErrorHandler();
 
-  public async run(): Promise<SfProvarConfigValidateResult> {
+  public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(SfProvarConfigValidate);
 
     const envFilePath = process.env.PROVARDX_PROPERTIES_FILE_PATH;
@@ -52,7 +47,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         }
       } catch (errors: any) {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', messages.getMessage('malformedJSON_message'));
-        return this.populateResult(flags);
+        return populateResult(flags, this.errorHandler, messages, this.log);
       }
       const missingPropertiesCount = missingRequiredProperties.length;
       const invalidValuesCount = invalidPropertiesValue.length;
@@ -81,27 +76,6 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarConfigVali
         );
       }
     }
-    return this.populateResult(flags);
-  }
-
-  private populateResult(flags: any): SfProvarConfigValidateResult {
-    let result: SfProvarConfigValidateResult = { success: true };
-
-    if (this.errorHandler.getErrors().length > 0) {
-      const errorObjects: Error[] = this.errorHandler.getErrors();
-      if (!flags['json']) {
-        throw messages.createError('error.MULTIPLE_ERRORS', this.errorHandler.errorsToStringArray());
-      }
-      result = {
-        success: false,
-        errors: errorObjects,
-      };
-    } else {
-      this.log(messages.getMessage('success_message'));
-      result = {
-        success: true,
-      };
-    }
-    return result;
+    return populateResult(flags, this.errorHandler, messages, this.log);
   }
 }
