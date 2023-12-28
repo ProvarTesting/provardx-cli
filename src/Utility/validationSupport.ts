@@ -7,7 +7,7 @@ import { substringAfter, addQuotesAround } from './stringSupport';
 export default class ValidationSupport {
   public validationResults!: ValidatorResult;
   private errorHandler: ErrorHandler;
-  private MISSINGFILEERROR = 'The properties file has not been loaded or cannot be accessed.;';
+  private MISSINGFILEERROR = 'The properties file has not been loaded or cannot be accessed.';
   private MALFORMEDFILEERROR = 'The properties file is not a valid JSON.';
 
   public constructor(errorHandler: ErrorHandler) {
