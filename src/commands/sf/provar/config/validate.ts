@@ -76,6 +76,6 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarCommandRes
         );
       }
     }
-    return populateResult(flags, this.errorHandler, messages, this.log);
+    return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
 }
