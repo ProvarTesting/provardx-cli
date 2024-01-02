@@ -2,7 +2,6 @@ import * as fs from 'fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import { SfProvarConfigGenerateResult } from '../../../../../src/commands/sf/provar/config/generate';
 import { sfProvarConfigGenerateCommand } from '../../../../assertion/generateConstants';
 import * as validateConstants from '../../../../assertion/validateConstants';
 
@@ -14,7 +13,7 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should be validated successfully with all required & optional attributes', () => {
-    execCmd<SfProvarConfigGenerateResult>(`${sfProvarConfigGenerateCommand} -p validateFile.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p validateFile.json`);
     process.env.PROVARDX_PROPERTIES_FILE_PATH = './validateFile.json';
     const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`, {
       ensureExitCode: 0,
@@ -87,7 +86,7 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as it is invalid json file', () => {
-    execCmd<SfProvarConfigGenerateResult>(`${sfProvarConfigGenerateCommand} -p malformedFile.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p malformedFile.json`);
     const jsonFilePath = './malformedFile.json';
     const data = fs.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
@@ -110,7 +109,7 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as one required property is missing in json file', () => {
-    execCmd<SfProvarConfigGenerateResult>(`${sfProvarConfigGenerateCommand} -p propertyError.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p propertyError.json`);
     interface MyJsonData {
       [key: string]: string | boolean;
     }
@@ -190,7 +189,7 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as invalid property value', () => {
-    execCmd<SfProvarConfigGenerateResult>(`${sfProvarConfigGenerateCommand} -p ./valueError.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./valueError.json`);
     interface MyJsonData {
       [key: string]: string | boolean | MyJsonData;
     }
@@ -297,7 +296,7 @@ describe('sf provar config validate NUTs', () => {
       interface MyJsonData {
         [key: string]: string | boolean | MyJsonData;
       }
-      execCmd<SfProvarConfigGenerateResult>(`${sfProvarConfigGenerateCommand} -p ./propertyRange.json`);
+      execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./propertyRange.json`);
       process.env.PROVARDX_PROPERTIES_FILE_PATH = './propertyRange.json';
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
