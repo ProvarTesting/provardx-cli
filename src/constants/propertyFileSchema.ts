@@ -1,4 +1,4 @@
-export const schema = {
+export const propertyFileSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   $id: 'http://provartesting.com/provardx-props.schema.json',
   title: 'ProvarDX-Properties',

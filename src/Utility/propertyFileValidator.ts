@@ -1,10 +1,10 @@
 import * as fileSystem from 'fs';
 import { Validator, ValidatorResult } from 'jsonschema';
-import { schema } from '../constants/propertyFileSchema';
+import { propertyFileSchema } from '../constants/propertyFileSchema';
 import ErrorHandler, { Error } from './errorHandler';
 import { substringAfter, addQuotesAround } from './stringSupport';
 
-export default class ValidationSupport {
+export default class PropertyFileValidator {
   public validationResults!: ValidatorResult;
   private errorHandler: ErrorHandler;
   private MISSINGFILEERROR = 'The properties file has not been loaded or cannot be accessed.';
@@ -14,7 +14,7 @@ export default class ValidationSupport {
     this.errorHandler = errorHandler;
   }
 
-  public validatePropertiesJson(): boolean {
+  public validate(): boolean {
     const envFilePath = process.env.PROVARDX_PROPERTIES_FILE_PATH;
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
@@ -26,7 +26,7 @@ export default class ValidationSupport {
       try {
         this.validationResults = jsonValidator.validate(
           JSON.parse(fileSystem.readFileSync(envFilePath).toString()),
-          schema
+          propertyFileSchema
         );
         if (this.validationResults.errors.length > 0) {
           for (const validationError of this.validationResults.errors) {

@@ -2,7 +2,7 @@ import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
-import ValidationSupport from '../../../../Utility/validationSupport';
+import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
@@ -15,8 +15,8 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarCommandRes
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(SfProvarConfigValidate);
-    const validationSupport = new ValidationSupport(this.errorHandler);
-    validationSupport.validatePropertiesJson();
+    const propertyFileValidator = new PropertyFileValidator(this.errorHandler);
+    propertyFileValidator.validate();
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
