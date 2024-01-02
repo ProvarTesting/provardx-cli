@@ -348,5 +348,45 @@ describe('sf provar config validate NUTs', () => {
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
+
+    it('Boilerplate json file should be validated successfully for the property metadataLevel', () => {
+      interface MyJsonData {
+        metadata: {
+          metadataLevel: string;
+        };
+      }
+      const jsonFilePath = './propertyRange.json';
+      const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const metadataLevel = ['Reuse', 'Reload', 'Refresh'];
+      metadataLevel.forEach((metadata) => {
+        jsonData.metadata.metadataLevel = metadata;
+        const updatedJsonData = JSON.stringify(jsonData, null, 2);
+        fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+        // validating the file
+        const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
+        expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
+      });
+    });
+
+    it('Boilerplate json file should be validated successfully for the property webBrowser', () => {
+      interface MyJsonData {
+        environment: {
+          webBrowser: string;
+        };
+      }
+      const jsonFilePath = './propertyRange.json';
+      const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const webBrowser = ['Chrome', 'Safari', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless'];
+      webBrowser.forEach((browser) => {
+        jsonData.environment.webBrowser = browser;
+        const updatedJsonData = JSON.stringify(jsonData, null, 2);
+        fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+        // validating the file
+        const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
+        expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
+      });
+    });
   });
 });
