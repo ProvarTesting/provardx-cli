@@ -2,16 +2,13 @@ import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { generateFile, getExtension } from '../../../../Utility/fileSupport';
+import ErrorHandler from '../../../../Utility/errorHandler';
+import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
 
-export type SfProvarConfigGenerateResult = {
-  success: boolean;
-  error?: object;
-};
-
-export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGenerateResult> {
+export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
@@ -28,56 +25,40 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarConfigGene
     }),
   };
 
-  private errorMessage = '';
-  private errorCode = '';
+  private errorHandler: ErrorHandler = new ErrorHandler();
 
-  public async run(): Promise<SfProvarConfigGenerateResult> {
+  public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(SfProvarConfigGenerate);
     const PropertiesFileName = flags['properties-file'];
-    let result: SfProvarConfigGenerateResult = { success: true };
 
     if (getExtension(PropertiesFileName) !== '.json') {
-      this.errorCode = 'INVALID_FILE_EXTENSION';
-      this.errorMessage = 'Only the .json file extension is supported.';
+      this.errorHandler.addErrorsToList('INVALID_FILE_EXTENSION', 'Only the .json file extension is supported.');
     } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
       if (!(await this.confirm(messages.getMessage('PropertiesFileOverwritePromptConfirm')))) {
-        this.errorCode = 'GENERATE_OPERATION_DENIED';
-        this.errorMessage = 'The operation was cancelled.';
+        this.errorHandler.addErrorsToList('GENERATE_OPERATION_DENIED', 'The operation was cancelled.');
       } else {
         this.generatePropertiesFile(PropertiesFileName);
       }
+      return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     } else {
       this.generatePropertiesFile(PropertiesFileName);
     }
-    if (this.errorCode !== '') {
-      if (!flags['json']) {
-        throw messages.createError('error.' + this.errorCode);
-      }
-      result = {
-        success: false,
-        error: {
-          code: this.errorCode,
-          message: this.errorMessage,
-        },
-      };
-    }
-    return result;
+
+    return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
 
   private generatePropertiesFile(PropertiesFileName: string): void {
     try {
       generateFile(PropertiesFileName);
-      this.log('The properties file was generated successfully.');
-      // eslint-disable-next-line
+      /* eslint-disable */
     } catch (error: any) {
-      this.errorMessage = error.message; // eslint-disable-line
-      this.errorCode = error.code; // eslint-disable-line
-      if (this.errorCode === 'ENOENT') {
-        this.errorCode = 'INVALID_PATH';
-        this.errorMessage = 'The provided path does not exist or is invalid.';
-      } else if (this.errorCode === 'EPERM' || this.errorCode === 'EACCES') {
-        this.errorCode = 'INSUFFICIENT_PERMISSIONS';
-        this.errorMessage = 'The user does not have permissions to create the file.';
+      if (error.code === 'ENOENT') {
+        this.errorHandler.addErrorsToList('INVALID_PATH', 'The provided path does not exist or is invalid.');
+      } else if (error.code === 'EPERM' || error.code === 'EACCES') {
+        this.errorHandler.addErrorsToList(
+          'INSUFFICIENT_PERMISSIONS',
+          'The user does not have permissions to create the file.'
+        );
       }
     }
   }
