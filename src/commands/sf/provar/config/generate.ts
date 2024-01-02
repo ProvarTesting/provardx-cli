@@ -39,7 +39,6 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandRes
       } else {
         this.generatePropertiesFile(PropertiesFileName);
       }
-      return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     } else {
       this.generatePropertiesFile(PropertiesFileName);
     }
