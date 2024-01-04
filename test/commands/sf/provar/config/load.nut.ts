@@ -11,6 +11,21 @@ describe('sf provar config load NUTs', () => {
 
   after(async () => {
     await session?.clean();
+    const filePaths = [
+      'File.json',
+      'loadError.json',
+      'loadFile.json',
+      'loadMalformed.json',
+      'loadMalformedNew.json',
+      'overwriteFile.json',
+    ];
+    filePaths.forEach((filePath) => {
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          return err;
+        }
+      });
+    });
   });
 
   it('Boilerplate json file should be loaded successfully and return a success message', () => {
@@ -46,23 +61,25 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should be loaded sucessfully when file is overwritten', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p a.json`);
-    execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p a.json`);
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p b.json`);
-    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p b.json`).shellOutput;
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p File.json`);
+    execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p File.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p overwriteFile.json`);
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p overwriteFile.json`
+    ).shellOutput;
     expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
   });
 
   it('Boilerplate json file should be loaded sucessfully when file is overwritten and return the result in json format', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file c.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file overwrite-NewFile.json`);
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} --properties-file c.json --json`,
+      `${loadConstants.sfProvarConfigLoadCommand} --properties-file overwrite-NewFile.json --json`,
       {
         ensureExitCode: 0,
       }
     );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
-    const filePath = 'c.json';
+    const filePath = 'overwrite-NewFile.json';
     fs.unlink(filePath, (err) => {
       if (err) {
         return;
@@ -71,13 +88,15 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded when file is deleted and return the error message', () => {
-    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p c.json`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p overwrite-NewFile.json`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(loadConstants.invalidPathError);
   });
 
   it('Boilerplate json file should not be loaded when json file is malformed', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p provardx-properties.json`);
-    const jsonFilePath = 'provardx-properties.json';
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadMalformed.json`);
+    const jsonFilePath = 'loadMalformed.json';
     fs.readFileSync(jsonFilePath, 'utf-8');
     const newData = '';
     fs.writeFile(jsonFilePath, newData, (error) => {
@@ -86,14 +105,14 @@ describe('sf provar config load NUTs', () => {
       }
     });
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p provardx-properties.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadMalformed.json`
     ).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.malformedFileError);
   });
 
-  it('Boilerplate json file should not be loaded when json file malformed and return the result in json format', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file sample.json`);
-    const jsonFilePath = 'sample.json';
+  it('Boilerplate json file should not be loaded when json file malformed and return the error in json format', () => {
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file loadMalformedNew.json`);
+    const jsonFilePath = 'loadMalformedNew.json';
     const data = fs.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
     fs.writeFile(jsonFilePath, newData, (error) => {
@@ -102,11 +121,76 @@ describe('sf provar config load NUTs', () => {
       }
     });
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} --properties-file sample.json --json`,
+      `${loadConstants.sfProvarConfigLoadCommand} --properties-file loadMalformedNew.json --json`,
       {
         ensureExitCode: 0,
       }
     );
     expect(res.jsonOutput).to.deep.equal(validateConstants.malformedFileJsonError);
+  });
+
+  it('Boilerplate json file should not be loaded as required property is missing in json file and return the error', () => {
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadError.json`);
+    interface MyJsonData {
+      [key: string]: string | boolean;
+    }
+    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+      propertiesToRemove.forEach((property) => {
+        delete jsonObject[property];
+      });
+    }
+    const jsonFilePath = './loadError.json';
+    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const propertiesToRemove: string[] = ['provarHome'];
+    removeProperties(originalJsonData, propertiesToRemove);
+    const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p ./loadError.json`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(validateConstants.missingPropertyError);
+  });
+
+  it('Boilerplate json file should not be loaded as multiple required properties are missing in file and return the error in json format', () => {
+    interface MyJsonData {
+      [key: string]: string | boolean | MyJsonData;
+    }
+    const jsonFilePath = 'loadError.json';
+    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+      propertiesToRemove.forEach((property) => {
+        const nestedProperties = property.split('.');
+        deleteNestedProperty(jsonObject, nestedProperties);
+      });
+    }
+    function deleteNestedProperty(obj: MyJsonData, path: string[]): void {
+      const property = path.shift();
+      if (property !== undefined && Object.prototype.hasOwnProperty.call(obj, property)) {
+        if (path.length === 0) {
+          delete obj[property];
+        } else if (typeof obj[property] === 'object') {
+          deleteNestedProperty(obj[property] as MyJsonData, path);
+        }
+      }
+    }
+    const propertiesToRemove: string[] = [
+      'projectPath',
+      'resultsPath',
+      'metadata.metadataLevel',
+      'metadata.cachePath',
+      'environment.webBrowser',
+      'environment.webBrowserConfig',
+      'environment.webBrowserProviderName',
+      'environment.webBrowserDeviceName',
+    ];
+    removeProperties(originalJsonData, propertiesToRemove);
+    const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p loadError.json --json`, {
+      ensureExitCode: 0,
+    });
+    expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertiesJsonError);
   });
 });
