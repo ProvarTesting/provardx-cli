@@ -18,7 +18,7 @@ describe('sf provar config load NUTs', () => {
       'advanceFile.json',
       'loadMalformedFile.json',
       'loadMalformedNew.json',
-      'loadErrorProperty',
+      'loadErrorProperty.json',
     ];
     filePaths.forEach((filePath) => {
       fs.unlink(filePath, (err) => {
