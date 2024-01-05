@@ -13,6 +13,7 @@ describe('sf provar config load NUTs', () => {
     await session?.clean();
     const filePaths = [
       'loadSuccess.json',
+      'loadValidateSuccess.json',
       'loadinvalidFile.json',
       'basicFile.json',
       'advanceFile.json',
@@ -46,6 +47,36 @@ describe('sf provar config load NUTs', () => {
       }
     );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
+  });
+
+  it('Boilerplate json file should be loaded and validated successfully and return the success message', () => {
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadValidateSuccess.json`);
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadValidateSuccess.json`,
+      {
+        ensureExitCode: 0,
+      }
+    ).shellOutput;
+    expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
+    const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`, {
+      ensureExitCode: 0,
+    }).shellOutput;
+    expect(result.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
+  });
+
+  it('Boilerplate json file should be loaded and validated successfully and return the result in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadValidateSuccess.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
+
+    const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand} --json`, {
+      ensureExitCode: 0,
+    });
+    expect(result.jsonOutput).to.deep.equal(validateConstants.validateSuccessJson);
   });
 
   it('Boilerplate json file should not be loaded when file path is invalid', () => {
