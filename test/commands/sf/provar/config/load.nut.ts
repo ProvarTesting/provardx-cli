@@ -51,6 +51,7 @@ describe('sf provar config load NUTs', () => {
 
   it('Boilerplate json file should be loaded and validated successfully and return the success message', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadValidateSuccess.json`);
+    // load the file
     const res = execCmd<SfProvarCommandResult>(
       `${loadConstants.sfProvarConfigLoadCommand} -p loadValidateSuccess.json`,
       {
@@ -58,6 +59,7 @@ describe('sf provar config load NUTs', () => {
       }
     ).shellOutput;
     expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
+    // validate the file
     const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`, {
       ensureExitCode: 0,
     }).shellOutput;
@@ -65,6 +67,7 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should be loaded and validated successfully and return the result in json format', () => {
+    // load the file
     const res = execCmd<SfProvarCommandResult>(
       `${loadConstants.sfProvarConfigLoadCommand} -p loadValidateSuccess.json --json`,
       {
@@ -72,7 +75,7 @@ describe('sf provar config load NUTs', () => {
       }
     );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
-
+    // validate the file
     const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand} --json`, {
       ensureExitCode: 0,
     });
