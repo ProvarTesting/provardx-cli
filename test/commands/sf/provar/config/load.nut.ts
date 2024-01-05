@@ -19,6 +19,7 @@ describe('sf provar config load NUTs', () => {
       'loadMalformedFile.json',
       'loadMalformedNew.json',
       'loadErrorProperty.json',
+      'loadInvalidPropertyValue.json',
     ];
     filePaths.forEach((filePath) => {
       fs.unlink(filePath, (err) => {
@@ -98,7 +99,7 @@ describe('sf provar config load NUTs', () => {
     expect(res.stderr).to.deep.equal(loadConstants.invalidPathError);
   });
 
-  it('Boilerplate json file should not be loaded when json file is malformed', () => {
+  it('Boilerplate json file should not be loaded when json file is malformed and return the error message', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadMalformedFile.json`);
     const jsonFilePath = 'loadMalformedFile.json';
     fs.readFileSync(jsonFilePath, 'utf-8');
@@ -114,7 +115,7 @@ describe('sf provar config load NUTs', () => {
     expect(res.stderr).to.deep.equal(validateConstants.malformedFileError);
   });
 
-  it('Boilerplate json file should not be loaded when json file malformed and return the error in json format', () => {
+  it('Boilerplate json file should not be loaded when json file is malformed and return the error message in json format', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file loadMalformedNew.json`);
     const jsonFilePath = 'loadMalformedNew.json';
     const data = fs.readFileSync(jsonFilePath, 'utf-8');
@@ -133,7 +134,7 @@ describe('sf provar config load NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(validateConstants.malformedFileJsonError);
   });
 
-  it('Boilerplate json file should not be loaded as required property is missing in json file and return the error', () => {
+  it('Boilerplate json file should not be loaded as required property is missing in json file and return the error message', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadErrorProperty.json`);
     interface MyJsonData {
       [key: string]: string | boolean;
@@ -156,7 +157,7 @@ describe('sf provar config load NUTs', () => {
     expect(res.stderr).to.deep.equal(validateConstants.missingPropertyError);
   });
 
-  it('Boilerplate json file should not be loaded as multiple required properties are missing in file and return the error in json format', () => {
+  it('Boilerplate json file should not be loaded as multiple required properties are missing in file and return the error message in json format', () => {
     interface MyJsonData {
       [key: string]: string | boolean | MyJsonData;
     }
@@ -199,5 +200,94 @@ describe('sf provar config load NUTs', () => {
       }
     );
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertiesJsonError);
+  });
+
+  it('Boilerplate json file should not be loaded as invalid value exists for one property and return the error message', () => {
+    interface MyJsonData {
+      [key: string]: string | boolean | number | MyJsonData;
+    }
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadInvalidPropertyValue.json`);
+    const jsonFilePath = 'loadInvalidPropertyValue.json';
+    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    jsonData.resultsPathDisposition = 'Increement';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadInvalidPropertyValue.json`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(validateConstants.invalidValueError);
+  });
+
+  it('updating values for multiple properties', () => {
+    interface MyJsonData {
+      [key: string]: string | boolean | MyJsonData;
+    }
+    const jsonFilePath = 'loadInvalidPropertyValue.json';
+    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    jsonData.pluginOutputlevel = 'WARNIING';
+    jsonData.testOutputLevel = 'DETAILL';
+    jsonData.stopOnError = '0';
+    jsonData.lightningMode = '1';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+  });
+
+  it('Boilerplate json file should not be loaded as invalid value exists for multiple properties and return the error message in json format', () => {
+    interface MyJsonData {
+      metadata: {
+        metadataLevel: string;
+      };
+      environment: {
+        webBrowser: string;
+      };
+    }
+    const jsonFilePath = 'loadInvalidPropertyValue.json';
+    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    jsonData.metadata.metadataLevel = 'reloaad';
+    jsonData.environment.webBrowser = 'FF';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadInvalidPropertyValue.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValuesJsonError);
+  });
+
+  it('Boilerplate json file should not be loaded as multiple error exists and return the error message', () => {
+    interface MyJsonData {
+      [key: string]: string | boolean;
+    }
+    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+      propertiesToRemove.forEach((property) => {
+        delete jsonObject[property];
+      });
+    }
+    const jsonFilePath = 'loadInvalidPropertyValue.json';
+    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const propertiesToRemove: string[] = ['projectPath'];
+    removeProperties(originalJsonData, propertiesToRemove);
+    const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
+    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadInvalidPropertyValue.json`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(loadConstants.multipleErrors);
+  });
+
+  it('Boilerplate json file should not be loaded as multiple error exists and return the error message in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadInvalidPropertyValue.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(loadConstants.multipleJsonErrors);
   });
 });
