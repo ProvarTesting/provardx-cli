@@ -12,12 +12,13 @@ describe('sf provar config load NUTs', () => {
   after(async () => {
     await session?.clean();
     const filePaths = [
-      'File.json',
-      'loadError.json',
-      'loadFile.json',
-      'loadMalformed.json',
+      'loadSuccess.json',
+      'loadinvalidFile.json',
+      'basicFile.json',
+      'advanceFile.json',
+      'loadMalformedFile.json',
       'loadMalformedNew.json',
-      'overwriteFile.json',
+      'loadErrorProperty',
     ];
     filePaths.forEach((filePath) => {
       fs.unlink(filePath, (err) => {
@@ -29,30 +30,33 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should be loaded successfully and return a success message', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadFile.json`);
-    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p loadFile.json`, {
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadSuccess.json`);
+    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p loadSuccess.json`, {
       ensureExitCode: 0,
     }).shellOutput;
     expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
   });
 
   it('Boilerplate json file should be loaded successfully and return a success message in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p loadFile.json --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadSuccess.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
   });
 
   it('Boilerplate json file should not be loaded when file path is invalid', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p invalidFile.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadinvalidFile.json`
     ).shellOutput;
     expect(res.stderr).to.deep.equal(loadConstants.invalidPathError);
   });
 
   it('Boilerplate json file should not be loaded when file path is invalid and return error message in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p invalidFile.json --json`,
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadinvalidFile.json --json`,
       {
         ensureExitCode: 0,
       }
@@ -61,25 +65,25 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should be loaded sucessfully when file is overwritten', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p File.json`);
-    execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p File.json`);
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p overwriteFile.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p basicFile.json`);
+    execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p basicFile.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p advanceFile.json`);
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p overwriteFile.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p advanceFile.json`
     ).shellOutput;
     expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
   });
 
   it('Boilerplate json file should be loaded sucessfully when file is overwritten and return the result in json format', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file overwrite-NewFile.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} --properties-file overwrite-advanceFile.json`);
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} --properties-file overwrite-NewFile.json --json`,
+      `${loadConstants.sfProvarConfigLoadCommand} --properties-file overwrite-advanceFile.json --json`,
       {
         ensureExitCode: 0,
       }
     );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
-    const filePath = 'overwrite-NewFile.json';
+    const filePath = 'overwrite-advanceFile.json';
     fs.unlink(filePath, (err) => {
       if (err) {
         return;
@@ -89,14 +93,14 @@ describe('sf provar config load NUTs', () => {
 
   it('Boilerplate json file should not be loaded when file is deleted and return the error message', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p overwrite-NewFile.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p overwrite-advanceFile.json`
     ).shellOutput;
     expect(res.stderr).to.deep.equal(loadConstants.invalidPathError);
   });
 
   it('Boilerplate json file should not be loaded when json file is malformed', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadMalformed.json`);
-    const jsonFilePath = 'loadMalformed.json';
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadMalformedFile.json`);
+    const jsonFilePath = 'loadMalformedFile.json';
     fs.readFileSync(jsonFilePath, 'utf-8');
     const newData = '';
     fs.writeFile(jsonFilePath, newData, (error) => {
@@ -105,7 +109,7 @@ describe('sf provar config load NUTs', () => {
       }
     });
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p loadMalformed.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadMalformedFile.json`
     ).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.malformedFileError);
   });
@@ -130,7 +134,7 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded as required property is missing in json file and return the error', () => {
-    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadError.json`);
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadErrorProperty.json`);
     interface MyJsonData {
       [key: string]: string | boolean;
     }
@@ -139,7 +143,7 @@ describe('sf provar config load NUTs', () => {
         delete jsonObject[property];
       });
     }
-    const jsonFilePath = './loadError.json';
+    const jsonFilePath = './loadErrorProperty.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
     const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
     const propertiesToRemove: string[] = ['provarHome'];
@@ -147,7 +151,7 @@ describe('sf provar config load NUTs', () => {
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
-      `${loadConstants.sfProvarConfigLoadCommand} -p ./loadError.json`
+      `${loadConstants.sfProvarConfigLoadCommand} -p ./loadErrorProperty.json`
     ).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.missingPropertyError);
   });
@@ -156,7 +160,7 @@ describe('sf provar config load NUTs', () => {
     interface MyJsonData {
       [key: string]: string | boolean | MyJsonData;
     }
-    const jsonFilePath = 'loadError.json';
+    const jsonFilePath = 'loadErrorProperty.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
     const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
     function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
@@ -188,9 +192,12 @@ describe('sf provar config load NUTs', () => {
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
-    const res = execCmd<SfProvarCommandResult>(`${loadConstants.sfProvarConfigLoadCommand} -p loadError.json --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadErrorProperty.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertiesJsonError);
   });
 });
