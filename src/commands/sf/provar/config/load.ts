@@ -4,6 +4,7 @@ import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 import ErrorHandler from '../../../../Utility/errorHandler';
+import { ProvarConfig } from '../../../../Utility/provarConfig';
 import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
 
 Messages.importMessagesDirectory(__dirname);
@@ -24,17 +25,20 @@ export default class SfProvarConfigLoad extends SfCommand<SfProvarCommandResult>
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(SfProvarConfigLoad);
+    /* eslint-disable */
     const propertiesFileName = resolve(flags['properties-file']);
     const propertyFileValidator = new PropertyFileValidator(this.errorHandler);
+    const config: ProvarConfig = await propertyFileValidator.loadConfig();
+
     if (!fileSystem.existsSync(propertiesFileName)) {
       this.errorHandler.addErrorsToList('INVALID_PATH', 'The provided path does not exist or is invalid.');
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
-    process.env.PROVARDX_PROPERTIES_FILE_PATH = propertiesFileName;
+    config.set('PROVARDX_PROPERTIES_FILE_PATH', propertiesFileName);
     if (!propertyFileValidator.validate()) {
-      delete process.env.PROVARDX_PROPERTIES_FILE_PATH;
+      config.unset('PROVARDX_PROPERTIES_FILE_PATH');
     }
-
+    await config.write();
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
 }

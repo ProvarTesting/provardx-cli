@@ -16,7 +16,7 @@ export default class SfProvarConfigValidate extends SfCommand<SfProvarCommandRes
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(SfProvarConfigValidate);
     const propertyFileValidator = new PropertyFileValidator(this.errorHandler);
-    propertyFileValidator.validate();
+    await propertyFileValidator.validate();
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }

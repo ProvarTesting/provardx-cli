@@ -1,8 +1,10 @@
 import * as fileSystem from 'fs';
+import { SfError } from '@salesforce/core';
 import { Validator, ValidatorResult } from 'jsonschema';
 import { propertyFileSchema } from '../constants/propertyFileSchema';
 import ErrorHandler, { Error } from './errorHandler';
 import { substringAfter, addQuotesAround } from './stringSupport';
+import { ProvarConfig } from './provarConfig';
 
 export default class PropertyFileValidator {
   public validationResults!: ValidatorResult;
@@ -14,18 +16,20 @@ export default class PropertyFileValidator {
     this.errorHandler = errorHandler;
   }
 
-  public validate(): boolean {
-    const envFilePath = process.env.PROVARDX_PROPERTIES_FILE_PATH;
+  public async validate(): Promise<boolean> {
+    const config: ProvarConfig = await this.loadConfig();
+    const filePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
+
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
-    if (envFilePath === undefined || !fileSystem.existsSync(envFilePath)) {
+    if (filePath === undefined || !fileSystem.existsSync(filePath)) {
       this.errorHandler.addErrorsToList('MISSING_FILE', this.MISSINGFILEERROR);
     } else {
       /* eslint-disable */
       const jsonValidator = new Validator();
       try {
         this.validationResults = jsonValidator.validate(
-          JSON.parse(fileSystem.readFileSync(envFilePath).toString()),
+          JSON.parse(fileSystem.readFileSync(filePath).toString()),
           propertyFileSchema
         );
         if (this.validationResults.errors.length > 0) {
@@ -80,5 +84,18 @@ export default class PropertyFileValidator {
 
   public getValidationErrors(): Error[] {
     return this.errorHandler.getErrors();
+  }
+
+  async loadConfig(): Promise<ProvarConfig> {
+    try {
+      const config = await ProvarConfig.create();
+      await config.read();
+      return config;
+    } catch (error) {
+      if (error instanceof SfError) {
+        this.errorHandler.addErrorsToList(error.code, error.message);
+      }
+      throw error;
+    }
   }
 }
