@@ -170,17 +170,17 @@ describe('sf provar config load NUTs', () => {
 
   it('Boilerplate json file should not be loaded as required property is missing in json file and return the error message', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadErrorProperty.json`);
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       [key: string]: string | boolean;
     }
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         delete jsonObject[property];
       });
     }
     const jsonFilePath = './loadErrorProperty.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['provarHome'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
@@ -192,25 +192,25 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded as multiple required properties are missing in file and return the error message in json format', () => {
-    interface MyJsonData {
-      [key: string]: string | boolean | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = 'loadErrorProperty.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         const nestedProperties = property.split('.');
         deleteNestedProperty(jsonObject, nestedProperties);
       });
     }
-    function deleteNestedProperty(obj: MyJsonData, path: string[]): void {
+    function deleteNestedProperty(obj: PropertyFileJsonData, path: string[]): void {
       const property = path.shift();
       if (property !== undefined && Object.prototype.hasOwnProperty.call(obj, property)) {
         if (path.length === 0) {
           delete obj[property];
         } else if (typeof obj[property] === 'object') {
-          deleteNestedProperty(obj[property] as MyJsonData, path);
+          deleteNestedProperty(obj[property] as PropertyFileJsonData, path);
         }
       }
     }
@@ -237,13 +237,13 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded as invalid value exists for one property and return the error message', () => {
-    interface MyJsonData {
-      [key: string]: string | boolean | number | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | number | PropertyFileJsonData;
     }
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadInvalidPropertyValue.json`);
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.resultsPathDisposition = 'Increement';
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
@@ -254,12 +254,12 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('updating values for multiple properties', () => {
-    interface MyJsonData {
-      [key: string]: string | boolean | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.pluginOutputlevel = 'WARNIING';
     jsonData.testOutputLevel = 'DETAILL';
     jsonData.stopOnError = '0';
@@ -269,7 +269,7 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded as invalid value exists for multiple properties and return the error message in json format', () => {
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       metadata: {
         metadataLevel: string;
       };
@@ -279,7 +279,7 @@ describe('sf provar config load NUTs', () => {
     }
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.metadata.metadataLevel = 'reloaad';
     jsonData.environment.webBrowser = 'FF';
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
@@ -294,17 +294,17 @@ describe('sf provar config load NUTs', () => {
   });
 
   it('Boilerplate json file should not be loaded as multiple error exists and return the error message', () => {
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       [key: string]: string | boolean;
     }
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         delete jsonObject[property];
       });
     }
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['projectPath'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
