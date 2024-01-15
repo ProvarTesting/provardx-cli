@@ -6,6 +6,7 @@ import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfPro
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { ProvarConfig } from '../../../../Utility/provarConfig';
 import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
+import { errorMessages } from '../../../../constants/errorMessages';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.load');
@@ -31,7 +32,7 @@ export default class SfProvarConfigLoad extends SfCommand<SfProvarCommandResult>
     const config: ProvarConfig = await propertyFileValidator.loadConfig();
 
     if (!fileSystem.existsSync(propertiesFileName)) {
-      this.errorHandler.addErrorsToList('INVALID_PATH', 'The provided path does not exist or is invalid.');
+      this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
     config.set('PROVARDX_PROPERTIES_FILE_PATH', propertiesFileName);
