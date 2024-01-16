@@ -279,11 +279,14 @@ describe('sf provar config load NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | number | PropertyFileJsonData;
     }
+    const incorrectResultsPathDisposition = 'Increement';
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p loadInvalidPropertyValue.json`);
     const jsonFilePath = 'loadInvalidPropertyValue.json';
+    // reading the json data
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
-    jsonData.resultsPathDisposition = 'Increement';
+    // passing invalid value to resultsPathDisposition property in json
+    jsonData.resultsPathDisposition = incorrectResultsPathDisposition;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
@@ -299,13 +302,19 @@ describe('sf provar config load NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | PropertyFileJsonData;
     }
+    const incorrectPluginOutputlevel = 'WARNIING';
+    const incorrectTestOutputLevel = 'DETAILL';
+    const incorrectStopOnError = '0';
+    const incorrectLightningMode = '1';
+    // reading the json data
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
-    jsonData.pluginOutputlevel = 'WARNIING';
-    jsonData.testOutputLevel = 'DETAILL';
-    jsonData.stopOnError = '0';
-    jsonData.lightningMode = '1';
+    // passing invalid values to multiple properties in json
+    jsonData.pluginOutputlevel = incorrectPluginOutputlevel;
+    jsonData.testOutputLevel = incorrectTestOutputLevel;
+    jsonData.stopOnError = incorrectStopOnError;
+    jsonData.lightningMode = incorrectLightningMode;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
   });
