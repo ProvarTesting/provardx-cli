@@ -1,6 +1,7 @@
 import * as fileSystem from 'fs';
 import { SfError } from '@salesforce/core';
 import { Validator, ValidatorResult } from 'jsonschema';
+import { errorMessages } from '../constants/errorMessages';
 import { propertyFileSchema } from '../constants/propertyFileSchema';
 import ErrorHandler, { Error } from './errorHandler';
 import { substringAfter, addQuotesAround } from './stringSupport';
@@ -9,8 +10,6 @@ import { ProvarConfig } from './provarConfig';
 export default class PropertyFileValidator {
   public validationResults!: ValidatorResult;
   private errorHandler: ErrorHandler;
-  private MISSINGFILEERROR = 'The properties file has not been loaded or cannot be accessed.';
-  private MALFORMEDFILEERROR = 'The properties file is not a valid JSON.';
 
   public constructor(errorHandler: ErrorHandler) {
     this.errorHandler = errorHandler;
@@ -23,7 +22,7 @@ export default class PropertyFileValidator {
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
     if (filePath === undefined || !fileSystem.existsSync(filePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', this.MISSINGFILEERROR);
+      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
     } else {
       /* eslint-disable */
       const jsonValidator = new Validator();
@@ -46,7 +45,7 @@ export default class PropertyFileValidator {
           }
         }
       } catch (errors: any) {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', this.MALFORMEDFILEERROR);
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
         return false;
       }
       const missingPropertiesCount = missingRequiredProperties.length;
