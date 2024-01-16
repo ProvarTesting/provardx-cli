@@ -39,8 +39,9 @@ export default class SfProvarConfigLoad extends SfCommand<SfProvarCommandResult>
     await config.write();
     if (!propertyFileValidator.validate()) {
       config.unset('PROVARDX_PROPERTIES_FILE_PATH');
+      await config.write();
     }
-    await config.write();
+
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
 }
