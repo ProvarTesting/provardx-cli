@@ -1,6 +1,5 @@
 export const sfProvarConfigLoadCommand = 'sf provar config load';
 export const loadSuccessMessage = 'The properties file was loaded successfully.\n';
-export const invalidPathError = 'Error (1): [INVALID_PATH] The provided path does not exist or is invalid.\n';
 export const multipleErrors =
   "Error (1): [MISSING_PROPERTY] The property 'projectPath' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
 
