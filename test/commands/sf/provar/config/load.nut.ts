@@ -328,11 +328,13 @@ describe('sf provar config load NUTs', () => {
         webBrowser: string;
       };
     }
+    const incorrectMetadataLevel = 'reloaad';
+    const incorrectWebBrowser = 'FF';
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
-    jsonData.metadata.metadataLevel = 'reloaad';
-    jsonData.environment.webBrowser = 'FF';
+    jsonData.metadata.metadataLevel = incorrectMetadataLevel;
+    jsonData.environment.webBrowser = incorrectWebBrowser;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
