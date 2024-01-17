@@ -189,7 +189,7 @@ describe('sf provar config load NUTs', () => {
     expect(res.stdout).to.deep.equal(loadConstants.loadSuccessMessage);
   });
 
-  it('Boilerplate json file should not be loaded as required property is missing in json file and return the error message', () => {
+  it('Boilerplate json file should not be loaded as one required property is missing in json file and return the error message', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadErrorProperty.json`);
     interface PropertyFileJsonData {
       [key: string]: string | boolean;
@@ -213,6 +213,16 @@ describe('sf provar config load NUTs', () => {
     // validating the file
     const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+  });
+
+  it('Boilerplate json file should not be loaded as one required property is missing in json file and return the result in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p ./loadErrorProperty.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertyJsonError);
   });
 
   it('Boilerplate json file should not be loaded as multiple required properties are missing in file and return the error message in json format', () => {
@@ -265,6 +275,13 @@ describe('sf provar config load NUTs', () => {
     expect(result.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
+  it('Boilerplate json file should not be loaded as multiple required properties are missing in the file and return the error message', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadErrorProperty.json`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(validateConstants.missingPropertiesError);
+  });
+
   it('Boilerplate json file which contains valid data should be loaded successfully and return a success message in json format', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./loadSuccessNew.json`);
     const res = execCmd<SfProvarCommandResult>(
@@ -297,6 +314,16 @@ describe('sf provar config load NUTs', () => {
     // validating the file
     const result = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+  });
+
+  it('Boilerplate json file should not be loaded as invalid value exists for one property and return the result in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} -p loadInvalidPropertyValue.json --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValueJsonError);
   });
 
   it('updating values for multiple properties', () => {
@@ -345,6 +372,13 @@ describe('sf provar config load NUTs', () => {
       }
     );
     expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValuesJsonError);
+  });
+
+  it('Boilerplate json file should not be loaded as invalid value exists for multiple properties and return the error message', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${loadConstants.sfProvarConfigLoadCommand} --properties-file loadInvalidPropertyValue.json`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(validateConstants.invalidValuesError);
   });
 
   it('Boilerplate json file should not be loaded as multiple error exists and return the error message', () => {
