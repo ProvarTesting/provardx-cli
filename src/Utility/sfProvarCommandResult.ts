@@ -25,7 +25,7 @@ export function populateResult(
       errors: errorObjects,
     };
   } else {
-    log(messages.getMessage('success_message'));
+    !messages.messages.has('success_message') ?? log(messages.getMessage('success_message'));
     result = {
       success: true,
     };
