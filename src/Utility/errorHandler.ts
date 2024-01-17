@@ -1,12 +1,14 @@
+import { ErrorCode } from './errorCode';
+
 export type Error = {
-  code: string;
+  code: ErrorCode;
   message: string;
 };
 
 export default class ErrorHandler {
   private errors: Error[] = [];
 
-  public addErrorsToList(eCode: string, eMessage: string): void {
+  public addErrorsToList(eCode: ErrorCode, eMessage: string): void {
     this.errors.push({
       code: eCode,
       message: eMessage,
