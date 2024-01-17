@@ -2,11 +2,6 @@ export const sfProvarConfigValidateCommand = 'sf provar config validate';
 
 export const validateSuccessMessage = 'The properties file was validated successfully.\n';
 
-export const missingFileError =
-  'Error (1): [MISSING_FILE] The properties file has not been loaded or cannot be accessed.\n';
-
-export const malformedFileError = 'Error (1): [MALFORMED_FILE] The properties file is not a valid JSON.\n';
-
 export const missingPropertyError = "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing.\n";
 
 export const missingPropertiesError =
