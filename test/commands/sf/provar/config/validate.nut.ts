@@ -3,6 +3,7 @@ import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
 import { sfProvarConfigGenerateCommand } from '../../../../assertion/generateConstants';
+import { sfProvarConfigLoadCommand } from '../../../../assertion/loadConstants';
 import * as validateConstants from '../../../../assertion/validateConstants';
 
 describe('sf provar config validate NUTs', () => {
@@ -12,9 +13,22 @@ describe('sf provar config validate NUTs', () => {
     await session?.clean();
   });
 
+  it('Boilerplate json file should not be validated if the file has not been loaded', () => {
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p MissingFile.json`);
+    const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
+    expect(res.stderr).to.deep.equal(validateConstants.missingFileError);
+  });
+
+  it('Boilerplate json file should not be validated if the file has not been loaded and return result in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand} --json`, {
+      ensureExitCode: 0,
+    });
+    expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+  });
+
   it('Boilerplate json file should be validated successfully with all required & optional attributes', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p validateFile.json`);
-    process.env.PROVARDX_PROPERTIES_FILE_PATH = './validateFile.json';
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p validateFile.json`);
     const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`, {
       ensureExitCode: 0,
     }).shellOutput;
@@ -30,10 +44,10 @@ describe('sf provar config validate NUTs', () => {
 
   it('Boilerplate json file should be validated successfully with all the required attributes and their types', () => {
     describe('JSON file contains all required attribute', () => {
-      interface MyJsonData {
+      interface PropertyFileJsonData {
         [key: string]: string | number | boolean;
       }
-      const jsonData = JSON.parse(fs.readFileSync('./validateFile.json', 'utf8')) as MyJsonData;
+      const jsonData = JSON.parse(fs.readFileSync('./validateFile.json', 'utf8')) as PropertyFileJsonData;
       const requiredAttributes: string[] = ['provarHome', 'projectPath', 'resultsPath'];
       const metadataNestedAttributes: string[] = ['metadataLevel', 'cachePath'];
       const environmentNestedAttributes: string[] = [
@@ -72,19 +86,6 @@ describe('sf provar config validate NUTs', () => {
     }
   });
 
-  it('Boilerplate json file should not be validated if the file has not been loaded', () => {
-    delete process.env.PROVARDX_PROPERTIES_FILE_PATH;
-    const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
-    expect(res.stderr).to.deep.equal(validateConstants.missingFileError);
-  });
-
-  it('Boilerplate json file should not be validated if the file has not been loaded and return result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand} --json`, {
-      ensureExitCode: 0,
-    });
-    expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
-  });
-
   it('Boilerplate json file should not be validated as it is invalid json file', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p malformedFile.json`);
     const jsonFilePath = './malformedFile.json';
@@ -95,7 +96,7 @@ describe('sf provar config validate NUTs', () => {
         return;
       }
     });
-    process.env.PROVARDX_PROPERTIES_FILE_PATH = './malformedFile.json';
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p ./malformedFile.json`);
     // validating json file
     const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.malformedFileError);
@@ -110,24 +111,24 @@ describe('sf provar config validate NUTs', () => {
 
   it('Boilerplate json file should not be validated as one required property is missing in json file', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p propertyError.json`);
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       [key: string]: string | boolean;
     }
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         delete jsonObject[property];
       });
     }
     const jsonFilePath = './propertyError.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['provarHome'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     expect(originalJsonData).to.not.have.all.keys(propertiesToRemove);
     // loading the file in the environment
-    process.env.PROVARDX_PROPERTIES_FILE_PATH = './propertyError.json';
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p ./propertyError.json`);
     // validatig the file
     const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.missingPropertyError);
@@ -141,26 +142,26 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as multiple required properties are missing in the file', () => {
-    interface MyJsonData {
-      [key: string]: string | boolean | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = './propertyError.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
 
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         const nestedProperties = property.split('.');
         deleteNestedProperty(jsonObject, nestedProperties);
       });
     }
-    function deleteNestedProperty(obj: MyJsonData, path: string[]): void {
+    function deleteNestedProperty(obj: PropertyFileJsonData, path: string[]): void {
       const property = path.shift();
       if (property !== undefined && Object.prototype.hasOwnProperty.call(obj, property)) {
         if (path.length === 0) {
           delete obj[property];
         } else if (typeof obj[property] === 'object') {
-          deleteNestedProperty(obj[property] as MyJsonData, path);
+          deleteNestedProperty(obj[property] as PropertyFileJsonData, path);
         }
       }
     }
@@ -190,16 +191,17 @@ describe('sf provar config validate NUTs', () => {
 
   it('Boilerplate json file should not be validated as invalid property value', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./valueError.json`);
-    interface MyJsonData {
-      [key: string]: string | boolean | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = './valueError.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.resultsPathDisposition = 'Decrement';
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
-    process.env.PROVARDX_PROPERTIES_FILE_PATH = './valueError.json';
+    // loading the json file
+    execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p ./valueError.json`);
     // validating json file
     const res = execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`).shellOutput;
     expect(res.stderr).to.deep.equal(validateConstants.invalidValueError);
@@ -213,12 +215,12 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('updating value of properties pluginOutputlevel,testOutputLevel,stopOnError,lightningMode in json file', () => {
-    interface MyJsonData {
-      [key: string]: string | boolean | MyJsonData;
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = './valueError.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.pluginOutputlevel = 'Error';
     jsonData.testOutputLevel = 'BASICC';
     jsonData.stopOnError = '2';
@@ -232,13 +234,13 @@ describe('sf provar config validate NUTs', () => {
       webBrowser?: string;
       metadataLevel?: string;
     }
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       environment?: Environment;
       metadata?: Environment;
     }
     const jsonFilePath = './valueError.json';
     const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
 
     if (jsonData.environment) {
       jsonData.environment = jsonData.environment || {};
@@ -264,17 +266,17 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as multiple error exists', () => {
-    interface MyJsonData {
+    interface PropertyFileJsonData {
       [key: string]: string | boolean;
     }
-    function removeProperties(jsonObject: MyJsonData, propertiesToRemove: string[]): void {
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
         delete jsonObject[property];
       });
     }
     const jsonFilePath = './valueError.json';
     const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
-    const originalJsonData: MyJsonData = JSON.parse(jsonData) as MyJsonData;
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['provarHome'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
@@ -293,14 +295,14 @@ describe('sf provar config validate NUTs', () => {
 
   describe('Validate properties which having a valid range of options in json file', () => {
     it('Boilerplate json file should be validated successfully for the property resultsPathDisposition', () => {
-      interface MyJsonData {
-        [key: string]: string | boolean | MyJsonData;
+      interface PropertyFileJsonData {
+        [key: string]: string | boolean | PropertyFileJsonData;
       }
       execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p ./propertyRange.json`);
-      process.env.PROVARDX_PROPERTIES_FILE_PATH = './propertyRange.json';
+      execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p ./propertyRange.json`);
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
       const resultsPathDisposition = ['Increment', 'Replace', 'Fail'];
       resultsPathDisposition.forEach((resultsPath) => {
         jsonData.resultsPathDisposition = resultsPath;
@@ -313,12 +315,12 @@ describe('sf provar config validate NUTs', () => {
     });
 
     it('Boilerplate json file should be validated successfully for the property testOutputLevel', () => {
-      interface MyJsonData {
-        [key: string]: string | boolean | MyJsonData;
+      interface PropertyFileJsonData {
+        [key: string]: string | boolean | PropertyFileJsonData;
       }
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
       const testOutputLevel = ['BASIC', 'DETAILED', 'DIAGNOSTIC'];
       testOutputLevel.forEach((testOutput) => {
         jsonData.testOutputLevel = testOutput;
@@ -331,12 +333,12 @@ describe('sf provar config validate NUTs', () => {
     });
 
     it('Boilerplate json file should be validated successfully for the property pluginOutputlevel', () => {
-      interface MyJsonData {
-        [key: string]: string | boolean | MyJsonData;
+      interface PropertyFileJsonData {
+        [key: string]: string | boolean | PropertyFileJsonData;
       }
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
       const pluginOutputlevel = ['SEVERE', 'WARNING', 'INFO', 'FINE', 'FINER', 'FINEST'];
       pluginOutputlevel.forEach((pluginOutput) => {
         jsonData.pluginOutputlevel = pluginOutput;
@@ -349,14 +351,14 @@ describe('sf provar config validate NUTs', () => {
     });
 
     it('Boilerplate json file should be validated successfully for the property metadataLevel', () => {
-      interface MyJsonData {
+      interface PropertyFileJsonData {
         metadata: {
           metadataLevel: string;
         };
       }
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
       const metadataLevel = ['Reuse', 'Reload', 'Refresh'];
       metadataLevel.forEach((metadata) => {
         jsonData.metadata.metadataLevel = metadata;
@@ -369,14 +371,14 @@ describe('sf provar config validate NUTs', () => {
     });
 
     it('Boilerplate json file should be validated successfully for the property webBrowser', () => {
-      interface MyJsonData {
+      interface PropertyFileJsonData {
         environment: {
           webBrowser: string;
         };
       }
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
-      const jsonData: MyJsonData = JSON.parse(jsonDataString) as MyJsonData;
+      const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
       const webBrowser = ['Chrome', 'Safari', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless'];
       webBrowser.forEach((browser) => {
         jsonData.environment.webBrowser = browser;
