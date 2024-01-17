@@ -4,6 +4,7 @@ import { Messages } from '@salesforce/core';
 import { generateFile, getExtension } from '../../../../Utility/fileSupport';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
+import { errorMessages } from '../../../../constants/errorMessages';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
@@ -35,7 +36,7 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandRes
       this.errorHandler.addErrorsToList('INVALID_FILE_EXTENSION', 'Only the .json file extension is supported.');
     } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
       if (!(await this.confirm(messages.getMessage('PropertiesFileOverwritePromptConfirm')))) {
-        this.errorHandler.addErrorsToList('GENERATE_OPERATION_DENIED', 'The operation was cancelled.');
+        this.errorHandler.addErrorsToList('GENERATE_OPERATION_DENIED', errorMessages.GENERATE_OPERATION_DENIED);
       } else {
         this.generatePropertiesFile(PropertiesFileName);
       }
@@ -52,7 +53,7 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandRes
       /* eslint-disable */
     } catch (error: any) {
       if (error.code === 'ENOENT') {
-        this.errorHandler.addErrorsToList('INVALID_PATH', 'The provided path does not exist or is invalid.');
+        this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
       } else if (error.code === 'EPERM' || error.code === 'EACCES') {
         this.errorHandler.addErrorsToList(
           'INSUFFICIENT_PERMISSIONS',
