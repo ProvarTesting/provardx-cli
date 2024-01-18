@@ -51,7 +51,6 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
           this.errorHandler.addErrorsToList('INVALID_VALUE', errorMessages.INVALID_VALUE);
           return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
         }
-        attributeName = JSON.parse(attributeName);
         if (attributeName.includes('.')) {
           setNestedProperty(propertyFileContent, attributeName, attributeValue);
         } else {
