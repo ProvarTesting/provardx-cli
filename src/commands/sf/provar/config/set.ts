@@ -46,7 +46,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
           this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
         }
         try {
-          attributeValue = JSON.parse(attributeValue);
+          attributeValue = parseJSONString(attributeValue);
         } catch (err: any) {
           this.errorHandler.addErrorsToList('INVALID_VALUE', errorMessages.INVALID_VALUE);
           return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
@@ -82,4 +82,14 @@ function setNestedProperty(jsondata: any, attribute: string, value: string | und
     jsondata = jsondata[arg];
   }
   jsondata[argList[arglen - 1]] = value;
+}
+
+function parseJSONString(jsonInput: string) {
+  try {
+    // Attempt to parse the input as JSON
+    return JSON.parse(jsonInput);
+  } catch (err) {
+    // If parsing as JSON fails, treat it as a regular string
+    return jsonInput;
+  }
 }
