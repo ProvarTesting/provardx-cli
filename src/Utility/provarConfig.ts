@@ -1,4 +1,6 @@
-import { Config, ConfigPropertyMeta } from '@salesforce/core';
+import { Config, ConfigPropertyMeta, SfError } from '@salesforce/core';
+import ErrorHandler from './errorHandler';
+
 /**
  * The files where provardx config values are stored for projects and the global space.
  */
@@ -16,5 +18,19 @@ export class ProvarConfig extends Config {
         option
       )
     );
+  }
+
+  public static async loadConfig(errorHandler: ErrorHandler): Promise<ProvarConfig> {
+    try {
+      const config = await ProvarConfig.create();
+      await config.read();
+      return config;
+    } catch (error) {
+      if (error instanceof SfError) {
+        // eslint-disable-next-line
+        errorHandler.addErrorsToList(error.code, error.message);
+      }
+      throw error;
+    }
   }
 }

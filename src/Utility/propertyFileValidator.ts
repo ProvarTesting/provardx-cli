@@ -1,5 +1,4 @@
 import * as fileSystem from 'fs';
-import { SfError } from '@salesforce/core';
 import { Validator, ValidatorResult } from 'jsonschema';
 import { errorMessages } from '../constants/errorMessages';
 import { propertyFileSchema } from '../constants/propertyFileSchema';
@@ -16,7 +15,7 @@ export default class PropertyFileValidator {
   }
 
   public async validate(): Promise<boolean> {
-    const config: ProvarConfig = await this.loadConfig();
+    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
     const filePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
 
     const missingRequiredProperties: string[] = [];
@@ -83,18 +82,5 @@ export default class PropertyFileValidator {
 
   public getValidationErrors(): Error[] {
     return this.errorHandler.getErrors();
-  }
-
-  async loadConfig(): Promise<ProvarConfig> {
-    try {
-      const config = await ProvarConfig.create();
-      await config.read();
-      return config;
-    } catch (error) {
-      if (error instanceof SfError) {
-        this.errorHandler.addErrorsToList(error.code, error.message);
-      }
-      throw error;
-    }
   }
 }

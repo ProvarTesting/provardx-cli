@@ -4,6 +4,7 @@ import { Messages } from '@salesforce/core';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { errorMessages } from '../../../../constants/errorMessages';
+import { ProvarConfig } from '../../../../Utility/provarConfig';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.set');
@@ -18,7 +19,10 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
 
   public async run(): Promise<SfProvarCommandResult> {
     const { args, argv, flags } = await this.parse(SfProvarConfigSet);
-    const propertiesFilePath = 'D:/provardx-cli/prop.json';
+    // eslint-disable-next-line
+    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
+    const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
+
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
       this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
