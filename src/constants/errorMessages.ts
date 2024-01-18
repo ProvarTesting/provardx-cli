@@ -6,4 +6,6 @@ export enum errorMessages {
   MISSING_VALUE = 'The value is missing.',
   MISSING_PROPERTY = 'The property is missing.',
   INVALID_ARGUMENT = 'The property/value cannot be parsed.',
+  INVALID_VALUE = 'The value cannot be parsed.',
+  INVALID_PROPERTY = 'The property cannot be parsed.',
 }

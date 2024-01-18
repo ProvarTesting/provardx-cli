@@ -30,16 +30,32 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
 
     try {
       /* eslint-disable */
+      const parsed: Object = parseVarArgs(args, argv as string[]);
+      if (Object.keys(parsed).length === 0) {
+        this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      }
       const data = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
       const propertyFileContent = JSON.parse(data);
 
-      const parsed = parseVarArgs(args, argv as string[]);
-      for (const [attributeName, attributeValue] of Object.entries(parsed)) {
+      for (let [attributeName, attributeValue] of Object.entries(parsed)) {
         if (!attributeValue) {
           this.errorHandler.addErrorsToList('MISSING_VALUE', errorMessages.MISSING_VALUE);
         }
         if (attributeName.length < 1) {
           this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
+        }
+        try {
+          attributeValue = JSON.parse(attributeValue);
+        } catch (err: any) {
+          this.errorHandler.addErrorsToList('INVALID_VALUE', errorMessages.INVALID_VALUE);
+          return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+        }
+        try {
+          attributeName = JSON.parse(attributeName);
+        } catch (err: any) {
+          this.errorHandler.addErrorsToList('INVALID_PROPERTY', errorMessages.INVALID_PROPERTY);
+          return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
         }
         if (attributeName.includes('.')) {
           setNestedProperty(propertyFileContent, attributeName, attributeValue);
@@ -53,8 +69,10 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
     } catch (err: any) {
       if (err.name === 'InvalidArgumentFormatError') {
         this.errorHandler.addErrorsToList('INVALID_ARGUMENT', errorMessages.INVALID_ARGUMENT);
-      } else {
+      } else if (err.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+      } else {
+        throw err;
       }
     }
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
