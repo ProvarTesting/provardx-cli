@@ -5,6 +5,7 @@ import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfPro
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { errorMessages } from '../../../../constants/errorMessages';
 import { ProvarConfig } from '../../../../Utility/provarConfig';
+import { parseJSONString, setNestedProperty } from '../../../../Utility/jsonSupport';
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.set');
@@ -70,26 +71,5 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
       }
     }
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-  }
-}
-
-function setNestedProperty(jsondata: any, attribute: string, value: string | undefined) {
-  var argList = attribute.split('.');
-  var arglen = argList.length;
-  for (var i = 0; i < arglen - 1; i++) {
-    var arg = argList[i];
-    if (!jsondata[arg]) jsondata[arg] = {};
-    jsondata = jsondata[arg];
-  }
-  jsondata[argList[arglen - 1]] = value;
-}
-
-function parseJSONString(jsonInput: string) {
-  try {
-    // Attempt to parse the input as JSON
-    return JSON.parse(jsonInput);
-  } catch (err) {
-    // If parsing as JSON fails, treat it as a regular string
-    return jsonInput;
   }
 }
