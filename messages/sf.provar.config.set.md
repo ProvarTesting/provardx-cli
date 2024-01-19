@@ -1,10 +1,10 @@
 # summary
 
-Setting different properties dx properties.json
+Setting different properties inside dx-properties.json
 
 # description
 
-Setting different properties inside PROPERTIES_FILE_PATH loaded under .sf/config.json file
+Setting different properties inside dx-properties.json loaded under .sf/config.json file
 
 # examples
 

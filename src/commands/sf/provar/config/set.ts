@@ -38,23 +38,23 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
       const data = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
       const propertyFileContent = JSON.parse(data);
 
-      for (let [attributeName, attributeValue] of Object.entries(parsed)) {
-        if (!attributeValue) {
+      for (let [propertyName, propertyValue] of Object.entries(parsed)) {
+        if (!propertyValue) {
           this.errorHandler.addErrorsToList('MISSING_VALUE', errorMessages.MISSING_VALUE);
         }
-        if (attributeName.length < 1) {
+        if (propertyName.length < 1) {
           this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
         }
         try {
-          attributeValue = parseJSONString(attributeValue);
+          propertyValue = parseJSONString(propertyValue);
         } catch (err: any) {
           this.errorHandler.addErrorsToList('INVALID_VALUE', errorMessages.INVALID_VALUE);
           return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
         }
-        if (attributeName.includes('.')) {
-          setNestedProperty(propertyFileContent, attributeName, attributeValue);
+        if (propertyName.includes('.')) {
+          setNestedProperty(propertyFileContent, propertyName, propertyValue);
         } else {
-          propertyFileContent[attributeName] = attributeValue;
+          propertyFileContent[propertyName] = propertyValue;
         }
       }
       if (this.errorHandler.getErrors().length == 0) {
