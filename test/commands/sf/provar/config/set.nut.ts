@@ -14,14 +14,14 @@ describe('sf provar config set NUTs', () => {
 
   after(async () => {
     await session?.clean();
-    // const filePaths = ['setinvalidFile.json', 'setMultiplePropertiesValue.json'];
-    // filePaths.forEach((filePath) => {
-    //   fs.unlink(filePath, (err) => {
-    //     if (err) {
-    //       return err;
-    //     }
-    //   });
-    // });
+    const filePaths = ['setinvalidFile.json', 'setMultiplePropertiesValue.json'];
+    filePaths.forEach((filePath) => {
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          return err;
+        }
+      });
+    });
   });
 
   it('Value should not be set in json file if json file is not loaded in sf config file path and return the error', () => {
