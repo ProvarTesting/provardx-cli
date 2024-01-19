@@ -1,32 +1,32 @@
 /* eslint-disable */
-export function getNestedProperty(jsondata: any, attribute: string): any {
-  const attributes = attribute.split('.');
-  for (let i = 0; i < attributes.length; i++) {
-    jsondata = jsondata[attributes[i]];
+export function getNestedProperty(jsonData: any, attribute: string): any {
+  const attributePath = attribute.split('.');
+  for (let i = 0; i < attributePath.length; i++) {
+    jsonData = jsonData[attributePath[i]];
   }
-  return jsondata;
+  return jsonData;
 }
 
-export function checkNestedProperty(jsondata: any, attribute: string): boolean {
-  const attributes = attribute.split('.');
-  for (const attr of attributes) {
-    if (!jsondata?.hasOwnProperty(attr)) {
+export function checkNestedProperty(jsonData: any, attribute: string): boolean {
+  const attributePath = attribute.split('.');
+  for (const attr of attributePath) {
+    if (!jsonData?.hasOwnProperty(attr)) {
       return false;
     }
-    jsondata = jsondata[attr];
+    jsonData = jsonData[attr];
   }
   return true;
 }
 
-export function setNestedProperty(jsondata: any, attribute: string, value: string | undefined) {
-  const argList = attribute.split('.');
-  const arglen = argList.length;
-  for (var i = 0; i < arglen - 1; i++) {
-    var arg = argList[i];
-    if (!jsondata[arg]) jsondata[arg] = {};
-    jsondata = jsondata[arg];
+export function setNestedProperty(jsonData: any, attribute: string, value: string | undefined) {
+  const attributePath = attribute.split('.');
+  const attributesLength = attributePath.length;
+  for (var i = 0; i < attributesLength - 1; i++) {
+    var arg = attributePath[i];
+    if (!jsonData[arg]) jsonData[arg] = {};
+    jsonData = jsonData[arg];
   }
-  jsondata[argList[arglen - 1]] = value;
+  jsonData[attributePath[attributesLength - 1]] = value;
 }
 
 export function parseJSONString(jsonInput: string) {
