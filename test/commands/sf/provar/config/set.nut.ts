@@ -188,6 +188,13 @@ describe('sf provar config set NUTs', () => {
     expect(res.stdout).to.deep.equal('');
   });
 
+  it('Value should be set successfully for lightningMode property in json file and return the success result', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${setConstants.sfProvarConfigSetCommand} lightningMode=false`
+    ).shellOutput;
+    expect(res.stdout).to.deep.equal('');
+  });
+
   it('Value should be set successfully for testEnvironment property in environment object in json file', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${setConstants.sfProvarConfigSetCommand} "environment.testEnvironment"="SIT"`
@@ -205,7 +212,7 @@ describe('sf provar config set NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
   });
 
-  it('Value should be set successfully for metadata property in json file and return the success result in json format', () => {
+  it('Value should be set successfully for metadataLevel property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${setConstants.sfProvarConfigSetCommand} "metadata.metadataLevel"="RefreshedMetadata" --json`,
       {
@@ -230,6 +237,13 @@ describe('sf provar config set NUTs', () => {
       }
     );
     expect(res.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
+  });
+
+  it('New property and Value of type array should be set successfully in json file and return the success result', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${setConstants.sfProvarConfigSetCommand} "testcase"="[\\"tests/myTestCase.testcase\\",\\"tests/testSuite1/myTestCase1.testCase\\"]"`
+    ).shellOutput;
+    expect(res.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type object should be set successfully in json file and return the success resul', () => {
@@ -304,7 +318,7 @@ describe('sf provar config set NUTs', () => {
     expect(output.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
   });
 
-  it('New Object with nested property and Value should be created successfully in json file and return the success result in json format', () => {
+  it('New Object with nested properties and Value should be created successfully in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${setConstants.sfProvarConfigSetCommand} company.team.employee.position=Engineer --json`,
       {
@@ -333,6 +347,13 @@ describe('sf provar config set NUTs', () => {
     expect(jsonData.number).to.equal(1234567890);
     expect(jsonData.number_Value).to.equal(9876.54321);
     expect(jsonData.nullProperty).to.equal(null);
+    expect(jsonData.lightningMode).to.equal(false);
+    expect(jsonData.testCases).to.have.members([
+      '/Test Case 1.testcase',
+      '/Test Case 2.testcase',
+      '/Test Case 3.testcase',
+    ]);
+    expect(jsonData.testcase).to.have.members(['tests/myTestCase.testcase', 'tests/testSuite1/myTestCase1.testCase']);
   });
 
   it('Verifying values of all nested properties', () => {
