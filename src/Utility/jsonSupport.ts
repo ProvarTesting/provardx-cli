@@ -8,7 +8,6 @@
 /**
  * Custom logics from JSON manipulation.
  *
- * @author Palak Bansal
  */
 
 /* eslint-disable */

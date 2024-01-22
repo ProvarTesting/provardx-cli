@@ -18,7 +18,6 @@ import { checkNestedProperty, getNestedProperty } from '../../../../Utility/json
  * Gets the value for specified propertykey under arguments from provardx-properties.json
  * laoded under config.json
  *
- * @author Palak Bansal
  */
 
 Messages.importMessagesDirectory(__dirname);

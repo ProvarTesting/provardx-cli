@@ -18,7 +18,6 @@ import { parseJSONString, setNestedProperty } from '../../../../Utility/jsonSupp
  * Sets the specified property key and value inside provardx-properties.json
  * loaded under config file
  *
- * @author Palak Bansal
  */
 
 Messages.importMessagesDirectory(__dirname);
