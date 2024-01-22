@@ -8,4 +8,6 @@ export enum errorMessages {
   INVALID_ARGUMENT = 'The property/value cannot be parsed.',
   INVALID_VALUE = 'The value cannot be parsed.',
   INVALID_PROPERTY = 'The property cannot be parsed.',
+  MISSING_PROPERTY_GET = 'Please, specify a property to get from the properties file.',
+  UNKNOWN_PROPERTY = 'The property is not present in the file.',
 }
