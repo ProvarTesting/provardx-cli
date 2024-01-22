@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 import * as fileSystem from 'fs';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -6,6 +13,13 @@ import ErrorHandler from '../../../../Utility/errorHandler';
 import { ProvarConfig } from '../../../../Utility/provarConfig';
 import { errorMessages } from '../../../../constants/errorMessages';
 import { checkNestedProperty, getNestedProperty } from '../../../../Utility/jsonSupport';
+
+/**
+ * Gets the value for specified propertykey under arguments from provardx-properties.json
+ * laoded under config.json
+ *
+ * @author Palak Bansal
+ */
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.get');
