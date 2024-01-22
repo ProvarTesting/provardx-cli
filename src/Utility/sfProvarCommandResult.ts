@@ -11,7 +11,6 @@ import ErrorHandler, { Error } from './errorHandler';
 /**
  * Declaring return type and populating return object for async run method of the commands.
  *
- * @author Palak Bansal
  */
 
 export type SfProvarCommandResult = {

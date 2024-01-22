@@ -17,7 +17,6 @@ import { ProvarConfig } from './provarConfig';
 /**
  * Conatins code to load the config file and validation login for provardx-properties.json
  *
- * @author Palak Bansal
  */
 
 export default class PropertyFileValidator {

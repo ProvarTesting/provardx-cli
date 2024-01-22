@@ -11,7 +11,6 @@ import propertyFileContent from '../constants/propertyFileContent.json';
 /**
  * Contains all the methods that deals with generic file related operations.
  *
- * @author Palak Bansal
  */
 
 export function generateFile(filePath: string): void {

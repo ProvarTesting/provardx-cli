@@ -15,7 +15,6 @@ import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
  * Validates the provardx-properties.json against JSON standards and provardx schema
  * mentioned under PropertyFileSchema.ts
  *
- * @author Palak Bansal
  */
 
 Messages.importMessagesDirectory(__dirname);

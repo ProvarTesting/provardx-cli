@@ -16,7 +16,6 @@ import { errorMessages } from '../../../../constants/errorMessages';
 /**
  * Generates the boiler plate provardx-properties.json
  *
- * @author Palak Bansal
  */
 
 Messages.importMessagesDirectory(__dirname);

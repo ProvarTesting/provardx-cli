@@ -8,7 +8,6 @@
 /**
  * Deals with the custom operations on strings.
  *
- * @author Palak Bansal
  */
 
 export function substringAfter(str: string, separator: string): string {

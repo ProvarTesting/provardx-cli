@@ -10,7 +10,6 @@ import { ErrorCode } from './errorCode';
 /**
  * ErrorHandler to manage multiple errors thrown while execution of commands.
  *
- * @author Palak Bansal
  */
 
 export type Error = {

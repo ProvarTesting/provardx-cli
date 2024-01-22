@@ -20,7 +20,6 @@ import { errorMessages } from '../../../../constants/errorMessages';
  * So, that further any command can be run at any location by picking up the properties.json file
  * from config.json file.
  *
- * @author Palak Bansal
  */
 
 Messages.importMessagesDirectory(__dirname);

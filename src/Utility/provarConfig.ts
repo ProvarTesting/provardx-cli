@@ -11,7 +11,6 @@ import { Config, ConfigPropertyMeta } from '@salesforce/core';
  * sfdxConfig extended class that deals with any operation over .sf/config.json.
  * ex: what all properties we can add to config.json.
  *
- * @author Palak Bansal
  */
 
 export class ProvarConfig extends Config {
