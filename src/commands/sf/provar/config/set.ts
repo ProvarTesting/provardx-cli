@@ -18,7 +18,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
   private errorHandler = new ErrorHandler();
 
   public async run(): Promise<SfProvarCommandResult> {
-    const { args, argv, flags } = await this.parse(SfProvarConfigSet);
+    const { argv, flags } = await this.parse(SfProvarConfigSet);
     // eslint-disable-next-line
     const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
     const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
@@ -30,7 +30,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
 
     try {
       /* eslint-disable */
-      const parsed: Object = parseVarArgs(args, argv as string[]);
+      const parsed: Object = parseVarArgs({}, argv as string[]);
       if (Object.keys(parsed).length === 0) {
         this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
