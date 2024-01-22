@@ -33,18 +33,18 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
       const data = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
       const propertyFileContent = JSON.parse(data);
 
-      for (const attributeName of argv as string[]) {
-        if (attributeName.includes('.')) {
-          if (!checkNestedProperty(propertyFileContent, attributeName)) {
+      for (const propertyName of argv as string[]) {
+        if (propertyName.includes('.')) {
+          if (!checkNestedProperty(propertyFileContent, propertyName)) {
             this.errorHandler.addErrorsToList('UNKNOWN_PROPERTY', errorMessages.UNKNOWN_PROPERTY);
           } else {
-            attributeValue = getNestedProperty(propertyFileContent, attributeName);
+            attributeValue = getNestedProperty(propertyFileContent, propertyName);
           }
         } else {
-          if (!propertyFileContent.hasOwnProperty(attributeName)) {
+          if (!propertyFileContent.hasOwnProperty(propertyName)) {
             this.errorHandler.addErrorsToList('UNKNOWN_PROPERTY', errorMessages.UNKNOWN_PROPERTY);
           } else {
-            attributeValue = propertyFileContent[attributeName];
+            attributeValue = propertyFileContent[propertyName];
           }
         }
       }

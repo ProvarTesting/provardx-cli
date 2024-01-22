@@ -1,40 +1,38 @@
 /* eslint-disable */
-export function getNestedProperty(jsonData: any, attribute: string): any {
-  const attributePath = attribute.split('.');
-  for (let i = 0; i < attributePath.length; i++) {
-    jsonData = jsonData[attributePath[i]];
+export function getNestedProperty(jsonData: any, property: string): any {
+  const propertyPath = property.split('.');
+  for (let i = 0; i < propertyPath.length; i++) {
+    jsonData = jsonData[propertyPath[i]];
   }
   return jsonData;
 }
 
-export function checkNestedProperty(jsonData: any, attribute: string): boolean {
-  const attributePath = attribute.split('.');
-  for (const attr of attributePath) {
-    if (!jsonData?.hasOwnProperty(attr)) {
+export function checkNestedProperty(jsonData: any, property: string): boolean {
+  const propertyPath = property.split('.');
+  for (const nestedProperty of propertyPath) {
+    if (!jsonData?.hasOwnProperty(nestedProperty)) {
       return false;
     }
-    jsonData = jsonData[attr];
+    jsonData = jsonData[nestedProperty];
   }
   return true;
 }
 
-export function setNestedProperty(jsonData: any, attribute: string, value: string | undefined) {
-  const attributePath = attribute.split('.');
-  const attributesLength = attributePath.length;
-  for (var i = 0; i < attributesLength - 1; i++) {
-    var arg = attributePath[i];
-    if (!jsonData[arg]) jsonData[arg] = {};
-    jsonData = jsonData[arg];
+export function setNestedProperty(jsonData: any, property: string, value: string | undefined) {
+  const propertyPath = property.split('.');
+  const propertyPathLength = propertyPath.length;
+  for (var i = 0; i < propertyPathLength - 1; i++) {
+    var nestedProperty = propertyPath[i];
+    if (!jsonData[nestedProperty]) jsonData[nestedProperty] = {};
+    jsonData = jsonData[nestedProperty];
   }
-  jsonData[attributePath[attributesLength - 1]] = value;
+  jsonData[propertyPath[propertyPathLength - 1]] = value;
 }
 
 export function parseJSONString(jsonInput: string) {
   try {
-    // Attempt to parse the input as JSON
     return JSON.parse(jsonInput);
   } catch (err) {
-    // If parsing as JSON fails, treat it as a regular string
     return jsonInput;
   }
 }
