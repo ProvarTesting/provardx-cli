@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 export const sfProvarConfigValidateCommand = 'sf provar config validate';
 
 export const validateSuccessMessage = 'The properties file was validated successfully.\n';
