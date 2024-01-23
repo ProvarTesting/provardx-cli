@@ -15,7 +15,7 @@ import { substringAfter, addQuotesAround } from './stringSupport';
 import { ProvarConfig } from './provarConfig';
 
 /**
- * Conatins code to load the config file and validation login for provardx-properties.json
+ * Contains code to load the config file and validation login for provardx-properties.json
  *
  */
 
