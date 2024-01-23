@@ -129,8 +129,9 @@ describe('sf provar config get NUTs', () => {
 
   it('value should be returned for resultsPathDisposition property in json format', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
-      `${getConstants.sfProvarConfigGetCommand} resultsPathDisposition --json`
+      `${getConstants.sfProvarConfigGetCommand} "resultsPathDisposition" --json`
     ).jsonOutput;
+    expect(getOutput?.result.success).to.deep.equal(true);
     expect(getOutput?.result.value).to.deep.equal('Increment');
   });
 
@@ -138,6 +139,7 @@ describe('sf provar config get NUTs', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${getConstants.sfProvarConfigGetCommand} lightningMode --json`
     ).jsonOutput;
+    expect(getOutput?.result.success).to.deep.equal(true);
     expect(getOutput?.result.value).to.deep.equal(true);
   });
 
@@ -158,6 +160,14 @@ describe('sf provar config get NUTs', () => {
       `${getConstants.sfProvarConfigGetCommand} "environment.webBrowserDeviceName"`
     ).shellOutput;
     expect(getOutput.stdout).to.deep.equal('Full Screen\n');
+  });
+
+  it('Value should be returned successfully for cachePath property in metadata object', () => {
+    const getOutput = execCmd<SfProvarCommandResult>(
+      `${getConstants.sfProvarConfigGetCommand} metadata.cachePath --json`
+    ).jsonOutput;
+    expect(getOutput?.result.success).to.deep.equal(true);
+    expect(getOutput?.result.value).to.deep.equal('../.provarCaches');
   });
 
   it('Value should be returned successfully for testprojectSecrets property', () => {
