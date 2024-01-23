@@ -24,7 +24,7 @@ describe('sf provar config get NUTs', () => {
     });
   });
 
-  it('Property value is not returned as json file is not loaded', () => {
+  it('Missing file error as json file is not loaded', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p getinvalidFile.json`);
     const jsonFilePath = 'getinvalidFile.json';
     const data = fs.readFileSync(jsonFilePath, 'utf-8');
@@ -39,14 +39,14 @@ describe('sf provar config get NUTs', () => {
     expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
   });
 
-  it('Property value is not returned as json file is not loaded and return the error in json format', () => {
+  it('Missing file error in json format as json file is not loaded', () => {
     const res = execCmd<SfProvarCommandResult>(`${getConstants.sfProvarConfigGetCommand} resultsPath --json`, {
       ensureExitCode: 0,
     });
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
-  it('Property name is missing', () => {
+  it('Missing property error as property name is missing', () => {
     execCmd<SfProvarCommandResult>(`${sfProvarConfigGenerateCommand} -p getValues.json`);
     execCmd<SfProvarCommandResult>(`${sfProvarConfigLoadCommand} -p getValues.json`);
     execCmd<SfProvarCommandResult>(`${validateConstants.sfProvarConfigValidateCommand}`);
@@ -54,33 +54,33 @@ describe('sf provar config get NUTs', () => {
     expect(getOutput.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY_GET}\n`);
   });
 
-  it('Property name is missing and return the error in json format', () => {
+  it('Missing property error in json format as property name is missing', () => {
     const getOutput = execCmd<SfProvarCommandResult>(`${getConstants.sfProvarConfigGetCommand} --json`).jsonOutput;
     expect(getOutput).to.deep.equal(getConstants.missingPropertyGetJson);
   });
 
-  it('Property name to be returned for metadata obj is not present in the file and return the error', () => {
+  it('Unknown Property error as property is not present in the file', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${getConstants.sfProvarConfigGetCommand} metadata.test`
     ).shellOutput;
     expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
   });
 
-  it('Property name to be returned for env object is not present in the file and return the error', () => {
+  it('Unknown Property error as property is not present in the file', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${getConstants.sfProvarConfigGetCommand} environment.webBrowserProvider`
     ).shellOutput;
     expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
   });
 
-  it('Property name to be returned not present in the file and return the error', () => {
+  it('Unknown Property error as property is not present in the file', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${getConstants.sfProvarConfigGetCommand} projectPath.web`
     ).shellOutput;
     expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
   });
 
-  it('Property name to be returned is not present in the file and return the error in json format', () => {
+  it('Unknown Property error in json format as property is not present in the file', () => {
     const res = execCmd<SfProvarCommandResult>(`${getConstants.sfProvarConfigGetCommand} sample --json`, {
       ensureExitCode: 0,
     });
@@ -155,6 +155,13 @@ describe('sf provar config get NUTs', () => {
     expect(getOutput.jsonOutput).to.deep.equal(getConstants.getEnvironmentJsonObject);
   });
 
+  it('Value should be returned successfully for testEnvironment property in environment object', () => {
+    const getOutput = execCmd<SfProvarCommandResult>(
+      `${getConstants.sfProvarConfigGetCommand} environment.testEnvironment`
+    ).shellOutput;
+    expect(getOutput.stdout).to.deep.equal('${PROVAR_TEST_ENVIRONMENT}\n');
+  });
+
   it('Value should be returned successfully for webBrowserDeviceName property in environment object', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${getConstants.sfProvarConfigGetCommand} "environment.webBrowserDeviceName"`
@@ -175,5 +182,12 @@ describe('sf provar config get NUTs', () => {
       `${getConstants.sfProvarConfigGetCommand} testprojectSecrets`
     ).shellOutput;
     expect(getOutput.stdout).to.deep.equal('${PROVAR_TEST_PROJECT_SECRETS}\n');
+  });
+
+  it('Value should be returned successfully for connectionRefreshType property', () => {
+    const getOutput = execCmd<SfProvarCommandResult>(
+      `${getConstants.sfProvarConfigGetCommand} connectionRefreshType metadata.metadataLevel`
+    ).shellOutput;
+    expect(getOutput.stdout).to.deep.equal('Reload\n');
   });
 });
