@@ -43,6 +43,11 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
     }
     try {
       /* eslint-disable */
+      if (!argv.length) {
+        this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      }
+
       const data = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
       const propertyFileContent = JSON.parse(data);
 
@@ -62,7 +67,11 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
         }
       }
     } catch (err: any) {
-      this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+      if (err.name === 'SyntaxError') {
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+      } else {
+        throw err;
+      }
     }
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this), attributeValue);
