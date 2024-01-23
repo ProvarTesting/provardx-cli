@@ -44,7 +44,7 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
     try {
       /* eslint-disable */
       if (!argv.length) {
-        this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY);
+        this.errorHandler.addErrorsToList('MISSING_PROPERTY', errorMessages.MISSING_PROPERTY_GET);
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       }
 
