@@ -12,3 +12,5 @@ Run In dev provardx plugin on your local
 # Naming conventions used in provardx-cli development
 1. camelCase for fileNames/methodNames/Variables
 2. PascalCase for classNames.
+
+Also, we are adding the Copyright/licensing text over every ts file
