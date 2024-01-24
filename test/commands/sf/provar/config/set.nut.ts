@@ -52,7 +52,7 @@ describe('sf provar config set NUTs', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
     );
-    const jsonFilePath = 'FILE_PATHS.INVALID_FILE';
+    const jsonFilePath = FILE_PATHS.INVALID_FILE;
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
     fileSystem.writeFile(jsonFilePath, newData, (error) => {
@@ -404,7 +404,7 @@ describe('sf provar config set NUTs', () => {
       [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonData = JSON.parse(
-      fileSystem.readFileSync('./FILE_PATHS.FILE_MULTIPLE_FILES', 'utf8')
+      fileSystem.readFileSync(`./${FILE_PATHS.FILE_MULTIPLE_FILES}`, 'utf8')
     ) as PropertyFileJsonData;
     expect(jsonData.provarHome).to.equal(JSON.parse(SET_PROVAR_HOME_VALUE));
     expect(jsonData.resultsPath).to.equal(JSON.parse(SET_RESULTS_PATH_VALUE));
@@ -465,7 +465,7 @@ describe('sf provar config set NUTs', () => {
       };
     }
     const jsonData = JSON.parse(
-      fileSystem.readFileSync('./FILE_PATHS.FILE_MULTIPLE_FILES', 'utf8')
+      fileSystem.readFileSync(`./${FILE_PATHS.FILE_MULTIPLE_FILES}`, 'utf8')
     ) as PropertyFileJsonData;
     expect(jsonData.metadata.metadataLevel).to.equal(JSON.parse(SET_METADATA_LEVEL_VALUE));
     expect(jsonData.metadata.cachePath).to.equal(SET_CACHE_PATH_VALUE);

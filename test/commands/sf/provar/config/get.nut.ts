@@ -29,7 +29,7 @@ describe('sf provar config get NUTs', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
     );
-    const jsonFilePath = 'FILE_PATHS.INVALID_FILE';
+    const jsonFilePath = FILE_PATHS.INVALID_FILE;
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
     fileSystem.writeFile(jsonFilePath, newData, (error) => {
