@@ -164,7 +164,7 @@ describe('sf provar config get NUTs', () => {
 
   it('Value should be returned successfully for webBrowserDeviceName property in environment object', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
-      `${getConstants.sfProvarConfigGetCommand} "environment.webBrowserDeviceName"`
+      `${getConstants.sfProvarConfigGetCommand} "environment"."webBrowserDeviceName"`
     ).shellOutput;
     expect(getOutput.stdout).to.deep.equal('Full Screen\n');
   });
@@ -189,5 +189,13 @@ describe('sf provar config get NUTs', () => {
       `${getConstants.sfProvarConfigGetCommand} connectionRefreshType metadata.metadataLevel`
     ).shellOutput;
     expect(getOutput.stdout).to.deep.equal('Reload\n');
+  });
+
+  it('value should be returned for new added property', () => {
+    execCmd<SfProvarCommandResult>(`${setConstants.sfProvarConfigSetCommand} "Test Suite"="Multiple Suites"`);
+    const getOutput = execCmd<SfProvarCommandResult>(
+      `${getConstants.sfProvarConfigGetCommand} "Test Suite"`
+    ).shellOutput;
+    expect(getOutput.stdout).to.deep.equal('Multiple Suites\n');
   });
 });
