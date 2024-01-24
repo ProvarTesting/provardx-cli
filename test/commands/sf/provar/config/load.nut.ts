@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
@@ -25,7 +25,7 @@ describe('sf provar config load NUTs', () => {
       'loadInvalidPropertyValue.json',
     ];
     filePaths.forEach((filePath) => {
-      fs.unlink(filePath, (err) => {
+      fileSystem.unlink(filePath, (err) => {
         if (err) {
           return err;
         }
@@ -127,7 +127,7 @@ describe('sf provar config load NUTs', () => {
     );
     expect(res.jsonOutput).to.deep.equal(loadConstants.loadSuccessJson);
     const filePath = 'overwrite-advanceFile.json';
-    fs.unlink(filePath, (err) => {
+    fileSystem.unlink(filePath, (err) => {
       if (err) {
         return;
       }
@@ -144,9 +144,9 @@ describe('sf provar config load NUTs', () => {
   it('Boilerplate json file should not be loaded when json file is malformed and return the error message', () => {
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p loadMalformedFile.json`);
     const jsonFilePath = 'loadMalformedFile.json';
-    fs.readFileSync(jsonFilePath, 'utf-8');
+    fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = '';
-    fs.writeFile(jsonFilePath, newData, (error) => {
+    fileSystem.writeFile(jsonFilePath, newData, (error) => {
       if (error) {
         return;
       }
@@ -165,9 +165,9 @@ describe('sf provar config load NUTs', () => {
       `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file loadMalformedNew.json`
     );
     const jsonFilePath = 'loadMalformedNew.json';
-    const data = fs.readFileSync(jsonFilePath, 'utf-8');
+    const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
-    fs.writeFile(jsonFilePath, newData, (error) => {
+    fileSystem.writeFile(jsonFilePath, newData, (error) => {
       if (error) {
         return;
       }
@@ -207,12 +207,12 @@ describe('sf provar config load NUTs', () => {
       });
     }
     const jsonFilePath = './loadErrorProperty.json';
-    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['provarHome'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ./loadErrorProperty.json`
     ).shellOutput;
@@ -237,7 +237,7 @@ describe('sf provar config load NUTs', () => {
       [key: string]: string | boolean | PropertyFileJsonData;
     }
     const jsonFilePath = 'loadErrorProperty.json';
-    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
       propertiesToRemove.forEach((property) => {
@@ -267,7 +267,7 @@ describe('sf provar config load NUTs', () => {
     ];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadErrorProperty.json --json`,
       {
@@ -310,12 +310,12 @@ describe('sf provar config load NUTs', () => {
     );
     const jsonFilePath = 'loadInvalidPropertyValue.json';
     // reading the json data
-    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     // passing invalid value to resultsPathDisposition property in json
     jsonData.resultsPathDisposition = incorrectResultsPathDisposition;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadInvalidPropertyValue.json`
     ).shellOutput;
@@ -345,7 +345,7 @@ describe('sf provar config load NUTs', () => {
     const incorrectLightningMode = '1';
     // reading the json data
     const jsonFilePath = 'loadInvalidPropertyValue.json';
-    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     // passing invalid values to multiple properties in json
     jsonData.pluginOutputlevel = incorrectPluginOutputlevel;
@@ -353,7 +353,7 @@ describe('sf provar config load NUTs', () => {
     jsonData.stopOnError = incorrectStopOnError;
     jsonData.lightningMode = incorrectLightningMode;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
   });
 
   it('Boilerplate json file should not be loaded as invalid value exists for multiple properties and return the error message in json format', () => {
@@ -368,12 +368,12 @@ describe('sf provar config load NUTs', () => {
     const incorrectMetadataLevel = 'reloaad';
     const incorrectWebBrowser = 'FF';
     const jsonFilePath = 'loadInvalidPropertyValue.json';
-    const jsonDataString = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.metadata.metadataLevel = incorrectMetadataLevel;
     jsonData.environment.webBrowser = incorrectWebBrowser;
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadInvalidPropertyValue.json --json`,
       {
@@ -400,12 +400,12 @@ describe('sf provar config load NUTs', () => {
       });
     }
     const jsonFilePath = 'loadInvalidPropertyValue.json';
-    const jsonData = fs.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
     const propertiesToRemove: string[] = ['projectPath'];
     removeProperties(originalJsonData, propertiesToRemove);
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
-    fs.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadInvalidPropertyValue.json`
     ).shellOutput;

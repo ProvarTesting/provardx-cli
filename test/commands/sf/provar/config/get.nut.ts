@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
@@ -14,7 +14,7 @@ describe('sf provar config get NUTs', () => {
     await session?.clean();
     const filePaths = ['getinvalidFile.json', 'getValues.json'];
     filePaths.forEach((filePath) => {
-      fs.unlink(filePath, (err) => {
+      fileSystem.unlink(filePath, (err) => {
         if (err) {
           return err;
         }
@@ -25,9 +25,9 @@ describe('sf provar config get NUTs', () => {
   it('Missing file error as json file is not loaded', () => {
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p getinvalidFile.json`);
     const jsonFilePath = 'getinvalidFile.json';
-    const data = fs.readFileSync(jsonFilePath, 'utf-8');
+    const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
-    fs.writeFile(jsonFilePath, newData, (error) => {
+    fileSystem.writeFile(jsonFilePath, newData, (error) => {
       if (error) {
         return;
       }

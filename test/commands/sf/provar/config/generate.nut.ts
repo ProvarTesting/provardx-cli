@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/generateConstants';
@@ -27,7 +27,7 @@ describe('Config generate', () => {
   it('Properties defined inside boilerplate json file are matched', () => {
     const filePath = './provardx-properties.json';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const expectedJsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const expectedJsonData = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'));
     expect(expectedJsonData).to.deep.equal(PropertyFileContent);
   });
 

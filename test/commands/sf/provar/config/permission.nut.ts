@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { exec } from 'child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
@@ -17,8 +17,8 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
   if (process.platform === 'win32') {
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag', (done) => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
       const command = `C:/Windows/System32/icacls "${folderPath}" /deny "Everyone:(WD)"`;
       exec(command, (error) => {
@@ -36,8 +36,8 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
 
     it('Boilerplate json file should not be generated with "-p" flag as Invalid Path, Extension and Insufficient Permissions', (done) => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
       const command = `C:/Windows/System32/icacls "${folderPath}" /deny "Everyone:(WD)"`;
       exec(command, (error) => {
@@ -55,8 +55,8 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
 
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag and return the result in json format', (done) => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
       const command = `C:/Windows/System32/icacls "${folderPath}" /deny "Everyone:(WD)"`;
       exec(command, (error) => {
@@ -77,8 +77,8 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
 
     it('Boilerplate json file should not be generated with "-p" flag as Invalid Path and Insufficient Permission and return the result in json format', (done) => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
       const command = `C:/Windows/System32/icacls "${folderPath}" /deny "Everyone:(WD)"`;
       exec(command, (error) => {
@@ -99,10 +99,10 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
   } else if (process.platform === 'linux') {
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag', () => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
-      fs.chmodSync(folderPath, '555');
+      fileSystem.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Test.json`,
         {
@@ -114,10 +114,10 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
 
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag and return the result in json format', () => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
-      fs.chmodSync(folderPath, '555');
+      fileSystem.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Dummy.json --json`,
         {
@@ -129,10 +129,10 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
   } else if (process.platform === 'darwin') {
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "-p" flag', () => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
-      fs.chmodSync(folderPath, '555');
+      fileSystem.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Test.json`,
         {
@@ -144,10 +144,10 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
 
     it('Boilerplate json file should not be generated inside InsufficientPermission folder with "--properties-file" flag and return the result in json format', () => {
       const folderPath = './test/InsufficientPermission';
-      if (!fs.existsSync(folderPath)) {
-        fs.mkdirSync(folderPath);
+      if (!fileSystem.existsSync(folderPath)) {
+        fileSystem.mkdirSync(folderPath);
       }
-      fs.chmodSync(folderPath, '555');
+      fileSystem.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Dummy.json --json`,
         {

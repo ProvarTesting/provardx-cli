@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import * as fileSystem from 'fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
@@ -9,34 +9,34 @@ import { commandConstants } from '../../../../../src/constants/commandConstants'
 
 describe('sf provar config set NUTs', () => {
   let session: TestSession;
-  const setProvarHomeValue = '"C:/Users/anchal.goel/Downloads/main_win32_e4145678987_20240117_08768/"';
-  const setResultsPathValue = '"C:/Users/anchal.goel/git/ProvarRegressionqam5/test/provardx/Results"';
-  const setProjectPathValue = 'C:/Users/anchal.goel/git/ProvarRegression/test';
-  const setSmtpPathValue = '" ../test/user/path"';
-  const setResultsPathDispositionValue = '"some random test"';
-  const setTestOutputLevelValue = 'DIAGNOSTIC';
-  const setPluginOutputlevelValue = '"FINEST"';
-  const setLightningModeValue = false;
-  const setTestEnvironmentValue = '"SIT"';
-  const setNewEnvironmentValue = 'testingEnv';
-  const setMetadataLevelValue = '"RefreshedMetadata"';
-  const setCachePathValue = '../Users/anchalgoel/test/path';
-  const setErrorValue = 'fail';
-  const setKeyValue = 'KeyTest';
-  const setTestValue = 'New_User';
-  const setSpecialCharactersValue = 'Str#$%in*_g';
-  const setNumberValue = 1234567890;
-  const setNumberDecimalValue = 9876.54321;
-  const setCountryValue = 'India';
-  const setStateValue = 'Uttarakhand';
-  const setCityValue = '"Roorkee"';
-  const setPositionValue = 'Engineer';
+  const SET_PROVAR_HOME_VALUE = '"C:/Users/anchal.goel/Downloads/main_win32_e4145678987_20240117_08768/"';
+  const SET_RESULTS_PATH_VALUE = '"C:/Users/anchal.goel/git/ProvarRegressionqam5/test/provardx/Results"';
+  const SET_PROJECT_PATH_VALUE = 'C:/Users/anchal.goel/git/ProvarRegression/test';
+  const SET_SMTP_PATH_VALUE = '" ../test/user/path"';
+  const SET_RESULTS_PATH_DISPOSITION_VALUE = '"some random test"';
+  const SET_TEST_OUTPUT_LEVEL_VALUE = 'DIAGNOSTIC';
+  const SET_PLUGIN_OUTPUTLEVEL_VALUE = '"FINEST"';
+  const SET_LIGHTNING_MODE_VALUE = false;
+  const SET_TEST_ENVIRONMENT_VALUE = '"SIT"';
+  const SET_NEW_ENVIRONMENT_VALUE = 'testingEnv';
+  const SET_METADATA_LEVEL_VALUE = '"RefreshedMetadata"';
+  const SET_CACHE_PATH_VALUE = '../Users/anchalgoel/test/path';
+  const SET_ERROR_VALUE = 'fail';
+  const SET_KEY_VALUE = 'KeyTest';
+  const SET_TEST_VALUE = 'New_User';
+  const SET_SPECIAL_CHARACTERS_VALUE = 'Str#$%in*_g';
+  const SET_NUMBER_VALUE = 1234567890;
+  const SET_NUMBER_DECIMAL_VALUE = 9876.54321;
+  const SET_COUNTRY_VALUE = 'India';
+  const SET_STATE_VALUE = 'Uttarakhand';
+  const SET_CITY_VALUE = '"Roorkee"';
+  const SET_POSITION_VALUE = 'Engineer';
 
   after(async () => {
     await session?.clean();
     const filePaths = ['setinvalidFile.json', 'setMultiplePropertiesValue.json', 'setErrors.json'];
     filePaths.forEach((filePath) => {
-      fs.unlink(filePath, (err) => {
+      fileSystem.unlink(filePath, (err) => {
         if (err) {
           return err;
         }
@@ -47,9 +47,9 @@ describe('sf provar config set NUTs', () => {
   it('Missing file error should be thrown when json file is not loaded and return the error', () => {
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p setinvalidFile.json`);
     const jsonFilePath = 'setinvalidFile.json';
-    const data = fs.readFileSync(jsonFilePath, 'utf-8');
+    const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
-    fs.writeFile(jsonFilePath, newData, (error) => {
+    fileSystem.writeFile(jsonFilePath, newData, (error) => {
       if (error) {
         return;
       }
@@ -168,14 +168,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be overwritten successfully for provarHome property in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "provarHome"=${setProvarHomeValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for resultsPath property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "resultsPath"=${setResultsPathValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "resultsPath"=${SET_RESULTS_PATH_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -185,14 +185,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for projectPath property in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "projectPath"=${setProjectPathValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for smtpPath property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} smtpPath=${setSmtpPathValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} smtpPath=${SET_SMTP_PATH_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -202,7 +202,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for resultsPathDisposition property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} resultsPathDisposition=${setResultsPathDispositionValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} resultsPathDisposition=${SET_RESULTS_PATH_DISPOSITION_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -212,7 +212,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for testOutputLevel property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "testOutputLevel"=${setTestOutputLevelValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "testOutputLevel"=${SET_TEST_OUTPUT_LEVEL_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -222,28 +222,28 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for pluginOutputlevel property in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} pluginOutputlevel=${setPluginOutputlevelValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} pluginOutputlevel=${SET_PLUGIN_OUTPUTLEVEL_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for lightningMode property in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} lightningMode=${setLightningModeValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} lightningMode=${SET_LIGHTNING_MODE_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for testEnvironment property in environment object in json file', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "environment.testEnvironment"=${setTestEnvironmentValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "environment.testEnvironment"=${SET_TEST_ENVIRONMENT_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('New property should be set successfully in environment object in json file and return the success result in json format ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} environment.newEnvironment=${setNewEnvironmentValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} environment.newEnvironment=${SET_NEW_ENVIRONMENT_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -253,7 +253,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for metadataLevel property in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "metadata.metadataLevel"=${setMetadataLevelValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "metadata.metadataLevel"=${SET_METADATA_LEVEL_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -263,14 +263,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for metadata cachePath property in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.cachePath=${setCachePathValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.cachePath=${SET_CACHE_PATH_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
 
   it('Multiple properties with values should be set successfully and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.error=${setErrorValue} environment.key=${setKeyValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.error=${SET_ERROR_VALUE} environment.key=${SET_KEY_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
@@ -301,7 +301,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type string should be set successfully in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} test=${setTestValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} test=${SET_TEST_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -311,7 +311,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type string with special char should be set successfully in json file and return the success result in json format ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "SpecialCharacters"=${setSpecialCharactersValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "SpecialCharacters"=${SET_SPECIAL_CHARACTERS_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -338,7 +338,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type Number should be set successfully in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number=${setNumberValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number=${SET_NUMBER_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -348,7 +348,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type Number should be set successfully in json file and return the success result', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number_Value=${setNumberDecimalValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number_Value=${SET_NUMBER_DECIMAL_VALUE}`
     ).shellOutput;
     expect(res.stdout).to.deep.equal('');
   });
@@ -365,25 +365,25 @@ describe('sf provar config set NUTs', () => {
 
   it('New Object with property and Value should be created successfully in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.country=${setCountryValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.country=${SET_COUNTRY_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
     );
     expect(res.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.state=${setStateValue}`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.state=${SET_STATE_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
     const output = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "world.city"=${setCityValue} --json`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "world.city"=${SET_CITY_VALUE} --json`
     );
     expect(output.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
   });
 
   it('New Object with nested properties and Value should be created successfully in json file and return the success result in json format', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} company.team.employee.position=${setPositionValue} --json`,
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} company.team.employee.position=${SET_POSITION_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -395,21 +395,23 @@ describe('sf provar config set NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | PropertyFileJsonData;
     }
-    const jsonData = JSON.parse(fs.readFileSync('./setMultiplePropertiesValue.json', 'utf8')) as PropertyFileJsonData;
-    expect(jsonData.provarHome).to.equal(JSON.parse(setProvarHomeValue));
-    expect(jsonData.resultsPath).to.equal(JSON.parse(setResultsPathValue));
-    expect(jsonData.projectPath).to.equal(setProjectPathValue);
-    expect(jsonData.smtpPath).to.equal(JSON.parse(setSmtpPathValue));
-    expect(jsonData.resultsPathDisposition).to.equal(JSON.parse(setResultsPathDispositionValue));
-    expect(jsonData.testOutputLevel).to.equal(setTestOutputLevelValue);
-    expect(jsonData.pluginOutputlevel).to.equal(JSON.parse(setPluginOutputlevelValue));
-    expect(jsonData.lightningMode).to.equal(setLightningModeValue);
-    expect(jsonData.test).to.equal(setTestValue);
-    expect(jsonData.SpecialCharacters).to.equal(setSpecialCharactersValue);
+    const jsonData = JSON.parse(
+      fileSystem.readFileSync('./setMultiplePropertiesValue.json', 'utf8')
+    ) as PropertyFileJsonData;
+    expect(jsonData.provarHome).to.equal(JSON.parse(SET_PROVAR_HOME_VALUE));
+    expect(jsonData.resultsPath).to.equal(JSON.parse(SET_RESULTS_PATH_VALUE));
+    expect(jsonData.projectPath).to.equal(SET_PROJECT_PATH_VALUE);
+    expect(jsonData.smtpPath).to.equal(JSON.parse(SET_SMTP_PATH_VALUE));
+    expect(jsonData.resultsPathDisposition).to.equal(JSON.parse(SET_RESULTS_PATH_DISPOSITION_VALUE));
+    expect(jsonData.testOutputLevel).to.equal(SET_TEST_OUTPUT_LEVEL_VALUE);
+    expect(jsonData.pluginOutputlevel).to.equal(JSON.parse(SET_PLUGIN_OUTPUTLEVEL_VALUE));
+    expect(jsonData.lightningMode).to.equal(SET_LIGHTNING_MODE_VALUE);
+    expect(jsonData.test).to.equal(SET_TEST_VALUE);
+    expect(jsonData.SpecialCharacters).to.equal(SET_SPECIAL_CHARACTERS_VALUE);
     expect(jsonData.booleanValue).to.equal(false);
     expect(jsonData.status).to.equal(true);
-    expect(jsonData.number).to.equal(setNumberValue);
-    expect(jsonData.number_Value).to.equal(setNumberDecimalValue);
+    expect(jsonData.number).to.equal(SET_NUMBER_VALUE);
+    expect(jsonData.number_Value).to.equal(SET_NUMBER_DECIMAL_VALUE);
     expect(jsonData.nullProperty).to.equal(null);
     expect(jsonData.lightningMode).to.equal(false);
     expect(jsonData.testCases).to.have.members([
@@ -454,13 +456,15 @@ describe('sf provar config set NUTs', () => {
         };
       };
     }
-    const jsonData = JSON.parse(fs.readFileSync('./setMultiplePropertiesValue.json', 'utf8')) as PropertyFileJsonData;
-    expect(jsonData.metadata.metadataLevel).to.equal(JSON.parse(setMetadataLevelValue));
-    expect(jsonData.metadata.cachePath).to.equal(setCachePathValue);
-    expect(jsonData.metadata.error).to.equal(setErrorValue);
-    expect(jsonData.environment.key).to.equal(setKeyValue);
-    expect(jsonData.environment.testEnvironment).to.equal(JSON.parse(setTestEnvironmentValue));
-    expect(jsonData.environment.newEnvironment).to.equal(setNewEnvironmentValue);
+    const jsonData = JSON.parse(
+      fileSystem.readFileSync('./setMultiplePropertiesValue.json', 'utf8')
+    ) as PropertyFileJsonData;
+    expect(jsonData.metadata.metadataLevel).to.equal(JSON.parse(SET_METADATA_LEVEL_VALUE));
+    expect(jsonData.metadata.cachePath).to.equal(SET_CACHE_PATH_VALUE);
+    expect(jsonData.metadata.error).to.equal(SET_ERROR_VALUE);
+    expect(jsonData.environment.key).to.equal(SET_KEY_VALUE);
+    expect(jsonData.environment.testEnvironment).to.equal(JSON.parse(SET_TEST_ENVIRONMENT_VALUE));
+    expect(jsonData.environment.newEnvironment).to.equal(SET_NEW_ENVIRONMENT_VALUE);
     expect(jsonData.emailProperties.sendEmail).to.equal(true);
     expect(jsonData.emailProperties.primaryRecipients).to.equal('anchal.goel@provartesting.com');
     expect(jsonData.emailProperties.ccRecipients).to.equal('');
@@ -468,9 +472,9 @@ describe('sf provar config set NUTs', () => {
     expect(jsonData.emailProperties.emailSubject).to.equal('Provar test run report');
     expect(jsonData.emailProperties.attachExecutionReport).to.equal(true);
     expect(jsonData.emailProperties.attachZip).to.equal(false);
-    expect(jsonData.world.country).to.equal(setCountryValue);
-    expect(jsonData.world.state).equal(setStateValue);
-    expect(jsonData.world.city).equal(JSON.parse(setCityValue));
-    expect(jsonData.company.team.employee.position).to.equal(setPositionValue);
+    expect(jsonData.world.country).to.equal(SET_COUNTRY_VALUE);
+    expect(jsonData.world.state).equal(SET_STATE_VALUE);
+    expect(jsonData.world.city).equal(JSON.parse(SET_CITY_VALUE));
+    expect(jsonData.company.team.employee.position).to.equal(SET_POSITION_VALUE);
   });
 });
