@@ -9,11 +9,14 @@ import { commandConstants } from '../../../../../src/constants/commandConstants'
 
 describe('sf provar config get NUTs', () => {
   let session: TestSession;
+  enum FILE_PATHS {
+    INVALID_FILE = 'getInvalidFile.json',
+    VALUES_FILE = 'getValues.json',
+  }
 
   after(async () => {
     await session?.clean();
-    const filePaths = ['getinvalidFile.json', 'getValues.json'];
-    filePaths.forEach((filePath) => {
+    Object.values(FILE_PATHS).forEach((filePath) => {
       fileSystem.unlink(filePath, (err) => {
         if (err) {
           return err;
@@ -23,8 +26,8 @@ describe('sf provar config get NUTs', () => {
   });
 
   it('Missing file error as json file is not loaded', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p getinvalidFile.json`);
-    const jsonFilePath = 'getinvalidFile.json';
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    const jsonFilePath = 'FILE_PATHS.INVALID_FILE';
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
     fileSystem.writeFile(jsonFilePath, newData, (error) => {
@@ -32,23 +35,28 @@ describe('sf provar config get NUTs', () => {
         return;
       }
     });
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p getinvalidFile.json`);
-    const res = execCmd<SfProvarCommandResult>(
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} provarHome`
     ).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
   });
 
   it('Missing file error in json format as json file is not loaded', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} resultsPath --json`, {
-      ensureExitCode: 0,
-    });
-    expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} resultsPath --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(result.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
   it('Missing property error as property name is missing', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p getValues.json`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p getValues.json`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.VALUES_FILE.json`
+    );
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.VALUES_FILE.json`);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
     const getOutput = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND}`).shellOutput;
     expect(getOutput.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY_GET}\n`);
@@ -83,10 +91,10 @@ describe('sf provar config get NUTs', () => {
   });
 
   it('Unknown Property error in json format as property is not present in the file', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} sample --json`, {
+    const result = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} sample --json`, {
       ensureExitCode: 0,
     });
-    expect(res.jsonOutput).to.deep.equal(getConstants.unknownPropertyJson);
+    expect(result.jsonOutput).to.deep.equal(getConstants.unknownPropertyJson);
   });
 
   it('value should be returned for provarHome property', () => {
@@ -99,16 +107,16 @@ describe('sf provar config get NUTs', () => {
   });
 
   it('value should be returned for projectPath property', () => {
-    const setprojectPath = 'C:/Users/anchal.goel/Desktop/main_win64_e413157177_20240117_0452/';
-    const Output = execCmd<SfProvarCommandResult>(
+    const setProjectPath = 'C:/Users/anchal.goel/Desktop/main_win64_e413157177_20240117_0452/';
+    const output = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} projectPath`
     ).shellOutput;
-    expect(Output.stdout).to.deep.equal('${PROVAR_PROJECT_PATH}\n');
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} projectPath=${setprojectPath}`);
+    expect(output.stdout).to.deep.equal('${PROVAR_PROJECT_PATH}\n');
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} projectPath=${setProjectPath}`);
     const getOutput = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} "projectPath"`
     ).shellOutput;
-    expect(getOutput.stdout).to.deep.equal(`${setprojectPath}\n`);
+    expect(getOutput.stdout).to.deep.equal(`${setProjectPath}\n`);
   });
 
   it('value should be returned for resultsPath property in json format', () => {
