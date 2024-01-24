@@ -56,7 +56,7 @@ describe('sf provar config get NUTs', () => {
 
   it('Missing property error as property name is missing', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.VALUES_FILE.json`
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.VALUES_FILE}`
     );
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.VALUES_FILE.json`);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
