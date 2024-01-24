@@ -58,7 +58,7 @@ describe('sf provar config get NUTs', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.VALUES_FILE}`
     );
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.VALUES_FILE.json`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.VALUES_FILE}`);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
     const getOutput = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND}`).shellOutput;
     expect(getOutput.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY_GET}\n`);
