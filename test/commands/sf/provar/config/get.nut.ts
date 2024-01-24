@@ -26,7 +26,9 @@ describe('sf provar config get NUTs', () => {
   });
 
   it('Missing file error as json file is not loaded', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
+    );
     const jsonFilePath = 'FILE_PATHS.INVALID_FILE';
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
@@ -35,7 +37,7 @@ describe('sf provar config get NUTs', () => {
         return;
       }
     });
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`);
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} provarHome`
     ).shellOutput;

@@ -49,7 +49,9 @@ describe('sf provar config set NUTs', () => {
   });
 
   it('Missing file error should be thrown when json file is not loaded and return the error', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
+    );
     const jsonFilePath = 'FILE_PATHS.INVALID_FILE';
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
@@ -58,7 +60,7 @@ describe('sf provar config set NUTs', () => {
         return;
       }
     });
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.INVALID_FILE`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`);
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} provarHome=notDefined`
     ).shellOutput;
@@ -76,8 +78,8 @@ describe('sf provar config set NUTs', () => {
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.ERROR_FILE`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.ERROR_FILE`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} =Provar`
@@ -157,10 +159,10 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for provarHome property in json file and return the success result in json format', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p FILE_PATHS.FILE_MULTIPLE_FILES`
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
     );
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p FILE_PATHS.FILE_MULTIPLE_FILES`
+      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
     );
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
     const result = execCmd<SfProvarCommandResult>(
