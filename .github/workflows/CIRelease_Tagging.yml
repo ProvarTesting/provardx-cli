@@ -1,4 +1,4 @@
-name: Tag on Pull Request merge
+name: Publish to NPM
 on:
   # Should trigger only when a Pull Request is Closed
   # (the action will not create the Tag if the Pull Request is discarded - closed without merge)
@@ -9,15 +9,24 @@ on:
       - main
 
 jobs:
-  provardx-release-build:
+  provardx-publish-npm:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-          
-      - name: CI execution
-        run:
-          |
-          
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install Dependencies
+        run: |
+          yarn
+      - name: Build the project
+        run: |
+          yarn prepack
+      - name: Publish to NPM
+        run: |
+          yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   TagOnPR:
     name: Tag on Pull Request merge
     runs-on: ubuntu-latest
