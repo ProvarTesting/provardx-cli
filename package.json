@@ -94,7 +94,6 @@
     "docs": "sf-docs",
     "format": "wireit",
     "lint": "wireit",
-    "postinstall": "yarn husky install",
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
@@ -206,5 +205,9 @@
       "output": []
     }
   },
-  "author": "Palak Bansal"
+  "author": "Palak Bansal",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  }
 }
