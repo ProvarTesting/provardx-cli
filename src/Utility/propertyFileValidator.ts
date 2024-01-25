@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 import * as fileSystem from 'fs';
 import { Validator, ValidatorResult } from 'jsonschema';
 import { errorMessages } from '../constants/errorMessages';
@@ -5,6 +12,11 @@ import { propertyFileSchema } from '../constants/propertyFileSchema';
 import ErrorHandler, { Error } from './errorHandler';
 import { substringAfter, addQuotesAround } from './stringSupport';
 import { ProvarConfig } from './provarConfig';
+
+/**
+ * Contains code to load the config file and validation login for provardx-properties.json
+ *
+ */
 
 export default class PropertyFileValidator {
   public validationResults!: ValidatorResult;

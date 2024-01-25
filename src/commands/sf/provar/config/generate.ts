@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 import * as fs from 'fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -5,6 +12,11 @@ import { generateFile, getExtension } from '../../../../Utility/fileSupport';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 import { errorMessages } from '../../../../constants/errorMessages';
+
+/**
+ * Generates the boiler plate provardx-properties.json
+ *
+ */
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');

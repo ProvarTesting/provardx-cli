@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 import * as fileSystem from 'fs';
 import { resolve } from 'path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
@@ -7,6 +14,13 @@ import ErrorHandler from '../../../../Utility/errorHandler';
 import { ProvarConfig } from '../../../../Utility/provarConfig';
 import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
 import { errorMessages } from '../../../../constants/errorMessages';
+
+/**
+ * Loads the path to provardx-properties.json to the user directory ${user}/.sf/config.json
+ * So, that further any command can be run at any location by picking up the properties.json file
+ * from config.json file.
+ *
+ */
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.load');

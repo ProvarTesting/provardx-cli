@@ -1,8 +1,21 @@
+/*
+ * Copyright (c) 2024 Provar Limited.
+ * All rights reserved.
+ * Licensed under the BSD 3-Clause license.
+ * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
+ */
+
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import ErrorHandler from '../../../../Utility/errorHandler';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
 import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
+
+/**
+ * Validates the provardx-properties.json against JSON standards and provardx schema
+ * mentioned under PropertyFileSchema.ts
+ *
+ */
 
 Messages.importMessagesDirectory(__dirname);
 const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
