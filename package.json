@@ -1,6 +1,6 @@
 {
-  "name": "provardx-cli",
-  "description": "ProvarDX cli is a new Salesforce CLI Plugin based on sf v2",
+  "name": "@provartesting/provardx-cli",
+  "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
   "version": "0.0.1",
   "dependencies": {
     "@oclif/core": "^2.11.8",

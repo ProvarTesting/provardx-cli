@@ -18,7 +18,7 @@ import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
  */
 
 Messages.importMessagesDirectory(__dirname);
-const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.validate');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.validate');
 
 export default class SfProvarConfigValidate extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
