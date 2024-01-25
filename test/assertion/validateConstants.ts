@@ -1,5 +1,3 @@
-export const sfProvarConfigValidateCommand = 'sf provar config validate';
-
 export const validateSuccessMessage = 'The properties file was validated successfully.\n';
 
 export const missingPropertyError = "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing.\n";

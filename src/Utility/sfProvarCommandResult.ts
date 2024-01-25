@@ -3,6 +3,7 @@ import ErrorHandler, { Error } from './errorHandler';
 
 export type SfProvarCommandResult = {
   success: boolean;
+  value?: string;
   errors?: Error[];
 };
 
@@ -11,7 +12,8 @@ export function populateResult(
   flags: any,
   errorHandler: ErrorHandler,
   messages: Messages<string>,
-  log: Function
+  log: Function,
+  value?: string
 ): SfProvarCommandResult {
   let result: SfProvarCommandResult = { success: true };
 
@@ -25,9 +27,11 @@ export function populateResult(
       errors: errorObjects,
     };
   } else {
-    log(messages.getMessage('success_message'));
+    messages.messages.has('success_message') ? log(messages.getMessage('success_message')) : '';
+    value != null ? log(value) : '';
     result = {
       success: true,
+      value: value,
     };
   }
   return result;
