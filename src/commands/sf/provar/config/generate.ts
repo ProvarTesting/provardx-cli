@@ -19,7 +19,7 @@ import { errorMessages } from '../../../../constants/errorMessages';
  */
 
 Messages.importMessagesDirectory(__dirname);
-const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.generate');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.generate');
 
 export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');

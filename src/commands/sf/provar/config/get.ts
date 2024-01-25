@@ -21,7 +21,7 @@ import { checkNestedProperty, getNestedProperty } from '../../../../Utility/json
  */
 
 Messages.importMessagesDirectory(__dirname);
-const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.get');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.get');
 
 export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');

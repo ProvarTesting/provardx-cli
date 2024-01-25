@@ -21,7 +21,7 @@ import { parseJSONString, setNestedProperty } from '../../../../Utility/jsonSupp
  */
 
 Messages.importMessagesDirectory(__dirname);
-const messages = Messages.loadMessages('provardx-cli', 'sf.provar.config.set');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.set');
 
 export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
