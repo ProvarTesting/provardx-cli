@@ -5,8 +5,6 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-export const sfProvarConfigValidateCommand = 'sf provar config validate';
-
 export const validateSuccessMessage = 'The properties file was validated successfully.\n';
 
 export const missingPropertyError = "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing.\n";

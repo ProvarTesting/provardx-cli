@@ -43,7 +43,7 @@ export default class SfProvarConfigLoad extends SfCommand<SfProvarCommandResult>
     /* eslint-disable */
     const propertiesFileName = resolve(flags['properties-file']);
     const propertyFileValidator = new PropertyFileValidator(this.errorHandler);
-    const config: ProvarConfig = await propertyFileValidator.loadConfig();
+    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
 
     if (!fileSystem.existsSync(propertiesFileName)) {
       this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);

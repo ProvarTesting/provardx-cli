@@ -5,7 +5,8 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { Config, ConfigPropertyMeta } from '@salesforce/core';
+import { Config, ConfigPropertyMeta, SfError } from '@salesforce/core';
+import ErrorHandler from './errorHandler';
 
 /**
  * sfdxConfig extended class that deals with any operation over .sf/config.json.
@@ -27,5 +28,19 @@ export class ProvarConfig extends Config {
         option
       )
     );
+  }
+
+  public static async loadConfig(errorHandler: ErrorHandler): Promise<ProvarConfig> {
+    try {
+      const config = await ProvarConfig.create();
+      await config.read();
+      return config;
+    } catch (error) {
+      if (error instanceof SfError) {
+        // eslint-disable-next-line
+        errorHandler.addErrorsToList(error.code, error.message);
+      }
+      throw error;
+    }
   }
 }

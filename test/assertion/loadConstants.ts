@@ -5,7 +5,6 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-export const sfProvarConfigLoadCommand = 'sf provar config load';
 export const loadSuccessMessage = 'The properties file was loaded successfully.\n';
 export const multipleErrors =
   "Error (1): [MISSING_PROPERTY] The property 'projectPath' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";

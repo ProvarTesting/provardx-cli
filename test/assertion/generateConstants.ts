@@ -5,7 +5,6 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-export const sfProvarConfigGenerateCommand = 'sf provar config generate';
 export const successMessage = 'The properties file was generated successfully.\n';
 export const errorInvalidPath = 'Error (1): [INVALID_PATH] The provided path does not exist or is invalid.\n';
 export const errorInvalidFileExtension =
