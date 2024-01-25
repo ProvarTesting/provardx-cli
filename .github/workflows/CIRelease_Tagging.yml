@@ -22,7 +22,11 @@ jobs:
       - name: Build the project
         run: |
           yarn prepack
-          
+      - name: Publish to NPM
+        run: |
+          yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
   TagOnPR:
     name: Tag on Pull Request merge
     runs-on: ubuntu-latest
