@@ -204,10 +204,5 @@
       ],
       "output": []
     }
-  },
-  "author": "Palak Bansal",
-  "directories": {
-    "lib": "lib",
-    "test": "test"
   }
 }
