@@ -12,10 +12,15 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
-          registry-url: "https://registry.npmjs.org"
-      - name: Install dependencies and build 🔧
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install dependencies and build
         run: yarn && yarn prepack
-      - name: Publish package on NPM 📦
+      - name: Display file
+        run: |
+          cat /home/runner/work/_temp/.npmrc
+          cat $NPM_CONFIG_USERCONFIG
+      - name: Publish package on NPM
         run: yarn publish
         env:
           NPM_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
