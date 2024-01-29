@@ -1,5 +1,5 @@
 {
-  "name": "@provartesting/provardx-cli",
+  "name": "provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
   "version": "0.0.1",
   "license": "BSD-3-Clause",
