@@ -1,10 +1,10 @@
 # summary
 
-Summary of a command.
+Generates the boilerplate properties file for provardx.
 
 # description
 
-Generate a boilerplate property file.
+Generates the boilerplate properties file for provardx with all the required attributes.
 
 # examples
 
