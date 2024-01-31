@@ -187,6 +187,5 @@
     }
   },
   "exports": "./lib/index.js",
-  "type": "module",
-  "author": "palak"
+  "type": "module"
 }
