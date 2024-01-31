@@ -1,4 +1,4 @@
-name: Publish to NPM
+name: CI execution on Release Branch
 on:
   # Should trigger only when a Pull Request is Closed
   # (the action will not create the Tag if the Pull Request is discarded - closed without merge)
@@ -7,7 +7,6 @@ on:
       - closed
     branches:
       - main
-
 jobs:
   provardx-publish-npm:
     runs-on: ubuntu-latest
@@ -23,20 +22,3 @@ jobs:
       - name: Build the project
         run: |
           yarn prepack
-      - name: Publish to NPM
-        run: |
-          yarn publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-  TagOnPR:
-    name: Tag on Pull Request merge
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
-    steps:
-      - name: Tag on PR merge
-        id: tag-on-pr-merge
-        uses: ProvarTesting/provardx-cli@main
-        with:
-          push-tag: true
-      - name: Print fetched tag
-        run: echo ${{ steps.tag-on-pr-merge.outputs.tag }}

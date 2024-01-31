@@ -1,0 +1,27 @@
+name: Publish to NPM
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@provartesting'
+      - name: Install dependencies and build
+        run: yarn && yarn prepack
+      - name: Display file
+        run: |
+          cat /home/runner/work/_temp/.npmrc
+          cat $NPM_CONFIG_USERCONFIG
+      - name: Publish package on NPM
+        run: yarn publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
