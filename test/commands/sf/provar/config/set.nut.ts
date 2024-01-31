@@ -1,11 +1,11 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import * as validateConstants from '../../../../assertion/validateConstants';
-import * as setConstants from '../../../../assertion/setConstants';
-import { errorMessages } from '../../../../../src/constants/errorMessages';
-import { commandConstants } from '../../../../../src/constants/commandConstants';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import * as validateConstants from '../../../../assertion/validateConstants.js';
+import * as setConstants from '../../../../assertion/setConstants.js';
+import { errorMessages } from '../../../../../src/constants/errorMessages.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('sf provar config set NUTs', () => {
   let session: TestSession;
@@ -64,7 +64,7 @@ describe('sf provar config set NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} provarHome=notDefined`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Missing file error should be thrown when json file is not loaded and return the error in json', () => {
@@ -84,19 +84,19 @@ describe('sf provar config set NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} =Provar`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} ""=MissingProperty`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND}`).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error in json format', () => {
@@ -113,14 +113,14 @@ describe('sf provar config set NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} missingValue=`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n\n`);
   });
 
   it('Missing value error should be thrown when value is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "missingValue"=""`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n\n`);
   });
 
   it('Missing value error should be thrown when value is not defined and return the error in json format', () => {
@@ -137,14 +137,14 @@ describe('sf provar config set NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} invalid = argument`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n\n`);
   });
 
   it('Invalid argument error should be thrown when property and value is not defined in correct format and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} attachmentProperties=random value`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n\n`);
   });
 
   it('Invalid argument error should be thrown when property and value is not defined in correct format and return the error in json format', () => {
