@@ -47,9 +47,9 @@ jobs:
       - name: Change permissions
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-               chmod 777 ./bin/run
+               chmod 777 ./bin/run.js
           elif [ "$RUNNER_OS" == "macOS" ]; then
-               chmod 777 ./bin/run
+               chmod 777 ./bin/run.js
           fi
         shell: bash
       - name: Execute NUTS
