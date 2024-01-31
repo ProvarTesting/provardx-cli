@@ -5,8 +5,8 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
-import { exec } from 'child_process';
+import * as fileSystem from 'node:fs';
+import { exec } from 'node:child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';

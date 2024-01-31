@@ -5,13 +5,13 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
+import * as fileSystem from 'node:fs';
 import { Validator, ValidatorResult } from 'jsonschema';
-import { errorMessages } from '../constants/errorMessages';
-import { propertyFileSchema } from '../constants/propertyFileSchema';
-import ErrorHandler, { Error } from './errorHandler';
-import { substringAfter, addQuotesAround } from './stringSupport';
-import { ProvarConfig } from './provarConfig';
+import { errorMessages } from '../constants/errorMessages.js';
+import { propertyFileSchema } from '../constants/propertyFileSchema.js';
+import ErrorHandler, { Error } from './errorHandler.js';
+import { substringAfter, addQuotesAround } from './stringSupport.js';
+import { ProvarConfig } from './provarConfig.js';
 
 /**
  * Contains code to load the config file and validation login for provardx-properties.json

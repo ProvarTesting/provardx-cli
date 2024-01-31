@@ -6,7 +6,7 @@
  */
 
 import { Messages } from '@salesforce/core';
-import ErrorHandler, { Error } from './errorHandler';
+import ErrorHandler, { Error } from './errorHandler.js';
 
 /**
  * Declaring return type and populating return object for async run method of the commands.

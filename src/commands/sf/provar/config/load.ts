@@ -5,15 +5,15 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
-import { resolve } from 'path';
+import * as fileSystem from 'node:fs';
+import { resolve } from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
-import ErrorHandler from '../../../../Utility/errorHandler';
-import { ProvarConfig } from '../../../../Utility/provarConfig';
-import PropertyFileValidator from '../../../../Utility/propertyFileValidator';
-import { errorMessages } from '../../../../constants/errorMessages';
+import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
+import ErrorHandler from '../../../../Utility/errorHandler.js';
+import { ProvarConfig } from '../../../../Utility/provarConfig.js';
+import PropertyFileValidator from '../../../../Utility/propertyFileValidator.js';
+import { errorMessages } from '../../../../constants/errorMessages.js';
 
 /**
  * Loads the path to provardx-properties.json to the user directory ${user}/.sf/config.json
@@ -22,7 +22,7 @@ import { errorMessages } from '../../../../constants/errorMessages';
  *
  */
 
-Messages.importMessagesDirectory(__dirname);
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.load');
 
 export default class SfProvarConfigLoad extends SfCommand<SfProvarCommandResult> {
