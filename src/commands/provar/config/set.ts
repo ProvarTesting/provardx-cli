@@ -8,11 +8,11 @@
 import * as fileSystem from 'node:fs';
 import { SfCommand, parseVarArgs } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
-import ErrorHandler from '../../../../Utility/errorHandler.js';
-import { errorMessages } from '../../../../constants/errorMessages.js';
-import { ProvarConfig } from '../../../../Utility/provarConfig.js';
-import { parseJSONString, setNestedProperty } from '../../../../Utility/jsonSupport.js';
+import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
+import ErrorHandler from '../../../Utility/errorHandler.js';
+import { errorMessages } from '../../../constants/errorMessages.js';
+import { ProvarConfig } from '../../../Utility/provarConfig.js';
+import { parseJSONString, setNestedProperty } from '../../../Utility/jsonSupport.js';
 
 /**
  * Sets the specified property key and value inside provardx-properties.json
