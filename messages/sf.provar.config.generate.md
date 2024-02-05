@@ -1,14 +1,14 @@
 # summary
 
-Generates the boilerplate properties file for provardx.
+Generates a boilerplate ProvarDX properties file
 
 # description
 
-Generates the boilerplate properties file for provardx with all the required attributes.
+Generates a boilerplate ProvarDX properties file
 
 # examples
 
-- Generates the boiler plate properties.json at the given path :
+- Generates a boilerplate ProvarDX properties file at the given path :
 
   <%= config.bin %> <%= command.id %> --properties-file 'propertiesFile path'
 

@@ -1,14 +1,14 @@
 # summary
 
-Validate the loaded provardx-properties.json against schema.
+Checks if the loaded properties file has all the required properties set
 
 # description
 
-Validating provardx-properties.json against the schema for all the needed properties with their expected values.
+Checks if the loaded properties file has all the required properties set
 
 # examples
 
-- Validate the loaded provardx-properties.json loaded under environment variables :
+- Checks if the loaded properties file has all the required properties set
 
   <%= config.bin %> <%= command.id %>'
 

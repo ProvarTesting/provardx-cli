@@ -1,14 +1,14 @@
 # summary
 
-getting values for different properties inside dx properties.json
+Retrieves a value from the loaded properties file
 
 # description
 
-Getting values for different properties inside PROPERTIES_FILE_PATH loaded under .sf/config.json file
+Retrieves a value from the loaded properties file
 
 # examples
 
-- gets the value for the provided property as a key from properties.json loaded inside config.json
+- Retrieves a value from the loaded properties file
 
   <%= config.bin %> <%= command.id %> 'key'
 
