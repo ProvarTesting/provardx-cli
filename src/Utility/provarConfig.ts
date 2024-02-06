@@ -6,7 +6,7 @@
  */
 
 import { Config, ConfigPropertyMeta, SfError } from '@salesforce/core';
-import ErrorHandler from './errorHandler';
+import ErrorHandler from './errorHandler.js';
 
 /**
  * sfdxConfig extended class that deals with any operation over .sf/config.json.

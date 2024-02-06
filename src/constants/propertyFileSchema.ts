@@ -4,6 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+const nonEmptyStringRegex = /^(?!\s+$)./;
 
 export const propertyFileSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
@@ -20,11 +21,13 @@ export const propertyFileSchema = {
       description:
         'Contains the location that the Provar installation was unzipped. ​This attribute is not required if there is a full Provar installation in the default location, or if PROVAR_HOME Environment Variable is set',
       type: 'string',
+      pattern: nonEmptyStringRegex,
     },
     projectPath: {
       description:
         'The fully qualified path of the Test Project containing the tests to be run.  This is the folder that contains the .testproject file',
       type: 'string',
+      pattern: nonEmptyStringRegex,
     },
     smtpPath: {
       description: 'The fully qualified path of the .smtp folder to which Provar will use to send emails',
@@ -33,6 +36,7 @@ export const propertyFileSchema = {
     resultsPath: {
       description: 'The fully qualified path of the folder to which Provar will write the test results',
       type: 'string',
+      pattern: nonEmptyStringRegex,
     },
     resultsPathDisposition: {
       description: 'Controls the result folder disposition.',
@@ -78,6 +82,7 @@ export const propertyFileSchema = {
         cachePath: {
           description: 'The fully qualified path of the folder that will be used for storing the metadata cache',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
       },
       required: ['metadataLevel', 'cachePath'],
@@ -99,14 +104,17 @@ export const propertyFileSchema = {
         webBrowserConfig: {
           description: 'The web browser window size. Browser configurations are defined in Test Settings',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
         webBrowserProviderName: {
           description: 'Web browser provider name.',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
         webBrowserDeviceName: {
           description: 'Web browser device name',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
       },
       required: ['webBrowser', 'webBrowserConfig', 'webBrowserProviderName', 'webBrowserDeviceName'],

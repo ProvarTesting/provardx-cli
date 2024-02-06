@@ -5,20 +5,20 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fs from 'fs';
-import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
+import fs from 'node:fs';
 import { Messages } from '@salesforce/core';
-import { generateFile, getExtension } from '../../../../Utility/fileSupport';
-import ErrorHandler from '../../../../Utility/errorHandler';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
-import { errorMessages } from '../../../../constants/errorMessages';
+import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
+import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
+import { generateFile, getExtension } from '../../../Utility/fileSupport.js';
+import ErrorHandler from '../../../Utility/errorHandler.js';
+import { errorMessages } from '../../../constants/errorMessages.js';
 
 /**
  * Generates the boiler plate provardx-properties.json
  *
  */
 
-Messages.importMessagesDirectory(__dirname);
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.generate');
 
 export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandResult> {
@@ -47,7 +47,7 @@ export default class SfProvarConfigGenerate extends SfCommand<SfProvarCommandRes
     if (getExtension(PropertiesFileName) !== '.json') {
       this.errorHandler.addErrorsToList('INVALID_FILE_EXTENSION', 'Only the .json file extension is supported.');
     } else if (fs.existsSync(PropertiesFileName) && !flags['no-prompt']) {
-      if (!(await this.confirm(messages.getMessage('PropertiesFileOverwritePromptConfirm')))) {
+      if (!(await this.confirm({ message: messages.getMessage('PropertiesFileOverwritePromptConfirm') }))) {
         this.errorHandler.addErrorsToList('GENERATE_OPERATION_DENIED', errorMessages.GENERATE_OPERATION_DENIED);
       } else {
         this.generatePropertiesFile(PropertiesFileName);

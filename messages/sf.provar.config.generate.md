@@ -1,14 +1,14 @@
 # summary
 
-Summary of a command.
+Generates a boilerplate ProvarDX properties file.
 
 # description
 
-Generate a boilerplate property file.
+Generates a boilerplate ProvarDX properties file.
 
 # examples
 
-- Generates the boiler plate properties.json at the given path :
+- Generates a boilerplate ProvarDX properties file at the given path :
 
   <%= config.bin %> <%= command.id %> --properties-file 'propertiesFile path'
 

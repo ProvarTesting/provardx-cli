@@ -5,13 +5,13 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
+import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import * as validateConstants from '../../../../assertion/validateConstants';
-import { errorMessages } from '../../../../../src/constants/errorMessages';
-import { commandConstants } from '../../../../../src/constants/commandConstants';
+import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
+import * as validateConstants from '../../../assertion/validateConstants.js';
+import { errorMessages } from '../../../../src/constants/errorMessages.js';
+import { commandConstants } from '../../../../src/constants/commandConstants.js';
 
 describe('sf provar config validate NUTs', () => {
   let session: TestSession;
@@ -38,7 +38,7 @@ describe('sf provar config validate NUTs', () => {
   it('Boilerplate json file should not be validated if the file has not been loaded', () => {
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p MissingFile.json`);
     const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated if the file has not been loaded and return result in json format', () => {
@@ -121,7 +121,7 @@ describe('sf provar config validate NUTs', () => {
     });
     // validating json file
     const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated as json file is malformed and return result in json format', () => {
