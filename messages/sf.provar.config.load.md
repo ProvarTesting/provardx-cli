@@ -1,10 +1,10 @@
 # summary
 
-Validates and loads a ProvarDX properties file for later use
+Validates and loads a ProvarDX properties file for later use.
 
 # description
 
-Validates and loads a ProvarDX properties file for later use
+Validates and loads a ProvarDX properties file for later use.
 
 # examples
 

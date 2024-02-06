@@ -1,10 +1,10 @@
 # summary
 
-Retrieves a value from the loaded properties file
+Retrieves a value from the loaded properties file.
 
 # description
 
-Retrieves a value from the loaded properties file
+Retrieves a value from the loaded properties file.
 
 # examples
 

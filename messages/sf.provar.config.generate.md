@@ -1,10 +1,10 @@
 # summary
 
-Generates a boilerplate ProvarDX properties file
+Generates a boilerplate ProvarDX properties file.
 
 # description
 
-Generates a boilerplate ProvarDX properties file
+Generates a boilerplate ProvarDX properties file.
 
 # examples
 

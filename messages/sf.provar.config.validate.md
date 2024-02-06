@@ -1,10 +1,10 @@
 # summary
 
-Checks if the loaded properties file has all the required properties set
+Checks if the loaded properties file has all the required properties set.
 
 # description
 
-Checks if the loaded properties file has all the required properties set
+Checks if the loaded properties file has all the required properties set.
 
 # examples
 

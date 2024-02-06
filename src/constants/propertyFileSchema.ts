@@ -82,6 +82,7 @@ export const propertyFileSchema = {
         cachePath: {
           description: 'The fully qualified path of the folder that will be used for storing the metadata cache',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
       },
       required: ['metadataLevel', 'cachePath'],
@@ -103,14 +104,17 @@ export const propertyFileSchema = {
         webBrowserConfig: {
           description: 'The web browser window size. Browser configurations are defined in Test Settings',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
         webBrowserProviderName: {
           description: 'Web browser provider name.',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
         webBrowserDeviceName: {
           description: 'Web browser device name',
           type: 'string',
+          pattern: nonEmptyStringRegex,
         },
       },
       required: ['webBrowser', 'webBrowserConfig', 'webBrowserProviderName', 'webBrowserDeviceName'],

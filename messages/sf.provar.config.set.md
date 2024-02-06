@@ -1,10 +1,10 @@
 # summary
 
-Sets a property in the loaded properties file
+Sets a property in the loaded properties file.
 
 # description
 
-Sets a property in the loaded properties file
+Sets a property in the loaded properties file.
 
 # examples
 

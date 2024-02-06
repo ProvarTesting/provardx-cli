@@ -53,7 +53,7 @@ export default class PropertyFileValidator {
             } else if (validationError.name === 'pattern') {
               let substring = substringAfter(validationError.property, '.');
               if (substring) {
-                missingRequiredProperties.push(substring);
+                invalidPropertiesValue.push(substring);
               }
             } else if (validationError.name === 'enum' || validationError.name === 'type') {
               invalidPropertiesValue.push(substringAfter(validationError.property, '.'));
