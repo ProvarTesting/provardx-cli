@@ -1,14 +1,14 @@
 # summary
 
-Loading provardx-properties.json into system environment variables.
+Validates and loads a ProvarDX properties file for later use.
 
 # description
 
-Loading after internally validating the provardx-properties.json file generated via config generate command
+Validates and loads a ProvarDX properties file for later use.
 
 # examples
 
-- loads the properties.json at the given path
+- Validates and loads a ProvarDX properties file for later use at the given path
 
   <%= config.bin %> <%= command.id %> --properties-file 'propertiesFile path'
 

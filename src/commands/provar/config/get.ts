@@ -5,14 +5,14 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
+import * as fileSystem from 'node:fs';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult';
-import ErrorHandler from '../../../../Utility/errorHandler';
-import { ProvarConfig } from '../../../../Utility/provarConfig';
-import { errorMessages } from '../../../../constants/errorMessages';
-import { checkNestedProperty, getNestedProperty } from '../../../../Utility/jsonSupport';
+import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
+import ErrorHandler from '../../../Utility/errorHandler.js';
+import { ProvarConfig } from '../../../Utility/provarConfig.js';
+import { errorMessages } from '../../../constants/errorMessages.js';
+import { checkNestedProperty, getNestedProperty } from '../../../Utility/jsonSupport.js';
 
 /**
  * Gets the value for specified propertykey under arguments from provardx-properties.json
@@ -20,7 +20,7 @@ import { checkNestedProperty, getNestedProperty } from '../../../../Utility/json
  *
  */
 
-Messages.importMessagesDirectory(__dirname);
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.get');
 
 export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> {

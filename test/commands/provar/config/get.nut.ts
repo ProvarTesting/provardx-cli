@@ -1,11 +1,11 @@
-import * as fileSystem from 'fs';
+import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import * as validateConstants from '../../../../assertion/validateConstants';
-import * as getConstants from '../../../../assertion/getConstants';
-import { errorMessages } from '../../../../../src/constants/errorMessages';
-import { commandConstants } from '../../../../../src/constants/commandConstants';
+import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
+import * as validateConstants from '../../../assertion/validateConstants.js';
+import * as getConstants from '../../../assertion/getConstants.js';
+import { errorMessages } from '../../../../src/constants/errorMessages.js';
+import { commandConstants } from '../../../../src/constants/commandConstants.js';
 
 describe('sf provar config get NUTs', () => {
   let session: TestSession;
@@ -41,7 +41,7 @@ describe('sf provar config get NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} provarHome`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Missing file error in json format as json file is not loaded', () => {
@@ -61,7 +61,7 @@ describe('sf provar config get NUTs', () => {
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.VALUES_FILE}`);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
     const getOutput = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND}`).shellOutput;
-    expect(getOutput.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY_GET}\n`);
+    expect(getOutput.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY_GET}\n\n`);
   });
 
   it('Missing property error in json format as property name is missing', () => {
@@ -75,21 +75,21 @@ describe('sf provar config get NUTs', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} metadata.test`
     ).shellOutput;
-    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
+    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n\n`);
   });
 
   it('Unknown Property error as property is not present in the file', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} environment.webBrowserProvider`
     ).shellOutput;
-    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
+    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n\n`);
   });
 
   it('Unknown Property error as property is not present in the file', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_CONFIG_GET_COMMAND} projectPath.web`
     ).shellOutput;
-    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n`);
+    expect(getOutput.stderr).to.deep.equal(`Error (1): [UNKNOWN_PROPERTY] ${errorMessages.UNKNOWN_PROPERTY}\n\n`);
   });
 
   it('Unknown Property error in json format as property is not present in the file', () => {

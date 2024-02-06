@@ -7,19 +7,19 @@
 
 export const validateSuccessMessage = 'The properties file was validated successfully.\n';
 
-export const missingPropertyError = "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing.\n";
+export const missingPropertyError = "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing.\n\n";
 
 export const missingPropertiesError =
-  "Error (1): [MISSING_PROPERTIES] The properties 'provarHome', 'projectPath', 'resultsPath', 'metadata.metadataLevel', 'metadata.cachePath', 'environment.webBrowser', 'environment.webBrowserConfig', 'environment.webBrowserProviderName', 'environment.webBrowserDeviceName' are missing.\n";
+  "Error (1): [MISSING_PROPERTIES] The properties 'provarHome', 'projectPath', 'resultsPath', 'metadata.metadataLevel', 'metadata.cachePath', 'environment.webBrowser', 'environment.webBrowserConfig', 'environment.webBrowserProviderName', 'environment.webBrowserDeviceName' are missing.\n\n";
 
 export const invalidValueError =
-  "Error (1): [INVALID_VALUE] The property 'resultsPathDisposition' value is not valid.\n";
+  "Error (1): [INVALID_VALUE] The property 'resultsPathDisposition' value is not valid.\n\n";
 
 export const invalidValuesError =
-  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
+  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
 
 export const multipleErrors =
-  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
+  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
 
 export const validateSuccessJson = {
   status: 0,

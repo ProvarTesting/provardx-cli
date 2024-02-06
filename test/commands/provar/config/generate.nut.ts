@@ -5,14 +5,14 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
+import * as fileSystem from 'node:fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
-import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/generateConstants';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../../assertion/generateConstants';
-import PropertyFileContent from '../../../../../src/constants/propertyFileContent.json';
-import { commandConstants } from '../../../../../src/constants/commandConstants';
+import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../assertion/generateConstants.js';
+import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
+import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../assertion/generateConstants.js';
+import { propertyFileContent } from '../../../../src/constants/propertyFileContent.js';
+import { commandConstants } from '../../../../src/constants/commandConstants.js';
 
 describe('Config generate', () => {
   let testSession: TestSession;
@@ -35,7 +35,7 @@ describe('Config generate', () => {
     const filePath = './provardx-properties.json';
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const expectedJsonData = JSON.parse(fileSystem.readFileSync(filePath, 'utf8'));
-    expect(expectedJsonData).to.deep.equal(PropertyFileContent);
+    expect(expectedJsonData).to.deep.equal(propertyFileContent);
   });
 
   it('Boilerplate json file should be generated with "--properties-file" flag when no path is defined', () => {

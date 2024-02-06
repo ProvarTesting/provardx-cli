@@ -6,11 +6,11 @@
  */
 
 export const successMessage = 'The properties file was generated successfully.\n';
-export const errorInvalidPath = 'Error (1): [INVALID_PATH] The provided path does not exist or is invalid.\n';
+export const errorInvalidPath = 'Error (1): [INVALID_PATH] The provided path does not exist or is invalid.\n\n';
 export const errorInvalidFileExtension =
-  'Error (1): [INVALID_FILE_EXTENSION] Only the .json file extension is supported.\n';
+  'Error (1): [INVALID_FILE_EXTENSION] Only the .json file extension is supported.\n\n';
 export const errorInsufficientPermissions =
-  'Error (1): [INSUFFICIENT_PERMISSIONS] The user does not have permissions to create the file.\n';
+  'Error (1): [INSUFFICIENT_PERMISSIONS] The user does not have permissions to create the file.\n\n';
 
 export const PASS_FILE_CONTENT = {
   status: 0,

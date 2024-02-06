@@ -1,14 +1,14 @@
 # summary
 
-Setting different properties inside dx-properties.json
+Sets a property in the loaded properties file.
 
 # description
 
-Setting different properties inside dx-properties.json loaded under .sf/config.json file
+Sets a property in the loaded properties file.
 
 # examples
 
-- sets the provided properties with resp. values as key=value in properties.json
+- Sets a property in the loaded properties file with resp. values
 
   <%= config.bin %> <%= command.id %> 'key'='value'
 

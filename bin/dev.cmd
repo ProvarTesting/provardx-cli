@@ -1,4 +1,3 @@
 @echo off
-set NODE_ENV=development
-set NODE_OPTIONS='--inspect-brk'
-node "%~dp0\dev" %*
+
+node --loader ts-node/esm --no-warnings=ExperimentalWarning "%~dp0\dev" %*

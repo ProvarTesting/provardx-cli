@@ -5,8 +5,8 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fs from 'fs';
-import propertyFileContent from '../constants/propertyFileContent.json';
+import * as fs from 'node:fs';
+import { propertyFileContent } from '../constants/propertyFileContent.js';
 
 /**
  * Contains all the methods that deals with generic file related operations.

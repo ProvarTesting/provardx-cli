@@ -6,17 +6,23 @@ on:
   pull_request:
     branches:
       - develop
-    types: ["opened", "edited"]
+    types: ['opened', 'edited', 'synchronize']
+    paths-ignore: ['**.github/**']
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      OS:
+        description: 'Comma-separated list of OS versions e.g. "macos-latest, windows-latest, ubuntu-latest"'
+        default: '"ubuntu-latest"'
+        required: true
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest"')) }}
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
@@ -39,12 +45,12 @@ jobs:
           yarn prepack
           npm install -g @salesforce/cli
       - name: Change permissions
-        run:   |
-         if [ "$RUNNER_OS" == "Linux" ]; then
-              chmod 777 ./bin/run
-         elif [ "$RUNNER_OS" == "macOS" ]; then
-              chmod 777 ./bin/run
-         fi
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+               chmod 777 ./bin/run.js
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+               chmod 777 ./bin/run.js
+          fi
         shell: bash
       - name: Execute NUTS
         run: |
@@ -55,5 +61,4 @@ jobs:
         with:
           name: nuts-report-${{ matrix.os }}
           path: |
-             mochawesome-report
-          
+            mochawesome-report

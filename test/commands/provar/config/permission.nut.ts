@@ -5,14 +5,14 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import * as fileSystem from 'fs';
-import { exec } from 'child_process';
+import * as fileSystem from 'node:fs';
+import { exec } from 'node:child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult';
-import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../assertion/generateConstants';
-import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../../assertion/generateConstants';
-import { commandConstants } from '../../../../../src/constants/commandConstants';
+import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
+import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../assertion/generateConstants.js';
+import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../assertion/generateConstants.js';
+import { commandConstants } from '../../../../src/constants/commandConstants.js';
 
 describe('Handling Insufficient Permissions scenarios as write permission is removed from a folder', () => {
   let testSession: TestSession;

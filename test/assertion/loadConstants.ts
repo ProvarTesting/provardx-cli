@@ -7,7 +7,7 @@
 
 export const loadSuccessMessage = 'The properties file was loaded successfully.\n';
 export const multipleErrors =
-  "Error (1): [MISSING_PROPERTY] The property 'projectPath' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n";
+  "Error (1): [MISSING_PROPERTY] The property 'projectPath' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
 
 export const loadSuccessJson = {
   status: 0,
