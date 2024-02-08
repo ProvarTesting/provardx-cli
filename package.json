@@ -60,6 +60,14 @@
             }
           }
         }
+      },
+      "provar": {
+        "description": "description for provar",
+        "subtopics": {
+          "metadata": {
+            "description": "description for provar.metadata"
+          }
+        }
       }
     },
     "flexibleTaxonomy": true
