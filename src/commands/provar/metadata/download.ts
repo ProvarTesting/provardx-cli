@@ -76,7 +76,6 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const logFilePath = `${propertiesInstance.projectPath}log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
 
-      // javaProcessOutput.stderr.on('data', (data) => {
       fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
 
       const fileContent = fileSystem.readFileSync(logFilePath)?.toString();

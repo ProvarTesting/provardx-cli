@@ -24,10 +24,8 @@ export default class ProvarDXUtility {
       const username = override.username;
       const message = 'Validating and retriving dx user info: ' + username;
       let dxUserInfo = await this.executeCommand(`sf org display user --target-org ${username} --json`, message);
-      // let jsonDxUser = JSON.parse(dxUserInfo?.toString());
       let jsonDxUser = dxUserInfo;
       if (jsonDxUser.status !== 0) {
-        console.error('[WARNING] ' + jsonDxUser.message + '. Skipping operation.');
         continue;
       }
       if (jsonDxUser.result.password == null) {
