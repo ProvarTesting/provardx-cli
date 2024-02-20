@@ -1,10 +1,13 @@
 import fileSystem from 'node:fs';
+import { spawn } from 'node:child_process';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import ErrorHandler from '../../../Utility/errorHandler.js';
 import { ProvarConfig } from '../../../Utility/provarConfig.js';
 import { errorMessages } from '../../../constants/errorMessages.js';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
+import ProvarDXUtility from '../../../Utility/provarDxUtils.js';
+import { fileContainsString, getStringAfterSubstring } from '../../../Utility/fileSupport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.metadata.download');
@@ -20,11 +23,6 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       char: 'c',
       required: true,
     }),
-    'log-level': Flags.option({
-      summary: messages.getMessage('flags.log-level.summary'),
-      char: 'l',
-      options: ['INFO', 'SEVERE', 'WARNING', 'FINE', 'FINER', 'FINEST'] as const,
-    })(),
   };
 
   private errorHandler: ErrorHandler = new ErrorHandler();
@@ -39,14 +37,79 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
     const propertiesdata = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    /* eslint-disable */
     const propertiesInstance = JSON.parse(propertiesdata);
 
     if (flags.connections) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       propertiesInstance.connectionName = flags.connections;
     }
 
+    this.doConnectionOverrides(propertiesInstance);
+
+    const rawProperties = JSON.stringify(propertiesInstance);
+    const provarDxUtils = new ProvarDXUtility();
+    const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
+    const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride);
+    if (userInfo === null && !flags.connections) {
+      this.errorHandler.addErrorsToList(
+        'DOWNLOAD_ERROR',
+        `${errorMessages.DOWNLOAD_ERROR}No valid user org found to download metadata.`
+      );
+      return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+    }
+    const userInfoString =
+      flags.connections && userInfo === null
+        ? ''
+        : provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
+    const jarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
+    try {
+      const command =
+        'java -cp "' +
+        jarPath +
+        '" com.provar.provardx.DxCommandExecuter ' +
+        updateProperties +
+        ' ' +
+        userInfoString +
+        ' Metadata';
+
+      const javaProcessOutput = spawn(command, { shell: true });
+      const logFilePath = `${propertiesInstance.projectPath}log.txt`;
+      const downloadSuccessMessage = 'Download completed successfully';
+
+      javaProcessOutput.stderr.on('data', (data) => {
+        fileSystem.writeFileSync(logFilePath, data.toString(), { encoding: 'utf-8' });
+      });
+      javaProcessOutput.on('close', (code) => {
+        fileSystem.appendFileSync(logFilePath, `child process exited with code ${code}`, { encoding: 'utf-8' });
+      });
+
+      const fileContent = fileSystem.readFileSync(logFilePath)?.toString();
+      if (!fileContainsString(fileContent, downloadSuccessMessage)) {
+        const errorMessage = getStringAfterSubstring(fileContent, 'ERROR');
+        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR}${errorMessage}`);
+      }
+      fileSystem.unlink(logFilePath, (error) => {});
+    } catch (error: any) {
+      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR}${error.errorMessage}`);
+    }
+
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+  }
+
+  private doConnectionOverrides(properties: any): void {
+    if (!properties.connectionOverride && !properties.connectionName) {
+      return;
+    }
+
+    if (properties.connectionName && properties.connectionOverride) {
+      const connections = properties.connectionName.split(',');
+      const connOver = [];
+      for (const override of properties.connectionOverride) {
+        if (connections.indexOf(override.connection) !== -1) {
+          connOver.push(override);
+        }
+      }
+      properties.connectionOverride = connOver;
+    }
   }
 }
