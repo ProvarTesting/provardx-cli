@@ -1,5 +1,5 @@
 import fileSystem from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import ErrorHandler from '../../../Utility/errorHandler.js';
@@ -72,16 +72,12 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
         userInfoString +
         ' Metadata';
 
-      const javaProcessOutput = spawn(command, { shell: true });
+      const javaProcessOutput = spawnSync(command, { shell: true });
       const logFilePath = `${propertiesInstance.projectPath}log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
 
-      javaProcessOutput.stderr.on('data', (data) => {
-        fileSystem.writeFileSync(logFilePath, data.toString(), { encoding: 'utf-8' });
-      });
-      javaProcessOutput.on('close', (code) => {
-        fileSystem.appendFileSync(logFilePath, `child process exited with code ${code}`, { encoding: 'utf-8' });
-      });
+      // javaProcessOutput.stderr.on('data', (data) => {
+      fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
 
       const fileContent = fileSystem.readFileSync(logFilePath)?.toString();
       if (!fileContainsString(fileContent, downloadSuccessMessage)) {
