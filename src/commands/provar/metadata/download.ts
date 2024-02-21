@@ -81,7 +81,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const fileContent = fileSystem.readFileSync(logFilePath)?.toString();
       if (!fileContainsString(fileContent, downloadSuccessMessage)) {
         const errorMessage = getStringAfterSubstring(fileContent, 'ERROR');
-        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR}${errorMessage}`);
+        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR} ${errorMessage}`);
       }
       fileSystem.unlink(logFilePath, (error) => {});
     } catch (error: any) {
