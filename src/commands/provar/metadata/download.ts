@@ -51,10 +51,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
     const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
     const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride);
     if (userInfo === null && !flags.connections) {
-      this.errorHandler.addErrorsToList(
-        'DOWNLOAD_ERROR',
-        `${errorMessages.DOWNLOAD_ERROR}No valid user org found to download metadata.`
-      );
+      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `No valid user org found to download metadata.`);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
     const userInfoString =
@@ -81,11 +78,11 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const fileContent = fileSystem.readFileSync(logFilePath)?.toString();
       if (!fileContainsString(fileContent, downloadSuccessMessage)) {
         const errorMessage = getStringAfterSubstring(fileContent, 'ERROR');
-        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR} ${errorMessage}`);
+        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessage}`);
       }
       fileSystem.unlink(logFilePath, (error) => {});
     } catch (error: any) {
-      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessages.DOWNLOAD_ERROR} ${error.errorMessage}`);
+      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);
     }
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
