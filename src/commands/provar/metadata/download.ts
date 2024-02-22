@@ -41,7 +41,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
     const propertiesInstance = JSON.parse(propertiesdata);
 
     if (flags.connections) {
-      propertiesInstance.connectionName = flags.connections;
+      propertiesInstance.connectionName = flags.connections.trim();
     }
 
     this.doConnectionOverrides(propertiesInstance);
