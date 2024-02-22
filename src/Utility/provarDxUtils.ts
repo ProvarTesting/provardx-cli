@@ -1,3 +1,4 @@
+import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
 import { cli } from 'cli-ux';
 
@@ -15,7 +16,7 @@ export default class ProvarDXUtility {
    *
    * @param overrides Connection overrides provided in dx property file.
    */
-  public async getDxUsersInfo(overrides: any): Promise<string[]> {
+  public async getDxUsersInfo(overrides: any): Promise<any> {
     const dxUsers: string[] = [];
     if (overrides === undefined) {
       return dxUsers;
@@ -23,9 +24,10 @@ export default class ProvarDXUtility {
     for (const override of overrides) {
       const username = override.username;
       const message = 'Validating and retriving dx user info: ' + username;
-      let dxUserInfo = await this.executeCommand(`sf org display user --target-org ${username} --json`, message);
-      let jsonDxUser = dxUserInfo;
+      let dxUserInfo = await this.executeCommand('sfdx org:display:user --json --target-org ' + username, message);
+      let jsonDxUser = JSON.parse(dxUserInfo.toString());
       if (jsonDxUser.status !== 0) {
+        console.error('[WARNING] ' + jsonDxUser.message + '. Skipping operation.');
         continue;
       }
       if (jsonDxUser.result.password == null) {
@@ -35,11 +37,14 @@ export default class ProvarDXUtility {
           'sfdx org:display:user --json --target-org ' + username,
           'Getting generated password for user: ' + username
         );
-        jsonDxUser = JSON.parse(dxUserInfo?.toString());
+        jsonDxUser = JSON.parse(dxUserInfo.toString());
       }
       jsonDxUser.result.connection = override['connection'];
       jsonDxUser.result.password = this.handleSpecialCharacters(jsonDxUser.result.password);
       dxUsers.push(jsonDxUser);
+    }
+    if (dxUsers.length === 0) {
+      return null;
     }
     return dxUsers;
   }
@@ -54,8 +59,10 @@ export default class ProvarDXUtility {
       cli.action.start(message);
     }
     let isSucessful = false;
+    const execPromise = promisify(exec);
+
     try {
-      const result = await exec(command);
+      const result = await execPromise(command);
       isSucessful = true;
       return result.stdout;
     } catch (e: any) {
