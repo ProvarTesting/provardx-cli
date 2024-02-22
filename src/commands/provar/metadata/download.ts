@@ -70,7 +70,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
         ' Metadata';
 
       const javaProcessOutput = spawnSync(command, { shell: true });
-      const logFilePath = `${propertiesInstance.projectPath}log.txt`;
+      const logFilePath = `${propertiesInstance.projectPath}/log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
 
       fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
