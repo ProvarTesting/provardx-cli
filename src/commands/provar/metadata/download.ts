@@ -36,30 +36,31 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
-    const propertiesdata = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
-    /* eslint-disable */
-    const propertiesInstance = JSON.parse(propertiesdata);
 
-    if (flags.connections) {
-      propertiesInstance.connectionName = flags.connections.trim();
-    }
-
-    this.doConnectionOverrides(propertiesInstance);
-
-    const rawProperties = JSON.stringify(propertiesInstance);
-    const provarDxUtils = new ProvarDXUtility();
-    const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
-    const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride);
-    if (userInfo === null && !flags.connections) {
-      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `No valid user org found to download metadata.`);
-      return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-    }
-    const userInfoString =
-      flags.connections && userInfo === null
-        ? ''
-        : provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
-    const jarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
     try {
+      const propertiesdata = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
+      /* eslint-disable */
+      const propertiesInstance = JSON.parse(propertiesdata);
+
+      if (flags.connections) {
+        propertiesInstance.connectionName = flags.connections.trim();
+      }
+
+      this.doConnectionOverrides(propertiesInstance);
+
+      const rawProperties = JSON.stringify(propertiesInstance);
+      const provarDxUtils = new ProvarDXUtility();
+      const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
+      const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride);
+      if (userInfo === null && !flags.connections) {
+        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `No valid user org found to download metadata.`);
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      }
+      const userInfoString =
+        flags.connections && userInfo === null
+          ? ''
+          : provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
+      const jarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
       const command =
         'java -cp "' +
         jarPath +
@@ -82,7 +83,11 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       }
       fileSystem.unlink(logFilePath, (error) => {});
     } catch (error: any) {
-      this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);
+      if (error.name === 'SyntaxError') {
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+      } else {
+        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);
+      }
     }
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
