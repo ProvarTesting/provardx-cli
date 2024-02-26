@@ -24,7 +24,7 @@ export default class ProvarDXUtility {
     }
     for (const override of overrides) {
       const username = override.username;
-      const message = 'Validating and retriving dx user info: ' + username;
+      const message = 'Validating and retrieving dx user info: ' + username;
       let dxUserInfo = await this.executeCommand('sfdx org:display:user --json --target-org ' + username, message);
       let jsonDxUser = JSON.parse(dxUserInfo.toString());
       if (jsonDxUser.status !== 0) {
@@ -46,9 +46,6 @@ export default class ProvarDXUtility {
       jsonDxUser.result.connection = override['connection'];
       jsonDxUser.result.password = this.handleSpecialCharacters(jsonDxUser.result.password);
       dxUsers.push(jsonDxUser);
-    }
-    if (dxUsers.length === 0) {
-      return null;
     }
     return dxUsers;
   }

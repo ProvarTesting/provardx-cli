@@ -52,10 +52,6 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const provarDxUtils = new ProvarDXUtility();
       const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
       const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
-      if (userInfo === null && !flags.connections) {
-        this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `No valid user org found to download metadata.`);
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-      }
       const userInfoString =
         flags.connections && userInfo === null
           ? ''
