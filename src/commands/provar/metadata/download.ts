@@ -8,6 +8,7 @@ import { errorMessages } from '../../../constants/errorMessages.js';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
 import ProvarDXUtility from '../../../Utility/provarDxUtils.js';
 import { fileContainsString, getStringAfterSubstring } from '../../../Utility/fileSupport.js';
+import { removeSpaces } from '../../../Utility/stringSupport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.metadata.download');
@@ -43,7 +44,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const propertiesInstance = JSON.parse(propertiesdata);
 
       if (flags.connections) {
-        propertiesInstance.connectionName = flags.connections.trim();
+        propertiesInstance.connectionName = removeSpaces(flags.connections);
       }
 
       this.doConnectionOverrides(propertiesInstance);

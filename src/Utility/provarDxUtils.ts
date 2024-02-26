@@ -72,7 +72,7 @@ export default class ProvarDXUtility {
       return errorMessage;
     } finally {
       if (message) {
-        cli.action.stop(isSucessful ? 'successful' : 'failed');
+        cli.action.stop(isSucessful ? 'successfull' : 'failed');
       }
     }
   }

@@ -27,3 +27,6 @@ export function substringAfter(str: string, separator: string): string {
 export function addQuotesAround(array: string[]): string[] {
   return array.map((item) => "'" + item + "'");
 }
+export function removeSpaces(str: string): string {
+  return str.replace(/\s/g, '');
+}
