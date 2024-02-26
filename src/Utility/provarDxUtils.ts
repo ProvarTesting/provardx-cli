@@ -26,7 +26,7 @@ export default class ProvarDXUtility {
       const username = override.username;
       const message = 'Validating and retrieving dx user info: ' + username;
       let dxUserInfo = await this.executeCommand('sf org display user --json --target-org ' + username, message);
-      let jsonDxUser = JSON.parse(dxUserInfo.toString());
+      let jsonDxUser = JSON.parse(dxUserInfo);
       if (jsonDxUser.status !== 0) {
         errorHandler.addErrorsToList(
           'DOWNLOAD_ERROR',
