@@ -1,6 +1,7 @@
 import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
 import { cli } from 'cli-ux';
+import ErrorHandler from './errorHandler.js';
 
 export default class ProvarDXUtility {
   /**
@@ -16,7 +17,7 @@ export default class ProvarDXUtility {
    *
    * @param overrides Connection overrides provided in dx property file.
    */
-  public async getDxUsersInfo(overrides: any): Promise<any> {
+  public async getDxUsersInfo(overrides: any, errorHandler: ErrorHandler): Promise<any> {
     const dxUsers: string[] = [];
     if (overrides === undefined) {
       return dxUsers;
@@ -27,7 +28,10 @@ export default class ProvarDXUtility {
       let dxUserInfo = await this.executeCommand('sfdx org:display:user --json --target-org ' + username, message);
       let jsonDxUser = JSON.parse(dxUserInfo.toString());
       if (jsonDxUser.status !== 0) {
-        console.error('[WARNING] ' + jsonDxUser.message + '. Skipping operation.');
+        errorHandler.addErrorsToList(
+          'DOWNLOAD_ERROR',
+          `The following connectionOverride username is not valid: ${username}`
+        );
         continue;
       }
       if (jsonDxUser.result.password == null) {
