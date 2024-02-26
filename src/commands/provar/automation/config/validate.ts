@@ -7,9 +7,9 @@
 
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import ErrorHandler from '../../../Utility/errorHandler.js';
-import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
-import PropertyFileValidator from '../../../Utility/propertyFileValidator.js';
+import ErrorHandler from '../../../../Utility/errorHandler.js';
+import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
+import PropertyFileValidator from '../../../../Utility/propertyFileValidator.js';
 
 /**
  * Validates the provardx-properties.json against JSON standards and provardx schema
