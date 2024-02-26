@@ -25,7 +25,7 @@ export default class ProvarDXUtility {
     for (const override of overrides) {
       const username = override.username;
       const message = 'Validating and retrieving dx user info: ' + username;
-      let dxUserInfo = await this.executeCommand('sfdx org:display:user --json --target-org ' + username, message);
+      let dxUserInfo = await this.executeCommand('sf org display user --json --target-org ' + username, message);
       let jsonDxUser = JSON.parse(dxUserInfo.toString());
       if (jsonDxUser.status !== 0) {
         errorHandler.addErrorsToList(
@@ -35,10 +35,10 @@ export default class ProvarDXUtility {
         continue;
       }
       if (jsonDxUser.result.password == null) {
-        const generatePasswordCommand = 'sfdx force:user:password:generate --targetusername ' + username;
+        const generatePasswordCommand = 'sf org generate password --target-org ' + username;
         await this.executeCommand(generatePasswordCommand, 'Generating password for user: ' + username);
         dxUserInfo = await this.executeCommand(
-          'sfdx org:display:user --json --target-org ' + username,
+          'sf org display user --json --target-org ' + username,
           'Getting generated password for user: ' + username
         );
         jsonDxUser = JSON.parse(dxUserInfo.toString());
@@ -61,18 +61,15 @@ export default class ProvarDXUtility {
     }
     let isSucessful = false;
     const execPromise = promisify(exec);
-
     try {
       const result = await execPromise(command);
       isSucessful = true;
       return result.stdout;
     } catch (e: any) {
-      let errorMessage = e.message;
-      errorMessage = errorMessage.substring(errorMessage.indexOf('{'), errorMessage.indexOf('}') + 1);
-      return errorMessage;
+      return e.stdout;
     } finally {
       if (message) {
-        cli.action.stop(isSucessful ? 'successfull' : 'failed');
+        cli.action.stop(isSucessful ? 'successful' : 'failed');
       }
     }
   }
