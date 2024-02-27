@@ -53,10 +53,10 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const provarDxUtils = new ProvarDXUtility();
       const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
       const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
-      const userInfoString =
-        flags.connections && userInfo === null
-          ? ''
-          : provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
+      if (userInfo === null && !flags.connections) {
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      }
+      const userInfoString = provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
       const jarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
       const command =
         'java -cp "' +

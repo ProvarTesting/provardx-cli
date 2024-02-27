@@ -47,6 +47,9 @@ export default class ProvarDXUtility {
       jsonDxUser.result.password = this.handleSpecialCharacters(jsonDxUser.result.password);
       dxUsers.push(jsonDxUser);
     }
+    if (dxUsers.length === 0) {
+      return null;
+    }
     return dxUsers;
   }
 
