@@ -50,29 +50,26 @@
       "@oclif/plugin-help"
     ],
     "topics": {
-      "sf": {
-        "description": "commands to automate salesforce",
+      "provar": {
+        "description": "CLI commands to interact with Provar.",
         "subtopics": {
-          "provar": {
-            "description": "commands to manipulate properties file & automate salesforce using provardx",
+          "automation": {
+            "description": "These commands are used to interact with Provar Automation.",
             "subtopics": {
               "config": {
-                "description": "commands to generate and manipulate provardx-properties file"
+                "description": "commands to generate and manipulate provardx-properties file."
+              },
+              "subtopics": {
+                "metadata": {
+                  "description": "commands to download metadata for required connections."
+                }
               }
             }
           }
         }
       },
-      "provar": {
-        "description": "description for provar",
-        "subtopics": {
-          "metadata": {
-            "description": "description for provar.metadata"
-          }
-        }
-      }
-    },
-    "flexibleTaxonomy": true
+      "flexibleTaxonomy": true
+    }
   },
   "scripts": {
     "build": "wireit",

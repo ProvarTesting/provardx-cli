@@ -1,10 +1,10 @@
 # summary
 
-Summary of a command.
+Download any required metadata for a specified Provar Salesforce connection.
 
 # description
 
-More information about a command. Don't repeat the summary.
+Download any required metadata for a specified Provar Salesforce connection.
 
 # examples
 
