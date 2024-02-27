@@ -18,7 +18,7 @@ export default class UserSupport {
    */
   public async getDxUsersInfo(overrides: any, errorHandler: ErrorHandler): Promise<any> {
     const dxUsers: string[] = [];
-    if (overrides === undefined) {
+    if (overrides === undefined || overrides.length === 0) {
       return dxUsers;
     }
     for (const override of overrides) {
