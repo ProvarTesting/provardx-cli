@@ -33,10 +33,10 @@ export function removeSpaces(str: string): string {
   return str.replace(/\s/g, '');
 }
 
-export function getStringAfterSubstring(fileContent: string, searchString: string): string {
-  const index = fileContent.toLowerCase().indexOf(searchString.toLowerCase());
+export function getStringAfterSubstring(content: string, searchString: string): string {
+  const index = content.toLowerCase().indexOf(searchString.toLowerCase());
   if (index === -1) {
     return '';
   }
-  return fileContent.slice(index);
+  return content.slice(index);
 }

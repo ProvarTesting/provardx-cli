@@ -53,7 +53,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const userSupport = new UserSupport();
       const updateProperties = userSupport.prepareRawProperties(rawProperties);
       const userInfo = await userSupport.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
-      if (userInfo === null && !flags.connections) {
+      if (userInfo === null) {
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       }
       const userInfoString = userSupport.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
@@ -68,20 +68,23 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
         ' Metadata';
 
       const javaProcessOutput = spawnSync(downloadMetadatacommand, { shell: true });
-      const logFilePath = `${propertiesInstance.projectPath}/log.txt`;
+      //  const logFilePath = `${propertiesInstance.projectPath}/log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
 
-      fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
+      // fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
 
-      const logFileContent = fileSystem.readFileSync(logFilePath)?.toString();
-      if (!fileContainsString(logFileContent, downloadSuccessMessage)) {
-        const errorMessage = getStringAfterSubstring(logFileContent, 'ERROR');
+      //  const logFileContent = fileSystem.readFileSync(logFilePath)?.toString();
+      if (!fileContainsString(javaProcessOutput.stderr.toString(), downloadSuccessMessage)) {
+        const errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessage}`);
       }
-      fileSystem.unlink(logFilePath, (error) => {});
+
+      // fileSystem.unlink(logFilePath, (error) => { });
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+      } else if (error.name === 'MULTIPLE_ERRORSError') {
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       } else {
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);
       }
