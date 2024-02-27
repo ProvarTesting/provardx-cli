@@ -7,8 +7,8 @@ import { ProvarConfig } from '../../../Utility/provarConfig.js';
 import { errorMessages } from '../../../constants/errorMessages.js';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
 import ProvarDXUtility from '../../../Utility/provarDxUtils.js';
-import { fileContainsString, getStringAfterSubstring } from '../../../Utility/fileSupport.js';
-import { removeSpaces } from '../../../Utility/stringSupport.js';
+import { fileContainsString } from '../../../Utility/fileSupport.js';
+import { removeSpaces, getStringAfterSubstring } from '../../../Utility/stringSupport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.metadata.download');

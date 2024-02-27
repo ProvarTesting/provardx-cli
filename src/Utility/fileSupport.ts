@@ -23,14 +23,5 @@ export function getExtension(filename: string): string {
 }
 
 export function fileContainsString(fileContent: string, searchString: string): boolean {
-  // const fileContent = fs.readFileSync(filePath, 'utf8');
   return fileContent.includes(searchString);
-}
-
-export function getStringAfterSubstring(fileContent: string, searchString: string): string {
-  const index = fileContent.toLowerCase().indexOf(searchString.toLowerCase());
-  if (index === -1) {
-    return '';
-  }
-  return fileContent.slice(index);
 }
