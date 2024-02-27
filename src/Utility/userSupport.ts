@@ -1,9 +1,8 @@
-import { promisify } from 'node:util';
-import { exec } from 'node:child_process';
-import { cli } from 'cli-ux';
+import { sfCommandConstants } from '../constants/sfCommandConstants.js';
 import ErrorHandler from './errorHandler.js';
+import { executeCommand } from './provardxExecutor.js';
 
-export default class ProvarDXUtility {
+export default class UserSupport {
   /**
    * Updates the dx properties json string before it is send to command executer.
    */
@@ -25,7 +24,7 @@ export default class ProvarDXUtility {
     for (const override of overrides) {
       const username = override.username;
       const message = 'Validating and retrieving dx user info: ' + username;
-      let dxUserInfo = await this.executeCommand('sf org display user --json --target-org ' + username, message);
+      let dxUserInfo = await executeCommand(sfCommandConstants.DISPLAY_USER_INFO + username, message);
       let jsonDxUser = JSON.parse(dxUserInfo);
       if (jsonDxUser.status !== 0) {
         errorHandler.addErrorsToList(
@@ -34,15 +33,7 @@ export default class ProvarDXUtility {
         );
         continue;
       }
-      if (jsonDxUser.result.password == null) {
-        const generatePasswordCommand = 'sf org generate password --target-org ' + username;
-        await this.executeCommand(generatePasswordCommand, 'Generating password for user: ' + username);
-        dxUserInfo = await this.executeCommand(
-          'sf org display user --json --target-org ' + username,
-          'Getting generated password for user: ' + username
-        );
-        jsonDxUser = JSON.parse(dxUserInfo.toString());
-      }
+      ({ jsonDxUser, dxUserInfo } = await this.newMethod(jsonDxUser, username, dxUserInfo));
       jsonDxUser.result.connection = override['connection'];
       jsonDxUser.result.password = this.handleSpecialCharacters(jsonDxUser.result.password);
       dxUsers.push(jsonDxUser);
@@ -53,28 +44,17 @@ export default class ProvarDXUtility {
     return dxUsers;
   }
 
-  /**
-   * Executes the provided dx command.
-   * @param command Command string
-   * @param message Message to be displayed while command execution is in progress.
-   */
-  private async executeCommand(command: string, message: string): Promise<any> {
-    if (message) {
-      cli.action.start(message);
+  private async newMethod(jsonDxUser: any, username: any, dxUserInfo: any) {
+    if (jsonDxUser.result.password == null) {
+      const generatePasswordCommand = sfCommandConstants.GENERATE_PASSWORD + username;
+      await executeCommand(generatePasswordCommand, 'Generating password for user: ' + username);
+      dxUserInfo = await executeCommand(
+        sfCommandConstants.DISPLAY_USER_INFO + username,
+        'Getting generated password for user: ' + username
+      );
+      jsonDxUser = JSON.parse(dxUserInfo.toString());
     }
-    let isSucessful = false;
-    const execPromise = promisify(exec);
-    try {
-      const result = await execPromise(command);
-      isSucessful = true;
-      return result.stdout;
-    } catch (e: any) {
-      return e.stdout;
-    } finally {
-      if (message) {
-        cli.action.stop(isSucessful ? 'successful' : 'failed');
-      }
-    }
+    return { jsonDxUser, dxUserInfo };
   }
 
   private handleSpecialCharacters(password: string): string {

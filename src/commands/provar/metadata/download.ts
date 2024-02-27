@@ -6,7 +6,7 @@ import ErrorHandler from '../../../Utility/errorHandler.js';
 import { ProvarConfig } from '../../../Utility/provarConfig.js';
 import { errorMessages } from '../../../constants/errorMessages.js';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
-import ProvarDXUtility from '../../../Utility/provarDxUtils.js';
+import UserSupport from '../../../Utility/userSupport.js';
 import { fileContainsString } from '../../../Utility/fileSupport.js';
 import { removeSpaces, getStringAfterSubstring } from '../../../Utility/stringSupport.js';
 
@@ -50,32 +50,32 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       this.doConnectionOverrides(propertiesInstance);
 
       const rawProperties = JSON.stringify(propertiesInstance);
-      const provarDxUtils = new ProvarDXUtility();
-      const updateProperties = provarDxUtils.prepareRawProperties(rawProperties);
-      const userInfo = await provarDxUtils.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
+      const userSupport = new UserSupport();
+      const updateProperties = userSupport.prepareRawProperties(rawProperties);
+      const userInfo = await userSupport.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
       if (userInfo === null && !flags.connections) {
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       }
-      const userInfoString = provarDxUtils.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
-      const jarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
-      const command =
+      const userInfoString = userSupport.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
+      const provarDxJarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
+      const downloadMetadatacommand =
         'java -cp "' +
-        jarPath +
+        provarDxJarPath +
         '" com.provar.provardx.DxCommandExecuter ' +
         updateProperties +
         ' ' +
         userInfoString +
         ' Metadata';
 
-      const javaProcessOutput = spawnSync(command, { shell: true });
+      const javaProcessOutput = spawnSync(downloadMetadatacommand, { shell: true });
       const logFilePath = `${propertiesInstance.projectPath}/log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
 
       fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
 
-      const fileContent = fileSystem.readFileSync(logFilePath)?.toString();
-      if (!fileContainsString(fileContent, downloadSuccessMessage)) {
-        const errorMessage = getStringAfterSubstring(fileContent, 'ERROR');
+      const logFileContent = fileSystem.readFileSync(logFilePath)?.toString();
+      if (!fileContainsString(logFileContent, downloadSuccessMessage)) {
+        const errorMessage = getStringAfterSubstring(logFileContent, 'ERROR');
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessage}`);
       }
       fileSystem.unlink(logFilePath, (error) => {});
