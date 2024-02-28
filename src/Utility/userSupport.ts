@@ -33,7 +33,7 @@ export default class UserSupport {
         );
         continue;
       }
-      ({ jsonDxUser, dxUserInfo } = await this.newMethod(jsonDxUser, username, dxUserInfo));
+      ({ jsonDxUser, dxUserInfo } = await this.generatePasswordIfNotPresent(jsonDxUser, username, dxUserInfo));
       jsonDxUser.result.connection = override['connection'];
       jsonDxUser.result.password = this.handleSpecialCharacters(jsonDxUser.result.password);
       dxUsers.push(jsonDxUser);
@@ -44,7 +44,7 @@ export default class UserSupport {
     return dxUsers;
   }
 
-  private async newMethod(jsonDxUser: any, username: any, dxUserInfo: any) {
+  private async generatePasswordIfNotPresent(jsonDxUser: any, username: any, dxUserInfo: any) {
     if (jsonDxUser.result.password == null) {
       const generatePasswordCommand = sfCommandConstants.GENERATE_PASSWORD + username;
       await executeCommand(generatePasswordCommand, 'Generating password for user: ' + username);
