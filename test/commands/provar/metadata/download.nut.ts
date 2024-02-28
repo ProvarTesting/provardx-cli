@@ -7,12 +7,12 @@ import * as metadataDownloadConstants from '../../../assertion/metadataDownloadC
 import { errorMessages } from '../../../../src/constants/errorMessages.js';
 import { commandConstants } from '../../../../src/constants/commandConstants.js';
 
-
 describe('sf provar config metadataDownload NUTs', () => {
   let session: TestSession;
   const DOWNLOAD_ERROR = 'Error (1): [DOWNLOAD_ERROR]';
   enum FILE_PATHS {
     METADATA_ERROR_FILE = 'metadataErrorFile.json',
+    MALFORMED_METADATA_FILE = 'malformedMetadataFile.json',
     METADATA_DOWNLOAD_FILE = 'metadataDownloadFile.json',
   }
 
@@ -57,7 +57,7 @@ describe('sf provar config metadataDownload NUTs', () => {
 
   it('Missing file error as json file is not loaded', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections "RegressionOrg, RegmainOrg"`
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections "RegressionOrg,RegmainOrg"`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
@@ -70,6 +70,27 @@ describe('sf provar config metadataDownload NUTs', () => {
       }
     );
     expect(result.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+  });
+
+  it('Malformed file error as file is made malformed after loading the file', () => {
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.MALFORMED_METADATA_FILE}`
+    );
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.MALFORMED_METADATA_FILE}`
+    );
+    const jsonFilePath = FILE_PATHS.MALFORMED_METADATA_FILE;
+    const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
+    const newData = data.substring(1);
+    fileSystem.writeFile(jsonFilePath, newData, (error) => {
+      if (error) {
+        return;
+      }
+    });
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
+    ).shellOutput;
+    expect(result.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n\n`);
   });
 
   it('Metadata should not be downloaded as provarHome & projectPath are not correct and return the error message', () => {
@@ -93,10 +114,10 @@ describe('sf provar config metadataDownload NUTs', () => {
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
-    });
+  });
 
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
-    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/RC2.12.1.1.02/"';
+    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
     const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
@@ -199,6 +220,13 @@ describe('sf provar config metadataDownload NUTs', () => {
     expect(result).to.deep.equal(metadataDownloadConstants.successJsonMessage);
   });
 
+  it('Metadata should be downloaded for the provided connection and return the success message', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c " RegmainSandbox, RegressionOrg "`
+    ).shellOutput;
+    expect(result.stdout).to.deep.equal(metadataDownloadConstants.successMessage);
+  });
+
   it('Metadata should be downloaded for the provided connection and return the success message in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections "RegmainOrg, RegressionOrg" --json`
@@ -215,7 +243,7 @@ describe('sf provar config metadataDownload NUTs', () => {
 
   it('Metadata should not be downloaded as incorrect connection name and return the error message in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections Regmain --json`
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections REGMAINORG --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
@@ -238,7 +266,7 @@ describe('sf provar config metadataDownload NUTs', () => {
   it('Metadata should be downloaded for the user provided in connection override', () => {
     execCmd<SfProvarCommandResult>(
       // eslint-disable-next-line no-useless-escape
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "connectionOverride"=["{\\"connection\\": \\"RegressionOrg\\", \\"username\\": \\"TestScratch\\"}"]`
+      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "connectionOverride"=["{\\"connection\\": \\"RegressionOrg\\", \\"username\\": \\"test-08a5ntrfpe71@example.com\\"}"]`
     );
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
@@ -282,6 +310,13 @@ describe('sf provar config metadataDownload NUTs', () => {
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
   });
 
+  it('Metadata should not be downloaded when user does not have download permissions and return the error', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c NonAdmin`
+    ).shellOutput;
+    expect(result.stderr).to.include(DOWNLOAD_ERROR);
+  });
+
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
     interface PropertyFileJsonData {
       metadata: {
@@ -295,7 +330,7 @@ describe('sf provar config metadataDownload NUTs', () => {
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections RegressionOrg`
+      `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections RegmainOrg`
     ).shellOutput;
     expect(result.stdout).to.deep.equal(metadataDownloadConstants.successMessage);
   });
