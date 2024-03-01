@@ -271,6 +271,7 @@ describe('sf provar config metadataDownload NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
     ).shellOutput;
+    expect(result.stderr).to.deep.equal(metadataDownloadConstants.validUserMessage)
     expect(result.stdout).to.deep.equal(metadataDownloadConstants.successMessage);
   });
 
@@ -281,7 +282,7 @@ describe('sf provar config metadataDownload NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
     ).shellOutput;
-    expect(result.stderr).to.include(DOWNLOAD_ERROR);
+    expect(result.stderr).to.deep.equal(metadataDownloadConstants.invalidUserMessage);
   });
 
   it('Metadata should not be downloaded for the invalid user provided in connection override and return the error in json format', () => {
@@ -292,7 +293,9 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_METADATA_DOWNLOAD_COMMAND} --connections RegressionOrg --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
-    expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
+    expect(result?.result.errors?.[0]?.code).to.equal('DOWNLOAD_ERROR');
+    expect(result?.result.errors?.[0]?.message).to.equal('The following connectionOverride username is not valid: ScratchInvalidUser');
+
   });
 
   it('Metadata should not be downloaded for the invalid user name and return the error', () => {
