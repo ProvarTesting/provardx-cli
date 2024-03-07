@@ -16,4 +16,5 @@ export enum errorMessages {
   INVALID_PROPERTY = 'The property cannot be parsed.',
   MISSING_PROPERTY_GET = 'Please, specify a property to get from the properties file.',
   UNKNOWN_PROPERTY = 'The property is not present in the file.',
+  SETUP_ERROR = 'Provar Automation could not be set up because: ',
 }
