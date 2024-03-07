@@ -8,11 +8,11 @@
 import * as fileSystem from 'node:fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
-import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../assertion/generateConstants.js';
-import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
-import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../assertion/generateConstants.js';
-import { propertyFileContent } from '../../../../src/constants/propertyFileContent.js';
-import { commandConstants } from '../../../../src/constants/commandConstants.js';
+import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/generateConstants.js';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../../assertion/generateConstants.js';
+import { propertyFileContent } from '../../../../../src/constants/propertyFileContent.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('Config generate', () => {
   let testSession: TestSession;
