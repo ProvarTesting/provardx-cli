@@ -68,18 +68,11 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
         ' Metadata';
 
       const javaProcessOutput = spawnSync(downloadMetadatacommand, { shell: true });
-      //  const logFilePath = `${propertiesInstance.projectPath}/log.txt`;
       const downloadSuccessMessage = 'Download completed successfully';
-
-      // fileSystem.writeFileSync(logFilePath, javaProcessOutput.stderr.toString(), { encoding: 'utf-8' });
-
-      //  const logFileContent = fileSystem.readFileSync(logFilePath)?.toString();
       if (!fileContainsString(javaProcessOutput.stderr.toString(), downloadSuccessMessage)) {
         const errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessage}`);
       }
-
-      // fileSystem.unlink(logFilePath, (error) => { });
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
@@ -100,13 +93,13 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
 
     if (properties.connectionName && properties.connectionOverride) {
       const connections = properties.connectionName.split(',');
-      const connOver = [];
+      const connectionOverride = [];
       for (const override of properties.connectionOverride) {
         if (connections.indexOf(override.connection) !== -1) {
-          connOver.push(override);
+          connectionOverride.push(override);
         }
       }
-      properties.connectionOverride = connOver;
+      properties.connectionOverride = connectionOverride;
     }
   }
 }
