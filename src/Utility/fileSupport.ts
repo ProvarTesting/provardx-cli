@@ -6,6 +6,8 @@
  */
 
 import * as fs from 'node:fs';
+// eslint-disable-next-line
+import unzipper from 'unzipper';
 import { propertyFileContent } from '../constants/propertyFileContent.js';
 
 /**
@@ -20,4 +22,18 @@ export function generateFile(filePath: string): void {
 export function getExtension(filename: string): string {
   const i = filename.lastIndexOf('.');
   return i < 0 ? '' : filename.substr(i);
+}
+
+export function unzipFile(srcDirectory: string, targetDirectory: string): void {
+  if (!fs.existsSync(targetDirectory)) {
+    fs.mkdirSync(targetDirectory);
+  }
+  /* eslint-disable */
+  fs.createReadStream(srcDirectory).pipe(unzipper.Extract({ path: targetDirectory }));
+}
+
+export function unlinkFileIfExist(filePath: string): void {
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
 }

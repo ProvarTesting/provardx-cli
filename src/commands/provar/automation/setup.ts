@@ -1,10 +1,10 @@
 import * as fileSystem from 'node:fs';
-import os from 'node:os';
 import axios from 'axios';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
 import ErrorHandler from '../../../Utility/errorHandler.js';
+import { unzipFile, unlinkFileIfExist } from '../../../Utility/fileSupport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.setup');
@@ -25,41 +25,29 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationSetup);
-    const filePath = './provarInstaller.exe';
-    const fileStream = fileSystem.createWriteStream(filePath);
-    let url = '';
-    const platform = os.platform();
-    switch (platform) {
-      case 'darwin':
-        url = 'https://download.provartesting.com/2.12.1.1/Provar_2.12.1.1_macos_signed.pkg';
-        break;
-      case 'win32':
-        url = 'https://download.provartesting.com/2.12.1.1/Provar_setup_2.12.1.1_win_64.exe';
-        break;
-      case 'linux':
-        url = 'https://download.provartesting.com/2.12.1.1/Provar_ANT_2.12.1.1.zip';
-        break;
-      default:
-        this.log('Unknown operating system');
-    }
+    const filePath = './provarPlugins';
+    const fileStream = fileSystem.createWriteStream(`${filePath}.zip`);
+    const url = 'https://download.provartesting.com/2.12.1.1/Provar_ANT_2.12.1.1.zip';
 
-    // unlink file
+    /* eslint-disable */
+
+    unlinkFileIfExist(`${filePath}.zip`);
+    unlinkFileIfExist(`${filePath}`);
+
     await axios
       .get(url, { responseType: 'stream' })
-      .then((response) => {
-        /* eslint-disable */
+      .then(async (response: any) => {
         response.data.pipe(fileStream);
-
         fileStream.on('finish', () => {
-          this.log('File downloaded successfully');
+          unzipFile(`${filePath}.zip`, `${filePath}`);
+          return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
         });
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       })
-      .catch((error) => {
+      .catch((error: any) => {
         this.errorHandler.addErrorsToList('SETUP_ERROR', `errorMessages.SETUP_ERROR ${error.message}`);
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       });
 
-    return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+    return { success: false };
   }
 }
