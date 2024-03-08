@@ -488,7 +488,6 @@ describe('sf provar config validate NUTs', () => {
       });
     });
   });
-
   it('Boilerplate json file contains empty values for required properties', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | number;
