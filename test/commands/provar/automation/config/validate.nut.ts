@@ -8,11 +8,11 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
-import * as validateConstants from '../../../assertion/validateConstants.js';
-import * as loadConstants from '../../../assertion/loadConstants.js';
-import { errorMessages } from '../../../../src/constants/errorMessages.js';
-import { commandConstants } from '../../../../src/constants/commandConstants.js';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import * as validateConstants from '../../../../assertion/validateConstants.js';
+import * as loadConstants from '../../../../assertion/loadConstants.js';
+import { errorMessages } from '../../../../../src/constants/errorMessages.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('sf provar config validate NUTs', () => {
   let session: TestSession;
@@ -26,7 +26,7 @@ describe('sf provar config validate NUTs', () => {
       'propertyRange.json',
       'validateFile.json',
       'valueError.json',
-      'loadEmptyValues.json'
+      'loadEmptyValues.json',
     ];
     filePaths.forEach((filePath) => {
       fileSystem.unlink(filePath, (err) => {
@@ -38,31 +38,43 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated if the file has not been loaded', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p MissingFile.json`);
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p MissingFile.json`
+    );
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated if the file has not been loaded and return result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
   it('Boilerplate json file should be validated successfully with all required & optional attributes', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p validateFile.json`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p validateFile.json`);
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`, {
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p validateFile.json`
+    );
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p validateFile.json`);
+    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`, {
       ensureExitCode: 0,
     }).shellOutput;
     expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
   });
 
   it('Boilerplate json file should be validated successfully with all required & optional attributes and return result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.validateSuccessJson);
   });
 
@@ -111,8 +123,12 @@ describe('sf provar config validate NUTs', () => {
   });
 
   it('Boilerplate json file should not be validated as json file is malformed', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p malformedFile.json`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p malformedFile.json`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p malformedFile.json`
+    );
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p malformedFile.json`
+    );
     const jsonFilePath = './malformedFile.json';
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const newData = data.substring(1);
@@ -122,24 +138,29 @@ describe('sf provar config validate NUTs', () => {
       }
     });
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated as json file is malformed and return result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.malformedFileJsonError);
   });
 
   it('Boilerplate json file should not be validated as one required property is missing in json file', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file propertyError.json`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file propertyError.json`
     );
     // loading json file
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} --properties-file ./propertyError.json`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} --properties-file ./propertyError.json`
     );
     interface PropertyFileJsonData {
       [key: string]: string | boolean;
@@ -158,14 +179,19 @@ describe('sf provar config validate NUTs', () => {
     fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     expect(originalJsonData).to.not.have.all.keys(propertiesToRemove);
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`${validateConstants.missingPropertyError}`);
   });
 
   it('Boilerplate json file should not be validated as one required property is missing in json file and return the result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertyJsonError);
   });
 
@@ -207,21 +233,28 @@ describe('sf provar config validate NUTs', () => {
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`${validateConstants.missingPropertiesError}`);
   });
 
   it('Boilerplate json file should not be validated as multiple required properties are missing in file and return the result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingPropertiesJsonError);
   });
 
   it('Boilerplate json file should not be validated as invalid property value', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./valueError.json`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./valueError.json`
+    );
     // loading the json file
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ./valueError.json`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ./valueError.json`);
     interface PropertyFileJsonData {
       [key: string]: string | boolean | PropertyFileJsonData;
     }
@@ -233,14 +266,19 @@ describe('sf provar config validate NUTs', () => {
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`${validateConstants.invalidValueError}`);
   });
 
   it('Boilerplate json file should not be validated as invalid property value and return the result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValueJsonError);
   });
 
@@ -290,14 +328,19 @@ describe('sf provar config validate NUTs', () => {
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`${validateConstants.invalidValuesError}`);
   });
 
   it('Boilerplate json file should not be validated as invalid value exists for multiple properties and return the result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.invalidValuesJsonError);
   });
 
@@ -318,14 +361,19 @@ describe('sf provar config validate NUTs', () => {
     const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
     // validating json file
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(res.stderr).to.deep.equal(`${validateConstants.multipleErrors}`);
   });
 
   it('Boilerplate json file should not be validated as multiple error exists and return the result in json format', () => {
-    const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(res.jsonOutput).to.deep.equal(validateConstants.multipleJsonErrors);
   });
 
@@ -334,8 +382,12 @@ describe('sf provar config validate NUTs', () => {
       interface PropertyFileJsonData {
         [key: string]: string | boolean | PropertyFileJsonData;
       }
-      execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./propertyRange.json`);
-      execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ./propertyRange.json`);
+      execCmd<SfProvarCommandResult>(
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./propertyRange.json`
+      );
+      execCmd<SfProvarCommandResult>(
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ./propertyRange.json`
+      );
       const jsonFilePath = './propertyRange.json';
       const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
       const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
@@ -345,7 +397,9 @@ describe('sf provar config validate NUTs', () => {
         const updatedJsonData = JSON.stringify(jsonData, null, 2);
         fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
         // validating the file
-        const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+        const res = execCmd<SfProvarCommandResult>(
+          `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+        ).shellOutput;
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
@@ -363,7 +417,9 @@ describe('sf provar config validate NUTs', () => {
         const updatedJsonData = JSON.stringify(jsonData, null, 2);
         fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
         // validating the file
-        const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+        const res = execCmd<SfProvarCommandResult>(
+          `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+        ).shellOutput;
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
@@ -381,7 +437,9 @@ describe('sf provar config validate NUTs', () => {
         const updatedJsonData = JSON.stringify(jsonData, null, 2);
         fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
         // validating the file
-        const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+        const res = execCmd<SfProvarCommandResult>(
+          `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+        ).shellOutput;
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
@@ -401,7 +459,9 @@ describe('sf provar config validate NUTs', () => {
         const updatedJsonData = JSON.stringify(jsonData, null, 2);
         fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
         // validating the file
-        const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+        const res = execCmd<SfProvarCommandResult>(
+          `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+        ).shellOutput;
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
@@ -421,7 +481,9 @@ describe('sf provar config validate NUTs', () => {
         const updatedJsonData = JSON.stringify(jsonData, null, 2);
         fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
         // validating the file
-        const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+        const res = execCmd<SfProvarCommandResult>(
+          `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+        ).shellOutput;
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
@@ -431,7 +493,9 @@ describe('sf provar config validate NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | number;
     }
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p loadEmptyValues.json`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p loadEmptyValues.json`
+    );
     const jsonFilePath = 'loadEmptyValues.json';
     // reading the json data
     const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
@@ -469,21 +533,26 @@ describe('sf provar config validate NUTs', () => {
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json `
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json `
     ).shellOutput;
     expect(result.stderr).to.deep.equal(loadConstants.invalidValuesError);
-    const result1 = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`).shellOutput;
+    const result1 = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
     expect(result1.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Boilerplate json file should not allow empty values for required properties and return the error in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json --json`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json --json`
     ).jsonOutput;
     expect(result).to.deep.equal(loadConstants.invalidValuesJsonError);
-    const result1 = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND} --json`, {
-      ensureExitCode: 0,
-    });
+    const result1 = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
     expect(result1.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 });

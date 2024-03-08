@@ -9,10 +9,10 @@ import * as fileSystem from 'node:fs';
 import { exec } from 'node:child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
-import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../assertion/generateConstants.js';
-import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../assertion/generateConstants.js';
-import { commandConstants } from '../../../../src/constants/commandConstants.js';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../assertion/generateConstants.js';
+import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../../assertion/generateConstants.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('Handling Insufficient Permissions scenarios as write permission is removed from a folder', () => {
   let testSession: TestSession;
@@ -33,7 +33,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           done(error);
         } else {
           const res = execCmd<SfProvarCommandResult>(
-            `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/bin.json`
+            `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/bin.json`
           ).shellOutput;
           expect(res.stderr).to.deep.equal(errorInsufficientPermissions);
           done();
@@ -52,7 +52,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           done(error);
         } else {
           const res = execCmd<SfProvarCommandResult>(
-            `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/cd/Dom.uu`
+            `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/cd/Dom.uu`
           ).shellOutput;
           expect(res.stderr).to.deep.equal(errorInvalidFileExtension);
           done();
@@ -71,7 +71,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           done(error);
         } else {
           const result = execCmd<SfProvarCommandResult>(
-            `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/new.json --json`,
+            `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/new.json --json`,
             {
               ensureExitCode: 0,
             }
@@ -93,7 +93,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
           done(error);
         } else {
           const result = execCmd<SfProvarCommandResult>(
-            `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/u/unit.json --json`,
+            `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/u/unit.json --json`,
             {
               ensureExitCode: 0,
             }
@@ -111,7 +111,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       }
       fileSystem.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarCommandResult>(
-        `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Test.json`,
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Test.json`,
         {
           ensureExitCode: 1,
         }
@@ -126,7 +126,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       }
       fileSystem.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarCommandResult>(
-        `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Dummy.json --json`,
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Dummy.json --json`,
         {
           ensureExitCode: 0,
         }
@@ -141,7 +141,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       }
       fileSystem.chmodSync(folderPath, '555');
       const res = execCmd<SfProvarCommandResult>(
-        `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Test.json`,
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/InsufficientPermission/Test.json`,
         {
           ensureExitCode: 1,
         }
@@ -156,7 +156,7 @@ describe('Handling Insufficient Permissions scenarios as write permission is rem
       }
       fileSystem.chmodSync(folderPath, '555');
       const result = execCmd<SfProvarCommandResult>(
-        `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Dummy.json --json`,
+        `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test/InsufficientPermission/Dummy.json --json`,
         {
           ensureExitCode: 0,
         }
