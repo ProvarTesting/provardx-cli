@@ -63,6 +63,9 @@
                 "metadata": {
                   "description": "commands to download metadata for required connections."
                 }
+              },
+              "project": {
+                "description": "Compile the project."
               }
             }
           }
