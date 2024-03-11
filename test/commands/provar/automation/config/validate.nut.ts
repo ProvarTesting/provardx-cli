@@ -10,6 +10,7 @@ import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
+import * as loadConstants from '../../../../assertion/loadConstants.js';
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
@@ -25,6 +26,7 @@ describe('sf provar config validate NUTs', () => {
       'propertyRange.json',
       'validateFile.json',
       'valueError.json',
+      'loadEmptyValues.json',
     ];
     filePaths.forEach((filePath) => {
       fileSystem.unlink(filePath, (err) => {
@@ -485,5 +487,71 @@ describe('sf provar config validate NUTs', () => {
         expect(res.stdout).to.deep.equal(validateConstants.validateSuccessMessage);
       });
     });
+  });
+  it('Boilerplate json file contains empty values for required properties', () => {
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | number;
+    }
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p loadEmptyValues.json`
+    );
+    const jsonFilePath = 'loadEmptyValues.json';
+    // reading the json data
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
+    jsonData.provarHome = '';
+    jsonData.projectPath = '';
+    jsonData.resultsPath = '';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+  });
+
+  it('Boilerplate json file should not allow empty values for required properties and return the error', () => {
+    interface PropertyFileJsonData {
+      metadata: {
+        metadataLevel: string;
+        cachePath: string;
+      };
+      environment: {
+        webBrowser: string;
+        webBrowserConfig: string;
+        webBrowserProviderName: string;
+        webBrowserDeviceName: string;
+      };
+    }
+    const jsonFilePath = 'loadEmptyValues.json';
+    // reading the json data
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
+    jsonData.metadata.metadataLevel = '';
+    jsonData.metadata.cachePath = '';
+    jsonData.environment.webBrowser = '';
+    jsonData.environment.webBrowserConfig = '';
+    jsonData.environment.webBrowserProviderName = '';
+    jsonData.environment.webBrowserDeviceName = '';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json `
+    ).shellOutput;
+    expect(result.stderr).to.deep.equal(loadConstants.invalidValuesError);
+    const result1 = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
+    ).shellOutput;
+    expect(result1.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+  });
+
+  it('Boilerplate json file should not allow empty values for required properties and return the error in json format', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p loadEmptyValues.json --json`
+    ).jsonOutput;
+    expect(result).to.deep.equal(loadConstants.invalidValuesJsonError);
+    const result1 = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(result1.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 });

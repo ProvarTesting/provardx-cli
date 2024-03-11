@@ -21,3 +21,7 @@ export function getExtension(filename: string): string {
   const i = filename.lastIndexOf('.');
   return i < 0 ? '' : filename.substr(i);
 }
+
+export function fileContainsString(fileContent: string, searchString: string): boolean {
+  return fileContent.includes(searchString);
+}
