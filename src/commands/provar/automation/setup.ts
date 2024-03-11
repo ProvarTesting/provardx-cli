@@ -51,8 +51,14 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
           this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
         } else if (error.code === 'EPERM' || error.code === 'EACCES') {
           this.errorHandler.addErrorsToList('INSUFFICIENT_PERMISSIONS', errorMessages.INSUFFICIENT_PERMISSIONS);
+        } else if (error.code === 'ERR_BAD_REQUEST') {
+          this.errorHandler.addErrorsToList(
+            'SETUP_ERROR',
+            `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
+          );
+        } else {
+          this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
         }
-        this.errorHandler.addErrorsToList('SETUP_ERROR', `errorMessages.SETUP_ERROR ${error.message}`);
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       });
 
