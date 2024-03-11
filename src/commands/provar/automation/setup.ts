@@ -5,6 +5,7 @@ import { Messages } from '@salesforce/core';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
 import ErrorHandler from '../../../Utility/errorHandler.js';
 import { unzipFile, unlinkFileIfExist } from '../../../Utility/fileSupport.js';
+import { errorMessages } from '../../../constants/errorMessages.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.setup');
@@ -18,6 +19,7 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
     version: Flags.string({
       summary: messages.getMessage('flags.version.summary'),
       char: 'v',
+      required: true,
     }),
   };
 
@@ -45,6 +47,11 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
         });
       })
       .catch((error: any) => {
+        if (error.code === 'ENOENT') {
+          this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
+        } else if (error.code === 'EPERM' || error.code === 'EACCES') {
+          this.errorHandler.addErrorsToList('INSUFFICIENT_PERMISSIONS', errorMessages.INSUFFICIENT_PERMISSIONS);
+        }
         this.errorHandler.addErrorsToList('SETUP_ERROR', `errorMessages.SETUP_ERROR ${error.message}`);
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       });
