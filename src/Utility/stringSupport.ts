@@ -24,6 +24,19 @@ export function substringAfter(str: string, separator: string): string {
 
   return str.substring(pos + separator.length);
 }
+
 export function addQuotesAround(array: string[]): string[] {
   return array.map((item) => "'" + item + "'");
+}
+
+export function removeSpaces(str: string): string {
+  return str.replace(/\s/g, '');
+}
+
+export function getStringAfterSubstring(content: string, searchString: string): string {
+  const index = content.toLowerCase().indexOf(searchString.toLowerCase());
+  if (index === -1) {
+    return '';
+  }
+  return content.slice(index);
 }

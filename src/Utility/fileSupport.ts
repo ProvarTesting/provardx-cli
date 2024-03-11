@@ -37,3 +37,7 @@ export function unlinkFileIfExist(filePath: string): void {
     fs.unlinkSync(filePath);
   }
 }
+
+export function fileContainsString(fileContent: string, searchString: string): boolean {
+  return fileContent.includes(searchString);
+}

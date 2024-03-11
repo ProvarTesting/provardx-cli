@@ -1,11 +1,11 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
-import * as validateConstants from '../../../assertion/validateConstants.js';
-import * as setConstants from '../../../assertion/setConstants.js';
-import { errorMessages } from '../../../../src/constants/errorMessages.js';
-import { commandConstants } from '../../../../src/constants/commandConstants.js';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import * as validateConstants from '../../../../assertion/validateConstants.js';
+import * as setConstants from '../../../../assertion/setConstants.js';
+import { errorMessages } from '../../../../../src/constants/errorMessages.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('sf provar config set NUTs', () => {
   let session: TestSession;
@@ -25,8 +25,8 @@ describe('sf provar config set NUTs', () => {
   const SET_KEY_VALUE = 'KeyTest';
   const SET_TEST_VALUE = 'New_User';
   const SET_SPECIAL_CHARACTERS_VALUE = 'Str#$%in*_g';
-  const SET_NUMBER_VALUE = 1234567890;
-  const SET_NUMBER_DECIMAL_VALUE = 9876.54321;
+  const SET_NUMBER_VALUE = 1_234_567_890;
+  const SET_NUMBER_DECIMAL_VALUE = 9876.543_21;
   const SET_COUNTRY_VALUE = 'India';
   const SET_STATE_VALUE = 'Uttarakhand';
   const SET_CITY_VALUE = '"Roorkee"';
@@ -50,7 +50,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Missing file error should be thrown when json file is not loaded and return the error', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
     );
     const jsonFilePath = FILE_PATHS.INVALID_FILE;
     const data = fileSystem.readFileSync(jsonFilePath, 'utf-8');
@@ -60,16 +60,18 @@ describe('sf provar config set NUTs', () => {
         return;
       }
     });
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.INVALID_FILE}`
+    );
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} provarHome=notDefined`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} provarHome=notDefined`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
   });
 
   it('Missing file error should be thrown when json file is not loaded and return the error in json', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} resultsPath=path --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} resultsPath=path --json`,
       {
         ensureExitCode: 0,
       }
@@ -78,30 +80,36 @@ describe('sf provar config set NUTs', () => {
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`);
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`
+    );
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.ERROR_FILE}`
+    );
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`);
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} =Provar`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} =Provar`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} ""=MissingProperty`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} ""=MissingProperty`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error', () => {
-    const result = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND}`).shellOutput;
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND}`
+    ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_PROPERTY] ${errorMessages.MISSING_PROPERTY}\n\n`);
   });
 
   it('Missing property error should be thrown when property is not defined and return the error in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} =MissingProperty --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} =MissingProperty --json`,
       {
         ensureExitCode: 0,
       }
@@ -111,21 +119,21 @@ describe('sf provar config set NUTs', () => {
 
   it('Missing value error should be thrown when value is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} missingValue=`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} missingValue=`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n\n`);
   });
 
   it('Missing value error should be thrown when value is not defined and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "missingValue"=""`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "missingValue"=""`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [MISSING_VALUE] ${errorMessages.MISSING_VALUE}\n\n`);
   });
 
   it('Missing value error should be thrown when value is not defined and return the error in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} missingValueError= --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} missingValueError= --json`,
       {
         ensureExitCode: 0,
       }
@@ -135,21 +143,21 @@ describe('sf provar config set NUTs', () => {
 
   it('Invalid argument error should be thrown when property and value is not defined in correct format and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} invalid = argument`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} invalid = argument`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n\n`);
   });
 
   it('Invalid argument error should be thrown when property and value is not defined in correct format and return the error', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} attachmentProperties=random value`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} attachmentProperties=random value`
     ).shellOutput;
     expect(result.stderr).to.deep.equal(`Error (1): [INVALID_ARGUMENT] ${errorMessages.INVALID_ARGUMENT}\n\n`);
   });
 
   it('Invalid argument error should be thrown when property and value is not defined in correct format and return the error in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "parsing" = "error" --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "parsing" = "error" --json`,
       {
         ensureExitCode: 0,
       }
@@ -159,14 +167,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for provarHome property in json file and return the success result in json format', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
     );
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.FILE_MULTIPLE_FILES}`
     );
-    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_CONFIG_VALIDATE_COMMAND}`);
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`);
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} provarHome=C:/Users/anchal.goel/Downloads/main_win64_e413157177_20240117_0452/ --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} provarHome=C:/Users/anchal.goel/Downloads/main_win64_e413157177_20240117_0452/ --json`,
       {
         ensureExitCode: 0,
       }
@@ -176,14 +184,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be overwritten successfully for provarHome property in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for resultsPath property in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "resultsPath"=${SET_RESULTS_PATH_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "resultsPath"=${SET_RESULTS_PATH_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -193,14 +201,14 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for projectPath property in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for smtpPath property in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} smtpPath=${SET_SMTP_PATH_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} smtpPath=${SET_SMTP_PATH_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -210,7 +218,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for resultsPathDisposition property in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} resultsPathDisposition=${SET_RESULTS_PATH_DISPOSITION_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} resultsPathDisposition=${SET_RESULTS_PATH_DISPOSITION_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -220,7 +228,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for testOutputLevel property in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "testOutputLevel"=${SET_TEST_OUTPUT_LEVEL_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testOutputLevel"=${SET_TEST_OUTPUT_LEVEL_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -230,28 +238,28 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for pluginOutputlevel property in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} pluginOutputlevel=${SET_PLUGIN_OUTPUTLEVEL_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} pluginOutputlevel=${SET_PLUGIN_OUTPUTLEVEL_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for lightningMode property in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} lightningMode=${SET_LIGHTNING_MODE_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} lightningMode=${SET_LIGHTNING_MODE_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('Value should be set successfully for testEnvironment property in environment object in json file', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "environment.testEnvironment"=${SET_TEST_ENVIRONMENT_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "environment.testEnvironment"=${SET_TEST_ENVIRONMENT_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property should be set successfully in environment object in json file and return the success result in json format ', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} environment.newEnvironment=${SET_NEW_ENVIRONMENT_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} environment.newEnvironment=${SET_NEW_ENVIRONMENT_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -261,7 +269,7 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for metadataLevel property in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "metadata.metadataLevel"=${SET_METADATA_LEVEL_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "metadata.metadataLevel"=${SET_METADATA_LEVEL_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -271,21 +279,21 @@ describe('sf provar config set NUTs', () => {
 
   it('Value should be set successfully for metadata cachePath property in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.cachePath=${SET_CACHE_PATH_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} metadata.cachePath=${SET_CACHE_PATH_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('Multiple properties with values should be set successfully and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} metadata.error=${SET_ERROR_VALUE} environment.key=${SET_KEY_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} metadata.error=${SET_ERROR_VALUE} environment.key=${SET_KEY_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type array should be set successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "testCases"="[\\"/Test Case 1.testcase\\",\\"/Test Case 2.testcase\\",\\"/Test Case 3.testcase\\"]" --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCases"="[\\"/Test Case 1.testcase\\",\\"/Test Case 2.testcase\\",\\"/Test Case 3.testcase\\"]" --json`,
       {
         ensureExitCode: 0,
       }
@@ -295,21 +303,21 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type array should be set successfully in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "testcase"="[\\"tests/myTestCase.testcase\\",\\"tests/testSuite1/myTestCase1.testCase\\"]"`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testcase"="[\\"tests/myTestCase.testcase\\",\\"tests/testSuite1/myTestCase1.testCase\\"]"`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type object should be set successfully in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "emailProperties"="{\\"sendEmail\\":true,\\"primaryRecipients\\":\\"anchal.goel@provartesting.com\\",\\"ccRecipients\\":\\"\\",\\"bccRecipients\\":\\"\\",\\"emailSubject\\":\\"Provar test run report\\",\\"attachExecutionReport\\":true,\\"attachZip\\":false}"`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "emailProperties"="{\\"sendEmail\\":true,\\"primaryRecipients\\":\\"anchal.goel@provartesting.com\\",\\"ccRecipients\\":\\"\\",\\"bccRecipients\\":\\"\\",\\"emailSubject\\":\\"Provar test run report\\",\\"attachExecutionReport\\":true,\\"attachZip\\":false}"`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type string should be set successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} test=${SET_TEST_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} test=${SET_TEST_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -319,7 +327,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type string with special char should be set successfully in json file and return the success result in json format ', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "SpecialCharacters"=${SET_SPECIAL_CHARACTERS_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "SpecialCharacters"=${SET_SPECIAL_CHARACTERS_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -329,7 +337,7 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type Boolean should be set successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} booleanValue=false --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} booleanValue=false --json`,
       {
         ensureExitCode: 0,
       }
@@ -339,14 +347,14 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type Boolean should be set successfully in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} status=true`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} status=true`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type Number should be set successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number=${SET_NUMBER_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} number=${SET_NUMBER_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
@@ -356,14 +364,14 @@ describe('sf provar config set NUTs', () => {
 
   it('New property and Value of type Number should be set successfully in json file and return the success result', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} number_Value=${SET_NUMBER_DECIMAL_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} number_Value=${SET_NUMBER_DECIMAL_VALUE}`
     ).shellOutput;
     expect(result.stdout).to.deep.equal('');
   });
 
   it('New property and Value of type Null should be set successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} nullProperty=null --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} nullProperty=null --json`,
       {
         ensureExitCode: 0,
       }
@@ -373,25 +381,25 @@ describe('sf provar config set NUTs', () => {
 
   it('New Object with property and Value should be created successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.country=${SET_COUNTRY_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} world.country=${SET_COUNTRY_VALUE} --json`,
       {
         ensureExitCode: 0,
       }
     );
     expect(result.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
     const resultSet = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} world.state=${SET_STATE_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} world.state=${SET_STATE_VALUE}`
     ).shellOutput;
     expect(resultSet.stdout).to.deep.equal('');
     const output = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} "world.city"=${SET_CITY_VALUE} --json`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "world.city"=${SET_CITY_VALUE} --json`
     );
     expect(output.jsonOutput).to.deep.equal(setConstants.setSuccessJson);
   });
 
   it('New Object with nested properties and Value should be created successfully in json file and return the success result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_SET_COMMAND} company.team.employee.position=${SET_POSITION_VALUE} --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} company.team.employee.position=${SET_POSITION_VALUE} --json`,
       {
         ensureExitCode: 0,
       }

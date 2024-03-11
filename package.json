@@ -8,10 +8,12 @@
     "@salesforce/core": "^6.5.1",
     "@salesforce/kit": "^3.0.15",
     "@salesforce/sf-plugins-core": "^7.1.4",
+    "@salesforce/ts-types": "^2.0.9",
     "axios": "^1.6.7",
     "jsonschema": "^1.4.1",
     "sync-request": "^6.1.0",
-    "unzipper": "^0.10.14"
+    "unzipper": "^0.10.14",
+    "cli-ux": "^6.0.9"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.0.2",
@@ -52,14 +54,19 @@
       "@oclif/plugin-help"
     ],
     "topics": {
-      "sf": {
-        "description": "commands to automate salesforce",
+      "provar": {
+        "description": "CLI commands to interact with Provar.",
         "subtopics": {
-          "provar": {
-            "description": "commands to manipulate properties file & automate salesforce using provardx",
+          "automation": {
+            "description": "These commands are used to interact with Provar Automation.",
             "subtopics": {
               "config": {
-                "description": "commands to generate and manipulate provardx-properties file"
+                "description": "commands to generate and manipulate provardx-properties file."
+              },
+              "subtopics": {
+                "metadata": {
+                  "description": "commands to download metadata for required connections."
+                }
               }
             }
           }
