@@ -19,7 +19,6 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
     version: Flags.string({
       summary: messages.getMessage('flags.version.summary'),
       char: 'v',
-      required: true,
     }),
   };
 
@@ -27,11 +26,12 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationSetup);
-    const provarVersion = flags.version;
     const filePath = './provarPlugins';
     const fileStream = fileSystem.createWriteStream(`${filePath}.zip`);
-    const url = `https://download.provartesting.com/${provarVersion}/Provar_ANT_${provarVersion}.zip`;
-
+    let url = 'https://download.provartesting.com/latest/Provar_ANT_latest.zip';
+    if (flags.version) {
+      url = `https://download.provartesting.com/${flags.version}/Provar_ANT_${flags.version}.zip`;
+    }
     /* eslint-disable */
 
     unlinkFileIfExist(`${filePath}.zip`);
