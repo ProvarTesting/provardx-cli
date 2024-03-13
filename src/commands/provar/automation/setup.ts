@@ -56,6 +56,7 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
             'SETUP_ERROR',
             `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
           );
+          unlinkFileIfExist(`${filePath}.zip`);
         } else {
           this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
         }
