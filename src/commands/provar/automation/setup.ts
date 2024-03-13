@@ -62,6 +62,6 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       });
 
-    return { success: false };
+    return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
   }
 }
