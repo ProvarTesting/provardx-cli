@@ -37,32 +37,48 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
     unlinkFileIfExist(`${filePath}.zip`);
     unlinkFileIfExist(`${filePath}`);
 
-    await axios
-      .get(url, { responseType: 'stream' })
-      .then(async (response: any) => {
-        response.data.pipe(fileStream);
-        fileStream.on('finish', () => {
-          unzipFile(`${filePath}.zip`, `${filePath}`);
-          return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-        });
-      })
-      .catch((error: any) => {
-        if (error.code === 'ENOENT') {
-          this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
-        } else if (error.code === 'EPERM' || error.code === 'EACCES') {
-          this.errorHandler.addErrorsToList('INSUFFICIENT_PERMISSIONS', errorMessages.INSUFFICIENT_PERMISSIONS);
-        } else if (error.code === 'ERR_BAD_REQUEST') {
-          this.errorHandler.addErrorsToList(
-            'SETUP_ERROR',
-            `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
-          );
-          unlinkFileIfExist(`${filePath}.zip`);
-        } else {
-          this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
-        }
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-      });
+    try {
+      const response = await axios.get(url, { responseType: 'stream' });
+      response.data.pipe(fileStream);
+      await this.unzip(fileStream, filePath);
+      unlinkFileIfExist(`${filePath}.zip`);
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
+      } else if (error.code === 'EPERM' || error.code === 'EACCES') {
+        this.errorHandler.addErrorsToList('INSUFFICIENT_PERMISSIONS', errorMessages.INSUFFICIENT_PERMISSIONS);
+      } else if (error.code === 'ERR_BAD_REQUEST') {
+        this.errorHandler.addErrorsToList(
+          'SETUP_ERROR',
+          `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
+        );
+        unlinkFileIfExist(`${filePath}.zip`);
+      } else {
+        this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
+      }
+    }
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+  }
+
+  private async unzip(filestream: fileSystem.WriteStream, filePath: string): Promise<void> {
+    const resolvers: any = {
+      done: null,
+      error: null,
+    };
+    const promise = new Promise<void>((resolve, error) => {
+      resolvers.done = resolve;
+      resolvers.error = error;
+    });
+    filestream.on('finish', () => {
+      unzipFile(`${filePath}.zip`, `${filePath}`);
+      resolvers.done();
+    });
+    filestream.on('error', (error) => {
+      unzipFile(`${filePath}.zip`, `${filePath}`);
+      resolvers.error(error);
+    });
+
+    return promise;
   }
 }
