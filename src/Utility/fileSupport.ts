@@ -7,7 +7,7 @@
 
 import * as fs from 'node:fs';
 // eslint-disable-next-line
-import unzipper from 'unzipper';
+import StreamZip from 'node-stream-zip';
 import { propertyFileContent } from '../constants/propertyFileContent.js';
 
 /**
@@ -25,11 +25,15 @@ export function getExtension(filename: string): string {
 }
 
 export function unzipFile(srcDirectory: string, targetDirectory: string): void {
-  if (!fs.existsSync(targetDirectory)) {
-    fs.mkdirSync(targetDirectory);
-  }
-  /* eslint-disable */
-  fs.createReadStream(srcDirectory).pipe(unzipper.Extract({ path: targetDirectory }));
+  const zip = new StreamZip({
+    file: srcDirectory,
+    storeEntries: true,
+  });
+  zip.on('ready', () => {
+    zip.extract(null, targetDirectory, () => {
+      zip.close();
+    });
+  });
 }
 
 export function unlinkFileIfExist(filePath: string): void {

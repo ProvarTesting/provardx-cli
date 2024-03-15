@@ -10,10 +10,10 @@
     "@salesforce/sf-plugins-core": "^7.1.4",
     "@salesforce/ts-types": "^2.0.9",
     "axios": "^1.6.7",
+    "cli-ux": "^6.0.9",
     "jsonschema": "^1.4.1",
-    "sync-request": "^6.1.0",
-    "unzipper": "^0.10.14",
-    "cli-ux": "^6.0.9"
+    "node-stream-zip": "^1.15.0",
+    "sync-request": "^6.1.0"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.0.2",
