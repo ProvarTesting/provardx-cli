@@ -4,9 +4,9 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
+/* eslint-disable */
 
 import * as fs from 'node:fs';
-// eslint-disable-next-line
 import StreamZip from 'node-stream-zip';
 import { propertyFileContent } from '../constants/propertyFileContent.js';
 
