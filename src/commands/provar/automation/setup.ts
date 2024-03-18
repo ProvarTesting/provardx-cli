@@ -26,7 +26,7 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationSetup);
-    const filePath = './provarPlugins';
+    const filePath = './provarHome';
     const fileStream = fileSystem.createWriteStream(`${filePath}.zip`);
     let url = 'https://download.provartesting.com/latest/Provar_ANT_latest.zip';
     if (flags.version) {
