@@ -33,15 +33,14 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
       url = `https://download.provartesting.com/${flags.version}/Provar_ANT_${flags.version}.zip`;
     }
     /* eslint-disable */
-
-    unlinkFileIfExist(`${filePath}.zip`);
-    unlinkFileIfExist(`${filePath}`);
+    this.unlinkFileIfExist(`${filePath}.zip`);
+    this.unlinkFileIfExist(`${filePath}`);
 
     try {
       const response = await axios.get(url, { responseType: 'stream' });
       response.data.pipe(fileStream);
       await this.unzip(fileStream, filePath);
-      unlinkFileIfExist(`${filePath}.zip`);
+      this.unlinkFileIfExist(`${filePath}.zip`);
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
@@ -52,7 +51,7 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
           'SETUP_ERROR',
           `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
         );
-        unlinkFileIfExist(`${filePath}.zip`);
+        this.unlinkFileIfExist(`${filePath}.zip`);
       } else {
         this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
       }
@@ -80,5 +79,18 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
     });
 
     return promise;
+  }
+
+  private unlinkFileIfExist(filePath: string): void {
+    try {
+      unlinkFileIfExist(filePath);
+    } catch (error: any) {
+      if (error.code === 'EPERM' || error.code === 'EACCES') {
+        this.errorHandler.addErrorsToList(
+          'INSUFFICIENT_PERMISSIONS',
+          'The user does not have permissions to delete the existing folder.'
+        );
+      }
+    }
   }
 }
