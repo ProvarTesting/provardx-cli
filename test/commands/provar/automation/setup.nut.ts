@@ -36,13 +36,13 @@ describe('sf provar automation setup NUTs', () => {
     expect(result.stdout).to.deep.equal(setupConstants.successMessage);
   });
 
-  // it('Build should be installed using flag -v and return the success result in json format', () => {
-  //   const res = execCmd<SfProvarCommandResult>(
-  //     `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} --version 2.12.1 --json`,
-  //     {
-  //       ensureExitCode: 0,
-  //     }
-  //   ).jsonOutput;
-  //   expect(res).to.deep.equal(setupConstants.successJsonMessage);
-  // });
+  it('INSUFFICIENT_PERMISSIONS error on installing the build again using flag --version', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} --version 2.12.1 --json`,
+      {
+        ensureExitCode: 0,
+      }
+    ).jsonOutput;
+    expect(res).to.deep.equal(setupConstants.insufficientPermissions);
+  });
 });

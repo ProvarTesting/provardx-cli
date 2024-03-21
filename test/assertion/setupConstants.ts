@@ -21,3 +21,17 @@ export const failureJsonMessage = {
   },
   warnings: [],
 };
+
+export const insufficientPermissions = {
+  status: 0,
+  result: {
+    success: false,
+    errors: [
+      {
+        code: 'INSUFFICIENT_PERMISSIONS',
+        message: 'The user does not have permissions to delete the existing folder.',
+      },
+    ],
+  },
+  warnings: [],
+};
