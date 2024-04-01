@@ -20,4 +20,4 @@ Provar Automation build version number.
 
 # success_message
 
-Provar Automation was set up successfully. Please, remember to set the property “provarHome” to the relative path “ProvarHome”
+Provar Automation was set up successfully. Please, remember to set the property “provarHome” to the relative path “ProvarHome”.
