@@ -24,7 +24,7 @@ export function getExtension(filename: string): string {
   return i < 0 ? '' : filename.substr(i);
 }
 
-export function unzipFile(srcDirectory: string, targetDirectory: string): void {
+export function unzipFile(srcDirectory: string, targetDirectory: string, onComplete: () => void): void {
   const zip = new StreamZip({
     file: srcDirectory,
     storeEntries: true,
@@ -32,6 +32,7 @@ export function unzipFile(srcDirectory: string, targetDirectory: string): void {
   zip.on('ready', () => {
     zip.extract(null, targetDirectory, () => {
       zip.close();
+      onComplete();
     });
   });
 }

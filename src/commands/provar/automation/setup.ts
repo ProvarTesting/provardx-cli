@@ -70,12 +70,14 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
       resolvers.error = error;
     });
     filestream.on('finish', () => {
-      unzipFile(`${filePath}.zip`, `${filePath}`);
-      resolvers.done();
+      unzipFile(`${filePath}.zip`, `${filePath}`, () => {
+        resolvers.done();
+      });
     });
     filestream.on('error', (error) => {
-      unzipFile(`${filePath}.zip`, `${filePath}`);
-      resolvers.error(error);
+      unzipFile(`${filePath}.zip`, `${filePath}`, () => {
+        resolvers.error(error);
+      });
     });
 
     return promise;
