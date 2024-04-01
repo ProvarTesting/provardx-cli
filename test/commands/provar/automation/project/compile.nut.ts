@@ -3,12 +3,15 @@ import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
 import { commandConstants } from '../../../../../src/constants/commandConstants.js';
+import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import * as compileConstants from '../../../../assertion/compileConstants.js';
+import * as validateConstants from '../../../../assertion/validateConstants.js';
 
 describe('provar automation project compile NUTs', () => {
   let session: TestSession;
   enum FILE_PATHS {
-    COMPILE_FILE = 'metadataDownloadFile.json',
+    COMPILE_FILE = 'compileFile.json',
+    MISSING_FILE = 'missingFile.json'
   }
 
   after(async () => {
@@ -22,7 +25,39 @@ describe('provar automation project compile NUTs', () => {
     });
   });
 
-  it('Compile command should be successful', () => {
+  it('Boilerplate json file should not be compiled if the file has not been loaded', () => {
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.MISSING_FILE}`
+    );
+    interface PropertyFileJsonData {
+      [key: string]: string | boolean | number;
+    }
+    const jsonFilePath = 'MissingFile.json';
+    // reading the json data
+    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
+    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
+    jsonData.provarHome = '';
+    jsonData.projectPath = '';
+    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND}`);
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
+    ).shellOutput;
+    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+  });
+
+  it('Boilerplate json file should not be compiled if the file has not been loaded and return result in json format', () => {
+    const res = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND} --json`,
+      {
+        ensureExitCode: 0,
+      }
+    );
+    expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+  });
+
+  it('Compile command should not be successful', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );
@@ -30,7 +65,7 @@ describe('provar automation project compile NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );
     const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
-    const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
+    const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provarr"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`
@@ -38,7 +73,21 @@ describe('provar automation project compile NUTs', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
     );
-    const result = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`).shellOutput;
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
+    ).shellOutput;
+    expect(result.stderr).to.deep.equal('Error (1): [COMPILATION_ERROR] \n\n');
+  });
+
+  it('Compile command should be successful', () => {
+    const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
+    // set provarHome 
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
+    );
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
+    ).shellOutput;
     expect(result.stdout).to.deep.equal(compileConstants.successMessage);
   });
 
