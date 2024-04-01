@@ -50,7 +50,10 @@ export default class ProvarAutomationProjectCompile extends SfCommand<SfProvarCo
       const javaProcessOutput = spawnSync(projectCompilecommand, { shell: true });
       const compileSuccessMessage = 'Compile task finished sucessfully.';
       if (!fileContainsString(javaProcessOutput.stderr.toString(), compileSuccessMessage)) {
-        const errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
+        let errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
+        if (!errorMessage) {
+          errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'Compilation task failed.');
+        }
         this.errorHandler.addErrorsToList('COMPILATION_ERROR', `${errorMessage}`);
       }
     } catch (error: any) {
