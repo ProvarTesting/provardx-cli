@@ -4,7 +4,7 @@ import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
 import ErrorHandler from '../../../Utility/errorHandler.js';
-import { unzipFile, unlinkFileIfExist } from '../../../Utility/fileSupport.js';
+import { unzipFileSynchronously, unlinkFileIfExist } from '../../../Utility/fileSupport.js';
 import { errorMessages } from '../../../constants/errorMessages.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -26,16 +26,16 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationSetup);
-    const filePath = './ProvarHome';
-    const fileStream = fileSystem.createWriteStream(`${filePath}.zip`);
+    const provarHomePath = './ProvarHome';
+    const fileStream = fileSystem.createWriteStream(`${provarHomePath}.zip`);
     let url = 'https://download.provartesting.com/latest/Provar_ANT_latest.zip';
     if (flags.version) {
       url = `https://download.provartesting.com/${flags.version}/Provar_ANT_${flags.version}.zip`;
     }
     /* eslint-disable */
     try {
-      unlinkFileIfExist(`${filePath}.zip`);
-      unlinkFileIfExist(`${filePath}`);
+      unlinkFileIfExist(`${provarHomePath}.zip`);
+      unlinkFileIfExist(`${provarHomePath}`);
     } catch (error: any) {
       if (error.code === 'EPERM' || error.code === 'EACCES') {
         this.errorHandler.addErrorsToList(
@@ -49,8 +49,8 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
     try {
       const response = await axios.get(url, { responseType: 'stream' });
       response.data.pipe(fileStream);
-      await this.unzip(fileStream, filePath);
-      unlinkFileIfExist(`${filePath}.zip`);
+      await unzipFileSynchronously(fileStream, provarHomePath);
+      unlinkFileIfExist(`${provarHomePath}.zip`);
     } catch (error: any) {
       if (error.code === 'ENOENT') {
         this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
@@ -61,35 +61,12 @@ export default class ProvarAutomationSetup extends SfCommand<SfProvarCommandResu
           'SETUP_ERROR',
           `${errorMessages.SETUP_ERROR}Provided version is not a valid version.`
         );
-        unlinkFileIfExist(`${filePath}.zip`);
+        unlinkFileIfExist(`${provarHomePath}.zip`);
       } else {
         this.errorHandler.addErrorsToList('SETUP_ERROR', `${errorMessages.SETUP_ERROR} ${error.message}`);
       }
     }
 
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
-  }
-
-  private async unzip(filestream: fileSystem.WriteStream, filePath: string): Promise<void> {
-    const resolvers: any = {
-      done: null,
-      error: null,
-    };
-    const promise = new Promise<void>((resolve, error) => {
-      resolvers.done = resolve;
-      resolvers.error = error;
-    });
-    filestream.on('finish', () => {
-      unzipFile(`${filePath}.zip`, `${filePath}`, () => {
-        resolvers.done();
-      });
-    });
-    filestream.on('error', (error) => {
-      unzipFile(`${filePath}.zip`, `${filePath}`, () => {
-        resolvers.error(error);
-      });
-    });
-
-    return promise;
   }
 }
