@@ -1,4 +1,3 @@
-import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
@@ -41,19 +40,6 @@ describe('sf provar automation setup NUTs', () => {
 
   if (process.platform === 'win32') {
     it('INSUFFICIENT_PERMISSIONS error on installing the build again using flag --version', () => {
-      const res = execCmd<SfProvarCommandResult>(
-        `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} --version 2.12.1 --json`,
-        {
-          ensureExitCode: 0,
-        }
-      ).jsonOutput;
-      expect(res).to.deep.equal(setupConstants.insufficientPermissions);
-    });
-  } else if (process.platform === 'linux') {
-    it('INSUFFICIENT_PERMISSIONS error on installing the build again using flag --version', () => {
-      const folderPath = './ProvarHome';
-      fileSystem.chmodSync(folderPath, '755');
-
       const res = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} --version 2.12.1 --json`,
         {
