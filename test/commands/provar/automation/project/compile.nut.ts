@@ -76,7 +76,7 @@ describe('provar automation project compile NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal('Error (1): [COMPILATION_ERROR] \n\n');
+    expect(result.stderr).to.deep.equal(compileConstants.compilationError);
   });
 
   it('Compile command should be successful', () => {
