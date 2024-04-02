@@ -46,3 +46,26 @@ export function unlinkFileIfExist(filePath: string): void {
 export function fileContainsString(fileContent: string, searchString: string): boolean {
   return fileContent.includes(searchString);
 }
+
+export async function unzipFileSynchronously(filestream: fs.WriteStream, filePath: string): Promise<void> {
+  const resolvers: any = {
+    done: null,
+    error: null,
+  };
+  const promise = new Promise<void>((resolve, error) => {
+    resolvers.done = resolve;
+    resolvers.error = error;
+  });
+  filestream.on('finish', () => {
+    unzipFile(`${filePath}.zip`, `${filePath}`, () => {
+      resolvers.done();
+    });
+  });
+  filestream.on('error', (error) => {
+    unzipFile(`${filePath}.zip`, `${filePath}`, () => {
+      resolvers.error(error);
+    });
+  });
+
+  return promise;
+}
