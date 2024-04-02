@@ -52,7 +52,7 @@ describe('sf provar automation setup NUTs', () => {
   } else if (process.platform === 'linux') {
     it('INSUFFICIENT_PERMISSIONS error on installing the build again using flag --version', () => {
       const folderPath = './ProvarHome';
-      fileSystem.chmodSync(folderPath, '444');
+      fileSystem.chmodSync(folderPath, '755');
 
       const res = execCmd<SfProvarCommandResult>(
         `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} --version 2.12.1 --json`,
