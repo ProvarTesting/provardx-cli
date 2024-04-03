@@ -78,7 +78,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
-      } else if (error.name === 'MULTIPLE_ERRORSError') {
+      } else if (error.name === 'MultipleFailureError') {
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       } else {
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);

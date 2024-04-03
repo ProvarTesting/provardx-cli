@@ -16,6 +16,6 @@ Compile the project using the configuration set in the properties file.
 
 The project was compiled successfully.
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s

@@ -28,6 +28,6 @@ FILE_ALREADY_EXISTS - A file with the same name already exists in that location.
 
 The properties file was generated successfully.
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s
