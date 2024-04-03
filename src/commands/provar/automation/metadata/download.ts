@@ -9,6 +9,7 @@ import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfPro
 import UserSupport from '../../../../Utility/userSupport.js';
 import { fileContainsString } from '../../../../Utility/fileSupport.js';
 import { removeSpaces, getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
+import { sfCommandConstants } from '../../../../constants/sfCommandConstants.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.metadata.download');
@@ -61,7 +62,8 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const downloadMetadatacommand =
         'java -cp "' +
         provarDxJarPath +
-        '" com.provar.provardx.DxCommandExecuter ' +
+        '"' +
+        sfCommandConstants.DX_COMMAND_EXECUTER +
         updateProperties +
         ' ' +
         userInfoString +

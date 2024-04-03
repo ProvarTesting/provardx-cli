@@ -9,6 +9,7 @@ import { errorMessages } from '../../../../constants/errorMessages.js';
 import UserSupport from '../../../../Utility/userSupport.js';
 import { fileContainsString } from '../../../../Utility/fileSupport.js';
 import { getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
+import { sfCommandConstants } from '../../../../constants/sfCommandConstants.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.project.compile');
@@ -41,7 +42,8 @@ export default class ProvarAutomationProjectCompile extends SfCommand<SfProvarCo
       const projectCompilecommand =
         'java -cp "' +
         provarDxJarPath +
-        '" com.provar.provardx.DxCommandExecuter ' +
+        '"' +
+        sfCommandConstants.DX_COMMAND_EXECUTER +
         updateProperties +
         ' ' +
         'NA' +
