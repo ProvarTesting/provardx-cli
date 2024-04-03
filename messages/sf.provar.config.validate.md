@@ -16,6 +16,6 @@ Checks if the loaded properties file has all the required properties set.
 
 The properties file was validated successfully.
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s

@@ -21,4 +21,5 @@ export type ErrorCode =
   | 'INVALID_PROPERTY'
   | 'UNKNOWN_PROPERTY'
   | 'DOWNLOAD_ERROR'
+  | 'COMPILATION_ERROR'
   | 'SETUP_ERROR';

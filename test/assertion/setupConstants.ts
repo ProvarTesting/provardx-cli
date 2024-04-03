@@ -1,4 +1,5 @@
-export const successMessage = 'Provar Automation was set up successfully. Please, remember to set the property “provarHome” to the relative path “ProvarHome”.\n';
+export const successMessage =
+  'Provar Automation was set up successfully. Please, remember to set the property “provarHome” to the relative path “ProvarHome”.\n';
 export const setupError = '';
 export const successJsonMessage = {
   status: 0,

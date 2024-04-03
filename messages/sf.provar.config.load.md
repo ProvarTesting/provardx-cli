@@ -20,7 +20,7 @@ Path of the properties file to be loaded.
 
 [INVALID_PATH] The provided path does not exist or is invalid.
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s
 

@@ -14,7 +14,7 @@ Download and Install Provar Automation.
 
 Provar Automation build version number.
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s
 

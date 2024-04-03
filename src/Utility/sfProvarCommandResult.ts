@@ -32,7 +32,7 @@ export function populateResult(
   if (errorHandler.getErrors().length > 0) {
     const errorObjects: Error[] = errorHandler.getErrors();
     if (!flags['json']) {
-      throw messages.createError('error.MULTIPLE_ERRORS', errorHandler.errorsToStringArray());
+      throw messages.createError('error.MultipleFailure', errorHandler.errorsToStringArray());
     }
     result = {
       success: false,
