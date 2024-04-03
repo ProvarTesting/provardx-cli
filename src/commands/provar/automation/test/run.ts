@@ -1,12 +1,15 @@
 import * as fileSystem from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
+import { xml2json } from 'xml-js';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
 import ErrorHandler from '../../../../Utility/errorHandler.js';
 import { ProvarConfig } from '../../../../Utility/provarConfig.js';
 import { errorMessages } from '../../../../constants/errorMessages.js';
 import UserSupport from '../../../../Utility/userSupport.js';
+import { getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
+import { checkNestedProperty } from '../../../../Utility/jsonSupport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.test.run');
@@ -42,6 +45,13 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       }
       const userInfoString = userSupport.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
+      const projectPath = propertiesInstance.projectPath;
+      if (!fileSystem.existsSync(projectPath)) {
+        this.errorHandler.addErrorsToList('INVALID_PATH', 'prjectPath doesnot exist');
+        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      }
+      const logFilePath = projectPath + '/log.txt';
+
       const provarDxJarPath = propertiesInstance.provarHome + '/provardx/provardx.jar';
       const testRunCommand =
         'java -cp "' +
@@ -50,15 +60,9 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         updateProperties +
         ' ' +
         userInfoString +
-        ' ' +
-        'Runtests';
-      spawnSync(testRunCommand, { shell: true });
-      //  const javaProcessOutput = spawnSync(testRunCommand, { shell: true });
-      // const testRun = '';
-      // if (!fileContainsString(javaProcessOutput.stderr.toString(), testRun)) {
-      //   const errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
-      //   this.errorHandler.addErrorsToList('TEST_RUN_ERROR', `${errorMessage}`);
-      // }
+        ' Runtests';
+
+      await this.runJavaCommand(testRunCommand, logFilePath);
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
@@ -69,5 +73,56 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       }
     }
     return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+  }
+
+  private async runJavaCommand(command: string, logFilePath: string): Promise<void> {
+    const resolvers: any = {
+      done: null,
+      error: null,
+    };
+    const promise = new Promise<void>((resolve, error) => {
+      resolvers.done = resolve;
+      resolvers.error = error;
+    });
+    const javaProcessOutput = spawn(command, { shell: true, stdio: ['pipe', 'pipe', 'pipe'] });
+
+    javaProcessOutput.stdout.on('data', (data: { toString: () => string }) => {
+      const logMessage = data.toString().trim();
+      this.extract(logMessage, logFilePath);
+    });
+    javaProcessOutput.stderr.on('error', (error: { toString: () => string }) => {
+      const logError = error.toString().trim();
+      this.extract(logError, logFilePath);
+      resolvers.done();
+      // resolvers.error(error);
+    });
+
+    javaProcessOutput.stderr.on('finish', (error: { toString: () => string }) => {
+      resolvers.done();
+    });
+    return promise;
+  }
+
+  private extract(logMessage: string, logFilePath: string): void {
+    const reportSuccessMsg = 'JUnit XML report written successfully.';
+    if (logMessage.includes(reportSuccessMsg)) {
+      const xmlJunitReportPath = getStringAfterSubstring(logMessage, reportSuccessMsg);
+      this.xmlParser(xmlJunitReportPath);
+    }
+    fileSystem.appendFileSync(logFilePath, logMessage, { encoding: 'utf-8' });
+  }
+
+  private xmlParser(filePath: string): void {
+    if (fileSystem.existsSync(filePath)) {
+      const xmlContent = fileSystem.readFileSync(filePath, 'utf8');
+      const dataString = xml2json(xmlContent, { compact: true });
+      const jsondata = JSON.parse(dataString);
+      const testsuiteJson = jsondata?.testsuite;
+      for (let testCase of testsuiteJson.testcase) {
+        if (checkNestedProperty(testCase, 'failure')) {
+          this.errorHandler.addDynamicErrorsToList(`${testCase._attributes.name}`, `${testCase.failure._cdata}.`);
+        }
+      }
+    }
   }
 }

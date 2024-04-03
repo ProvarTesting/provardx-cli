@@ -70,7 +70,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const javaProcessOutput = spawnSync(downloadMetadatacommand, { shell: true });
       const downloadSuccessMessage = 'Download completed successfully';
       if (!fileContainsString(javaProcessOutput.stderr.toString(), downloadSuccessMessage)) {
-        const errorMessage = getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR');
+        const errorMessage = `ERROR${getStringAfterSubstring(javaProcessOutput.stderr.toString(), 'ERROR')}`;
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${errorMessage}`);
       }
     } catch (error: any) {

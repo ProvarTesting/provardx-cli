@@ -21,4 +21,5 @@ export type ErrorCode =
   | 'INVALID_PROPERTY'
   | 'UNKNOWN_PROPERTY'
   | 'DOWNLOAD_ERROR'
-  | 'TEST_RUN_ERROR';
+  | 'TEST_RUN_ERROR'
+  | 'TEST_CASE_NAME';
