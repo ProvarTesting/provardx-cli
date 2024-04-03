@@ -117,7 +117,7 @@ describe('sf provar config metadataDownload NUTs', () => {
   });
 
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
-    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
+    const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
     const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
