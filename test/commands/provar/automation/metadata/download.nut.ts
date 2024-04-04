@@ -6,7 +6,6 @@ import * as validateConstants from '../../../../assertion/validateConstants.js';
 import * as metadataDownloadConstants from '../../../../assertion/metadataDownloadConstants.js';
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import { commandConstants } from '../../../../../src/constants/commandConstants.js';
-// import * as setupConstants from '../../../../assertion/setupConstants.js';
 
 describe('sf provar config metadataDownload NUTs', () => {
   let session: TestSession;
@@ -95,11 +94,6 @@ describe('sf provar config metadataDownload NUTs', () => {
     expect(result?.result.success).to.deep.equal(false);
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
   });
-
-  // it('Build should be installed using flag -v and return the success output', () => {
-  //   const result = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND}`).shellOutput;
-  //   expect(result.stdout).to.deep.equal(setupConstants.successMessage);
-  // });
 
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
     const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';

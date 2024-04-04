@@ -6,7 +6,6 @@ import { commandConstants } from '../../../../../src/constants/commandConstants.
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import * as compileConstants from '../../../../assertion/compileConstants.js';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
-// import * as setupConstants from '../../../../assertion/setupConstants.js';
 
 describe('provar automation project compile NUTs', () => {
   let session: TestSession;
@@ -58,14 +57,7 @@ describe('provar automation project compile NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
-  // it('Build should be installed using flag -v and return the success output', () => {
-  //   const result = execCmd<SfProvarCommandResult>(
-  //     `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND}`
-  //   ).shellOutput;
-  //   expect(result.stdout).to.deep.equal(setupConstants.successMessage);
-  // });
-
-  it('Compile command should be successful', () => {
+ it('Compile command should be successful', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );

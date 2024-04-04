@@ -1,4 +1,3 @@
-import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
@@ -13,18 +12,18 @@ describe('sf provar automation setup NUTs', () => {
 
   after(async () => {
     await testSession?.clean();
-    const fileToDelete = './ProvarHome.zip';
-    const folderToDelete = './ProvarHome';
-    fileSystem.rm(folderToDelete, { recursive: true, force: true }, (err) => {
-      if (err) {
-        throw err;
-      }
-    });
-    fileSystem.unlink(fileToDelete, (err) => {
-      if (err) {
-        return err;
-      }
-    });
+    // const fileToDelete = './ProvarHome.zip';
+    // const folderToDelete = './ProvarHome';
+    // fileSystem.rm(folderToDelete, { recursive: true, force: true }, (err) => {
+    //   if (err) {
+    //     throw err;
+    //   }
+    // });
+    // fileSystem.unlink(fileToDelete, (err) => {
+    //   if (err) {
+    //     return err;
+    //   }
+    // });
   });
 
   it('Invalid build should not be installed using flag -v and return the error message', () => {
