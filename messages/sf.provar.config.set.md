@@ -12,6 +12,6 @@ Sets a property in the loaded properties file.
 
   <%= config.bin %> <%= command.id %> 'key'='value'
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s

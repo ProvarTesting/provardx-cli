@@ -12,6 +12,6 @@ Retrieves a value from the loaded properties file.
 
   <%= config.bin %> <%= command.id %> 'key'
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s

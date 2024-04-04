@@ -33,7 +33,7 @@ export function populateResult(
   const errorObjects: Error[] | object[] = errorHandler.getErrors();
   if (errorObjects.length > 0) {
     if (!flags['json']) {
-      throw messages.createError('error.MULTIPLE_ERRORS', errorHandler.errorsToStringArray());
+      throw messages.createError('error.MultipleFailure', errorHandler.errorsToStringArray());
     }
     result = {
       success: false,

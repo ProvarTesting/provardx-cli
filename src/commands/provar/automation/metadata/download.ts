@@ -9,6 +9,7 @@ import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfPro
 import UserSupport from '../../../../Utility/userSupport.js';
 import { fileContainsString } from '../../../../Utility/fileSupport.js';
 import { removeSpaces, getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
+import { sfCommandConstants } from '../../../../constants/sfCommandConstants.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.metadata.download');
@@ -61,7 +62,8 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       const downloadMetadatacommand =
         'java -cp "' +
         provarDxJarPath +
-        '" com.provar.provardx.DxCommandExecuter ' +
+        '"' +
+        sfCommandConstants.DX_COMMAND_EXECUTER +
         updateProperties +
         ' ' +
         userInfoString +
@@ -76,7 +78,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
-      } else if (error.name === 'MULTIPLE_ERRORSError') {
+      } else if (error.name === 'MultipleFailureError') {
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       } else {
         this.errorHandler.addErrorsToList('DOWNLOAD_ERROR', `${error.errorMessage}`);

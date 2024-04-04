@@ -22,4 +22,6 @@ export type ErrorCode =
   | 'UNKNOWN_PROPERTY'
   | 'DOWNLOAD_ERROR'
   | 'TEST_RUN_ERROR'
-  | 'TEST_CASE_NAME';
+  | 'TEST_CASE_NAME'
+  | 'COMPILATION_ERROR'
+  | 'SETUP_ERROR';

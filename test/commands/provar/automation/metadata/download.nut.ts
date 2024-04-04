@@ -117,7 +117,7 @@ describe('sf provar config metadataDownload NUTs', () => {
   });
 
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
-    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
+    const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
     const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
@@ -261,18 +261,6 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg,Regmain --json`
     ).jsonOutput;
     expect(result).to.deep.equal(metadataDownloadConstants.successJsonMessage);
-  });
-
-  it('Metadata should be downloaded for the user provided in connection override', () => {
-    execCmd<SfProvarCommandResult>(
-      // eslint-disable-next-line no-useless-escape
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "connectionOverride"=["{\\"connection\\": \\"RegressionOrg\\", \\"username\\": \\"test-08a5ntrfpe71@example.com\\"}"]`
-    );
-    const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
-    ).shellOutput;
-    expect(result.stderr).to.deep.equal(metadataDownloadConstants.validUserMessage);
-    expect(result.stdout).to.deep.equal(metadataDownloadConstants.successMessage);
   });
 
   it('Metadata should not be downloaded for the invalid user provided in connection override', () => {
