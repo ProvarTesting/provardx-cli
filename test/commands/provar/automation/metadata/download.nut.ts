@@ -6,6 +6,7 @@ import * as validateConstants from '../../../../assertion/validateConstants.js';
 import * as metadataDownloadConstants from '../../../../assertion/metadataDownloadConstants.js';
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import { commandConstants } from '../../../../../src/constants/commandConstants.js';
+import * as setupConstants from '../../../../assertion/setupConstants.js';
 
 describe('sf provar config metadataDownload NUTs', () => {
   let session: TestSession;
@@ -24,6 +25,18 @@ describe('sf provar config metadataDownload NUTs', () => {
           return err;
         }
       });
+    });
+    const fileToDelete = './ProvarHome.zip';
+    const folderToDelete = './ProvarHome';
+    fileSystem.rm(folderToDelete, { recursive: true, force: true }, (err) => {
+      if (err) {
+        throw err;
+      }
+    });
+    fileSystem.unlink(fileToDelete, (err) => {
+      if (err) {
+        return err;
+      }
     });
   });
 
@@ -116,9 +129,17 @@ describe('sf provar config metadataDownload NUTs', () => {
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
   });
 
+  it('Build should be installed using flag -v and return the success output', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND}`
+    ).shellOutput;
+    expect(result.stdout).to.deep.equal(setupConstants.successMessage);
+  });
+
+
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
     const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
-    const SET_PROJECT_PATH_VALUE = '"D:/Provar Workspace/8Feb/Provar"';
+    const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevamp"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`

@@ -4,13 +4,26 @@ import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandRe
 import * as setupConstants from '../../../assertion/setupConstants.js';
 import { commandConstants } from '../../../../src/constants/commandConstants.js';
 import { errorMessages } from '../../../../src/constants/errorMessages.js';
+import * as fileSystem from 'node:fs';
 
 describe('sf provar automation setup NUTs', () => {
   let testSession: TestSession;
   const SET_VALID_BUILD_VERSION = '2.12.1';
 
-  afterEach(async () => {
+  after(async () => {
     await testSession?.clean();
+    const fileToDelete = './ProvarHome.zip';
+    const folderToDelete = './ProvarHome';
+    fileSystem.rm(folderToDelete, { recursive: true, force: true }, (err) => {
+      if (err) {
+        throw err;
+      }
+    });
+    fileSystem.unlink(fileToDelete, (err) => {
+      if (err) {
+        return err;
+      }
+    });
   });
 
   it('Invalid build should not be installed using flag -v and return the error message', () => {
