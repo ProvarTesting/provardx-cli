@@ -5,57 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { ErrorCode } from './errorCode.js';
-
-export class GenericError {
-  private message: string = 'message';
-  private code: ErrorCode = 'TEST_RUN_ERROR';
-
-  public getCode(): ErrorCode {
-    return this.code;
-  }
-  public setCode(value: ErrorCode): void {
-    this.code = value;
-  }
-
-  public getMessage(): string {
-    return this.message;
-  }
-  public setMessage(value: string): void {
-    this.message = value;
-  }
-
-  public toString(): string {
-    return `[${this.code}] ${this.message}`;
-  }
-
-  public constructError(): object {
-    return {
-      code: this.getCode(),
-      message: this.getMessage(),
-    };
-  }
-}
-
-export class TestRunError extends GenericError {
-  private testCasePath: string = 'testCasePath';
-
-  public getTestCasePath(): string {
-    return this.testCasePath;
-  }
-  public setTestCasePath(value: string): void {
-    this.testCasePath = value;
-  }
-  public toString(): string {
-    return `[${this.testCasePath}] ${this.getMessage()}`;
-  }
-  public constructError(): object {
-    return {
-      testCasePath: this.getTestCasePath(),
-      message: this.getMessage(),
-    };
-  }
-}
+import { GenericError } from './GenericError.js';
 
 /**
  * ErrorHandler class to manage multiple errors thrown during command execution.

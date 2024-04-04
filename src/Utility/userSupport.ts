@@ -1,6 +1,7 @@
 import { sfCommandConstants } from '../constants/sfCommandConstants.js';
 import ErrorHandler from './errorHandler.js';
-import GenericErrorHandler, { GenericError } from './genericErrorHandler.js';
+import GenericErrorHandler from './genericErrorHandler.js';
+import { GenericError } from './GenericError.js';
 import { executeCommand } from './provardxExecutor.js';
 
 export default class UserSupport {

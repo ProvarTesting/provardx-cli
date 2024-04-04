@@ -9,7 +9,9 @@ import { errorMessages } from '../../../../constants/errorMessages.js';
 import UserSupport from '../../../../Utility/userSupport.js';
 import { getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
 import { checkNestedProperty } from '../../../../Utility/jsonSupport.js';
-import GenericErrorHandler, { GenericError, TestRunError } from '../../../../Utility/genericErrorHandler.js';
+import GenericErrorHandler from '../../../../Utility/genericErrorHandler.js';
+import { TestRunError } from '../../../../Utility/TestRunError.js';
+import { GenericError } from '../../../../Utility/GenericError.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.test.run');
