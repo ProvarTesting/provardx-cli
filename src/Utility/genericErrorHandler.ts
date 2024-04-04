@@ -7,36 +7,77 @@
 
 import { ErrorCode } from './errorCode.js';
 
-export class ErrorClass {
-  protected message: string = 'message';
-  private code: ErrorCode | undefined;
+export class GenericError {
+  private message: string = 'message';
+  private code: ErrorCode = 'TEST_RUN_ERROR';
+
+  public getCode(): ErrorCode {
+    return this.code;
+  }
+  public setCode(value: ErrorCode): void {
+    this.code = value;
+  }
+
+  public getMessage(): string {
+    return this.message;
+  }
+  public setMessage(value: string): void {
+    this.message = value;
+  }
+
   public toString(): string {
     return `[${this.code}] ${this.message}`;
   }
+
+  public constructError(): object {
+    return {
+      code: this.getCode(),
+      message: this.getMessage(),
+    };
+  }
 }
 
-export class TestRunErrorClass extends ErrorClass {
+export class TestRunError extends GenericError {
   private testCasePath: string = 'testCasePath';
+  public constructor(message: string) {
+    super();
+    this.setMessage(message);
+  }
+  public getTestCasePath(): string {
+    return this.testCasePath;
+  }
+  public setTestCasePath(value: string): void {
+    this.testCasePath = value;
+  }
   public toString(): string {
-    return `[${this.testCasePath}] ${this.message}`;
+    return `[${this.testCasePath}] ${this.getMessage()}`;
+  }
+  public constructError(): object {
+    return {
+      testCasePath: this.getTestCasePath(),
+      message: this.getMessage(),
+    };
   }
 }
 
 /**
  * ErrorHandler class to manage multiple errors thrown during command execution.
  */
-export default class ErrorHandler {
-  private errors: ErrorClass[] = [];
+export default class GenericErrorHandler {
+  private errors: GenericError[] = [];
 
-  public addErrorsToList(errorObject: ErrorClass): void {
+  public addErrorsToList(errorObject: GenericError): void {
     this.errors.push(errorObject);
   }
-
-  public getErrors(): ErrorClass[] {
-    return this.errors;
-  }
-
   public errorsToStringArray(): string[] {
     return this.errors.map((e) => e.toString());
+  }
+
+  public errorsToString(): string {
+    return this.errors.map((e) => e.toString()).join('\n');
+  }
+
+  public getErrors(): object[] {
+    return this.errors.map((e) => e.constructError());
   }
 }

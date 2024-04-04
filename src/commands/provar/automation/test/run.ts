@@ -10,6 +10,7 @@ import { errorMessages } from '../../../../constants/errorMessages.js';
 import UserSupport from '../../../../Utility/userSupport.js';
 import { getStringAfterSubstring } from '../../../../Utility/stringSupport.js';
 import { checkNestedProperty } from '../../../../Utility/jsonSupport.js';
+import GenericErrorHandler, { GenericError, TestRunError } from '../../../../Utility/genericErrorHandler.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.test.run');
@@ -20,17 +21,20 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
   public static readonly examples = messages.getMessages('examples');
 
   private errorHandler: ErrorHandler = new ErrorHandler();
+  private genericErrorHandler: GenericErrorHandler = new GenericErrorHandler();
+
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationTestRun);
-
-    this.log('asd');
-
     const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
     const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
+      const errorObj: GenericError = new GenericError();
+      errorObj.setCode('MISSING_FILE');
+      errorObj.setMessage(errorMessages.MISSINGFILEERROR);
+      this.genericErrorHandler.addErrorsToList(errorObj);
       this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
-      return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+      return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
     }
 
     try {
@@ -47,8 +51,13 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const userInfoString = userSupport.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
       const projectPath = propertiesInstance.projectPath;
       if (!fileSystem.existsSync(projectPath)) {
+        const errorObj: GenericError = new GenericError();
+        errorObj.setCode('INVALID_PATH');
+        errorObj.setMessage('projectPath doesnot exist');
+        this.genericErrorHandler.addErrorsToList(errorObj);
+
         this.errorHandler.addErrorsToList('INVALID_PATH', 'prjectPath doesnot exist');
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+        return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       }
       const logFilePath = projectPath + '/log.txt';
 
@@ -65,14 +74,24 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       await this.runJavaCommand(testRunCommand, logFilePath);
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
+        const errorObj: GenericError = new GenericError();
+        errorObj.setCode('MALFORMED_FILE');
+        errorObj.setMessage(errorMessages.MALFORMEDFILEERROR);
+        this.genericErrorHandler.addErrorsToList(errorObj);
+
         this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
       } else if (error.name === 'MULTIPLE_ERRORSError') {
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+        return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       } else {
+        const errorObj: GenericError = new GenericError();
+        errorObj.setCode('TEST_RUN_ERROR');
+        errorObj.setMessage(`${error.errorMessage}`);
+        this.genericErrorHandler.addErrorsToList(errorObj);
+
         this.errorHandler.addErrorsToList('TEST_RUN_ERROR', `${error.errorMessage}`);
       }
     }
-    return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+    return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
   }
 
   private async runJavaCommand(command: string, logFilePath: string): Promise<void> {
@@ -120,6 +139,10 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const testsuiteJson = jsondata?.testsuite;
       for (let testCase of testsuiteJson.testcase) {
         if (checkNestedProperty(testCase, 'failure')) {
+          const errorObj: TestRunError = new TestRunError(`${testCase.failure._cdata}.`);
+          errorObj.setTestCasePath(`${testCase._attributes.name}`); // errorObj.setMessage(`${testCase.failure._cdata}.`);
+          this.genericErrorHandler.addErrorsToList(errorObj);
+
           this.errorHandler.addDynamicErrorsToList(`${testCase._attributes.name}`, `${testCase.failure._cdata}.`);
         }
       }

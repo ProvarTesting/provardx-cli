@@ -41,4 +41,7 @@ export default class ErrorHandler {
   public errorsToStringArray(): string[] {
     return this.errors.map((e) => `[${e.code}] ${e.message}`);
   }
+  public errorsToString(): string {
+    return this.errors.map((e) => e.toString()).join('\n');
+  }
 }
