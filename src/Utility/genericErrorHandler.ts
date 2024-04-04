@@ -17,11 +17,7 @@ export default class GenericErrorHandler {
     this.errors.push(errorObject);
   }
   public errorsToStringArray(): string[] {
-    return this.errors.map((e) => e.toString());
-  }
-
-  public errorsToString(): string {
-    return this.errors.map((e) => e.toString()).join('\n');
+    return this.errors.map((e) => `${e.toString()}\n`);
   }
 
   public getErrors(): object[] {
