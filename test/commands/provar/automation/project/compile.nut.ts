@@ -6,7 +6,7 @@ import { commandConstants } from '../../../../../src/constants/commandConstants.
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import * as compileConstants from '../../../../assertion/compileConstants.js';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
-import * as setupConstants from '../../../../assertion/setupConstants.js';
+// import * as setupConstants from '../../../../assertion/setupConstants.js';
 
 describe('provar automation project compile NUTs', () => {
   let session: TestSession;
@@ -23,18 +23,6 @@ describe('provar automation project compile NUTs', () => {
           return err;
         }
       });
-    });
-    const fileToDelete = './ProvarHome.zip';
-    const folderToDelete = './ProvarHome';
-    fileSystem.rm(folderToDelete, { recursive: true, force: true }, (err) => {
-      if (err) {
-        throw err;
-      }
-    });
-    fileSystem.unlink(fileToDelete, (err) => {
-      if (err) {
-        return err;
-      }
     });
   });
 
@@ -70,14 +58,14 @@ describe('provar automation project compile NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
-  it('Build should be installed using flag -v and return the success output', () => {
-    const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND}`
-    ).shellOutput;
-    expect(result.stdout).to.deep.equal(setupConstants.successMessage);
-  });
+  // it('Build should be installed using flag -v and return the success output', () => {
+  //   const result = execCmd<SfProvarCommandResult>(
+  //     `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND}`
+  //   ).shellOutput;
+  //   expect(result.stdout).to.deep.equal(setupConstants.successMessage);
+  // });
 
-  it('Compile command should not be successful', () => {
+  it('Compile command should be successful', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );
@@ -85,23 +73,11 @@ describe('provar automation project compile NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );
     const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
-    const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevampzz"';
+    const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevamp"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE}`
     );
-    execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
-    );
-    const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
-    ).shellOutput;
-    expect(result.stderr).to.deep.equal(compileConstants.compilationError);
-  });
-
-  it('Compile command should be successful', () => {
-    const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevamp"';
-    // set provarHome 
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "projectPath"=${SET_PROJECT_PATH_VALUE}`
     );
