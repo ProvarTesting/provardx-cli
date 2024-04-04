@@ -4,7 +4,6 @@ import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { xml2json } from 'xml-js';
 import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
-import ErrorHandler from '../../../../Utility/errorHandler.js';
 import { ProvarConfig } from '../../../../Utility/provarConfig.js';
 import { errorMessages } from '../../../../constants/errorMessages.js';
 import UserSupport from '../../../../Utility/userSupport.js';
@@ -20,12 +19,11 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
-  private errorHandler: ErrorHandler = new ErrorHandler();
   private genericErrorHandler: GenericErrorHandler = new GenericErrorHandler();
 
   public async run(): Promise<SfProvarCommandResult> {
     const { flags } = await this.parse(ProvarAutomationTestRun);
-    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
+    const config: ProvarConfig = await ProvarConfig.loadConfig(this.genericErrorHandler);
     const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
@@ -33,7 +31,6 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       errorObj.setCode('MISSING_FILE');
       errorObj.setMessage(errorMessages.MISSINGFILEERROR);
       this.genericErrorHandler.addErrorsToList(errorObj);
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
       return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
     }
 
@@ -44,9 +41,12 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const rawProperties = JSON.stringify(propertiesInstance);
       const userSupport = new UserSupport();
       const updateProperties = userSupport.prepareRawProperties(rawProperties);
-      const userInfo = await userSupport.getDxUsersInfo(propertiesInstance.connectionOverride, this.errorHandler);
+      const userInfo = await userSupport.getDxUsersInfo(
+        propertiesInstance.connectionOverride,
+        this.genericErrorHandler
+      );
       if (userInfo === null) {
-        return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
+        return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       }
       const userInfoString = userSupport.prepareRawProperties(JSON.stringify({ dxUsers: userInfo }));
       const projectPath = propertiesInstance.projectPath;
@@ -55,8 +55,6 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         errorObj.setCode('INVALID_PATH');
         errorObj.setMessage('projectPath doesnot exist');
         this.genericErrorHandler.addErrorsToList(errorObj);
-
-        this.errorHandler.addErrorsToList('INVALID_PATH', 'prjectPath doesnot exist');
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       }
       const logFilePath = projectPath + '/log.txt';
@@ -78,8 +76,6 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         errorObj.setCode('MALFORMED_FILE');
         errorObj.setMessage(errorMessages.MALFORMEDFILEERROR);
         this.genericErrorHandler.addErrorsToList(errorObj);
-
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
       } else if (error.name === 'MULTIPLE_ERRORSError') {
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       } else {
@@ -87,8 +83,6 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         errorObj.setCode('TEST_RUN_ERROR');
         errorObj.setMessage(`${error.errorMessage}`);
         this.genericErrorHandler.addErrorsToList(errorObj);
-
-        this.errorHandler.addErrorsToList('TEST_RUN_ERROR', `${error.errorMessage}`);
       }
     }
     return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
@@ -139,11 +133,10 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const testsuiteJson = jsondata?.testsuite;
       for (let testCase of testsuiteJson.testcase) {
         if (checkNestedProperty(testCase, 'failure')) {
-          const errorObj: TestRunError = new TestRunError(`${testCase.failure._cdata}.`);
-          errorObj.setTestCasePath(`${testCase._attributes.name}`); // errorObj.setMessage(`${testCase.failure._cdata}.`);
+          const errorObj: TestRunError = new TestRunError();
+          errorObj.setTestCasePath(`${testCase._attributes.name}`);
+          errorObj.setMessage(`${testCase.failure._cdata}.`);
           this.genericErrorHandler.addErrorsToList(errorObj);
-
-          this.errorHandler.addDynamicErrorsToList(`${testCase._attributes.name}`, `${testCase.failure._cdata}.`);
         }
       }
     }

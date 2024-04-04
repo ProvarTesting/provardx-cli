@@ -39,10 +39,7 @@ export class GenericError {
 
 export class TestRunError extends GenericError {
   private testCasePath: string = 'testCasePath';
-  public constructor(message: string) {
-    super();
-    this.setMessage(message);
-  }
+
   public getTestCasePath(): string {
     return this.testCasePath;
   }
