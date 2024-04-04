@@ -1,10 +1,11 @@
+import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
 import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
 import * as setupConstants from '../../../assertion/setupConstants.js';
 import { commandConstants } from '../../../../src/constants/commandConstants.js';
 import { errorMessages } from '../../../../src/constants/errorMessages.js';
-import * as fileSystem from 'node:fs';
+
 
 describe('sf provar automation setup NUTs', () => {
   let testSession: TestSession;
