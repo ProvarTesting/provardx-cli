@@ -21,3 +21,7 @@ More information about a flag. Don't repeat the summary.
 # error.MULTIPLE_ERRORS
 
 %s
+
+# success_message
+
+The tests were run successfully.
