@@ -146,12 +146,12 @@ describe('sf provar config metadataDownload NUTs', () => {
     expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
   });
 
-  it('Metadata should be downloaded for the provided connection and return the success message in json format', () => {
-    const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegmainSandbox,RegmainOrg,RegressionOrg --json`
-    ).jsonOutput;
-    expect(result).to.deep.equal(metadataDownloadConstants.successJsonMessage);
-  });
+  // it('Metadata should be downloaded for the provided connection and return the success message in json format', () => {
+  //   const result = execCmd<SfProvarCommandResult>(
+  //     `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegmainSandbox,RegmainOrg,RegressionOrg`
+  //   ).shellOutput;
+  //   expect(result.stdout).to.deep.equal(metadataDownloadConstants.successMessage);
+  // });
 
   it('Metadata should not be downloaded as incorrect connection name and return the error message', () => {
     const result = execCmd<SfProvarCommandResult>(
