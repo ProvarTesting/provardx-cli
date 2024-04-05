@@ -127,7 +127,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
     if (logMessage.includes(successMessage)) {
       const xmlJunitReportPath = getStringAfterSubstring(logMessage, successMessage);
       this.getFailureMessagesFromXML(xmlJunitReportPath);
-    } else if (logMessage.includes('Error')) {
+    } else if (logMessage.includes('cause: [Exception')) {
       const errorObj: GenericError = new GenericError();
       errorObj.setCode('TEST_RUN_ERROR');
       errorObj.setMessage(`Error ${getStringAfterSubstring(logMessage, 'Error')}`);
@@ -143,16 +143,23 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const jsonData = JSON.parse(dataString);
       const testsuiteJson = jsonData?.testsuite;
       if (testsuiteJson?.testcase) {
-        for (let testCase of testsuiteJson?.testcase) {
-          if (checkNestedProperty(testCase, 'failure')) {
-            const errorObj: TestRunError = new TestRunError();
-            errorObj.setTestCasePath(`${testCase?._attributes.name}`);
-            errorObj.setMessage(`${testCase?.failure._cdata}.`);
-            this.genericErrorHandler.addErrorsToList(errorObj);
+        if (Array.isArray(testsuiteJson?.testcase)) {
+          for (let testCase of testsuiteJson?.testcase) {
+            this.addTestcaseFailures(testCase);
           }
+        } else {
+          this.addTestcaseFailures(testsuiteJson?.testcase);
         }
       } else {
       }
+    }
+  }
+  private addTestcaseFailures(testCase: any) {
+    if (checkNestedProperty(testCase, 'failure')) {
+      const errorObj: TestRunError = new TestRunError();
+      errorObj.setTestCasePath(`${testCase?._attributes.name}`);
+      errorObj.setMessage(`${testCase?.failure._cdata}.`);
+      this.genericErrorHandler.addErrorsToList(errorObj);
     }
   }
 }
