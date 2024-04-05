@@ -8,11 +8,15 @@
 import * as fileSystem from 'node:fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
-import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../assertion/generateConstants.js';
-import { SfProvarCommandResult } from '../../../../src/Utility/sfProvarCommandResult.js';
-import { successMessage, errorInvalidPath, errorInvalidFileExtension } from '../../../assertion/generateConstants.js';
-import { propertyFileContent } from '../../../../src/constants/propertyFileContent.js';
-import { commandConstants } from '../../../../src/constants/commandConstants.js';
+import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/generateConstants.js';
+import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import {
+  successMessage,
+  errorInvalidPath,
+  errorInvalidFileExtension,
+} from '../../../../assertion/generateConstants.js';
+import { propertyFileContent } from '../../../../../src/constants/propertyFileContent.js';
+import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('Config generate', () => {
   let testSession: TestSession;
@@ -23,7 +27,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "-p" flag when no path is defined', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p provardx-properties.json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p provardx-properties.json`,
       {
         ensureExitCode: 0,
       }
@@ -40,7 +44,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "--properties-file" flag when no path is defined', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file test_file.json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file test_file.json`,
       {
         ensureExitCode: 0,
       }
@@ -50,7 +54,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be overwritten when "-n" flag is provided with flag "-p" ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p provardx-properties.json -n`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p provardx-properties.json -n`,
       {
         ensureExitCode: 0,
       }
@@ -60,7 +64,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be overwritten when "--no-prompt" flag is provided with flag "--properties-file" ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test_file.json --no-prompt`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test_file.json --no-prompt`,
       {
         ensureExitCode: 0,
       }
@@ -70,7 +74,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be overwritten when "--no-prompt" flag is provided with flag "-p" ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test_file.json --no-prompt --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test_file.json --no-prompt --json`,
       {
         ensureExitCode: 0,
       }
@@ -80,7 +84,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be overwritten when "-n" flag is provided with flag "--properties-file" ', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test_file.json -n --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test_file.json -n --json`,
       {
         ensureExitCode: 0,
       }
@@ -90,7 +94,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "--properties-file"  when file name has space', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file "./test/assertion bbb.json"`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file "./test/assertion bbb.json"`,
       {
         ensureExitCode: 0,
       }
@@ -100,7 +104,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "-p" flag using relative path', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/XYZ.json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/XYZ.json`,
       {
         ensureExitCode: 0,
       }
@@ -110,7 +114,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should be generated with "-p" flag and with special char in file name', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p .\\test\\assertion\\D#um$.json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p .\\test\\assertion\\D#um$.json`,
       {
         ensureExitCode: 0,
       }
@@ -120,28 +124,28 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should not be generated with "-p" flag as path is invalid', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p a/aa.json`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p a/aa.json`
     ).shellOutput;
     expect(res['stderr']).to.deep.equal(errorInvalidPath);
   });
 
   it('Boilerplate json file should not be generated with "-p" flag as extension is invalid', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p ./test/Dom.txt`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ./test/Dom.txt`
     ).shellOutput;
     expect(res['stderr']).to.deep.equal(errorInvalidFileExtension);
   });
 
   it('Boilerplate json file should not be generated with "--properties-file" flag as both path and extension are invalid', () => {
     const res = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file ./test%cd/Dom.txt`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file ./test%cd/Dom.txt`
     ).shellOutput;
     expect(res['stderr']).to.deep.equal(errorInvalidFileExtension);
   });
 
   it('Boilerplate json file should be generated with "-p" flag and return the result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p xyz.json --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p xyz.json --json`,
       {
         ensureExitCode: 0,
       }
@@ -151,7 +155,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should not be generated with "-p" flag as path is invalid and return the result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} -p x/xyz.json --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p x/xyz.json --json`,
       {
         ensureExitCode: 0,
       }
@@ -161,7 +165,7 @@ describe('Config generate', () => {
 
   it('Boilerplate json file should not be generated with "--properties-file" flag as invalid file extension and return the result in json format', () => {
     const result = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_CONFIG_GENERATE_COMMAND} --properties-file Ani.bat --json`,
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} --properties-file Ani.bat --json`,
       {
         ensureExitCode: 0,
       }

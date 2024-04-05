@@ -6,9 +6,10 @@
  */
 export enum errorMessages {
   INVALID_PATH = 'The provided path does not exist or is invalid.',
+  INSUFFICIENT_PERMISSIONS = 'The user does not have permissions to create the file.',
   GENERATE_OPERATION_DENIED = 'The operation was cancelled.',
-  MISSINGFILEERROR = 'The properties file has not been loaded or cannot be accessed.',
-  MALFORMEDFILEERROR = 'The properties file is not a valid JSON.',
+  MISSING_FILE_ERROR = 'The properties file has not been loaded or cannot be accessed.',
+  MALFORMED_FILE_ERROR = 'The properties file is not a valid JSON.',
   MISSING_VALUE = 'The value is missing.',
   MISSING_PROPERTY = 'The property is missing.',
   INVALID_ARGUMENT = 'The property/value cannot be parsed.',
@@ -16,4 +17,5 @@ export enum errorMessages {
   INVALID_PROPERTY = 'The property cannot be parsed.',
   MISSING_PROPERTY_GET = 'Please, specify a property to get from the properties file.',
   UNKNOWN_PROPERTY = 'The property is not present in the file.',
+  SETUP_ERROR = 'Provar Automation could not be set up because: ',
 }

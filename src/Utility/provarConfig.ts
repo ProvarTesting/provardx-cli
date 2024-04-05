@@ -7,6 +7,7 @@
 
 import { Config, ConfigPropertyMeta, SfError } from '@salesforce/core';
 import ErrorHandler from './errorHandler.js';
+import GenericErrorHandler from './genericErrorHandler.js';
 
 /**
  * sfdxConfig extended class that deals with any operation over .sf/config.json.
@@ -30,7 +31,7 @@ export class ProvarConfig extends Config {
     );
   }
 
-  public static async loadConfig(errorHandler: ErrorHandler): Promise<ProvarConfig> {
+  public static async loadConfig(errorHandler: ErrorHandler | GenericErrorHandler): Promise<ProvarConfig> {
     try {
       const config = await ProvarConfig.create();
       await config.read();

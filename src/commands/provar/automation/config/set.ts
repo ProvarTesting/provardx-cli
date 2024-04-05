@@ -8,11 +8,11 @@
 import * as fileSystem from 'node:fs';
 import { SfCommand, parseVarArgs } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { SfProvarCommandResult, populateResult } from '../../../Utility/sfProvarCommandResult.js';
-import ErrorHandler from '../../../Utility/errorHandler.js';
-import { errorMessages } from '../../../constants/errorMessages.js';
-import { ProvarConfig } from '../../../Utility/provarConfig.js';
-import { parseJSONString, setNestedProperty } from '../../../Utility/jsonSupport.js';
+import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
+import ErrorHandler from '../../../../Utility/errorHandler.js';
+import { errorMessages } from '../../../../constants/errorMessages.js';
+import { ProvarConfig } from '../../../../Utility/provarConfig.js';
+import { parseJSONString, setNestedProperty } from '../../../../Utility/jsonSupport.js';
 
 /**
  * Sets the specified property key and value inside provardx-properties.json
@@ -38,7 +38,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
     const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
+      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
 
@@ -78,7 +78,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
       if (err.name === 'InvalidArgumentFormatError') {
         this.errorHandler.addErrorsToList('INVALID_ARGUMENT', errorMessages.INVALID_ARGUMENT);
       } else if (err.name === 'SyntaxError') {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMED_FILE_ERROR);
       } else {
         throw err;
       }

@@ -7,6 +7,7 @@
 
 import { Messages } from '@salesforce/core';
 import ErrorHandler, { Error } from './errorHandler.js';
+import GenericErrorHandler from './genericErrorHandler.js';
 
 /**
  * Declaring return type and populating return object for async run method of the commands.
@@ -16,23 +17,23 @@ import ErrorHandler, { Error } from './errorHandler.js';
 export type SfProvarCommandResult = {
   success: boolean;
   value?: string;
-  errors?: Error[];
+  errors?: Error[] | object[];
 };
 
 /* eslint-disable */
 export function populateResult(
   flags: any,
-  errorHandler: ErrorHandler,
+  errorHandler: ErrorHandler | GenericErrorHandler,
   messages: Messages<string>,
   log: Function,
   value?: string
 ): SfProvarCommandResult {
   let result: SfProvarCommandResult = { success: true };
 
-  if (errorHandler.getErrors().length > 0) {
-    const errorObjects: Error[] = errorHandler.getErrors();
+  const errorObjects: Error[] | object[] = errorHandler.getErrors();
+  if (errorObjects.length > 0) {
     if (!flags['json']) {
-      throw messages.createError('error.MULTIPLE_ERRORS', errorHandler.errorsToStringArray());
+      throw messages.createError('error.MultipleFailure', errorHandler.errorsToStringArray());
     }
     result = {
       success: false,
