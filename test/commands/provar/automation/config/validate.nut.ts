@@ -44,7 +44,7 @@ describe('sf provar config validate NUTs', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated if the file has not been loaded and return result in json format', () => {
@@ -141,7 +141,7 @@ describe('sf provar config validate NUTs', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMED_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be validated as json file is malformed and return result in json format', () => {
@@ -538,7 +538,7 @@ describe('sf provar config validate NUTs', () => {
     const result1 = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(result1.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result1.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not allow empty values for required properties and return the error in json format', () => {

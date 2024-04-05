@@ -35,7 +35,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
     const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
     const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
+      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
 
@@ -77,7 +77,7 @@ export default class ProvarMetadataDownload extends SfCommand<SfProvarCommandRes
       }
     } catch (error: any) {
       if (error.name === 'SyntaxError') {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMED_FILE_ERROR);
       } else if (error.name === 'MultipleFailureError') {
         return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
       } else {

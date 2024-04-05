@@ -1,18 +1,10 @@
 # summary
 
-Summary of a command.
+Run the tests as specified in the loaded properties file.
 
 # description
 
-More information about a command. Don't repeat the summary.
-
-# flags.name.summary
-
-Description of a flag.
-
-# flags.name.description
-
-More information about a flag. Don't repeat the summary.
+Run the tests as specified in the loaded properties file.
 
 # examples
 

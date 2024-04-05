@@ -15,7 +15,8 @@ import { GenericError } from '../../../../Utility/GenericError.js';
 import { sfCommandConstants } from '../../../../constants/sfCommandConstants.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.test.run');
+const mdFile: string = 'provar.automation.test.run';
+const messages = Messages.loadMessages('@provartesting/provardx-cli', mdFile);
 
 export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
@@ -32,15 +33,15 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
       const errorObj: GenericError = new GenericError();
       errorObj.setCode('MISSING_FILE');
-      errorObj.setMessage(errorMessages.MISSINGFILEERROR);
+      errorObj.setMessage(errorMessages.MISSING_FILE_ERROR);
       this.genericErrorHandler.addErrorsToList(errorObj);
       return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
     }
 
     try {
       /* eslint-disable */
-      const propertiesdata = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
-      const propertiesInstance = JSON.parse(propertiesdata);
+      const propertiesData = fileSystem.readFileSync(propertiesFilePath, { encoding: 'utf8' });
+      const propertiesInstance = JSON.parse(propertiesData);
       const rawProperties = JSON.stringify(propertiesInstance);
       const userSupport = new UserSupport();
       const updateProperties = userSupport.prepareRawProperties(rawProperties);
@@ -78,7 +79,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       if (error.name === 'SyntaxError') {
         const errorObj: GenericError = new GenericError();
         errorObj.setCode('MALFORMED_FILE');
-        errorObj.setMessage(errorMessages.MALFORMEDFILEERROR);
+        errorObj.setMessage(errorMessages.MALFORMED_FILE_ERROR);
         this.genericErrorHandler.addErrorsToList(errorObj);
       } else if (error.name === 'MultipleFailureError') {
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
@@ -105,15 +106,15 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
 
     javaProcessOutput.stdout.on('data', (data: { toString: () => string }) => {
       const logMessage = data.toString().trim();
-      this.extractReportAndFailures(logMessage, logFilePath);
+      this.extractReportAndAddFailuresToErrorHandler(logMessage, logFilePath);
     });
     javaProcessOutput.stderr.on('error', (error: { toString: () => string }) => {
       const logError = error.toString().trim();
-      this.extractReportAndFailures(logError, logFilePath);
+      this.extractReportAndAddFailuresToErrorHandler(logError, logFilePath);
     });
     javaProcessOutput.stderr.on('data', (error: { toString: () => string }) => {
       const logError = error.toString().trim();
-      this.extractReportAndFailures(logError, logFilePath);
+      this.extractReportAndAddFailuresToErrorHandler(logError, logFilePath);
     });
 
     javaProcessOutput.stderr.on('finish', (error: { toString: () => string }) => {
@@ -122,7 +123,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
     return promise;
   }
 
-  private extractReportAndFailures(logMessage: string, logFilePath: string): void {
+  private extractReportAndAddFailuresToErrorHandler(logMessage: string, logFilePath: string): void {
     const successMessage = 'JUnit XML report written successfully.';
     if (logMessage.includes(successMessage)) {
       const xmlJunitReportPath = getStringAfterSubstring(logMessage, successMessage);

@@ -13,8 +13,7 @@ import { ErrorCode } from './errorCode.js';
  */
 
 export type Error = {
-  code?: ErrorCode;
-  testCasePath?: string;
+  code: ErrorCode;
   message: string;
 };
 
@@ -24,12 +23,6 @@ export default class ErrorHandler {
   public addErrorsToList(eCode: ErrorCode, eMessage: string): void {
     this.errors.push({
       code: eCode,
-      message: eMessage,
-    });
-  }
-  public addDynamicErrorsToList(testPath: string, eMessage: string): void {
-    this.errors.push({
-      testCasePath: testPath,
       message: eMessage,
     });
   }

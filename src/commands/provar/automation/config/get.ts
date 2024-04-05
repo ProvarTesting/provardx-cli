@@ -38,7 +38,7 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
     let attributeValue = null;
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
+      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
     try {
@@ -67,7 +67,7 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
       }
     } catch (err: any) {
       if (err.name === 'SyntaxError') {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMED_FILE_ERROR);
       } else {
         throw err;
       }

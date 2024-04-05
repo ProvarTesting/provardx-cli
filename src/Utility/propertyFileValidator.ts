@@ -33,7 +33,7 @@ export default class PropertyFileValidator {
     const missingRequiredProperties: string[] = [];
     const invalidPropertiesValue: string[] = [];
     if (filePath === undefined || !fileSystem.existsSync(filePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSINGFILEERROR);
+      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
     } else {
       /* eslint-disable */
       const jsonValidator = new Validator();
@@ -61,7 +61,7 @@ export default class PropertyFileValidator {
           }
         }
       } catch (errors: any) {
-        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMEDFILEERROR);
+        this.errorHandler.addErrorsToList('MALFORMED_FILE', errorMessages.MALFORMED_FILE_ERROR);
         return false;
       }
       const missingPropertiesCount = missingRequiredProperties.length;
