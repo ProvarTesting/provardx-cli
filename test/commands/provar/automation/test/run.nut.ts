@@ -31,7 +31,7 @@ describe('provar automation test run NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | number;
     }
-    const jsonFilePath = 'MissingRunFile.json';
+    const jsonFilePath = FILE_PATHS.MISSING_FILE;
     // reading the json data
     const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
