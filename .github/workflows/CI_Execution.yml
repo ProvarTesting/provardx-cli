@@ -26,7 +26,7 @@ jobs:
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.nodeversion }}
@@ -44,6 +44,13 @@ jobs:
         run: |
           yarn prepack
           npm install -g @salesforce/cli
+      - name: Check out Regression repo
+        uses: actions/checkout@v4
+        with:
+          repository: ProvarTesting/ProvarRegression
+          path: ProvarRegression
+          ref: AnchalGoel
+          token: ${{ secrets.PATREGRESSION }}
       - name: Change permissions
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then

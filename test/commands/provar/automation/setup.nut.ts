@@ -5,11 +5,12 @@ import * as setupConstants from '../../../assertion/setupConstants.js';
 import { commandConstants } from '../../../../src/constants/commandConstants.js';
 import { errorMessages } from '../../../../src/constants/errorMessages.js';
 
+
 describe('sf provar automation setup NUTs', () => {
   let testSession: TestSession;
   const SET_VALID_BUILD_VERSION = '2.12.1';
 
-  afterEach(async () => {
+  after(async () => {
     await testSession?.clean();
   });
 
