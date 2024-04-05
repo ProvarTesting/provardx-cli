@@ -24,4 +24,5 @@ export type ErrorCode =
   | 'GENERIC_ERROR'
   | 'TEST_CASE_NAME'
   | 'COMPILATION_ERROR'
-  | 'SETUP_ERROR';
+  | 'SETUP_ERROR'
+  | 'TEST_RUN_ERROR';

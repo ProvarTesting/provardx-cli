@@ -111,6 +111,10 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const logError = error.toString().trim();
       this.extractReportAndFailures(logError, logFilePath);
     });
+    javaProcessOutput.stderr.on('data', (error: { toString: () => string }) => {
+      const logError = error.toString().trim();
+      this.extractReportAndFailures(logError, logFilePath);
+    });
 
     javaProcessOutput.stderr.on('finish', (error: { toString: () => string }) => {
       resolvers.done();
@@ -123,6 +127,11 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
     if (logMessage.includes(successMessage)) {
       const xmlJunitReportPath = getStringAfterSubstring(logMessage, successMessage);
       this.getFailureMessagesFromXML(xmlJunitReportPath);
+    } else if (logMessage.includes('Error')) {
+      const errorObj: GenericError = new GenericError();
+      errorObj.setCode('TEST_RUN_ERROR');
+      errorObj.setMessage(`Error ${getStringAfterSubstring(logMessage, 'Error')}`);
+      this.genericErrorHandler.addErrorsToList(errorObj);
     }
     fileSystem.appendFileSync(logFilePath, logMessage, { encoding: 'utf-8' });
   }
