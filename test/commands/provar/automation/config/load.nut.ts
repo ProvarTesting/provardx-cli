@@ -176,12 +176,12 @@ describe('sf provar config load NUTs', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p loadMalformedFile.json`
     ).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMEDFILEERROR}\n\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MALFORMED_FILE] ${errorMessages.MALFORMED_FILE_ERROR}\n\n`);
     // validating the file
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be loaded when json file is malformed and return the error message in json format', () => {
@@ -250,7 +250,7 @@ describe('sf provar config load NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be loaded as one required property is missing in json file and return the result in json format', () => {
@@ -360,7 +360,7 @@ describe('sf provar config load NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_VALIDATE_COMMAND}`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be loaded as invalid value exists for one property and return the result in json format', () => {

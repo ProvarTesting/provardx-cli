@@ -1,5 +1,7 @@
 import { sfCommandConstants } from '../constants/sfCommandConstants.js';
 import ErrorHandler from './errorHandler.js';
+import GenericErrorHandler from './genericErrorHandler.js';
+import { GenericError } from './GenericError.js';
 import { executeCommand } from './provardxExecutor.js';
 
 export default class UserSupport {
@@ -16,7 +18,7 @@ export default class UserSupport {
    *
    * @param overrides Connection overrides provided in dx property file.
    */
-  public async getDxUsersInfo(overrides: any, errorHandler: ErrorHandler): Promise<any> {
+  public async getDxUsersInfo(overrides: any, errorHandler: ErrorHandler | GenericErrorHandler): Promise<any> {
     const dxUsers: string[] = [];
     if (overrides === undefined || overrides.length === 0) {
       return dxUsers;
@@ -27,10 +29,17 @@ export default class UserSupport {
       let dxUserInfo = await executeCommand(sfCommandConstants.DISPLAY_USER_INFO + username, message);
       let jsonDxUser = JSON.parse(dxUserInfo);
       if (jsonDxUser.status !== 0) {
-        errorHandler.addErrorsToList(
-          'DOWNLOAD_ERROR',
-          `The following connectionOverride username is not valid: ${username}`
-        );
+        if (errorHandler instanceof GenericErrorHandler) {
+          const errorObj: GenericError = new GenericError();
+          errorObj.setCode('DOWNLOAD_ERROR');
+          errorObj.setMessage(`The following connectionOverride username is not valid: ${username}`);
+          errorHandler.addErrorsToList(errorObj);
+        } else {
+          errorHandler.addErrorsToList(
+            'DOWNLOAD_ERROR',
+            `The following connectionOverride username is not valid: ${username}`
+          );
+        }
         continue;
       }
       ({ jsonDxUser, dxUserInfo } = await this.generatePasswordIfNotPresent(jsonDxUser, username, dxUserInfo));

@@ -11,7 +11,7 @@ describe('provar automation project compile NUTs', () => {
   let session: TestSession;
   enum FILE_PATHS {
     COMPILE_FILE = 'compileFile.json',
-    MISSING_FILE = 'missingFile.json'
+    MISSING_FILE = 'missingFile.json',
   }
 
   after(async () => {
@@ -32,7 +32,7 @@ describe('provar automation project compile NUTs', () => {
     interface PropertyFileJsonData {
       [key: string]: string | boolean | number;
     }
-    const jsonFilePath = 'MissingFile.json';
+    const jsonFilePath = FILE_PATHS.MISSING_FILE;
     // reading the json data
     const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
@@ -44,7 +44,7 @@ describe('provar automation project compile NUTs', () => {
     const res = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_PROJECT_COMPILE_COMMAND}`
     ).shellOutput;
-    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Boilerplate json file should not be compiled if the file has not been loaded and return result in json format', () => {
@@ -57,7 +57,7 @@ describe('provar automation project compile NUTs', () => {
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
   });
 
- it('Compile command should be successful', () => {
+  it('Compile command should be successful', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.COMPILE_FILE}`
     );

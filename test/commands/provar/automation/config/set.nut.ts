@@ -66,7 +66,7 @@ describe('sf provar config set NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} provarHome=notDefined`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Missing file error should be thrown when json file is not loaded and return the error in json', () => {

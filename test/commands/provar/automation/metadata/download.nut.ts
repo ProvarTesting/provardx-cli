@@ -45,21 +45,21 @@ describe('sf provar config metadataDownload NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Missing file error as json file is not loaded', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} --connections RegressionOrg`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Missing file error as json file is not loaded', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} --connections "RegressionOrg,RegmainOrg"`
     ).shellOutput;
-    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSINGFILEERROR}\n\n`);
+    expect(result.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n`);
   });
 
   it('Missing file json error in json format as json file is not loaded', () => {
@@ -92,7 +92,8 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegressionOrg --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
-    expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
+    // eslint-disable-next-line
+    expect((result?.result.errors?.[0] as any)?.code).to.equals('DOWNLOAD_ERROR');
   });
 
   it('Metadata should be downloaded for the provided connection and return the success message', () => {
@@ -143,7 +144,8 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c RegmainOrg --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
-    expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
+    // eslint-disable-next-line
+    expect((result?.result.errors?.[0] as any)?.code).to.equals('DOWNLOAD_ERROR');
   });
 
   // it('Metadata should be downloaded for the provided connection and return the success message in json format', () => {
@@ -165,7 +167,8 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} --connections REGMAINORG --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
-    expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
+    // eslint-disable-next-line
+    expect((result?.result.errors?.[0] as any)?.code).to.equals('DOWNLOAD_ERROR');
   });
 
   it('Metadata should not be downloaded for the invalid user name and return the error', () => {
@@ -180,7 +183,8 @@ describe('sf provar config metadataDownload NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_METADATA_DOWNLOAD_COMMAND} -c PrereleaseOrg --json`
     ).jsonOutput;
     expect(result?.result.success).to.deep.equal(false);
-    expect(result?.result.errors?.[0]?.code).to.equals('DOWNLOAD_ERROR');
+    // eslint-disable-next-line
+    expect((result?.result.errors?.[0] as any)?.code).to.equals('DOWNLOAD_ERROR');
   });
 
   it('Metadata should not be downloaded when user does not have download permissions and return the error', () => {

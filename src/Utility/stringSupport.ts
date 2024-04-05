@@ -38,5 +38,5 @@ export function getStringAfterSubstring(content: string, searchString: string): 
   if (index === -1) {
     return '';
   }
-  return content.slice(index);
+  return content.slice(index + searchString.length);
 }
