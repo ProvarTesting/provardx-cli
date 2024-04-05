@@ -12,10 +12,3 @@ Run In dev provardx plugin on your local
 4. Need to copy the bin/dev folder to run the commands locally in Dev. Plugin.
 5. To run the command manually: bin/dev ${command} (example: bin/dev sf provar config generate)
 6. To run NUTS on your local: yarn run test:nuts
-
-# Naming conventions used in provardx-cli development
-
-1. camelCase for fileNames/methodNames/Variables
-2. PascalCase for classNames.
-
-Also, we are adding the Copyright/licensing text over every ts file
