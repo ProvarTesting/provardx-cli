@@ -33,6 +33,7 @@ export default class UserSupport {
           const errorObj: GenericError = new GenericError();
           errorObj.setCode('DOWNLOAD_ERROR');
           errorObj.setMessage(`The following connectionOverride username is not valid: ${username}`);
+          errorHandler.addErrorsToList(errorObj);
         } else {
           errorHandler.addErrorsToList(
             'DOWNLOAD_ERROR',

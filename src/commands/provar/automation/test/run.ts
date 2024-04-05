@@ -12,6 +12,7 @@ import { checkNestedProperty } from '../../../../Utility/jsonSupport.js';
 import GenericErrorHandler from '../../../../Utility/genericErrorHandler.js';
 import { TestRunError } from '../../../../Utility/TestRunError.js';
 import { GenericError } from '../../../../Utility/GenericError.js';
+import { sfCommandConstants } from '../../../../constants/sfCommandConstants.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.automation.test.run');
@@ -55,7 +56,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       if (!fileSystem.existsSync(projectPath)) {
         const errorObj: GenericError = new GenericError();
         errorObj.setCode('INVALID_PATH');
-        errorObj.setMessage('projectPath doesnot exist');
+        errorObj.setMessage('projectPath does not exist');
         this.genericErrorHandler.addErrorsToList(errorObj);
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       }
@@ -65,7 +66,8 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const testRunCommand =
         'java -cp "' +
         provarDxJarPath +
-        '" com.provar.provardx.DxCommandExecuter ' +
+        '"' +
+        sfCommandConstants.DX_COMMAND_EXECUTER +
         updateProperties +
         ' ' +
         userInfoString +
@@ -82,7 +84,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       } else {
         const errorObj: GenericError = new GenericError();
-        errorObj.setCode('TEST_RUN_ERROR');
+        errorObj.setCode('GENERIC_ERROR');
         errorObj.setMessage(`${error.errorMessage}`);
         this.genericErrorHandler.addErrorsToList(errorObj);
       }
@@ -103,13 +105,11 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
 
     javaProcessOutput.stdout.on('data', (data: { toString: () => string }) => {
       const logMessage = data.toString().trim();
-      this.extract(logMessage, logFilePath);
+      this.extractReportAndFailures(logMessage, logFilePath);
     });
     javaProcessOutput.stderr.on('error', (error: { toString: () => string }) => {
       const logError = error.toString().trim();
-      this.extract(logError, logFilePath);
-      resolvers.done();
-      // resolvers.error(error);
+      this.extractReportAndFailures(logError, logFilePath);
     });
 
     javaProcessOutput.stderr.on('finish', (error: { toString: () => string }) => {
@@ -118,28 +118,31 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
     return promise;
   }
 
-  private extract(logMessage: string, logFilePath: string): void {
-    const reportSuccessMsg = 'JUnit XML report written successfully.';
-    if (logMessage.includes(reportSuccessMsg)) {
-      const xmlJunitReportPath = getStringAfterSubstring(logMessage, reportSuccessMsg);
-      this.xmlParser(xmlJunitReportPath);
+  private extractReportAndFailures(logMessage: string, logFilePath: string): void {
+    const successMessage = 'JUnit XML report written successfully.';
+    if (logMessage.includes(successMessage)) {
+      const xmlJunitReportPath = getStringAfterSubstring(logMessage, successMessage);
+      this.getFailureMessagesFromXML(xmlJunitReportPath);
     }
     fileSystem.appendFileSync(logFilePath, logMessage, { encoding: 'utf-8' });
   }
 
-  private xmlParser(filePath: string): void {
+  private getFailureMessagesFromXML(filePath: string): void {
     if (fileSystem.existsSync(filePath)) {
       const xmlContent = fileSystem.readFileSync(filePath, 'utf8');
       const dataString = xml2json(xmlContent, { compact: true });
-      const jsondata = JSON.parse(dataString);
-      const testsuiteJson = jsondata?.testsuite;
-      for (let testCase of testsuiteJson?.testcase) {
-        if (checkNestedProperty(testCase, 'failure')) {
-          const errorObj: TestRunError = new TestRunError();
-          errorObj.setTestCasePath(`${testCase?._attributes.name}`);
-          errorObj.setMessage(`${testCase?.failure._cdata}.`);
-          this.genericErrorHandler.addErrorsToList(errorObj);
+      const jsonData = JSON.parse(dataString);
+      const testsuiteJson = jsonData?.testsuite;
+      if (testsuiteJson?.testcase) {
+        for (let testCase of testsuiteJson?.testcase) {
+          if (checkNestedProperty(testCase, 'failure')) {
+            const errorObj: TestRunError = new TestRunError();
+            errorObj.setTestCasePath(`${testCase?._attributes.name}`);
+            errorObj.setMessage(`${testCase?.failure._cdata}.`);
+            this.genericErrorHandler.addErrorsToList(errorObj);
+          }
         }
+      } else {
       }
     }
   }
