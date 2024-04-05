@@ -18,7 +18,7 @@ More information about a flag. Don't repeat the summary.
 
 - <%= config.bin %> <%= command.id %>
 
-# error.MULTIPLE_ERRORS
+# error.MultipleFailure
 
 %s
 

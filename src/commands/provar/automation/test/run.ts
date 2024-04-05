@@ -78,7 +78,7 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
         errorObj.setCode('MALFORMED_FILE');
         errorObj.setMessage(errorMessages.MALFORMEDFILEERROR);
         this.genericErrorHandler.addErrorsToList(errorObj);
-      } else if (error.name === 'MULTIPLE_ERRORSError') {
+      } else if (error.name === 'MultipleFailureError') {
         return populateResult(flags, this.genericErrorHandler, messages, this.log.bind(this));
       } else {
         const errorObj: GenericError = new GenericError();
