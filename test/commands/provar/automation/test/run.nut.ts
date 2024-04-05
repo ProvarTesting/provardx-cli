@@ -40,8 +40,6 @@ describe('provar automation test run NUTs', () => {
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND}`);
     const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`).shellOutput;
-    // eslint-disable-next-line no-console
-    console.log(res);
     expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n\n`);
   });
 
