@@ -133,11 +133,11 @@ export default class ProvarAutomationTestRun extends SfCommand<SfProvarCommandRe
       const dataString = xml2json(xmlContent, { compact: true });
       const jsondata = JSON.parse(dataString);
       const testsuiteJson = jsondata?.testsuite;
-      for (let testCase of testsuiteJson.testcase) {
+      for (let testCase of testsuiteJson?.testcase) {
         if (checkNestedProperty(testCase, 'failure')) {
           const errorObj: TestRunError = new TestRunError();
-          errorObj.setTestCasePath(`${testCase._attributes.name}`);
-          errorObj.setMessage(`${testCase.failure._cdata}.`);
+          errorObj.setTestCasePath(`${testCase?._attributes.name}`);
+          errorObj.setMessage(`${testCase?.failure._cdata}.`);
           this.genericErrorHandler.addErrorsToList(errorObj);
         }
       }
