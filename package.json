@@ -95,7 +95,7 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha \"**/*setup.nut.ts\" \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*get.nut.ts\" \"**/*set.nut.ts\" \"**/*download.nut.ts\" \"**/*compile.nut.ts\"  --slow 4500 --timeout 600000 --reporter mochawesome",
+    "test:nuts": "nyc mocha \"**/*setup.nut.ts\" \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*get.nut.ts\" \"**/*set.nut.ts\" \"**/*download.nut.ts\" \"**/*compile.nut.ts\" \"**/*run.nut.ts\"  --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
     "version": "oclif readme"
   },
