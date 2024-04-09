@@ -59,8 +59,8 @@ describe('provar automation test run NUTs', () => {
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.TEST_RUN}`
     );
-    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
-    const SET_PROJECT_PATH_VALUE = '"C:/Users/anchal.goel/git/ProvarRegression_9April/AutomationRevamp"';
+    const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
+    const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevamp"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE} "projectPath"=${SET_PROJECT_PATH_VALUE}`
