@@ -5,6 +5,7 @@ import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarComman
 import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
+import * as runConstants from '../../../../assertion/runConstants.js';
 
 describe('provar automation test run NUTs', () => {
   let session: TestSession;
@@ -36,6 +37,7 @@ describe('provar automation test run NUTs', () => {
     const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
     const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
     jsonData.provarHome = '';
+    jsonData.projectPath = '';
     const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
     fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND}`);
@@ -48,5 +50,53 @@ describe('provar automation test run NUTs', () => {
       ensureExitCode: 0,
     });
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+  });
+
+  it('Test Run command should be successful', () => {
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.TEST_RUN}`
+    );
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND} -p ${FILE_PATHS.TEST_RUN}`
+    );
+    const SET_PROVAR_HOME_VALUE = '"C:/Program Files/Provar/2.12.1.1.02/"';
+    const SET_PROJECT_PATH_VALUE = '"C:/Users/anchal.goel/git/ProvarRegression_9April/AutomationRevamp"';
+    // set provarHome and projectPath locations
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE} "projectPath"=${SET_PROJECT_PATH_VALUE}`
+    );
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCase"="[\\"/Test Case 1.testcase\\"]"`
+    );
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`
+    ).shellOutput;
+    expect(result.stdout).to.deep.equal(runConstants.successMessage);
+  });
+
+  it('Test Run command should be successful and return result in json', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND} --json`
+    ).jsonOutput;
+    expect(result).to.deep.equal(runConstants.SuccessJson);
+  });
+
+  it('Test Run command should not be successful and return the error', () => {
+    execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCase"="[\\"/Test Case 2.testcase\\", \\"/Test Case 4.testcase\\"]"`
+    );
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`
+    ).shellOutput;
+    // eslint-disable-next-line no-console
+    console.log(result);
+    expect(result.stderr).to.deep.equal(runConstants.errorMessage);
+  });
+
+  it('Test Run command should not be successful and return result in json format', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND} --json`
+    ).jsonOutput;
+    expect(result).to.deep.equal(runConstants.errorJson);
   });
 });
