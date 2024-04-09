@@ -88,8 +88,6 @@ describe('provar automation test run NUTs', () => {
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`
     ).shellOutput;
-    // eslint-disable-next-line no-console
-    console.log(result);
     expect(result.stderr).to.deep.equal(runConstants.errorMessage);
   });
 
