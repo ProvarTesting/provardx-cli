@@ -6,6 +6,7 @@ import { commandConstants } from '../../../../../src/constants/commandConstants.
 import { errorMessages } from '../../../../../src/constants/errorMessages.js';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
 import * as runConstants from '../../../../assertion/runConstants.js';
+import * as setupConstants from '../../../../assertion/setupConstants.js';
 
 describe('provar automation test run NUTs', () => {
   let session: TestSession;
@@ -30,16 +31,21 @@ describe('provar automation test run NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GENERATE_COMMAND} -p ${FILE_PATHS.MISSING_FILE}`
     );
     interface PropertyFileJsonData {
-      [key: string]: string | boolean | number;
+      [key: string]: string | boolean;
+    }
+    function removeProperties(jsonObject: PropertyFileJsonData, propertiesToRemove: string[]): void {
+      propertiesToRemove.forEach((property) => {
+        delete jsonObject[property];
+      });
     }
     const jsonFilePath = FILE_PATHS.MISSING_FILE;
-    // reading the json data
-    const jsonDataString = fileSystem.readFileSync(jsonFilePath, 'utf-8');
-    const jsonData: PropertyFileJsonData = JSON.parse(jsonDataString) as PropertyFileJsonData;
-    jsonData.provarHome = '';
-    jsonData.projectPath = '';
-    const updatedJsonDataString = JSON.stringify(jsonData, null, 2);
-    fileSystem.writeFileSync(jsonFilePath, updatedJsonDataString, 'utf-8');
+    const jsonData = fileSystem.readFileSync(jsonFilePath, 'utf-8');
+    const originalJsonData: PropertyFileJsonData = JSON.parse(jsonData) as PropertyFileJsonData;
+    const propertiesToRemove: string[] = ['provarHome'];
+    removeProperties(originalJsonData, propertiesToRemove);
+    const updatedJsonData = JSON.stringify(originalJsonData, null, 2);
+    fileSystem.writeFileSync(jsonFilePath, updatedJsonData, 'utf-8');
+    expect(originalJsonData).to.not.have.all.keys(propertiesToRemove);
     execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_LOAD_COMMAND}`);
     const res = execCmd<SfProvarCommandResult>(`${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`).shellOutput;
     expect(res.stderr).to.deep.equal(`Error (1): [MISSING_FILE] ${errorMessages.MISSING_FILE_ERROR}\n\n\n`);
@@ -50,6 +56,13 @@ describe('provar automation test run NUTs', () => {
       ensureExitCode: 0,
     });
     expect(res.jsonOutput).to.deep.equal(validateConstants.missingFileJsonError);
+  });
+
+  it('Build should be installed using flag -v and return the success output', () => {
+    const result = execCmd<SfProvarCommandResult>(
+      `${commandConstants.SF_PROVAR_AUTOMATION_SETUP_COMMAND} -v 2.12.1`
+    ).shellOutput;
+    expect(result.stdout).to.deep.equal(setupConstants.successMessage);
   });
 
   it('Test Run command should be successful', () => {
