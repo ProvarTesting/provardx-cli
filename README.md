@@ -5,7 +5,7 @@
 
 # What is the ProvarDX CLI?
 
-The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to automate the execution of tests and the reporting of test results and other quality-related reports (e.g. within a DevOps pipeline).
+The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to automate the execution of tests and the reporting of test results and other quality-related reports (e.g. within a CI pipeline).
 
 # Installation
 
