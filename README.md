@@ -2,16 +2,29 @@
 
 [![Version](https://img.shields.io/npm/v/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![Downloads/week](https://img.shields.io/npm/dw/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
+[![License](https://img.shields.io/npm/l/@provartesting/provardx-cli.svg)](https://github.com/ProvarTesting/provardx-cli/blob/main/LICENSE.md)
 
 # What is the ProvarDX CLI?
 
 The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to automate the execution of tests and the reporting of test results and other quality-related reports (e.g. within a CI pipeline).
 
-# Installation
+# Installation, Update, and Uninstall
 
+Install the plugin
 ```sh-session
 $ sf plugins install @provartesting/provardx-cli
 ```
+
+Update plugins
+```sh-session
+$ sf plugins update
+```
+
+Uninstall the plugin
+```sh-session
+$ sf plugins uninstall @provartesting/provardx-cli
+```
+
 # Commands
 
 - [`sf provar automation config generate`](#sf-provar-automation-config-generate)
