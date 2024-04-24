@@ -1,11 +1,9 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
+import { commandConstants, errorMessages, SfProvarCommandResult } from 'provardx-plugins-utils';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
 import * as getConstants from '../../../../assertion/getConstants.js';
-import { errorMessages } from '../../../../../src/constants/errorMessages.js';
-import { commandConstants } from '../../../../../src/constants/commandConstants.js';
 
 describe('sf provar config get NUTs', () => {
   let session: TestSession;

@@ -1,9 +1,7 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { SfProvarCommandResult } from '../../../../../src/Utility/sfProvarCommandResult.js';
-import { commandConstants } from '../../../../../src/constants/commandConstants.js';
-import { errorMessages } from '../../../../../src/constants/errorMessages.js';
+import { errorMessages, commandConstants, SfProvarCommandResult } from 'provardx-plugins-utils';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
 
 describe('provar automation test run NUTs', () => {

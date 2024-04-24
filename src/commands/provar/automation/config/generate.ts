@@ -6,12 +6,8 @@
  */
 
 import fs from 'node:fs';
-import { Messages } from '@salesforce/core';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
-import { generateFile, getExtension } from '../../../../Utility/fileSupport.js';
-import ErrorHandler from '../../../../Utility/errorHandler.js';
-import { errorMessages } from '../../../../constants/errorMessages.js';
+import { errorMessages, SfProvarCommandResult, populateResult, generateFile, getExtension, ErrorHandler, Messages } from 'provardx-plugins-utils';
 
 /**
  * Generates the boiler plate provardx-properties.json
