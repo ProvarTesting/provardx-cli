@@ -1,5 +1,5 @@
 export const successMessage = 'The tests were run successfully.\n';
-export const errorMessage = 'Error (1): [Test Case 4.testcase] No Alert present.\n\n\n';
+export const errorMessage = 'Error (1): [Test Case 4.testcase] The row locator did not match any rows..\n\n\n';
 export const SuccessJson = {
   status: 0,
   result: {
@@ -14,7 +14,7 @@ export const errorJson = {
     errors: [
       {
         testCasePath: 'Test Case 4.testcase',
-        message: 'No Alert present.',
+        message: 'The row locator did not match any rows..',
       },
     ],
   },
