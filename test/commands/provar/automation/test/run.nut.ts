@@ -96,7 +96,7 @@ describe('provar automation test run NUTs', () => {
 
   it('Test Run command should not be successful and return the error', () => {
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCase"="[\\"/Test Case 2.testcase\\", \\"/Test Case 4.testcase\\"]"`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCase"="[\\"/Test Case 4.testcase\\"]"`
     );
     const result = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_TEST_RUN_COMMAND}`
