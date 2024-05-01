@@ -7,7 +7,7 @@
 
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { } from '@salesforce/core';
-import { ErrorHandler, SfProvarCommandResult, populateResult, PropertyFileValidator, Messages } from 'provardx-plugins-utils';
+import { ErrorHandler, SfProvarCommandResult, populateResult, PropertyFileValidator, Messages } from '@provartesting/provardx-plugins-utils';
 
 /**
  * Validates the provardx-properties.json against JSON standards and provardx schema

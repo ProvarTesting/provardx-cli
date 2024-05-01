@@ -8,7 +8,7 @@
 import * as fileSystem from 'node:fs';
 import { expect } from 'chai';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
-import { commandConstants, propertyFileContent, SfProvarCommandResult } from 'provardx-plugins-utils';
+import { commandConstants, propertyFileContent, SfProvarCommandResult } from '@provartesting/provardx-plugins-utils';
 import { INVALID_PATH, PASS_FILE_CONTENT, INVALID_FILE_EXTENSION } from '../../../../assertion/generateConstants.js';
 import {
   successMessage,

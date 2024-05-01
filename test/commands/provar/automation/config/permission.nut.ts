@@ -9,7 +9,7 @@ import * as fileSystem from 'node:fs';
 import { exec } from 'node:child_process';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { commandConstants, SfProvarCommandResult } from 'provardx-plugins-utils';
+import { commandConstants, SfProvarCommandResult } from '@provartesting/provardx-plugins-utils';
 import { INSUFFICIENT_PERMISSIONS, INVALID_PATH } from '../../../../assertion/generateConstants.js';
 import { errorInsufficientPermissions, errorInvalidFileExtension } from '../../../../assertion/generateConstants.js';
 

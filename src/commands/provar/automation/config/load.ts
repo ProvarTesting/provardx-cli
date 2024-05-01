@@ -8,7 +8,7 @@
 import * as fileSystem from 'node:fs';
 import { resolve } from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
-import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, PropertyFileValidator, Messages } from 'provardx-plugins-utils';
+import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, PropertyFileValidator, Messages } from '@provartesting/provardx-plugins-utils';
 
 /**
  * Loads the path to provardx-properties.json to the user directory ${user}/.sf/config.json

@@ -7,7 +7,7 @@
 
 import * as fileSystem from 'node:fs';
 import { SfCommand } from '@salesforce/sf-plugins-core';
-import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, checkNestedProperty, getNestedProperty, Messages } from 'provardx-plugins-utils';
+import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, checkNestedProperty, getNestedProperty, Messages } from '@provartesting/provardx-plugins-utils';
 
 
 /**
