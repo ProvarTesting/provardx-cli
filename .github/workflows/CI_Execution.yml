@@ -59,6 +59,11 @@ jobs:
                chmod 777 ./bin/run.js
           fi
         shell: bash
+      - name: Setting up browser
+        run: |
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -        
+          sudo echo "deb [arch=amd64]  http://dl.google.com/linux/chrome/deb/ stable main" >>sudo tee -a /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get -y install google-chrome-stable
       - name: Execute NUTS
         run: |
           sf plugins link .
