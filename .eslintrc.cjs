@@ -3,6 +3,5 @@ module.exports = {
   root: true,
   rules: {
     header: 'off',
-    //'@typescript-eslint/no-unsafe-member-access': 'off',
   },
 };
