@@ -15,7 +15,6 @@
     "fast-xml-parser": "^4.3.6",
     "jsonschema": "^1.4.1",
     "node-stream-zip": "^1.15.0",
-    "@provartesting/provardx-plugins-utils": "0.0.2-beta",
     "sync-request": "^6.1.0",
     "xml-js": "^1.6.11"
   },
