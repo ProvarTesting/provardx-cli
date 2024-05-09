@@ -1,9 +1,14 @@
 {
-  "extends": "@salesforce/dev-config/tsconfig-strict",
+  "extends": "@salesforce/dev-config/tsconfig-strict-esm",
   "compilerOptions": {
     "outDir": "lib",
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["./**/*.ts"]
+  "include": [
+    "./**/*.ts"
+  ],
+  "exclude": [
+    "../node_modules"
+  ]
 }

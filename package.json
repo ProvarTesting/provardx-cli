@@ -14,9 +14,10 @@
     "cli-ux": "^6.0.9",
     "fast-xml-parser": "^4.3.6",
     "jsonschema": "^1.4.1",
-    "xml-js": "^1.6.11",
     "node-stream-zip": "^1.15.0",
-    "sync-request": "^6.1.0"
+    "@provartesting/provardx-plugins-utils": "0.0.2-beta",
+    "sync-request": "^6.1.0",
+    "xml-js": "^1.6.11"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.0.2",
@@ -97,7 +98,7 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha \"**/*setup.nut.ts\" \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*get.nut.ts\" \"**/*set.nut.ts\" \"**/*download.nut.ts\" \"**/*compile.nut.ts\" \"**/*run.nut.ts\"  --slow 4500 --timeout 600000 --reporter mochawesome",
+    "test:nuts": "nyc mocha \"**/*setup.nut.ts\" \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
     "version": "oclif readme"
   },
