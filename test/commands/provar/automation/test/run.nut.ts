@@ -74,9 +74,10 @@ describe('provar automation test run NUTs', () => {
     );
     const SET_PROVAR_HOME_VALUE = '"./ProvarHome"';
     const SET_PROJECT_PATH_VALUE = '"./ProvarRegression/AutomationRevamp"';
+    const SET_BROWSER_VALUE = '"Chrome_Headless"';
     // set provarHome and projectPath locations
     execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE} "projectPath"=${SET_PROJECT_PATH_VALUE}`
+      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "provarHome"=${SET_PROVAR_HOME_VALUE} "projectPath"=${SET_PROJECT_PATH_VALUE} "environment.webBrowser"=${SET_BROWSER_VALUE}`
     );
     execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_SET_COMMAND} "testCase"="[\\"/Test Case 1.testcase\\"]"`
