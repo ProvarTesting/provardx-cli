@@ -7,12 +7,8 @@
 
 import * as fileSystem from 'node:fs';
 import { SfCommand } from '@salesforce/sf-plugins-core';
-import { Messages } from '@salesforce/core';
-import { SfProvarCommandResult, populateResult } from '../../../../Utility/sfProvarCommandResult.js';
-import ErrorHandler from '../../../../Utility/errorHandler.js';
-import { ProvarConfig } from '../../../../Utility/provarConfig.js';
-import { errorMessages } from '../../../../constants/errorMessages.js';
-import { checkNestedProperty, getNestedProperty } from '../../../../Utility/jsonSupport.js';
+import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, checkNestedProperty, getNestedProperty, Messages } from '@provartesting/provardx-plugins-utils';
+
 
 /**
  * Gets the value for specified propertykey under arguments from provardx-properties.json
