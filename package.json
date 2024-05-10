@@ -4,7 +4,7 @@
   "version": "1.1.1-beta",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "@oclif/core": "^3.18.1",
+    "@oclif/core": "^3.26.2",
     "@provartesting/provardx-plugins-utils": "0.0.2-beta",
     "@salesforce/core": "^6.5.1",
     "@salesforce/kit": "^3.0.15",
