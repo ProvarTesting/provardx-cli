@@ -34,9 +34,6 @@ jobs:
         with:
           distribution: 'corretto'
           java-version: '11'
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1
-        id: setup-chrome
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.nodeversion }}
@@ -69,12 +66,25 @@ jobs:
                chmod 777 ./bin/run.js
           fi
         shell: bash
+      - name: Setup Chrome
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo dpkg -i google-chrome-stable_current_amd64.deb
+            sudo apt-get install -f
+          fi
+      - name: Setup Xvfb
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install xvfb
+            sudo Xvfb :0 -ac -screen 0 1024x768x24 &
+            export DISPLAY=:0
+          fi
       - name: Checking Software Versions
         run: |
           npm --version
           java -version
-          ${{ steps.setup-chrome.outputs.chrome-path }} --version
-          chrome --version
+          google-chrome --version
       - name: Execute NUTS
         run: |
           sf plugins link .
