@@ -20,6 +20,8 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   provardx-ci-execution:
+    env:
+      DISPLAY: :0
     strategy:
       matrix:
         os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest"')) }}
@@ -32,6 +34,12 @@ jobs:
         with:
           distribution: 'corretto'
           java-version: '11'
+      - name: Setup Chrome
+      - uses: browser-actions/setup-chrome@v1
+        id: setup-chrome
+      - run: chrome --version
+      - run: |
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.nodeversion }}
@@ -64,10 +72,13 @@ jobs:
                chmod 777 ./bin/run.js
           fi
         shell: bash
+      - name: Checking Software Versions
+        run: |
+          npm --version
+          java -version
       - name: Execute NUTS
         run: |
           sf plugins link .
-          java -version
           echo ${JAVA_HOME}
           yarn run test:nuts
       - name: Archive NUTS results
