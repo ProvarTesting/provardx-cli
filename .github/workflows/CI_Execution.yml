@@ -76,7 +76,7 @@ jobs:
       - name: Setup Xvfb
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-            sudo apt-get install xvfb
+            sudo apt-get install xvfb gnupg libdbus-glib-1-2 libgtk-3-0
             sudo Xvfb :0 -ac -screen 0 1024x768x24 &
             export DISPLAY=:0
           fi
