@@ -35,11 +35,8 @@ jobs:
           distribution: 'corretto'
           java-version: '11'
       - name: Setup Chrome
-      - uses: browser-actions/setup-chrome@v1
+        uses: browser-actions/setup-chrome@v1
         id: setup-chrome
-      - run: chrome --version
-      - run: |
-          ${{ steps.setup-chrome.outputs.chrome-path }} --version
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.nodeversion }}
@@ -76,6 +73,8 @@ jobs:
         run: |
           npm --version
           java -version
+          ${{ steps.setup-chrome.outputs.chrome-path }} --version
+          chrome --version
       - name: Execute NUTS
         run: |
           sf plugins link .
