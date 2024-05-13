@@ -20,6 +20,9 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   provardx-ci-execution:
+    env:
+      DISPLAY: :0
+      MY_LICENSE: ${{ secrets.PROVAR_LICENSE }}
     strategy:
       matrix:
         os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest"')) }}
@@ -64,10 +67,34 @@ jobs:
                chmod 777 ./bin/run.js
           fi
         shell: bash
+      - name: Setup Chrome
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+            sudo dpkg -i google-chrome-stable_current_amd64.deb
+            sudo apt-get install -f
+          fi
+      - name: Setup Xvfb
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            sudo apt-get install xvfb gnupg libdbus-glib-1-2 libgtk-3-0
+            sudo Xvfb :0 -ac -screen 0 1024x768x24 &
+            export DISPLAY=:0
+          fi
+      - name: Checking Software Versions
+        run: |
+          npm --version
+          java -version
+          google-chrome --version
+      - name: Include License
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            mkdir -p $HOME/Provar/.licenses 
+            echo "$MY_LICENSE" >> $HOME/Provar/.licenses/License.properties 
+          fi
       - name: Execute NUTS
         run: |
           sf plugins link .
-          java -version
           echo ${JAVA_HOME}
           yarn run test:nuts
       - name: Archive NUTS results
