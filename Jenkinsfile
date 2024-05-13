@@ -24,6 +24,7 @@ pipeline {
                       export NVM_DIR="$HOME/.nvm"
                       [ -s "$NVM_DIR/nvm.sh" ] && \\. "$NVM_DIR/nvm.sh" > /dev/null 2>&1
                       nvm use 18.19.0 > /dev/null 2>&1
+                      yarn
                       yarn prepack
                       npm install -g @salesforce/cli
                 '''
