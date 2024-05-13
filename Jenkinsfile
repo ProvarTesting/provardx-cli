@@ -7,7 +7,7 @@ pipeline {
         string(name: 'BRANCH_NAME', defaultValue: params.BRANCH_NAME ?: 'Jenkins', description: '''Mention the branch name''')
     }
     stages {
-      /*  stage('Git Checkout') {
+        stage('Git Checkout') {
             steps {
                 script {
                     checkout([$class: 'GitSCM', branches: [[name: BRANCH_NAME]], extensions: [], userRemoteConfigs: [[credentialsId: 'Provar_Github_PAT_Credentials', url: 'https://github.com/ProvarTesting/Provardx-cli.git']]])
@@ -46,7 +46,7 @@ pipeline {
                     sudo apt-get install -f
                 '''
             }
-        }*/
+        }
         stage('Execute NUTS') {
             tools {
                 jdk 'JDK11_linux'
