@@ -16,6 +16,6 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@provartesting'
       - name: Unpublish package from NPM
-        run: npm unpublish ${{ version }}
+        run: npm unpublish ${{ inputs.version }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
