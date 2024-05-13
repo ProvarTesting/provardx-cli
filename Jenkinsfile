@@ -38,15 +38,6 @@ pipeline {
                 }
             }
         }
-        stage('Install latest Chrome in ubuntu') {
-            steps {
-                sh '''
-                    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-                    sudo dpkg -i google-chrome-stable_current_amd64.deb
-                    sudo apt-get install -f
-                '''
-            }
-        }
         stage('Execute NUTS') {
             tools {
                 jdk 'JDK11_linux'
