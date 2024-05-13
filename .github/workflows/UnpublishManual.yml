@@ -1,0 +1,21 @@
+name: Unpublish from NPM
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'published plugin version to unpublish from NPM'
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@provartesting'
+      - name: Unpublish package from NPM
+        run: npm unpublish ${{ version }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
