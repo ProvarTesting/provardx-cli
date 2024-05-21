@@ -1,4 +1,41 @@
 #!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
 
-yarn commitlint --edit
+if [ -z "$1" ]; then
+    commit_message=$(cat)
+else
+    commit_message=$(cat "$1")
+fi
+
+echo "Debug: Full commit message:"
+echo "$commit_message"
+echo
+
+# Check if the first line contains specific text, and if so, skip further validations
+if echo "$commit_message" | head -n 1 | grep -qi -E 'Renaming|bumped version|resolving merge conflict|Merge remote-tracking branch|Merge branch'; then
+    echo "Skipping validations as the commit message indicates an updated manifest version or bumped version."
+    exit 0
+fi
+
+# Check if there are at least two lines
+if [ "$(echo "$commit_message" | wc -l)" -lt 2 ]; then
+    echo "Error: Commit message must have at least two lines."
+    exit 1
+fi
+
+# Extract the first line and check its format
+first_line=$(echo "$commit_message" | head -n 1)
+if ! (echo "$first_line" | grep -E '^(PDX)-[0-9]+: ' > /dev/null); then
+    echo "Error: First line should start with 'PDX-' followed by a colon and space."
+    exit 1
+fi
+
+# Extract lines starting from the second line
+message_lines=$(echo "$commit_message" | tail -n +2)
+
+# Check the order and presence of 'RCA/Req:' and 'Fix:'
+if ! (echo "$message_lines" | grep -E '^(RCA|Req): .{10,}$' > /dev/null && echo "$message_lines" | grep -q '^Fix: .\{10,\}'); then
+    echo "Error: The commit message must contain 'RCA/Req:' followed by 'Fix:', in that order, each with at least 10 characters. There should be space after the colon."
+    exit 1
+fi
+
+exit 0
