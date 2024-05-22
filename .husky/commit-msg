@@ -33,8 +33,8 @@ fi
 message_lines=$(echo "$commit_message" | tail -n +2)
 
 # Check the order and presence of 'RCA/Req:' and 'Fix:'
-if ! (echo "$message_lines" | grep -E '^(RCA|Req): .{10,}$' > /dev/null && echo "$message_lines" | grep -q '^Fix: .\{10,\}'); then
-    echo "Error: The commit message must contain 'RCA/Req:' followed by 'Fix:', in that order, each with at least 10 characters. There should be space after the colon."
+if ! (echo "$message_lines" | grep -E '^(RCA|Req): .{40,}$' > /dev/null && echo "$message_lines" | grep -q '^Fix: .\{40,\}'); then
+    echo "Error: The commit message must contain 'RCA/Req:' followed by 'Fix:', in that order, each with at least 40 characters. There should be space after the colon."
     exit 1
 fi
 
