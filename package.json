@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "BSD-3-Clause",
   "dependencies": {
     "@oclif/core": "^3.18.1",
