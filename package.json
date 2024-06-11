@@ -4,7 +4,7 @@
   "version": "1.1.1",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "@oclif/core": "^3.18.1",
+    "@oclif/core": "^3.26.2",
     "@salesforce/core": "^6.5.1",
     "@salesforce/kit": "^3.0.15",
     "@salesforce/sf-plugins-core": "^7.1.4",
@@ -93,6 +93,7 @@
     "docs": "sf-docs",
     "format": "wireit",
     "lint": "wireit",
+    "postinstall": "node ./scripts/postInstall.js",
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
