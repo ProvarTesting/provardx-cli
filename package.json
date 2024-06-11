@@ -116,7 +116,8 @@
       "files": [
         "src/**/*.ts",
         "**/tsconfig.json",
-        "messages/**"
+        "messages/**",
+        "/scripts"
       ],
       "output": [
         "lib/**",
