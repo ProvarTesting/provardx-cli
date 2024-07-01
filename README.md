@@ -6,7 +6,7 @@
 
 # What is the ProvarDX CLI?
 
-The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to automate the execution of tests and the reporting of test results and other quality-related reports (e.g. within a CI pipeline).
+The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to automate the execution of tests using Provar Automation, and the reporting of test results and other quality-related metrics to Provar Manager.
 
 # Installation, Update, and Uninstall
 
@@ -36,6 +36,8 @@ $ sf plugins uninstall @provartesting/provardx-cli
 - [`sf provar automation project compile`](#sf-provar-automation-project-compile)
 - [`sf provar automation metadata download`](#sf-provar-automation-metadata-download)
 - [`sf provar automation test run`](#sf-provar-automation-test-run)
+- [`sf provar manager connect`](#sf-provar-manager-connect)
+- [`sf provar manager testcase retrieve`](#sf-provar-manager-testcase-retrieve)
 
 ## `sf provar automation config generate`
 
@@ -236,4 +238,68 @@ EXAMPLES
   Run the tests as specified in the loaded properties file:
 
     $ sf provar automation test run
+```
+
+## `sf provar manager connect`
+
+Load the alias or username to be used in subsequent commands to connect to Provar Manager.
+
+```
+USAGE
+  $ sf provar manager connect -o <value> [--json]
+
+FLAGS
+  -o, --target-org=<value>  (required) Username or alias set in the SF CLI which corresponds to the Provar Manager org.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Load the alias or username to be used in subsequent commands to connect to Provar Manager.
+
+EXAMPLES
+  Connect to the Provar Manager org that has been previously authorised using the SF CLI, and stored with the alias "ProvarManager":
+
+    $ sf provar manager connect -o ProvarManager
+```
+
+## `sf provar manager testcase retrieve`
+
+Retrieve test cases related to the provided user stories (issues) or metadata components, for a given test project.
+
+```
+USAGE
+  $ sf provar automation test run [--json]
+
+FLAGS
+  -f, --metadata-file=<value>          Path to a text file that contains the list of metadata components in source format.
+  -i, --issues=<value>                 A comma-separated list of issue IDs, keys, or external IDs.
+  -m, --metadata-components=<value>    Semicolon-separated list of metadata components, grouped and prefixed by their metadata type.
+  -n, --ignore-metadata=<value>        Semicolon-separated list of metadata types to ignore from METADATA-COMPONENTS or METADATA-FILE.
+  -o, --output=<value>                 Output to a specific file instead of stdout.
+  -p, --test-project=<value>           (required) Test Project key to filter by.
+  -t, --test-automation-tool=<option>  (required) Test Automation tool used to automate the tests.
+                                       <options: Apex|ProvarAutomation>
+
+DESCRIPTION
+  Retrieve test cases related to the provided user stories (issues) or metadata components, for a given test project.
+
+EXAMPLES
+  Retrieve Apex unit test class ids from the test project "Salesforce Project" with key "SFP" that cover the "NewLeadFormController" and "ExistingLeadFormController" Apex classes:
+
+    $ sf provar manager testcase retrieve -p SFP -t Apex -m "ApexClass:NewLeadFormController,ExistingLeadFormController"
+
+  Retrieve Provar Automation test case paths from the test project with key "PAT" related to the user story with key "TM-766", in JSON format:
+
+    $ sf provar manager testcase retrieve -p PAT -t ProvarAutomation -i "TM-766" --json
+
+  Retrieve Provar Automation test case paths from the test project with key "PAT" related to the metadata listed in the file "changes.txt", ignoring changes to custom objects, output to "testcases.txt":
+
+    $ sf provar manager testcase retrieve -p PAT -t ProvarAutomation -f changes.txt -n CustomObject -o testcases.txt
+
+  Example of a list of metadata changes:
+
+    base/main/default/layouts/Release__c-Release Layout.layout-meta.xml
+    base/main/default/objects/Sprint__c/fields/Sprint_Goal__c.field-meta.xml
+
 ```

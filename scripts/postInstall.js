@@ -1,8 +1,16 @@
 import { exec } from 'child_process';
 
-const command = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-automation';
+const commandToInstallAutomationPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-automation';
+const commandToInstallManagerPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-manager';
 
-exec(command, (error) => {
+exec(commandToInstallAutomationPlugin, (error) => {
+  if (error) {
+    console.error(`Error: ${error.message}`);
+    return;
+  }
+});
+
+exec(commandToInstallManagerPlugin, (error) => {
   if (error) {
     console.error(`Error: ${error.message}`);
     return;
