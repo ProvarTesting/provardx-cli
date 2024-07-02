@@ -269,7 +269,7 @@ Retrieve test cases related to the provided user stories (issues) or metadata co
 
 ```
 USAGE
-  $ sf provar automation test run [--json]
+  $ sf provar manager testcase retrieve -p <value> -t Apex|ProvarAutomation [--json] [--flags-dir <value>] [-m <value>] [-f <value>] [-i <value>] [-o <value>] [-n <value>]
 
 FLAGS
   -f, --metadata-file=<value>          Path to a text file that contains the list of metadata components in source format.
