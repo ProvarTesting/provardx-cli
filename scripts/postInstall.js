@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 
 const commandToInstallAutomationPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-automation';
 const commandToInstallManagerPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-manager';
