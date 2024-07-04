@@ -16,7 +16,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@provartesting'
       - name: Install dependencies and build
-        run: yarn && yarn prepack
+        run: |
+          npm install -g @salesforce/cli
+          yarn
+          yarn prepack
       - name: Display file
         run: |
           cat /home/runner/work/_temp/.npmrc
