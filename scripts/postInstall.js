@@ -1,16 +1,18 @@
-import { exec } from 'child_process';
+import { execSync } from 'node:child_process';
 
-const commandToInstallAutomationPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-automation';
-const commandToInstallManagerPlugin = 'echo y | sfdx plugins:install @provartesting/provardx-plugins-manager';
+const commandToInstallAutomationPlugin = 'echo y | sf plugins install @provartesting/provardx-plugins-automation';
+const commandToInstallManagerPlugin = 'echo y | sf plugins install @provartesting/provardx-plugins-manager';
 
-exec(commandToInstallAutomationPlugin, (error) => {
+console.log('starting postInstall');
+
+execSync(commandToInstallAutomationPlugin, (error) => {
   if (error) {
     console.error(`Error: ${error.message}`);
     return;
   }
 });
 
-exec(commandToInstallManagerPlugin, (error) => {
+execSync(commandToInstallManagerPlugin, (error) => {
   if (error) {
     console.error(`Error: ${error.message}`);
     return;
