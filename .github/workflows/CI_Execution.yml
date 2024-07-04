@@ -39,11 +39,11 @@ jobs:
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
       - name: Install Dependencies
         run: |
+          npm install -g @salesforce/cli
           yarn
       - name: Build the project
         run: |
           yarn prepack
-          npm install -g @salesforce/cli
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
