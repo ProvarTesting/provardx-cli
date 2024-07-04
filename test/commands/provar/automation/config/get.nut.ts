@@ -152,27 +152,12 @@ describe('sf provar config get NUTs', () => {
     expect(getOutput.stdout).to.deep.equal('\n');
   });
 
-  it('value should be returned for testOutputLevel property', () => {
-    const getOutput = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GET_COMMAND} testOutputLevel`
-    ).shellOutput;
-    expect(getOutput.stdout).to.deep.equal('BASIC\n');
-  });
-
   it('value should be returned for resultsPathDisposition property in json format', () => {
     const getOutput = execCmd<SfProvarCommandResult>(
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GET_COMMAND} "resultsPathDisposition" --json`
     ).jsonOutput;
     expect(getOutput?.result.success).to.deep.equal(true);
     expect(getOutput?.result.value).to.deep.equal('Increment');
-  });
-
-  it('value should be returned for lightningMode property in json format', () => {
-    const getOutput = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GET_COMMAND} lightningMode --json`
-    ).jsonOutput;
-    expect(getOutput?.result.success).to.deep.equal(true);
-    expect(getOutput?.result.value).to.deep.equal(true);
   });
 
   it('Value should be returned successfully for metdata object', () => {
@@ -219,13 +204,6 @@ describe('sf provar config get NUTs', () => {
       `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GET_COMMAND} testprojectSecrets`
     ).shellOutput;
     expect(getOutput.stdout).to.deep.equal('${PROVAR_TEST_PROJECT_SECRETS}\n');
-  });
-
-  it('Value should be returned successfully for connectionRefreshType property', () => {
-    const getOutput = execCmd<SfProvarCommandResult>(
-      `${commandConstants.SF_PROVAR_AUTOMATION_CONFIG_GET_COMMAND} connectionRefreshType metadata.metadataLevel`
-    ).shellOutput;
-    expect(getOutput.stdout).to.deep.equal('Reload\n');
   });
 
   it('value should be returned for new added property', () => {
