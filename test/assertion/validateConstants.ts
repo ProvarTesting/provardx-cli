@@ -16,10 +16,10 @@ export const invalidValueError =
   "Error (1): [INVALID_VALUE] The property 'resultsPathDisposition' value is not valid.\n\n";
 
 export const invalidValuesError =
-  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'stopOnError', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
+  "Error (1): [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
 
 export const multipleErrors =
-  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'stopOnError', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
+  "Error (1): [MISSING_PROPERTY] The property 'provarHome' is missing. [INVALID_VALUES] The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.\n\n";
 
 export const validateSuccessJson = {
   status: 0,
@@ -108,7 +108,7 @@ export const invalidValuesJsonError = {
       {
         code: 'INVALID_VALUES',
         message:
-          "The properties 'resultsPathDisposition', 'stopOnError', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
+          "The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
       },
     ],
   },
@@ -127,7 +127,7 @@ export const multipleJsonErrors = {
       {
         code: 'INVALID_VALUES',
         message:
-          "The properties 'resultsPathDisposition', 'stopOnError', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
+          "The properties 'resultsPathDisposition', 'testOutputLevel', 'pluginOutputlevel', 'stopOnError', 'lightningMode', 'metadata.metadataLevel', 'environment.webBrowser' values are not valid.",
       },
     ],
   },
