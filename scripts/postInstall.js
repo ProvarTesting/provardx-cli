@@ -1,20 +1,39 @@
-import { execSync } from 'child_process';
+import { exec } from 'child_process';
 
-try {
-  console.log('starting postinstall');
-  // console.log('starting automation');
+console.log('starting postinstall');
+console.log('starting automation');
+const proc1 = exec('echo y | sf plugins install @provartesting/provardx-plugins-automation', (error, stdout, stderr) => {
+  if (error) {
+    console.error(`Error: ${error}`);
+    return;
+  }
+  console.log(`stdout: ${stdout}`);
+  console.error(`stderr: ${stderr}`);
+});
 
-  // const command = 'echo y | sf plugins install @provartesting/provardx-plugins-automation';
-  // const commandOutput = execSync(command);
-  // console.log(commandOutput);
-  // console.log('starting manager');
+console.log('starting manager');
+const proc2 = exec('echo y | sf plugins install @provartesting/provardx-plugins-manager', (error, stdout, stderr) => {
+  if (error) {
+    console.error(`Error: ${error}`);
+    return;
+  }
+  console.log(`stdout: ${stdout}`);
+  console.error(`stderr: ${stderr}`);
+});
 
-  const commandm = 'echo y | sf plugins install @provartesting/provardx-plugins-manager';
-  const commandOutputm = execSync(commandm)
-  console.log(commandOutputm);
 
-  // const commandm = 'echo y | sf plugins install @provartesting/provardx-plugins-manager';
-  // execSync(commandm, { stdio: 'inherit' });
-} catch (error) {
-  console.error(`Error: ${error}`);
-}
+proc1.on('exit', (code) => {
+  console.log(`Process 1 exited with code: ${code}`);
+});
+
+proc2.on('exit', (code) => {
+  console.log(`Process 2 exited with code: ${code}`);
+});
+
+proc1.on('error', (error) => {
+  console.error(`Process 1 exited with Error: ${error}`);
+});
+
+proc2.on('error', (error) => {
+  console.error(`Process 1 exited with Error: ${error}`);
+});
