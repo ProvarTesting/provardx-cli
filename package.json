@@ -20,8 +20,7 @@
     "node-stream-zip": "^1.15.0",
     "@provartesting/provardx-plugins-utils": "1.0.0",
     "sync-request": "^6.1.0",
-    "xml-js": "^1.6.11",
-    "@provartesting/provardx-cli": "file:~/provartesting-provardx-cli-1.2.3.tgz"
+    "xml-js": "^1.6.11"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.0.2",
