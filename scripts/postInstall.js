@@ -1,25 +1,11 @@
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 
 console.log('starting postinstall');
 console.log('starting automation');
-const proc1 = exec('echo y | sf plugins install @provartesting/provardx-plugins-automation', (error, stdout, stderr) => {
-  if (error) {
-    console.error(`Error: ${error}`);
-    return;
-  }
-  console.log(`stdout: ${stdout}`);
-  console.error(`stderr: ${stderr}`);
-});
+const proc1 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-automation', { stdio: 'inherit', shell: true });
 
 console.log('starting manager');
-const proc2 = exec('echo y | sf plugins install @provartesting/provardx-plugins-manager', (error, stdout, stderr) => {
-  if (error) {
-    console.error(`Error: ${error}`);
-    return;
-  }
-  console.log(`stdout: ${stdout}`);
-  console.error(`stderr: ${stderr}`);
-});
+const proc2 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-manager', { stdio: 'inherit', shell: true });
 
 
 proc1.on('exit', (code) => {
