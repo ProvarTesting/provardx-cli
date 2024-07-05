@@ -1,13 +1,13 @@
-import { execSync } from 'node:child_process';
+import { execSync } from 'child_process';
 
-const commandToInstallAutomationPlugin = 'echo y | sf plugins install @provartesting/provardx-plugins-automation';
+try {
+  const command = 'echo y | sf plugins install @provartesting/provardx-plugins-automation';
+  execSync(command, { stdio: 'inherit' });
 
-console.log('starting postInstall');
-
-execSync(commandToInstallAutomationPlugin, (error) => {
-  if (error) {
-    const errormessage = error.message ? error.message.toString('utf-8') : 'Unknown error';
-    console.error(`Error: ${errormessage}`);
-    return;
-  }
-});
+  const commandm = 'echo y | sf plugins install @provartesting/provardx-plugins-manager';
+  execSync(commandm, { stdio: 'inherit' });
+} catch (error) {
+  let textDecoder = new TextDecoder('utf-8');
+  const errormsg = textDecoder.decode(error.message);
+  console.error(`Error: ${errormsg}`);
+}
