@@ -2,10 +2,10 @@ import { exec, spawn } from 'child_process';
 
 console.log('starting postinstall');
 console.log('starting automation');
-const proc1 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-automation', { stdio: 'inherit', shell: true });
+const proc1 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-automation', { stdio: 'inherit', shell: true, detached: true });
 
 console.log('starting manager');
-const proc2 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-manager', { stdio: 'inherit', shell: true });
+const proc2 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-manager', { stdio: 'inherit', shell: true, detached: true });
 
 
 proc1.on('exit', (code) => {
