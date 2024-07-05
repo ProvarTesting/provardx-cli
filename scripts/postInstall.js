@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 
 async function spawnProcess(command, args) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, { stdio: 'inherit', shell: true });
+    const proc = spawn(command, { shell: true });
     proc.on('exit', (code) => {
       resolve();
     });
