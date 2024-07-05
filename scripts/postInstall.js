@@ -1,6 +1,5 @@
 import { spawn } from 'child_process';
 
-
 async function spawnProcess(command, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, { stdio: 'inherit', shell: true });
@@ -15,5 +14,5 @@ async function spawnProcess(command, args) {
 
 process.stdout.write('starting postinstall');
 
-await spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-automation');
-await spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-manager');
+spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-automation');
+spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-manager');
