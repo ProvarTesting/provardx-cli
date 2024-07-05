@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 
 async function spawnProcess(command, args) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, { shell: true });
+    const proc = spawn(command, { shell: true, detached: true });
     proc.on('exit', (code) => {
       resolve();
     });
@@ -14,5 +14,5 @@ async function spawnProcess(command, args) {
 
 process.stdout.write('starting postinstall');
 
-spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-automation');
-spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-manager');
+spawnProcess('sf plugins install @provartesting/provardx-plugins-automation');
+spawnProcess('sf plugins install @provartesting/provardx-plugins-manager');
