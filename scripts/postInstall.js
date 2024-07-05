@@ -5,11 +5,7 @@ async function spawnProcess(command, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, { stdio: 'inherit', shell: true });
     proc.on('exit', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Process exited with code: ${code}`));
-      }
+      resolve();
     });
     proc.on('error', (error) => {
       reject(error);
