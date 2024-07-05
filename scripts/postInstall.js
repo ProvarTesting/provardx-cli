@@ -1,25 +1,29 @@
-import { exec, spawn } from 'child_process';
-
-console.log('starting postinstall');
-console.log('starting automation');
-const proc1 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-automation', { stdio: 'inherit', shell: true, detached: true });
-
-console.log('starting manager');
-const proc2 = spawn('echo y | sf plugins install @provartesting/provardx-plugins-manager', { stdio: 'inherit', shell: true, detached: true });
+import { spawn } from 'child_process';
 
 
-proc1.on('exit', (code) => {
-  console.log(`Process 1 exited with code: ${code}`);
-});
+async function spawnProcess(command, args) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, { stdio: 'inherit', shell: true });
+    proc.on('exit', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Process exited with code: ${code}`));
+      }
+    });
+    proc.on('error', (error) => {
+      reject(error);
+    });
 
-proc2.on('exit', (code) => {
-  console.log(`Process 2 exited with code: ${code}`);
-});
+    proc.stdout.on('data', (data) => {
+      process.stdout.write(data);
+    });
+  });
+}
 
-proc1.on('error', (error) => {
-  console.error(`Process 1 exited with Error: ${error}`);
-});
 
-proc2.on('error', (error) => {
-  console.error(`Process 1 exited with Error: ${error}`);
-});
+process.stdout.write('starting postinstall');
+process.stdout.write('starting automation');
+
+await spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-automation');
+await spawnProcess('echo y | sf plugins install @provartesting/provardx-plugins-manager');
