@@ -3,6 +3,10 @@
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
   "version": "1.2.6",
   "license": "BSD-3-Clause",
+  "plugins": [
+    "@provartesting/provardx-plugins-automation",
+    "@provartesting/provardx-plugins-manager"
+  ],
   "dependencies": {
     "@oclif/core": "^3.26.2",
     "@salesforce/core": "^6.5.1",
