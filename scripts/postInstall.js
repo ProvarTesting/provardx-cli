@@ -7,14 +7,16 @@ console.log('starting postInstall');
 
 execSync(commandToInstallAutomationPlugin, (error) => {
   if (error) {
-    console.error(`Error: ${error.message}`);
+    const errormessage = error.message ? error.message.toString('utf-8') : 'Unknown error';
+    console.error(`Error: ${errormessage}`);
     return;
   }
 });
 
 execSync(commandToInstallManagerPlugin, (error) => {
   if (error) {
-    console.error(`Error: ${error.message}`);
+    const errormessage = error.message ? error.message.toString('utf-8') : 'Unknown error';
+    console.error(`Error: ${errormessage}`);
     return;
   }
 });
