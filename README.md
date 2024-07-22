@@ -269,11 +269,12 @@ Retrieve test cases related to the provided user stories (issues) or metadata co
 
 ```
 USAGE
-  $ sf provar manager testcase retrieve -p <value> -t Apex|ProvarAutomation [--json] [--flags-dir <value>] [-m <value>] [-f <value>] [-i <value>] [-o <value>] [-n <value>]
+  $ sf provar manager testcase retrieve -p <value> -t Apex|ProvarAutomation [--json] [--flags-dir <value>] [-m <value>] [-f <value>] [-i <value>] [-o <value>] [-n <value>] [-l <value>]
 
 FLAGS
   -f, --metadata-file=<value>          Path to a text file that contains the list of metadata components in source format.
   -i, --issues=<value>                 A comma-separated list of issue IDs, keys, or external IDs.
+  -l, --test-plan=<value>              Test Plan Name. Use if you want to retrieve test instance file paths.
   -m, --metadata-components=<value>    Semicolon-separated list of metadata components, grouped and prefixed by their metadata type.
   -n, --ignore-metadata=<value>        Semicolon-separated list of metadata types to ignore from METADATA-COMPONENTS or METADATA-FILE.
   -o, --output=<value>                 Output to a specific file instead of stdout.
