@@ -19,8 +19,8 @@
     "jsonschema": "^1.4.1",
     "node-stream-zip": "^1.15.0",
     "@provartesting/provardx-plugins-utils": "1.0.1",
-    "@provartesting/provardx-plugins-automation": "1.0.1",
-    "@provartesting/provardx-plugins-manager": "1.0.4",
+    "@provartesting/provardx-plugins-automation": "1.0.1", 
+    "@provartesting/provardx-plugins-manager": "1.0.5",
     "sync-request": "^6.1.0",
     "xml-js": "^1.6.11"
   },
