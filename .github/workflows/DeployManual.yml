@@ -5,8 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'tag name'
-        required: true
+        description: 'tag name e.g. beta, latest etc.'
 jobs:
   build:
     runs-on: ubuntu-latest
