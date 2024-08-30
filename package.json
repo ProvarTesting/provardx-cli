@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
-  "version": "1.2.10",
+  "version": "1.3.0",
   "license": "BSD-3-Clause",
   "plugins": [
     "@provartesting/provardx-plugins-automation",
@@ -18,9 +18,9 @@
     "fast-xml-parser": "^4.3.6",
     "jsonschema": "^1.4.1",
     "node-stream-zip": "^1.15.0",
-    "@provartesting/provardx-plugins-utils": "1.0.1",
-    "@provartesting/provardx-plugins-automation": "1.0.2",
-    "@provartesting/provardx-plugins-manager": "1.0.5",
+    "@provartesting/provardx-plugins-utils": "1.1.0",
+    "@provartesting/provardx-plugins-automation": "1.1.0",
+    "@provartesting/provardx-plugins-manager": "1.1.0",
     "sync-request": "^6.1.0",
     "xml-js": "^1.6.11"
   },
@@ -106,7 +106,7 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha \"**/*setup.nut.ts\" \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
+    "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
     "version": "oclif readme"
   },

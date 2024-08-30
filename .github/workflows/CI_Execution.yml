@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       OS:
-        description: 'Comma-separated list of OS versions e.g. "macos-latest, windows-latest, ubuntu-latest"'
+        description: 'Comma-separated list of OS versions e.g. "windows-latest, ubuntu-latest"'
         default: '"ubuntu-latest"'
         required: true
 
@@ -37,13 +37,60 @@ jobs:
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
+      - name: 'sf installation'
+        run: |
+          npm install -g @salesforce/cli 
+
+      - name: Determine Branch Name
+        id: set_branch_name
+        run: |
+          if [[ "${GITHUB_HEAD_REF}" ]]; then
+             echo "BRANCH_NAME=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
+          else
+             echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+          fi
+
+      - name: Check for target branch in Utils repo
+        id: check_branch
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const branch = process.env.BRANCH_NAME;
+            let branchExists = false;
+            try {
+              await github.rest.repos.getBranch({
+                owner: 'ProvarTesting', 
+                repo: 'provardx-plugins-utils',
+                branch: branch,
+              });
+              branchExists = true;
+            } catch (error) {
+              console.log(`Branch ${branch} does not exist, falling back to develop.`);
+            }
+            return branchExists;
+
+      - name: Check out Utils repo
+        uses: actions/checkout@v4
+        with:
+          repository: ProvarTesting/provardx-plugins-utils
+          path: utils
+          ref: ${{ steps.check_branch.outputs.result == 'true' && env.BRANCH_NAME || 'develop' }}
+          token: ${{ secrets.PATUTILS }}
+      - name: Utils build and link
+        run: |
+            cd utils
+            yarn && yarn prepack
+            yarn link
       - name: Install Dependencies
         run: |
-          npm install -g @salesforce/cli
           yarn
+      - name: Link utils package
+        run: |
+          yarn link @provartesting/provardx-plugins-utils
       - name: Build the project
         run: |
-          yarn prepack
+           sf plugins link .
+           yarn prepack
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
