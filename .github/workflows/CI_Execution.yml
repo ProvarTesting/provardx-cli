@@ -22,7 +22,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest"')) }}
+        os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest" || "macos-latest"')) }}
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
@@ -33,7 +33,7 @@ jobs:
       - name: 'Cache node_modules'
         uses: actions/cache@v3
         with:
-          path: ~/.npm
+          path: ${{ matrix.os == 'windows-latest' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\npm-cache' || '~/.npm' }}
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
@@ -42,13 +42,23 @@ jobs:
           npm install -g @salesforce/cli 
 
       - name: Determine Branch Name
-        id: set_branch_name
+        if: matrix.os == 'windows-latest'
+        run: |
+          if ($env:GITHUB_HEAD_REF) {
+            echo "BRANCH_NAME=$env:GITHUB_HEAD_REF" | Out-File -FilePath $env:GITHUB_ENV -Append
+          } else {
+            echo "BRANCH_NAME=$(echo $env:GITHUB_REF -replace 'refs/heads/', '')" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+          
+      - name: Determine Branch Name for Ubuntu/Mac
+        if: matrix.os != 'windows-latest'
         run: |
           if [[ "${GITHUB_HEAD_REF}" ]]; then
-             echo "BRANCH_NAME=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
+            echo "BRANCH_NAME=${GITHUB_HEAD_REF}" >> $GITHUB_ENV
           else
-             echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+            echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
           fi
+        shell: bash
 
       - name: Check for target branch in Utils repo
         id: check_branch
@@ -82,11 +92,9 @@ jobs:
             yarn && yarn prepack
             yarn link
       - name: Install Dependencies
-        run: |
-          yarn
+        run: yarn
       - name: Link utils package
-        run: |
-          yarn link @provartesting/provardx-plugins-utils
+        run: yarn link @provartesting/provardx-plugins-utils
       - name: Build the project
         run: |
            sf plugins link .
@@ -114,5 +122,4 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: nuts-report-${{ matrix.os }}
-          path: |
-            mochawesome-report
+          path: mochawesome-report
