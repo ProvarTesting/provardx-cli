@@ -1,9 +1,10 @@
 import * as fileSystem from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect } from 'chai';
-import { errorMessages, commandConstants, SfProvarCommandResult } from '@provartesting/provardx-plugins-utils';
+import { errorMessages, SfProvarCommandResult } from '@provartesting/provardx-plugins-utils';
 import * as validateConstants from '../../../../assertion/validateConstants.js';
 import * as setConstants from '../../../../assertion/setConstants.js';
+import { commandConstants } from '../../../../assertion/commandConstants.js';
 
 describe('sf provar config set NUTs', () => {
   let session: TestSession;
