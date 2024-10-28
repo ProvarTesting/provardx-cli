@@ -6,13 +6,13 @@
  */
 
 import * as fileSystem from 'node:fs';
+import * as path from 'node:path';
 import { SfCommand, parseVarArgs, Flags } from '@salesforce/sf-plugins-core';
 import {
   SfProvarCommandResult,
   populateResult,
   ErrorHandler,
   Messages,
-  ProvarConfig,
   parseJSONString,
   setNestedProperty,
   errorMessages,
@@ -45,9 +45,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
   public async run(): Promise<SfProvarCommandResult> {
     const { argv, flags } = await this.parse(SfProvarConfigSet);
     // eslint-disable-next-line
-    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
-    const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
-
+    const propertiesFilePath = path.resolve(flags['file-path']);
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
       this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));

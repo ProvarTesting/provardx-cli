@@ -6,13 +6,13 @@
  */
 
 import * as fileSystem from 'node:fs';
+import * as path from 'node:path';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import {
   errorMessages,
   SfProvarCommandResult,
   populateResult,
   ErrorHandler,
-  ProvarConfig,
   checkNestedProperty,
   getNestedProperty,
   Messages,
@@ -43,8 +43,7 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
 
   public async run(): Promise<SfProvarCommandResult> {
     const { argv, flags } = await this.parse(SfProvarConfigGet);
-    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
-    const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
+    const propertiesFilePath = path.resolve(flags['file-path']);
     let attributeValue = null;
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
