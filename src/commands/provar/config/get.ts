@@ -47,7 +47,7 @@ export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> 
     let attributeValue = null;
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
+      this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
     try {

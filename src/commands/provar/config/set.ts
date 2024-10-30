@@ -47,7 +47,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
     // eslint-disable-next-line
     const propertiesFilePath = path.resolve(flags['file-path']);
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
-      this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
+      this.errorHandler.addErrorsToList('INVALID_PATH', errorMessages.INVALID_PATH);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
     }
 
