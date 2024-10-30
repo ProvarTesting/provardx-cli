@@ -15,3 +15,8 @@ Retrieves a value from the loaded properties file.
 # error.MultipleFailure
 
 %s
+
+
+# flags.file-path.summary
+
+Config file-path to get the properties from.

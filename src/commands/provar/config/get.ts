@@ -6,9 +6,17 @@
  */
 
 import * as fileSystem from 'node:fs';
-import { SfCommand } from '@salesforce/sf-plugins-core';
-import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, ProvarConfig, checkNestedProperty, getNestedProperty, Messages } from '@provartesting/provardx-plugins-utils';
-
+import * as path from 'node:path';
+import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
+import {
+  errorMessages,
+  SfProvarCommandResult,
+  populateResult,
+  ErrorHandler,
+  checkNestedProperty,
+  getNestedProperty,
+  Messages,
+} from '@provartesting/provardx-plugins-utils';
 
 /**
  * Gets the value for specified propertykey under arguments from provardx-properties.json
@@ -17,20 +25,25 @@ import { errorMessages, SfProvarCommandResult, populateResult, ErrorHandler, Pro
  */
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.get');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.config.get');
 
 export default class SfProvarConfigGet extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
   public static readonly strict = false;
-
+  public static readonly flags = {
+    'file-path': Flags.string({
+      summary: messages.getMessage('flags.file-path.summary'),
+      char: 'f',
+      required: true,
+    }),
+  };
   private errorHandler = new ErrorHandler();
 
   public async run(): Promise<SfProvarCommandResult> {
     const { argv, flags } = await this.parse(SfProvarConfigGet);
-    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
-    const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
+    const propertiesFilePath = path.resolve(flags['file-path']);
     let attributeValue = null;
 
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {

@@ -15,3 +15,8 @@ Sets a property in the loaded properties file.
 # error.MultipleFailure
 
 %s
+
+
+# flags.file-path.summary
+
+Config file-path to set the properties to.

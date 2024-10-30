@@ -6,9 +6,17 @@
  */
 
 import * as fileSystem from 'node:fs';
-import { SfCommand, parseVarArgs } from '@salesforce/sf-plugins-core';
-import { SfProvarCommandResult, populateResult, ErrorHandler, Messages, ProvarConfig, parseJSONString, setNestedProperty, errorMessages } from '@provartesting/provardx-plugins-utils';
-
+import * as path from 'node:path';
+import { SfCommand, parseVarArgs, Flags } from '@salesforce/sf-plugins-core';
+import {
+  SfProvarCommandResult,
+  populateResult,
+  ErrorHandler,
+  Messages,
+  parseJSONString,
+  setNestedProperty,
+  errorMessages,
+} from '@provartesting/provardx-plugins-utils';
 
 /**
  * Sets the specified property key and value inside provardx-properties.json
@@ -17,22 +25,27 @@ import { SfProvarCommandResult, populateResult, ErrorHandler, Messages, ProvarCo
  */
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.config.set');
+const messages = Messages.loadMessages('@provartesting/provardx-cli', 'provar.config.set');
 
 export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
   public static readonly strict = false;
+  public static readonly flags = {
+    'file-path': Flags.string({
+      summary: messages.getMessage('flags.file-path.summary'),
+      char: 'f',
+      required: true,
+    }),
+  };
 
   private errorHandler = new ErrorHandler();
 
   public async run(): Promise<SfProvarCommandResult> {
     const { argv, flags } = await this.parse(SfProvarConfigSet);
     // eslint-disable-next-line
-    const config: ProvarConfig = await ProvarConfig.loadConfig(this.errorHandler);
-    const propertiesFilePath = config.get('PROVARDX_PROPERTIES_FILE_PATH')?.toString();
-
+    const propertiesFilePath = path.resolve(flags['file-path']);
     if (propertiesFilePath === undefined || !fileSystem.existsSync(propertiesFilePath)) {
       this.errorHandler.addErrorsToList('MISSING_FILE', errorMessages.MISSING_FILE_ERROR);
       return populateResult(flags, this.errorHandler, messages, this.log.bind(this));
