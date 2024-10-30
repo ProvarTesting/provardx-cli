@@ -20,7 +20,7 @@
     "node-stream-zip": "^1.15.0",
     "@provartesting/provardx-plugins-utils": "1.2.0-vBeta",
     "@provartesting/provardx-plugins-automation": "1.1.0",
-    "@provartesting/provardx-plugins-manager": "1.1.0",
+    "@provartesting/provardx-plugins-manager": "1.2.0-vBeta",
     "sync-request": "^6.1.0",
     "xml-js": "^1.6.11"
   },
