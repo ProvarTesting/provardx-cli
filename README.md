@@ -27,9 +27,11 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 # Commands
 
+- [`sf provar config get`](#sf-provar-config-get)
+- [`sf provar config set`](#sf-provar-config-set)
 - [`sf provar automation config generate`](#sf-provar-automation-config-generate)
-- [`sf provar automation config validate`](#sf-provar-automation-config-validate)
 - [`sf provar automation config load`](#sf-provar-automation-config-load)
+- [`sf provar automation config validate`](#sf-provar-automation-config-validate)
 - [`sf provar automation config get`](#sf-provar-automation-config-get)
 - [`sf provar automation config set`](#sf-provar-automation-config-set)
 - [`sf provar automation setup`](#sf-provar-automation-setup)
@@ -37,7 +39,65 @@ $ sf plugins uninstall @provartesting/provardx-cli
 - [`sf provar automation metadata download`](#sf-provar-automation-metadata-download)
 - [`sf provar automation test run`](#sf-provar-automation-test-run)
 - [`sf provar manager connect`](#sf-provar-manager-connect)
+- [`sf provar manager display`](#sf-provar-manager-display)
+- [`sf provar manager open`](#sf-provar-manager-open)
 - [`sf provar manager testcase retrieve`](#sf-provar-manager-testcase-retrieve)
+- [`sf provar manager test run`](#sf-provar-manager-test-run)
+- [`sf provar manager test run report`](#sf-provar-manager-test-run-report)
+
+## `sf provar config get`
+
+Retrieve a value from the specified JSON file.
+
+```
+USAGE
+  $ sf provar config get -f <value> [--json]
+
+FLAGS
+  -f, --file-path=<value>  (required) File path of the JSON file to get the property value from.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Retrieve a value from the specified JSON file.
+
+EXAMPLES
+  Get the testEnvironment value within the environment property from the config.json file:
+
+    $ sf provar config get environment.testEnvironment -f config.json
+```
+
+## `sf provar config set`
+
+Set one or more properties in the specified JSON file.
+
+```
+USAGE
+  $ sf provar config set [--json]
+
+FLAGS
+  -f, --file-path=<value>  (required) File path of the JSON file to get the property value from.
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Set one or more properties in the specified JSON file.
+
+EXAMPLES
+  Set the environment to “SIT” in the config.json properties file:
+
+    $ sf provar config set environment.testEnvironment="SIT" -f config.json
+
+  Set the testEnvironment to “SIT” and the webBrowser to “Chrome”, within the environment property.
+
+    $ sf provar config set environment.testEnvironment="SIT" environment.webBrowser="Chrome" -f config.json
+
+  Set testCases to a list of test case paths in the config.json properties file.
+
+    $ sf provar config set testCases='["tests/myTestCase.testcase","tests/testSuite1/myTestCase1.testCase"]' -f config.json
+```
 
 ## `sf provar automation config generate`
 
@@ -63,26 +123,6 @@ EXAMPLES
     $ sf provar automation config generate -p provardx-properties.json
 ```
 
-## `sf provar automation config validate`
-
-Check if the loaded properties file has all the required properties set.
-
-```
-USAGE
-  $ sf provar automation config validate [--json]
-
-GLOBAL FLAGS
-  --json  Format output as json.
-
-DESCRIPTION
-  Check if the loaded properties file has all the required properties set.
-
-EXAMPLES
-  Check if the loaded properties file has all the required properties set:
-  
-    $ sf provar automation config validate
-```
-
 ## `sf provar automation config load`
 
 Validate and load a ProvarDX properties file for later use.
@@ -104,6 +144,26 @@ EXAMPLES
   Validate that the myproperties.json file is valid.
 
     $ sf provar automation config load -p myproperties.json
+```
+
+## `sf provar automation config validate`
+
+Check if the loaded properties file has all the required properties set.
+
+```
+USAGE
+  $ sf provar automation config validate [--json]
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Check if the loaded properties file has all the required properties set.
+
+EXAMPLES
+  Check if the loaded properties file has all the required properties set:
+  
+    $ sf provar automation config validate
 ```
 
 ## `sf provar automation config get`
@@ -263,6 +323,46 @@ EXAMPLES
     $ sf provar manager connect -o ProvarManager
 ```
 
+## `sf provar manager display`
+
+Display information about the connected Provar Manager org.
+
+```
+USAGE
+  $ sf provar manager display [--json]
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Display information about the connected Provar Manager org.
+
+EXAMPLES
+  Display information about the connected Provar Manager org:
+
+    $ sf provar manager display
+```
+
+## `sf provar manager open`
+
+Open Provar Manager in a browser.
+
+```
+USAGE
+  $ sf provar manager open [--json]
+
+GLOBAL FLAGS
+  --json  Format output as json.
+
+DESCRIPTION
+  Open Provar Manager in a browser.
+
+EXAMPLES
+  Open Provar Manager in a browser:
+
+    $ sf provar manager open
+```
+
 ## `sf provar manager testcase retrieve`
 
 Retrieve test cases related to the provided user stories (issues) or metadata components, for a given test project.
@@ -302,5 +402,68 @@ EXAMPLES
 
     base/main/default/layouts/Release__c-Release Layout.layout-meta.xml
     base/main/default/objects/Sprint__c/fields/Sprint_Goal__c.field-meta.xml
+
+```
+
+## `sf provar manager test run`
+
+Run tests via Provar Manager.
+
+```
+USAGE
+  $ sf provar manager test run -f <value> [--json] [-y] [-w <value>] [-p <value>] [-o <value>] [-r <value>]
+
+FLAGS
+  -f, --configuration-file=<value>  (required) Path to the configuration file.
+  -o, --output=<value>              Output to a specific file instead of stdout.
+  -p, --polling-interval=<value>    [default: 60] Sets the polling interval in seconds. Default is 60 seconds.
+  -r, --result-format=<value>       [default: human] Format of the test results.
+  -w, --wait=<value>                Sets the polling timeout in minutes.
+  -y, --synchronous                 Runs command synchronously; if not specified, the command is run asynchronously.
+
+GLOBAL FLAGS
+  --json               Format output as json.
+
+DESCRIPTION
+  Run tests via Provar Manager.
+
+EXAMPLES
+  Run tests as per the config/run-grid-test.json configuration file, wait 10 minutes, poll every 30 seconds, and store the results as JSON in the results.json file:
+
+    $ sf provar manager test run -f config/run-grid-tests.json -w 10 -p 30 -r json -o results.json
+
+  Run tests as per the config/run-grid-test.json configuration file, wait 20 minutes, and store the results as JUnit in the junit-results.xml file:
+
+    $ sf provar manager test run -f config/run-grid-tests.json -w 20 -r junit -o junit-results.xml
+
+```
+
+## `sf provar manager test run report`
+
+Check or poll for the status of a test run operation.
+
+```
+USAGE
+  $ sf provar manager test run report -i <value> [--json] [-r <value>] [-o <value>]
+
+FLAGS
+  -i, --test-run=<value>       (required) Test run ID.
+  -o, --output=<value>         Output to a specific file instead of stdout.
+  -r, --result-format=<value>  [default: human] Format of the test results.
+
+GLOBAL FLAGS
+  --json               Format output as json.
+
+DESCRIPTION
+  Check or poll for the status of a test run operation.
+
+EXAMPLES
+  Retrieve results for test run 45f70417-df21-4917-a667-abc2ee46dc63 and store the results as JSON in the results.json file
+
+    $ sf provar manager test run report -i 45f70417-df21-4917-a667-abc2ee46dc63 -r json -o results.json
+
+  Retrieve results for test run 45f70417-df21-4917-a667-abc2ee46dc63 and store the results as JUnit in the junit-results.xml file:
+
+    $ sf provar manager test run report -i 45f70417-df21-4917-a667-abc2ee46dc63 -r junit -o junit-results.xml
 
 ```
