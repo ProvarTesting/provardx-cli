@@ -1,16 +1,16 @@
 # summary
 
-Retrieves a value from the loaded properties file.
+Retrieve a value from the specified JSON file.
 
 # description
 
-Retrieves a value from the loaded properties file.
+Retrieve a value from the specified JSON file.
 
 # examples
 
-- Retrieves a value from the loaded properties file
+-  Get the testEnvironment value within the environment property from the config.json file:
 
-  <%= config.bin %> <%= command.id %> 'key'
+  $ sf provar config get environment.testEnvironment -f config.json
 
 # error.MultipleFailure
 
