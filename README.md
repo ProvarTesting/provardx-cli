@@ -44,6 +44,7 @@ $ sf plugins uninstall @provartesting/provardx-cli
 - [`sf provar manager testcase retrieve`](#sf-provar-manager-testcase-retrieve)
 - [`sf provar manager test run`](#sf-provar-manager-test-run)
 - [`sf provar manager test run report`](#sf-provar-manager-test-run-report)
+- [`sf provar manager test run abort`](#sf-provar-manager-test-run-abort)
 
 ## `sf provar config get`
 
@@ -465,5 +466,33 @@ EXAMPLES
   Retrieve results for test run 45f70417-df21-4917-a667-abc2ee46dc63 and store the results as JUnit in the junit-results.xml file:
 
     $ sf provar manager test run report -i 45f70417-df21-4917-a667-abc2ee46dc63 -r junit -o junit-results.xml
+
+```
+
+## `sf provar manager test run abort`
+
+Abort an in-progress test run triggered via Provar Manager.
+
+```
+USAGE
+  $ sf provar manager test run abort -i <value> [--json] [-p <value>] [-w <value>]
+
+FLAGS
+  -i, --test-run=<value>          (required) Test run ID.
+  -p, --polling-interval=<value>  [default: 30] Sets the polling interval in
+                                  seconds. Default is 30 seconds.
+  -w, --wait=<value>              [default: 2] Sets the polling timeout in
+                                  minutes. Default is 2 minutes.
+
+GLOBAL FLAGS
+  --json               Format output as json.
+
+DESCRIPTION
+  Abort an in-progress test run triggered via Provar Manager.
+
+EXAMPLES
+  Abort test run with ID 45f70417-df21-4917-a667-abc2ee46dc63
+
+    $ sf provar manager test run abort -i 45f70417-df21-4917-a667-abc2ee46dc63
 
 ```
