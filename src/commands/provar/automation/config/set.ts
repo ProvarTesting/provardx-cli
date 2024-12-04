@@ -68,7 +68,7 @@ export default class SfProvarConfigSet extends SfCommand<SfProvarCommandResult> 
         }
       }
       if (this.errorHandler.getErrors().length == 0) {
-        fileSystem.writeFileSync(propertiesFilePath, JSON.stringify(propertyFileContent, null, 3));
+        fileSystem.writeFileSync(propertiesFilePath, JSON.stringify(propertyFileContent, null, 4));
       }
     } catch (err: any) {
       if (err.name === 'InvalidArgumentFormatError') {
