@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: ${{ matrix.nodeversion }}
       - name: 'Cache node_modules'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ matrix.os == 'windows-latest' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\npm-cache' || '~/.npm' }}
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
@@ -119,7 +119,7 @@ jobs:
           sf plugins link .
           yarn run test:nuts
       - name: Archive NUTS results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nuts-report-${{ matrix.os }}
           path: mochawesome-report
