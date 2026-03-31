@@ -22,7 +22,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest" || "macos-latest"')) }}
+        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest"]') }}
         nodeversion: [18]
     runs-on: ${{ matrix.os }}
     steps:
