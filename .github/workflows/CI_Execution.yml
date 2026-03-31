@@ -102,9 +102,9 @@ jobs:
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
-          repository: ProvarTesting/ProvarRegression
+          repository: ProvarTesting/provar-manager-regression
           path: ProvarRegression
-          ref: AnchalGoel
+          ref: PM_Grid_AutomationPack
           token: ${{ secrets.PATREGRESSION }}
       - name: Change permissions
         run: |
