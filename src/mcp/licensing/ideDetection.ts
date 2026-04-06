@@ -44,7 +44,7 @@ function decryptLicenseKeyField(encryptedBase64: string): string | null {
   }
 }
 
-/** Mirrors License4J's DEFAUT_LICENSE_FOLDER_PATH + PROVAR_USER_HOME. */
+/** Mirrors License4J's DEFAULT_LICENSE_FOLDER_PATH + PROVAR_USER_HOME. */
 function provarLicensesDir(): string {
   const provarHome = process.env['PROVAR_HOME'] ?? path.join(os.homedir(), 'Provar');
   return path.join(provarHome, '.licenses');
