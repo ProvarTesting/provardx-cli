@@ -23,7 +23,7 @@ jobs:
     strategy:
       matrix:
         os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest"]') }}
-        nodeversion: [18]
+        nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

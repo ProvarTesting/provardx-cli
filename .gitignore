@@ -4,6 +4,9 @@ tmp/
 # never checkin npm config
 .npmrc
 
+# npm lockfile — this project uses yarn; suppress the warning
+package-lock.json
+
 # debug logs
 npm-error.log
 yarn-error.log
@@ -21,13 +24,11 @@ test/lib
 coverage
 test_session*
 
-# generated docs
-docs
-
 # ignore sfdx-trust files
 *.tgz
 *.sig
 package.json.bak.
+.sfdx
 
 # -- CLEAN ALL
 *.tsbuildinfo
@@ -47,3 +48,9 @@ oclif.manifest.json
 
 #Mocha Report Directory
 mochawesome-report
+.gstack/
+
+# Local environment — never commit real credentials
+.env
+.env.local
+.env.*.local
