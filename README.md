@@ -105,7 +105,6 @@ DESCRIPTION
   Note: --json is not available on this command — stdout is reserved for MCP traffic.
 
 TOOLS EXPOSED
-  provardx.ping                        — sanity-check: echo back a message
   provar.project.inspect               — inspect project folder inventory
   provar.pageobject.generate           — generate Java Page Object skeleton
   provar.pageobject.validate           — validate Page Object quality (30+ rules)

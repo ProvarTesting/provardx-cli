@@ -1,10 +1,16 @@
 // MCP smoke test — runs sf provar mcp start as a subprocess and exercises all tools via JSON-RPC
 //
 // PASS = JSON-RPC result received (tool responded; content may still contain an error code — that's fine)
-// FAIL = JSON-RPC error (protocol-level: unknown method, missing required arg, server crash)
+// FAIL = JSON-RPC error (protocol-level: unknown method, missing required arg, server crash, timeout)
 //
 // Usage:  node scripts/mcp-smoke.cjs [2>$null]
 // Note:   Run with stderr suppressed to avoid sf update warnings mixing into output.
+//
+// Env flags:
+//   SMOKE_REQUEST_TIMEOUT_MS  Per-request timeout in ms (default: 30000)
+//   SMOKE_OVERALL_TIMEOUT_MS  Hard deadline for the whole run in ms (default: 120000)
+//   SMOKE_INCLUDE_SETUP       Set to "1" to include provar.automation.setup (may download
+//                             binaries if no Provar install is found — disabled by default)
 
 const { spawn } = require('child_process');
 const readline = require('readline');
@@ -12,6 +18,9 @@ const os = require('os');
 const path = require('path');
 
 const TMP = os.tmpdir();
+const REQUEST_TIMEOUT_MS = Number(process.env['SMOKE_REQUEST_TIMEOUT_MS'] ?? 30_000);
+const OVERALL_TIMEOUT_MS = Number(process.env['SMOKE_OVERALL_TIMEOUT_MS'] ?? 120_000);
+const INCLUDE_SETUP = process.env['SMOKE_INCLUDE_SETUP'] === '1';
 
 // ----------------------------------------------------------------------------
 // Server process
@@ -27,7 +36,7 @@ const server = spawn('sf', ['provar', 'mcp', 'start', '--allowed-paths', TMP], {
 
 const rl = readline.createInterface({ input: server.stdout });
 let msgId = 0;
-const pending = new Map();
+const pending = new Map(); // id → { label, resolve, timer }
 const results = [];
 
 rl.on('line', (line) => {
@@ -36,7 +45,8 @@ rl.on('line', (line) => {
   try { msg = JSON.parse(line); } catch { return; }
 
   if (msg.id !== undefined && pending.has(msg.id)) {
-    const { label, resolve } = pending.get(msg.id);
+    const { label, resolve, timer } = pending.get(msg.id);
+    clearTimeout(timer);
     pending.delete(msg.id);
     const ok = !msg.error;
     results.push({ label, ok, data: msg.error || msg.result });
@@ -45,24 +55,45 @@ rl.on('line', (line) => {
 });
 
 // ----------------------------------------------------------------------------
-// RPC helpers
+// Overall hard deadline — kills the server so CI never hangs indefinitely
 // ----------------------------------------------------------------------------
-function send(method, params) {
+const overallTimer = setTimeout(() => {
+  console.error(`\nFATAL: overall timeout of ${OVERALL_TIMEOUT_MS}ms exceeded — aborting`);
+  // Mark every still-pending call as timed out
+  for (const [, { label, resolve }] of pending) {
+    results.push({ label, ok: false, data: { message: `overall timeout (${OVERALL_TIMEOUT_MS}ms)` } });
+    resolve();
+  }
+  pending.clear();
+  server.kill();
+}, OVERALL_TIMEOUT_MS);
+overallTimer.unref(); // don't prevent natural exit if tests finish early
+
+// ----------------------------------------------------------------------------
+// RPC helpers (with per-request timeout)
+// ----------------------------------------------------------------------------
+function rpc(label, method, params) {
   return new Promise((resolve) => {
     const id = ++msgId;
-    pending.set(id, { label: method, resolve });
+    const timer = setTimeout(() => {
+      if (!pending.has(id)) return;
+      pending.delete(id);
+      results.push({ label, ok: false, data: { message: `request timeout (${REQUEST_TIMEOUT_MS}ms)` } });
+      console.error(`  TIMEOUT: ${label} did not respond within ${REQUEST_TIMEOUT_MS}ms`);
+      server.kill(); // kill so the process exits rather than hanging
+      resolve();
+    }, REQUEST_TIMEOUT_MS);
+    pending.set(id, { label, resolve, timer });
     server.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });
 }
 
+function send(method, params) {
+  return rpc(method, method, params);
+}
+
 function callTool(name, args) {
-  return new Promise((resolve) => {
-    const id = ++msgId;
-    pending.set(id, { label: name, resolve });
-    server.stdin.write(
-      JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } }) + '\n'
-    );
-  });
+  return rpc(name, 'tools/call', { name, arguments: args });
 }
 
 // ----------------------------------------------------------------------------
@@ -187,8 +218,12 @@ async function runTests() {
   });
 
   // ── 24. provar.automation.setup ───────────────────────────────────────────
-  // Detects existing Provar installs; no network call if found
-  await callTool('provar.automation.setup', {});
+  // Skipped by default: when no Provar installation is found on the CI runner,
+  // this tool downloads the full Provar binary (~200 MB), which is a destructive
+  // side effect in a smoke test. Enable with SMOKE_INCLUDE_SETUP=1.
+  if (INCLUDE_SETUP) {
+    await callTool('provar.automation.setup', {});
+  }
 
   // ── 25. provar.automation.metadata.download ───────────────────────────────
   await callTool('provar.automation.metadata.download', {});
@@ -239,7 +274,9 @@ async function runTests() {
 // Results
 // ----------------------------------------------------------------------------
 server.on('close', () => {
-  const TOTAL_EXPECTED = 34; // initialize + tools/list + 32 tools
+  clearTimeout(overallTimer);
+  // initialize + tools/list + 32 tools (setup excluded from default count)
+  const TOTAL_EXPECTED = 33 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 
