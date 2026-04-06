@@ -99,6 +99,8 @@ jobs:
         run: |
            sf plugins link .
            yarn prepack
+      - name: MCP smoke test
+        run: node scripts/mcp-smoke.cjs
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
