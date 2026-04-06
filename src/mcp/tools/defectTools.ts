@@ -45,32 +45,45 @@ interface FailureContext {
 
 // ── SF CLI helpers ─────────────────────────────────────────────────────────────
 
-function runSfArgs(args: string[]): { stdout: string; exitCode: number } {
-  const { stdout, exitCode } = runSfCommand(args);
-  return { stdout, exitCode };
+function runSfArgs(args: string[]): { stdout: string; stderr: string; exitCode: number } {
+  const { stdout, stderr, exitCode } = runSfCommand(args);
+  return { stdout, stderr, exitCode };
+}
+
+function formatSfCommandError(action: string, exitCode: number, stderr: string, stdout: string): string {
+  const details = [stderr?.trim(), stdout?.trim()].filter(Boolean).join('\n');
+  return details
+    ? `${action} failed with exit code ${exitCode}: ${details}`
+    : `${action} failed with exit code ${exitCode}`;
 }
 
 function runQuery(soql: string, targetOrg: string): SfQueryResponse {
-  const { stdout } = runSfArgs([
+  const { stdout, stderr, exitCode } = runSfArgs([
     'data', 'query',
     '--query', soql,
     '--target-org', targetOrg,
     '--json',
   ]);
+  if (exitCode !== 0) {
+    throw new Error(formatSfCommandError('Salesforce query', exitCode, stderr, stdout));
+  }
   return JSON.parse(stdout) as SfQueryResponse;
 }
 
 function createRecord(sobject: string, values: string, targetOrg: string): string {
-  const { stdout } = runSfArgs([
+  const { stdout, stderr, exitCode } = runSfArgs([
     'data', 'create', 'record',
     '--sobject', sobject,
     '--values', values,
     '--target-org', targetOrg,
     '--json',
   ]);
+  if (exitCode !== 0) {
+    throw new Error(formatSfCommandError(`Failed to create ${sobject}`, exitCode, stderr, stdout));
+  }
   const parsed = JSON.parse(stdout) as SfCreateResponse;
   if (!parsed.result?.success) {
-    throw new Error(`Failed to create ${sobject}: ${stdout}`);
+    throw new Error(formatSfCommandError(`Failed to create ${sobject}`, exitCode, stderr, stdout));
   }
   return parsed.result.id;
 }
