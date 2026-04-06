@@ -9,7 +9,7 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
-    "@oclif/core": "^3.26.2",
+    "@oclif/core": "^3.27.0",
     "@provartesting/provardx-plugins-automation": "1.2.2",
     "@provartesting/provardx-plugins-manager": "1.3.2",
     "@provartesting/provardx-plugins-utils": "1.3.3",
