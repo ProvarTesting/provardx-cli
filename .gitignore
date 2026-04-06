@@ -54,3 +54,6 @@ mochawesome-report
 .env
 .env.local
 .env.*.local
+
+# Claude
+.claude/skills
