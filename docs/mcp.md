@@ -126,11 +126,11 @@ Any MCP client that supports the **stdio transport** can use this server. Point 
 
 ---
 
-## Licence requirement
+## License requirement
 
-The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated licence. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one licence is in the `Activated` state and was last verified online within the past 48 hours.
+The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one icense is in the `Activated` state and was last verified online within the past 48 hours.
 
-If the licence check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the licence online, then retry.
+If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
 
 ---
 
