@@ -134,7 +134,11 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     return finalize(issues, null, null, 0, xmlContent, testName);
   }
 
-  const tc = parsed['testCase'] as Record<string, unknown>;
+  // fast-xml-parser yields '' for a self-closing element with no attributes (e.g. <testCase/>).
+  // Normalise to a plain object so subsequent `'key' in tc` checks don't throw.
+  const rawTc = parsed['testCase'];
+  const tc: Record<string, unknown> =
+    rawTc !== null && typeof rawTc === 'object' ? (rawTc as Record<string, unknown>) : {};
   const tcId = (tc['@_id'] as string | undefined) ?? null;
   const tcName = (tc['@_name'] as string | undefined) ?? null;
   const tcGuid = tc['@_guid'] as string | undefined;
@@ -178,7 +182,10 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     return finalize(issues, tcId, tcName, 0, xmlContent, testName);
   }
 
-  const steps = tc['steps'] as Record<string, unknown>;
+  // Same self-closing guard for <steps/> → fast-xml-parser yields ''
+  const rawSteps = tc['steps'];
+  const steps: Record<string, unknown> =
+    rawSteps !== null && typeof rawSteps === 'object' ? (rawSteps as Record<string, unknown>) : {};
   const rawApiCalls = steps['apiCall'];
   const apiCalls: Array<Record<string, unknown>> = rawApiCalls
     ? (Array.isArray(rawApiCalls) ? rawApiCalls : [rawApiCalls]) as Array<Record<string, unknown>>

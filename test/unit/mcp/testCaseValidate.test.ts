@@ -102,4 +102,26 @@ describe('validateTestCase', () => {
       assert.ok(r.validity_score >= 0);
     });
   });
+
+  describe('self-closing element handling', () => {
+    // fast-xml-parser yields '' for a self-closing element with no attributes.
+    // These must not throw "Cannot use 'in' operator to search for '...' in ''"
+
+    it('does not throw on bare <testCase/> — reports schema errors gracefully', () => {
+      assert.doesNotThrow(() => validateTestCase('<testCase/>'));
+      const r = validateTestCase('<testCase/>');
+      assert.ok(r.error_count > 0, 'Expected schema errors for bare <testCase/>');
+      assert.ok(r.validity_score >= 0);
+    });
+
+    it('does not throw on a <testCase> with self-closing <steps/>', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="t1" guid="${GUID_TC}" name="SelfClosingSteps">
+  <steps/>
+</testCase>`;
+      assert.doesNotThrow(() => validateTestCase(xml));
+      const r = validateTestCase(xml);
+      assert.equal(r.step_count, 0);
+    });
+  });
 });

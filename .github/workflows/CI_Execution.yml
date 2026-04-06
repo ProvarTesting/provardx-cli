@@ -39,7 +39,7 @@ jobs:
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
       - name: 'sf installation'
         run: |
-          npm install -g @salesforce/cli 
+          npm install -g @salesforce/cli
 
       - name: Determine Branch Name
         if: matrix.os == 'windows-latest'
@@ -49,7 +49,7 @@ jobs:
           } else {
             echo "BRANCH_NAME=$(echo $env:GITHUB_REF -replace 'refs/heads/', '')" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
-          
+
       - name: Determine Branch Name for Ubuntu/Mac
         if: matrix.os != 'windows-latest'
         run: |
@@ -88,17 +88,23 @@ jobs:
           token: ${{ secrets.PATUTILS }}
       - name: Utils build and link
         run: |
-            cd utils
-            yarn && yarn prepack
-            yarn link
+          cd utils
+          yarn && yarn prepack
+          yarn link
       - name: Install Dependencies
         run: yarn
       - name: Link utils package
         run: yarn link @provartesting/provardx-plugins-utils
       - name: Build the project
         run: |
-           sf plugins link .
-           yarn prepack
+          sf plugins link .
+          yarn prepack
+      - name: MCP smoke test
+        timeout-minutes: 5
+        env:
+          NODE_ENV: test
+          PROVAR_DEV_WHITELIST_KEYS: ${{ secrets.PROVAR_DEV_WHITELIST_KEYS }}
+        run: node scripts/mcp-smoke.cjs
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
