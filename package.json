@@ -11,7 +11,7 @@
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@oclif/core": "^3.26.2",
     "@provartesting/provardx-plugins-automation": "1.2.2-dev.0",
-    "@provartesting/provardx-plugins-manager": "1.3.2-dev.0",
+    "@provartesting/provardx-plugins-manager": "1.3.2-dev.1",
     "@provartesting/provardx-plugins-utils": "1.3.2-dev.0",
     "@salesforce/core": "^6.5.1",
     "@salesforce/kit": "^3.0.15",
@@ -70,11 +70,22 @@
           "mcp": {
             "description": "Commands to start and manage the Provar MCP server."
           },
+          "config": {
+            "description": "Commands to manage ProvarDX property configuration files."
+          },
+          "manager": {
+            "description": "Commands to connect and interact with Provar Quality Hub."
+          },
           "quality-hub": {
             "description": "Commands to connect and interact with Provar Quality Hub.",
             "subtopics": {
               "test": {
-                "description": "Operations related to Quality Hub test runs."
+                "description": "Operations related to Quality Hub test runs.",
+                "subtopics": {
+                  "run": {
+                    "description": "Commands to launch, monitor, abort, and report on Quality Hub test runs."
+                  }
+                }
               },
               "testcase": {
                 "description": "Operations related to Quality Hub test cases."
@@ -82,21 +93,19 @@
             }
           },
           "automation": {
-            "description": "These commands are used to interact with Provar Automation.",
+            "description": "Commands to interact with Provar Automation.",
             "subtopics": {
               "config": {
-                "description": "commands to generate and manipulate provardx-properties file."
+                "description": "Commands to generate and manage the provardx-properties configuration file."
               },
-              "subtopics": {
-                "metadata": {
-                  "description": "commands to download metadata for required connections."
-                }
+              "metadata": {
+                "description": "Commands to download required metadata for Salesforce connections."
               },
               "test": {
-                "description": "Operations related to test run."
+                "description": "Commands to execute and manage Provar Automation test runs."
               },
               "project": {
-                "description": "Compile the project."
+                "description": "Commands to compile and manage Provar Automation projects."
               }
             }
           }
