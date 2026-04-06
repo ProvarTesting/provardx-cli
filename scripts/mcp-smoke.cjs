@@ -19,6 +19,10 @@ const TMP = os.tmpdir();
 const server = spawn('sf', ['provar', 'mcp', 'start', '--allowed-paths', TMP], {
   stdio: ['pipe', 'pipe', 'inherit'],
   shell: true,
+  env: {
+    ...process.env,
+    PROVAR_DEV_WHITELIST_KEYS: process.env.PROVAR_DEV_WHITELIST_KEYS || 'true',
+  },
 });
 
 const rl = readline.createInterface({ input: server.stdout });
