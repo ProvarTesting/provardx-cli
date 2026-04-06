@@ -28,7 +28,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     },
     ({ content, xml, file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testcase.validate', { requestId, has_content: !!content, file_path });
+      log('info', 'provar.testcase.validate', { requestId, has_content: !!(content ?? xml), file_path });
 
       try {
         // Resolve xml alias: the batch validation API uses "xml", MCP originally used "content"
