@@ -1847,25 +1847,25 @@
   resolved "https://registry.npmjs.org/@pkgjs/parseargs/-/parseargs-0.11.0.tgz"
   integrity sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==
 
-"@provartesting/provardx-plugins-automation@1.2.2-dev.0":
-  version "1.2.2-dev.0"
-  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-automation/-/provardx-plugins-automation-1.2.2-dev.0.tgz#f35bcd74e43b5e75f8a47fa9ac201d2952c792e8"
-  integrity sha512-U3GP8nq8GExewdeh+Gp2Uj6PISSObbHvvhtt8CD7M0+9YbtBlGwfOccj+Bu/tuwly7D0gDAFQWovNJWv5/nnNA==
+"@provartesting/provardx-plugins-automation@1.2.2":
+  version "1.2.2"
+  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-automation/-/provardx-plugins-automation-1.2.2.tgz#db3c83a6449ea5d3dd0bb68fd72db77fd67ee1ee"
+  integrity sha512-HXCn85ZPXNDa4tUQYGUVpGjZNQPhbgBBiJ9P4NyTnpD0t2HZ+RbZlQUcmCw0P+HV9wxxHVJZNdT21xV6ICTbhA==
   dependencies:
-    "@oclif/core" "^3.26.2"
-    "@provartesting/provardx-plugins-utils" "1.3.1"
+    "@oclif/core" "^3.27.0"
+    "@provartesting/provardx-plugins-utils" "1.3.3"
     "@salesforce/core" "^7.2.0"
-    "@salesforce/sf-plugins-core" "^9.0.1"
+    "@salesforce/sf-plugins-core" "^9.1.1"
     axios "^1.13.5"
     xml-js "^1.6.11"
 
-"@provartesting/provardx-plugins-manager@1.3.2-dev.1":
-  version "1.3.2-dev.1"
-  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-manager/-/provardx-plugins-manager-1.3.2-dev.1.tgz#f41edadb9d3fac2ef40becbbd3a9174d420386b1"
-  integrity sha512-kooH2Cd+NFT7XB6iWL7AP21K1oT2BF4uwjMSRxq+4p9kLOIUEfPvlTVTBJfh/lxDt124SJQl5hvRKy8ANp35qw==
+"@provartesting/provardx-plugins-manager@1.3.2":
+  version "1.3.2"
+  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-manager/-/provardx-plugins-manager-1.3.2.tgz#bad2bebf2eb2ffed7928747288593faecf47f026"
+  integrity sha512-ZBreiTbzB7Ur+CAyKxN9dh00KCj5XuPRi2wSRooujmuRPHrDfLPZc/pNV+XEUjGHvwWXxRwF3KByvrxLSs28lQ==
   dependencies:
     "@oclif/core" "^3.26.2"
-    "@provartesting/provardx-plugins-utils" "1.3.1"
+    "@provartesting/provardx-plugins-utils" "1.3.3"
     "@salesforce/core" "^7.2.0"
     "@salesforce/kit" "^3.2.2"
     "@salesforce/sf-plugins-core" "^9.0.1"
@@ -1875,22 +1875,10 @@
     xml2js "^0.6.2"
     xmlbuilder2 "^3.1.1"
 
-"@provartesting/provardx-plugins-utils@1.3.1":
-  version "1.3.1"
-  resolved "https://registry.npmjs.org/@provartesting/provardx-plugins-utils/-/provardx-plugins-utils-1.3.1.tgz"
-  integrity sha512-lhGRqDgMCDY0hUyiSIUmXRIu8NFFHI50HYMECF/jXVYIu7GLmp1Tkyx7o8yQ1oH12TVyjsoGwmhe9Uw95sRE4w==
-  dependencies:
-    "@oclif/core" "^3.26.2"
-    "@salesforce/core" "^7.2.0"
-    "@salesforce/sf-plugins-core" "^9.0.1"
-    cli-ux "^6.0.9"
-    jsonschema "^1.4.1"
-    node-stream-zip "^1.15.0"
-
-"@provartesting/provardx-plugins-utils@1.3.2-dev.0":
-  version "1.3.2-dev.0"
-  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-utils/-/provardx-plugins-utils-1.3.2-dev.0.tgz#1d0a5ad5f4b7b364019cb8b5bc960b71d468142e"
-  integrity sha512-GXrzQSjMvWeAbPurnS9TrlPURoAejxGHA0/8NyiI7JYM27qP4TJEj6NOeRfqERwwiUPw4WkLpzaGFpXjAqaJUA==
+"@provartesting/provardx-plugins-utils@1.3.3":
+  version "1.3.3"
+  resolved "https://registry.yarnpkg.com/@provartesting/provardx-plugins-utils/-/provardx-plugins-utils-1.3.3.tgz#66b904c4edd70b10cabfb98e24d61ff2a18f18dc"
+  integrity sha512-+R4rWTy/aHJhykwev6iUCTOhW1hnkt1M/zOAk16SGdrOU9BWUBWTIU1jTLdLJeOTv8yGSoWrAfeTScSbwTL2mw==
   dependencies:
     "@oclif/core" "^3.27.0"
     "@salesforce/core" "^7.2.0"
