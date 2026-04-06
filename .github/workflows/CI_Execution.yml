@@ -22,8 +22,8 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: ${{ fromJSON(format('[{0}]', inputs.OS || '"ubuntu-latest" || "macos-latest"')) }}
-        nodeversion: [18]
+        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest"]') }}
+        nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: ${{ matrix.nodeversion }}
       - name: 'Cache node_modules'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ matrix.os == 'windows-latest' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\npm-cache' || '~/.npm' }}
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
@@ -102,9 +102,9 @@ jobs:
       - name: Check out Regression repo
         uses: actions/checkout@v4
         with:
-          repository: ProvarTesting/ProvarRegression
+          repository: ProvarTesting/provar-manager-regression
           path: ProvarRegression
-          ref: AnchalGoel
+          ref: PM_Grid_AutomationPack
           token: ${{ secrets.PATREGRESSION }}
       - name: Change permissions
         run: |
@@ -119,7 +119,7 @@ jobs:
           sf plugins link .
           yarn run test:nuts
       - name: Archive NUTS results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: nuts-report-${{ matrix.os }}
           path: mochawesome-report

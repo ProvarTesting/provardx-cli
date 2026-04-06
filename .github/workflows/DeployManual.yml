@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'tag name e.g. beta, latest etc.'
+        description: "tag name e.g. beta, latest etc."
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,11 +13,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
-          registry-url: 'https://registry.npmjs.org'
-          scope: '@provartesting'
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+          scope: "@provartesting"
       - name: Install dependencies and build
         run: |
           npm install -g @salesforce/cli
@@ -28,6 +28,7 @@ jobs:
           cat /home/runner/work/_temp/.npmrc
           cat $NPM_CONFIG_USERCONFIG
       - name: Publish package on NPM
-        run: yarn publish --tag ${{ inputs.tag }}
+        run: npm publish --tag "$TAG" --access public
         env:
+          TAG: ${{ github.event.inputs.tag || 'latest' }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
