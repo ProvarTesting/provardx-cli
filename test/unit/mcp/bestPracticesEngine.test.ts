@@ -128,7 +128,7 @@ describe('runBestPractices', () => {
 
     it('returns rules_evaluated > 0 when rules are loaded', () => {
       const result = runBestPractices(VALID_XML);
-      assert.ok(result.rules_evaluated >= 0, 'rules_evaluated should be a non-negative integer');
+      assert.ok(result.rules_evaluated > 0, 'rules_evaluated should be greater than 0 when rules are loaded');
     });
 
     it('returns violations as an array', () => {

@@ -26,11 +26,13 @@ export class PathPolicyError extends Error {
  * When allowedPaths is empty, all paths are permitted (unrestricted mode).
  */
 export function assertPathAllowed(filePath: string, allowedPaths: string[]): void {
-  if (filePath.includes('..')) {
+  // Check the original path for `..` segments before any normalization resolves them away
+  const rawSegments = filePath.split(/[/\\]+/).filter((s) => s.length > 0);
+  if (rawSegments.some((s) => s === '..')) {
     throw new PathPolicyError('PATH_TRAVERSAL', `Path traversal detected: ${filePath}`);
   }
   const resolved = path.resolve(filePath);
-  const resolvedAllowed = allowedPaths.map((p) => path.resolve(p));
+  const resolvedAllowed = allowedPaths.map((p) => path.resolve(path.normalize(p)));
   if (
     resolvedAllowed.length > 0 &&
     !resolvedAllowed.some((base) => resolved === base || resolved.startsWith(base + path.sep))

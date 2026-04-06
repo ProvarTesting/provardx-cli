@@ -1,0 +1,344 @@
+[
+  {
+    "id": "PO_001",
+    "name": "Missing package declaration",
+    "description": "Page Object is missing a package declaration.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Add 'package pageobjects;' at the top of the file."
+  },
+  {
+    "id": "PO_002",
+    "name": "Invalid package name",
+    "description": "Package name format is invalid.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Package names should be valid Java identifiers separated by dots (e.g., 'pageobjects' or 'pageobjects.MySubFolder')."
+  },
+  {
+    "id": "PO_003",
+    "name": "Missing class declaration",
+    "description": "Could not find public class declaration.",
+    "penalty": 25,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Ensure the file has a 'public class ClassName' declaration."
+  },
+  {
+    "id": "PO_004",
+    "name": "Class name not PascalCase",
+    "description": "Class name should follow PascalCase naming convention.",
+    "penalty": 8,
+    "severity": "WARNING",
+    "appliesTo": "class",
+    "suggestion": "Rename class to use PascalCase (e.g., 'MyPageObject')."
+  },
+  {
+    "id": "PO_005",
+    "name": "Invalid class name",
+    "description": "Class name is not a valid Java identifier.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Class names must start with a letter, $, or _ and contain only letters, digits, $, or _."
+  },
+  {
+    "id": "PO_006",
+    "name": "Class name mismatch",
+    "description": "Class name does not match the expected filename.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Class name must match the filename."
+  },
+  {
+    "id": "PO_012",
+    "name": "Missing Provar annotations import",
+    "description": "Missing import for Provar annotations.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "class",
+    "suggestion": "Add 'import com.provar.core.testapi.annotations.*;'"
+  },
+  {
+    "id": "PO_020",
+    "name": "Missing @Page annotation",
+    "description": "Missing @Page or @SalesforcePage annotation.",
+    "penalty": 12,
+    "severity": "WARNING",
+    "appliesTo": "annotation",
+    "suggestion": "Add @Page annotation before the class declaration."
+  },
+  {
+    "id": "PO_021",
+    "name": "@Page missing title",
+    "description": "@Page annotation missing 'title' attribute.",
+    "penalty": 8,
+    "severity": "WARNING",
+    "appliesTo": "annotation",
+    "suggestion": "Add title attribute to @Page annotation."
+  },
+  {
+    "id": "PO_022",
+    "name": "@SalesforcePage missing required attribute",
+    "description": "@SalesforcePage annotation missing required 'title' or 'connection' attribute.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "annotation",
+    "suggestion": "Add required attributes to @SalesforcePage annotation."
+  },
+  {
+    "id": "PO_023",
+    "name": "@SalesforcePage missing page type",
+    "description": "@SalesforcePage should specify page type attribute.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "annotation",
+    "suggestion": "Add one of: page, auraComponent, object, or lightningWebComponent attribute."
+  },
+  {
+    "id": "PO_030",
+    "name": "No fields found",
+    "description": "No WebElement or WebComponent fields found in Page Object.",
+    "penalty": 12,
+    "severity": "WARNING",
+    "appliesTo": "class",
+    "suggestion": "Add at least one WebElement field with @FindBy locator and type annotation."
+  },
+  {
+    "id": "PO_031",
+    "name": "Duplicate field name",
+    "description": "Duplicate field name found within the same scope.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Rename one of the duplicate fields."
+  },
+  {
+    "id": "PO_032",
+    "name": "Invalid field name",
+    "description": "Field name is not a valid Java identifier.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Field names must be valid Java identifiers."
+  },
+  {
+    "id": "PO_033",
+    "name": "Reserved word field name",
+    "description": "Field name is a Java reserved word.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Rename field to avoid Java reserved words."
+  },
+  {
+    "id": "PO_034",
+    "name": "Invalid locator strategy",
+    "description": "Invalid locator strategy used in @FindBy annotation.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Use one of: xpath, id, css, name, className, tagName, linkText, partialLinkText, visualforce, label."
+  },
+  {
+    "id": "PO_035",
+    "name": "Empty locator",
+    "description": "Empty locator value for field (AI healing will populate at runtime).",
+    "penalty": 2,
+    "severity": "INFO",
+    "appliesTo": "field",
+    "suggestion": "Consider providing an initial locator value."
+  },
+  {
+    "id": "PO_036",
+    "name": "Invalid element type annotation",
+    "description": "Element type annotation is not a valid Provar type (e.g., @LookupType is not valid).",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Use a valid Provar element type: TextType, ButtonType, LinkType, ChoiceListType, RadioType, FileType, DateType, RichTextType, BooleanType (NOTE: CheckboxType is invalid). For lookup/reference fields, use @TextType()."
+  },
+  {
+    "id": "PO_040",
+    "name": "Duplicate frame class name",
+    "description": "Duplicate @PageFrame class name found.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "frame",
+    "suggestion": "Rename one of the duplicate frame classes."
+  },
+  {
+    "id": "PO_041",
+    "name": "Frame class not PascalCase",
+    "description": "Frame class name should follow PascalCase naming convention.",
+    "penalty": 8,
+    "severity": "WARNING",
+    "appliesTo": "frame",
+    "suggestion": "Rename frame class to use PascalCase."
+  },
+  {
+    "id": "PO_050",
+    "name": "Missing semicolon",
+    "description": "Possible missing semicolon after field declaration.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Add semicolon after field declaration."
+  },
+  {
+    "id": "PO_051",
+    "name": "Unclosed string literal",
+    "description": "Possible unclosed string literal.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Check for missing closing quote."
+  },
+  {
+    "id": "PO_060",
+    "name": "Mismatched braces",
+    "description": "Mismatched opening and closing braces.",
+    "penalty": 25,
+    "severity": "ERROR",
+    "appliesTo": "class",
+    "suggestion": "Check for missing or extra curly braces."
+  },
+  {
+    "id": "PO_070",
+    "name": "ID-based locator",
+    "description": "Using 'id' locator strategy in Salesforce Lightning. IDs are often dynamically generated and unreliable.",
+    "penalty": 15,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Prefer xpath/css with stable attributes like data-testid, aria-label, name, or label-based locators."
+  },
+  {
+    "id": "PO_071",
+    "name": "Absolute XPath",
+    "description": "Absolute XPath starting from /html or /body. These break with any DOM structure change.",
+    "penalty": 20,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Use relative XPath starting with // or .// anchored to stable elements."
+  },
+  {
+    "id": "PO_072",
+    "name": "Indexed XPath",
+    "description": "XPath with numeric positional indexes like [1], [2], etc. These are brittle as they break when elements are added/removed.",
+    "penalty": 8,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Prefer attribute-based selection instead of positional indexes [n]."
+  },
+  {
+    "id": "PO_073",
+    "name": "Salesforce dynamic attribute",
+    "description": "Locators using Salesforce dynamic/Aura attributes (data-aura-rendered-by, aura-id, etc.). These change on every render and cause test flakiness.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Remove dynamic Aura attributes; use stable identifiers like labels, data-testid, or semantic selectors."
+  },
+  {
+    "id": "PO_074",
+    "name": "Hardcoded Salesforce ID",
+    "description": "Hardcoded Salesforce record IDs (15 or 18 character). These make tests environment-specific and non-portable.",
+    "penalty": 18,
+    "severity": "ERROR",
+    "appliesTo": "field",
+    "suggestion": "Remove hardcoded IDs; use dynamic data or environment-independent locators."
+  },
+  {
+    "id": "PO_075",
+    "name": "Unstable class pattern",
+    "description": "CSS class patterns that appear autogenerated or framework-specific. These classes often change with framework updates.",
+    "penalty": 5,
+    "severity": "INFO",
+    "appliesTo": "field",
+    "suggestion": "Prefer stable attributes over autogenerated CSS classes."
+  },
+  {
+    "id": "PO_076",
+    "name": "Complex XPath",
+    "description": "Overly complex XPath expressions with many path segments, axes, or predicates. Complex XPaths are harder to maintain and more likely to break.",
+    "penalty": 12,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Consider simplifying by using a more direct path, anchor + relative pattern, or data-testid attributes."
+  },
+  {
+    "id": "PO_077",
+    "name": "Text-based locator",
+    "description": "Locators that rely primarily on text content. Text-based locators may match multiple elements, fail with i18n changes, or break when labels are updated.",
+    "penalty": 5,
+    "severity": "INFO",
+    "appliesTo": "field",
+    "suggestion": "Combine text matching with other stable attributes; consider data-testid or aria-label."
+  },
+  {
+    "id": "PO_078",
+    "name": "Long locator",
+    "description": "Excessively long locators (>200 chars). Very long locators are harder to maintain and often indicate over-specification.",
+    "penalty": 3,
+    "severity": "INFO",
+    "appliesTo": "field",
+    "suggestion": "Consider using a shorter, more maintainable locator anchored to stable elements."
+  },
+  {
+    "id": "PO_079",
+    "name": "Position function in XPath",
+    "description": "XPath using position functions like last(), first(), position(). Position functions create fragile locators that break when DOM order changes.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Avoid position-based selection; use unique identifiers like @id, @data-testid, or aria attributes."
+  },
+  {
+    "id": "PO_080",
+    "name": "Commented code detected",
+    "description": "Page Object contains commented-out code. Commented code adds clutter and may indicate incomplete refactoring.",
+    "penalty": 2,
+    "severity": "INFO",
+    "appliesTo": "class",
+    "suggestion": "Remove commented code. Use version control to track code history instead."
+  },
+  {
+    "id": "PO_081",
+    "name": "Inline locator in method",
+    "description": "Locator defined inline within a method body using By.xpath(), By.id(), etc. Inline locators reduce maintainability and reusability.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "method",
+    "suggestion": "Extract inline locators to @FindBy WebElement fields at the class level for better maintainability and reuse."
+  },
+  {
+    "id": "PO_082",
+    "name": "Visualforce indexed component",
+    "description": "VisualforceBy locator uses positional index like [1], [2], [3]. Indexed locators break when page structure changes.",
+    "penalty": 8,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Use @id, @value, or @action attributes instead of positional indexes in componentXPath."
+  },
+  {
+    "id": "PO_083",
+    "name": "Visualforce not(@id) pattern",
+    "description": "VisualforceBy locator uses not(@id) pattern which matches any element without an ID. This is fragile and non-specific.",
+    "penalty": 10,
+    "severity": "WARNING",
+    "appliesTo": "field",
+    "suggestion": "Request developers add unique IDs to Visualforce components, or use more specific attributes like @value or @action."
+  },
+  {
+    "id": "PO_084",
+    "name": "Visualforce complex path",
+    "description": "VisualforceBy componentXPath contains complex nested path with multiple descendant selectors. Complex paths are harder to maintain.",
+    "penalty": 5,
+    "severity": "INFO",
+    "appliesTo": "field",
+    "suggestion": "Simplify the componentXPath by targeting a more specific ancestor component with @id or unique attributes."
+  }
+]

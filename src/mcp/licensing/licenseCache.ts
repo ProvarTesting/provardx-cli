@@ -16,7 +16,7 @@ export interface CacheEntry {
   keyHash: string;
   valid: boolean;
   licenseType: LicenseType;
-  checkedAt: number;   // Unix ms timestamp of last successful ALGAS check
+  checkedAt: number;   // Unix ms timestamp of last successful validation check
   expiresAt?: number;  // Optional license expiry from ALGAS response (Unix ms)
 }
 

@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { sfSpawnHelper } from './sfSpawn.js';
+import { runSfCommand, soqlEscape } from './sfSpawn.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -43,27 +43,11 @@ interface FailureContext {
   environment: string;
 }
 
-// ── Errors ─────────────────────────────────────────────────────────────────────
-
-class SfNotFoundError extends Error {
-  public readonly code = 'SF_NOT_FOUND';
-  public constructor() {
-    super(
-      'sf CLI not found in PATH. Install Salesforce CLI (`npm install -g @salesforce/cli`) and ensure it is in your PATH.'
-    );
-  }
-}
-
 // ── SF CLI helpers ─────────────────────────────────────────────────────────────
 
 function runSfArgs(args: string[]): { stdout: string; exitCode: number } {
-  const result = sfSpawnHelper.spawnSync('sf', args, { encoding: 'utf-8', shell: false });
-  if (result.error) {
-    const err = result.error as NodeJS.ErrnoException;
-    if (err.code === 'ENOENT') throw new SfNotFoundError();
-    throw result.error;
-  }
-  return { stdout: result.stdout ?? '', exitCode: result.status ?? 1 };
+  const { stdout, exitCode } = runSfCommand(args);
+  return { stdout, exitCode };
 }
 
 function runQuery(soql: string, targetOrg: string): SfQueryResponse {
@@ -117,7 +101,7 @@ export function createDefectsForRun(
 ): { created: DefectCreateResult[]; skipped: number; message: string } {
   // Step 1: resolve job record ID from tracking ID
   const jobQuery = runQuery(
-    `SELECT Id FROM provar__Test_Plan_Schedule_Job__c WHERE provar__Tracking_Id__c = '${runId}'`,
+    `SELECT Id FROM provar__Test_Plan_Schedule_Job__c WHERE provar__Tracking_Id__c = '${soqlEscape(runId)}'`,
     targetOrg
   );
   if (jobQuery.result.totalSize === 0) {
@@ -129,7 +113,7 @@ export function createDefectsForRun(
   const cycleQuery = runQuery(
     `SELECT Id, provar__Web_Browser__c, provar__Browser_Version__c, provar__Environment_Text__c
      FROM provar__Test_Cycle__c
-     WHERE provar__Test_Plan_Schedule_Job__c = '${jobId}'
+     WHERE provar__Test_Plan_Schedule_Job__c = '${soqlEscape(jobId)}'
      LIMIT 1`,
     targetOrg
   );
@@ -147,7 +131,7 @@ export function createDefectsForRun(
   const execQuery = runQuery(
     `SELECT Id, provar__Test_Case__c, provar__Tester__c
      FROM provar__Test_Execution__c
-     WHERE provar__Test_Cycle__c = '${cycleId}'
+     WHERE provar__Test_Cycle__c = '${soqlEscape(cycleId)}'
      AND provar__Status__c = 'Failed'`,
     targetOrg
   );
@@ -177,7 +161,7 @@ export function createDefectsForRun(
     const stepQuery = runQuery(
       `SELECT Id, provar__ActionObs__c, provar__Actual_Result__c, provar__Sequence_No__c, provar__Test_Step__c
        FROM provar__Test_Step_Execution__c
-       WHERE provar__Test_Execution__c = '${executionId}'
+       WHERE provar__Test_Execution__c = '${soqlEscape(executionId)}'
        AND provar__Result__c = 'Fail'
        ORDER BY provar__Sequence_No__c ASC
        LIMIT 1`,

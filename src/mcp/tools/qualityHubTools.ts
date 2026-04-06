@@ -10,42 +10,8 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { sfSpawnHelper } from './sfSpawn.js';
+import { runSfCommand } from './sfSpawn.js';
 
-// ── Shared spawn helper ───────────────────────────────────────────────────────
-
-interface SpawnResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
-function runSfCommand(args: string[]): SpawnResult {
-  const result = sfSpawnHelper.spawnSync('sf', args, { encoding: 'utf-8', shell: false });
-
-  if (result.error) {
-    const err = result.error as NodeJS.ErrnoException;
-    if (err.code === 'ENOENT') {
-      throw new SfNotFoundError();
-    }
-    throw result.error;
-  }
-
-  return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    exitCode: result.status ?? 1,
-  };
-}
-
-class SfNotFoundError extends Error {
-  public readonly code = 'SF_NOT_FOUND';
-  public constructor() {
-    super(
-      'sf CLI not found in PATH. Install Salesforce CLI (`npm install -g @salesforce/cli`) and ensure it is in your PATH.'
-    );
-  }
-}
 
 function handleSpawnError(err: unknown, requestId: string, toolName: string): { isError: true; content: Array<{ type: 'text'; text: string }> } {
   const error = err as Error & { code?: string };
@@ -179,12 +145,13 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
 
         const hasFailures = /fail/i.test(result.stdout);
         const suggestion = hasFailures
-          ? '\n\nSUGGESTION: Failures detected. Use provar.qualityhub.defect.create with run_id and target_org to automatically create Defect__c records for each failure (syncs to Jira/ADO if configured).'
+          ? 'Failures detected. Use provar.qualityhub.defect.create with run_id and target_org to automatically create Defect__c records for each failure (syncs to Jira/ADO if configured).'
           : '';
+        const responseWithSuggestion = { ...response, suggestion: suggestion || undefined };
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(response) + suggestion }],
-          structuredContent: response,
+          content: [{ type: 'text' as const, text: JSON.stringify(responseWithSuggestion) }],
+          structuredContent: responseWithSuggestion,
         };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar.qualityhub.testrun.report');

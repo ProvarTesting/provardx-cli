@@ -46,7 +46,7 @@ The MCP server verifies your Provar license before accepting any connections. Va
 
 1. **Auto-detection** — the server reads `~/Provar/.licenses/*.properties` (the same files written by Provar's IDE plugins). If a valid, activated license is found the server starts immediately.
 2. **Cache** — successful validations are cached at `~/Provar/.licenses/.mcp-license-cache.json` (2 h TTL). Subsequent starts within the TTL window skip the disk scan.
-3. **Offline grace** — if validation cannot reach the network and the cache is stale (but ≤ 48 h old), the server starts with a warning on stderr so CI pipelines are not broken by transient connectivity issues.
+3. **Grace fallback** — if the IDE license files cannot be found or read and the cache is stale (but ≤ 48 h old), the server starts with a warning on stderr using the cached result so CI pipelines are not broken by transient local file-access issues.
 4. **Fail closed** — if no valid license is detected the command exits with a non-zero exit code and a clear error message.
 
 **`NODE_ENV=test` fast-path:**

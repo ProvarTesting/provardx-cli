@@ -7,7 +7,8 @@
 
 /* eslint-disable camelcase */
 import fs from 'node:fs';
-import path from 'node:path';
+import path, { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerConfig } from '../server.js';
@@ -98,14 +99,28 @@ const SF_DYNAMIC_ATTRS_RE = /data-aura-rendered-by|data-aura-class|aura-id|data-
 const INDEXED_XPATH_RE = /\[\d+\]/;
 const POSITION_FN_RE = /\b(last|first|position)\s*\(\s*\)/;
 
-// Rule ID → penalty points (from page_object_validation_rules.json)
-const RULE_PENALTIES: Record<string, number> = {
-  PO_001: 20, PO_002: 18, PO_003: 25, PO_004: 8,  PO_005: 20, PO_006: 18,
-  PO_012: 10, PO_020: 12, PO_021: 8,  PO_022: 18, PO_023: 10,
-  PO_030: 12, PO_031: 20, PO_032: 18, PO_033: 20, PO_034: 18, PO_036: 10,
-  PO_060: 25, PO_070: 15, PO_071: 20, PO_072: 8,  PO_073: 18, PO_074: 18,
-  PO_075: 5,  PO_076: 12, PO_078: 3,  PO_079: 10, PO_080: 2,
-};
+// ── Rule penalties (lazy-loaded from page_object_validation_rules.json) ────────
+
+interface PoRule { id: string; penalty: number; severity: string; name: string; }
+
+const _dirPath = dirname(fileURLToPath(import.meta.url));
+let _rulePenalties: Record<string, number> | null = null;
+
+function getRulePenalties(): Record<string, number> {
+  if (!_rulePenalties) {
+    try {
+      const raw = fs.readFileSync(
+        join(_dirPath, '..', 'rules', 'page_object_validation_rules.json'),
+        'utf-8'
+      );
+      const rules = JSON.parse(raw) as PoRule[];
+      _rulePenalties = Object.fromEntries(rules.map((r) => [r.id, r.penalty]));
+    } catch {
+      _rulePenalties = {}; // unknown rules fall back to the default 5-point penalty
+    }
+  }
+  return _rulePenalties;
+}
 
 export interface PageObjectValidationResult {
   is_valid: boolean;
@@ -203,9 +218,10 @@ export function validatePageObject(
   }
 
   // ── Quality score (sum penalties, capped at 100) ──────────────────────────
+  const rulePenalties = getRulePenalties();
   let penalty = 0;
   for (const issue of issues) {
-    penalty += RULE_PENALTIES[issue.rule_id] ?? 5;
+    penalty += rulePenalties[issue.rule_id] ?? 5;
   }
 
   return {
