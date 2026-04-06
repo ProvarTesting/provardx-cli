@@ -101,25 +101,30 @@ const POSITION_FN_RE = /\b(last|first|position)\s*\(\s*\)/;
 
 // ── Rule penalties (lazy-loaded from page_object_validation_rules.json) ────────
 
-interface PoRule { id: string; penalty: number; severity: string; name: string; }
+interface PoRule {
+  id: string;
+  penalty: number;
+  severity: string;
+  name: string;
+}
 
-const _dirPath = dirname(fileURLToPath(import.meta.url));
-let _rulePenalties: Record<string, number> | null = null;
+const poRulesDirPath = dirname(fileURLToPath(import.meta.url));
+let poRulePenaltiesCache: Record<string, number> | null = null;
 
 function getRulePenalties(): Record<string, number> {
-  if (!_rulePenalties) {
+  if (!poRulePenaltiesCache) {
     try {
       const raw = fs.readFileSync(
-        join(_dirPath, '..', 'rules', 'page_object_validation_rules.json'),
+        join(poRulesDirPath, '..', 'rules', 'page_object_validation_rules.json'),
         'utf-8'
       );
       const rules = JSON.parse(raw) as PoRule[];
-      _rulePenalties = Object.fromEntries(rules.map((r) => [r.id, r.penalty]));
+      poRulePenaltiesCache = Object.fromEntries(rules.map((r) => [r.id, r.penalty]));
     } catch {
-      _rulePenalties = {}; // unknown rules fall back to the default 5-point penalty
+      poRulePenaltiesCache = {}; // unknown rules fall back to the default 5-point penalty
     }
   }
-  return _rulePenalties;
+  return poRulePenaltiesCache;
 }
 
 export interface PageObjectValidationResult {
