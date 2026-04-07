@@ -226,7 +226,7 @@ const updatesSchema = z.object({
   excludeCallable: z.boolean().optional().describe('Omit callable test cases from execution'),
   testprojectSecrets: z.string().optional().describe(
     'Encryption key (password string) used to decrypt the .secrets file in the Provar project root. ' +
-    'This is the key itself — NOT a file path. Leave empty if your project does not use secrets encryption.'
+    'This is the key itself — NOT a file path. Omit this field unless your project uses secrets encryption.'
   ),
   environment: z.object({
     testEnvironment: z.string().optional().describe('Name of the test environment to run against'),

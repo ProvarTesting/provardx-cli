@@ -254,7 +254,7 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
     ].join(' '),
     {
       flags: z.array(z.string()).optional().default([]).describe(
-        'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] to specify connections (required). Example: ["-c", "MyOrg,SandboxOrg"]'
+        'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
       ),
       sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
@@ -268,7 +268,9 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
 
         if (result.exitCode !== 0) {
           const isDownloadError = message.includes('[DOWNLOAD_ERROR]');
-          const details: Record<string, unknown> = isDownloadError ? { suggestion: DOWNLOAD_ERROR_SUGGESTION } : {};
+          const details: Record<string, unknown> | undefined = isDownloadError
+            ? { suggestion: DOWNLOAD_ERROR_SUGGESTION }
+            : undefined;
           return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)) }] };
         }
 
