@@ -233,12 +233,29 @@ export function registerAutomationCompile(server: McpServer): void {
 
 // ── Tool: provar.automation.metadata.download ─────────────────────────────────
 
+const DOWNLOAD_ERROR_SUGGESTION =
+  'A [DOWNLOAD_ERROR] almost always means a Salesforce authentication failure for the connection being used. ' +
+  'Check: (1) the connection credentials in the Provar project .secrets file are current and not expired; ' +
+  '(2) the named connection exists in the project and the name is spelled correctly (case-sensitive); ' +
+  '(3) if using a scratch org, confirm it has not expired (`sf org list`); ' +
+  '(4) if testprojectSecrets is set in provardx-properties.json, it must be the encryption key string used to decrypt .secrets — not a file path.';
+
 export function registerAutomationMetadataDownload(server: McpServer): void {
   server.tool(
     'provar.automation.metadata.download',
-    'Download Salesforce metadata into a Provar project. Invokes `sf provar automation metadata download`.',
+    [
+      'Download Salesforce metadata for one or more connections into a Provar project.',
+      'Invokes `sf provar automation metadata download`.',
+      'PREREQUISITE: Call provar.automation.config.load first — without it the command fails with MISSING_FILE.',
+      'Use the -c flag to specify connections: flags: ["-c", "ConnectionName1,ConnectionName2"].',
+      'Connection names are case-sensitive and must match the names defined in the Provar project.',
+      'If the download fails with [DOWNLOAD_ERROR], this is almost always a Salesforce authentication issue —',
+      'check that the credentials in the project .secrets file are current and that any referenced scratch orgs have not expired.',
+    ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe('Raw CLI flags to forward (e.g. ["--target-org", "myorg"])'),
+      flags: z.array(z.string()).optional().default([]).describe(
+        'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] to specify connections (required). Example: ["-c", "MyOrg,SandboxOrg"]'
+      ),
       sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
@@ -247,12 +264,15 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
 
       try {
         const result = runSfCommand(['provar', 'automation', 'metadata', 'download', ...flags], sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        const message = result.stderr || result.stdout;
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', result.stderr || result.stdout, requestId)) }] };
+          const isDownloadError = message.includes('[DOWNLOAD_ERROR]');
+          const details: Record<string, unknown> = isDownloadError ? { suggestion: DOWNLOAD_ERROR_SUGGESTION } : {};
+          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)) }] };
         }
 
+        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar.automation.metadata.download');
