@@ -13,9 +13,9 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { sfSpawnHelper } from './sfSpawn.js';
-import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import type { ServerConfig } from '../server.js';
+import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
+import { sfSpawnHelper } from './sfSpawn.js';
 
 // ── SF CLI discovery ──────────────────────────────────────────────────────────
 
