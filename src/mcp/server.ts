@@ -10,9 +10,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { log } from './logging/logger.js';
 
-const _require = createRequire(import.meta.url);
-const _pkg = _require('../../package.json') as { version: string };
-const SERVER_VERSION: string = _pkg.version;
+const requireJson = createRequire(import.meta.url);
+const SERVER_VERSION: string = (requireJson('../../package.json') as { version: string }).version;
 import { registerProjectInspect } from './tools/projectInspect.js';
 import { registerPageObjectGenerate } from './tools/pageObjectGenerate.js';
 import { registerPageObjectValidate } from './tools/pageObjectValidate.js';
