@@ -111,6 +111,14 @@ function validateViaIdeDetection(): LicenseValidationResult {
     );
   }
 
+  // Warn when the IDE's own ALGAS check is stale (> 7 days) — the IDE may not have been
+  // opened recently enough to refresh the activation status from the licensing server.
+  const IDE_FRESHNESS_WARN_MS = 7 * 24 * 60 * 60 * 1000;
+  if (ideState.lastOnlineCheckMs > 0 && Date.now() - ideState.lastOnlineCheckMs > IDE_FRESHNESS_WARN_MS) {
+    const ageDays = Math.round((Date.now() - ideState.lastOnlineCheckMs) / (24 * 60 * 60 * 1000));
+    log('warn', 'licenseValidator: IDE license online check is stale — open Provar IDE to refresh', { ageDays });
+  }
+
   // 3. Valid — write to MCP cache so next start within 2h skips this read
   const entry: CacheEntry = {
     keyHash,

@@ -5,9 +5,14 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+import { createRequire } from 'node:module';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { log } from './logging/logger.js';
+
+const _require = createRequire(import.meta.url);
+const _pkg = _require('../../package.json') as { version: string };
+const SERVER_VERSION: string = _pkg.version;
 import { registerProjectInspect } from './tools/projectInspect.js';
 import { registerPageObjectGenerate } from './tools/pageObjectGenerate.js';
 import { registerPageObjectValidate } from './tools/pageObjectValidate.js';
@@ -33,7 +38,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 
   const server = new McpServer({
     name: 'provar-mcp',
-    version: '1.0.0',
+    version: SERVER_VERSION,
   });
 
   // ── Sanity-check tool ────────────────────────────────────────────────────────
@@ -44,7 +49,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
       message: z.string().optional().default('ping').describe('Optional message to echo back'),
     },
     ({ message }) => {
-      const result = { pong: message, ts: new Date().toISOString(), server: 'provar-mcp@1.0.0' };
+      const result = { pong: message, ts: new Date().toISOString(), server: `provar-mcp@${SERVER_VERSION}` };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result) }],
         structuredContent: result,

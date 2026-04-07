@@ -15,7 +15,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
-import { sfSpawnHelper } from './sfSpawn.js';
+import { sfSpawnHelper, SfNotFoundError } from './sfSpawn.js';
 
 // ── SF CLI discovery ──────────────────────────────────────────────────────────
 
@@ -89,20 +89,6 @@ function resolveSfExecutable(): string | null {
   return null;
 }
 
-class SfNotFoundError extends Error {
-  public readonly code = 'SF_NOT_FOUND';
-  public constructor(sfPath?: string) {
-    const where = sfPath
-      ? `at explicit path "${sfPath}"`
-      : 'in PATH or common npm/nvm install locations';
-    super(
-      `sf CLI not found ${where}. ` +
-      'Install Salesforce CLI (npm install -g @salesforce/cli) and ensure the install directory is in your PATH, ' +
-      'or pass sf_path pointing to the sf executable directly ' +
-      '(e.g. "~/.nvm/versions/node/v22.0.0/bin/sf").'
-    );
-  }
-}
 
 function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   // Use explicit path if provided; otherwise use cached probe result
