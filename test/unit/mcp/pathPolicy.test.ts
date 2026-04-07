@@ -59,7 +59,7 @@ describe('pathPolicy', () => {
   });
 
   describe('symlink containment', () => {
-    let symlinkDir: string;
+    let symlinkDir: string | undefined;
 
     afterEach(() => {
       if (symlinkDir) {
