@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 
 export class PathPolicyError extends Error {
@@ -24,6 +25,11 @@ export class PathPolicyError extends Error {
  * - PATH_NOT_ALLOWED — resolved path is outside all allowed roots
  *
  * When allowedPaths is empty, all paths are permitted (unrestricted mode).
+ *
+ * Symlinks are resolved via fs.realpathSync so that a symlink inside an allowed
+ * directory pointing to a location outside it cannot bypass containment.
+ * If the path does not yet exist (e.g. an output file to be created), the parent
+ * directory is resolved instead and the basename re-attached.
  */
 export function assertPathAllowed(filePath: string, allowedPaths: string[]): void {
   // Check the original path for `..` segments before any normalization resolves them away
@@ -31,8 +37,30 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
   if (rawSegments.some((s) => s === '..')) {
     throw new PathPolicyError('PATH_TRAVERSAL', `Path traversal detected: ${filePath}`);
   }
-  const resolved = path.resolve(filePath);
-  const resolvedAllowed = allowedPaths.map((p) => path.resolve(path.normalize(p)));
+
+  // Resolve symlinks so a symlink inside an allowed dir that points outside cannot bypass
+  // the containment check. Fall back to lexical resolution when the path doesn't exist yet.
+  let resolved: string;
+  try {
+    resolved = fs.realpathSync(filePath);
+  } catch {
+    // Path doesn't exist — resolve the parent (which should exist) to catch symlinks there
+    const parent = path.dirname(path.resolve(filePath));
+    try {
+      resolved = path.join(fs.realpathSync(parent), path.basename(filePath));
+    } catch {
+      resolved = path.resolve(filePath);
+    }
+  }
+
+  const resolvedAllowed = allowedPaths.map((p) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(path.normalize(p));
+    }
+  });
+
   if (
     resolvedAllowed.length > 0 &&
     !resolvedAllowed.some((base) => resolved === base || resolved.startsWith(base + path.sep))

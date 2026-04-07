@@ -14,35 +14,12 @@
  * - licenseStatus — Activated | NotActivated | Expired | Invalid | QuotaReached
  * - licenseType — Fixed Seat | Floating | Trial | None
  * - lastOnlineAvailabilityCheckUtc — epoch ms of last ALGAS check by the IDE
- * - licenseKey — AES-128-ECB encrypted with key "provarautomation", Base64-encoded
- *
- * The licenseKey field is AES-128-ECB encrypted (LicenseSupport.KEY = "provarautomation").
- * We decrypt it to allow cross-referencing an explicitly supplied --license-key against
- * the IDE's already-validated license state without re-calling the licensing API.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { createDecipheriv } from 'node:crypto';
 import type { LicenseType } from './licenseCache.js';
-
-/** AES-128-ECB key used by Provar IDE to encrypt the licenseKey field. */
-const AES_KEY = Buffer.from('provarautomation'); // 16 bytes ASCII
-
-/**
- * Decrypt an AES-128-ECB + PKCS5 encrypted, Base64-encoded licenseKey field.
- * Returns the plaintext string, or null if decryption fails (wrong key / corrupt).
- */
-function decryptLicenseKeyField(encryptedBase64: string): string | null {
-  try {
-    const decipher = createDecipheriv('aes-128-ecb', AES_KEY, null);
-    const buf = Buffer.from(encryptedBase64, 'base64');
-    return Buffer.concat([decipher.update(buf), decipher.final()]).toString('utf-8');
-  } catch {
-    return null;
-  }
-}
 
 /** Mirrors License4J's DEFAULT_LICENSE_FOLDER_PATH + PROVAR_USER_HOME. */
 function provarLicensesDir(): string {
@@ -142,53 +119,3 @@ export function findActivatedIdeLicense(): IdeLicenseState | null {
   return activated.sort((a, b) => b.lastOnlineCheckMs - a.lastOnlineCheckMs)[0];
 }
 
-/**
- * Search all IDE .properties files for one whose decrypted licenseKey matches
- * the supplied raw key string.
- *
- * Used to cross-reference an explicit --license-key against the IDE's already-
- * validated activation state without making a fresh API call.
- *
- * Returns the matching IdeLicenseState (which may have activated=false if the
- * IDE recorded the key but it isn't currently activated), or null when no file
- * decrypts to the given key.
- */
-export function findLicenseByDecryptedKey(rawKey: string): IdeLicenseState | null {
-  const dir = provarLicensesDir();
-  if (!fs.existsSync(dir)) return null;
-
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return null;
-  }
-
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.properties')) continue;
-    try {
-      const content = fs.readFileSync(path.join(dir, entry.name), 'utf-8');
-      const props = parseProperties(content);
-
-      const encryptedKey = props.get('licenseKey');
-      if (!encryptedKey) continue;
-
-      const decrypted = decryptLicenseKeyField(encryptedKey);
-      if (decrypted !== rawKey) continue;
-
-      const licenseStatus = props.get('licenseStatus') ?? '';
-      const licenseType = parseLicenseType(props.get('licenseType') ?? '');
-      const lastCheck = parseInt(props.get('lastOnlineAvailabilityCheckUtc') ?? '0', 10);
-
-      return {
-        name: entry.name.slice(0, -'.properties'.length),
-        licenseType,
-        activated: licenseStatus === 'Activated',
-        lastOnlineCheckMs: isNaN(lastCheck) ? 0 : lastCheck,
-      };
-    } catch {
-      // Unreadable or corrupt file — skip
-    }
-  }
-  return null;
-}

@@ -78,7 +78,12 @@ export function writeCacheEntry(entry: CacheEntry): void {
       }
     }
     cache[entry.keyHash] = entry;
-    fs.writeFileSync(file, JSON.stringify(cache, null, 2), 'utf-8');
+    fs.writeFileSync(file, JSON.stringify(cache, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    try {
+      fs.chmodSync(file, 0o600);
+    } catch {
+      // Best-effort permission hardening; cache write itself already succeeded.
+    }
   } catch {
     // Cache write failure is non-fatal; validation result still returned to caller.
   }

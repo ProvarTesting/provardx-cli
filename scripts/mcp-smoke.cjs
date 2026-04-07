@@ -30,7 +30,7 @@ const server = spawn('sf', ['provar', 'mcp', 'start', '--allowed-paths', TMP], {
   shell: true,
   env: {
     ...process.env,
-    PROVAR_DEV_WHITELIST_KEYS: process.env.PROVAR_DEV_WHITELIST_KEYS || 'true',
+    PROVAR_DEV_WHITELIST_KEYS: process.env.PROVAR_DEV_WHITELIST_KEYS || '',
   },
 });
 

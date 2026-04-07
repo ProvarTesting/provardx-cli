@@ -22,7 +22,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest"]') }}
+        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest", "macos-latest"]') }}
         nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
@@ -102,7 +102,6 @@ jobs:
       - name: MCP smoke test
         timeout-minutes: 5
         env:
-          NODE_ENV: test
           PROVAR_DEV_WHITELIST_KEYS: ${{ secrets.PROVAR_DEV_WHITELIST_KEYS }}
         run: node scripts/mcp-smoke.cjs
       - name: Check out Regression repo

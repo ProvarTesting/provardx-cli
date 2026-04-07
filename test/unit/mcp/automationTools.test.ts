@@ -66,7 +66,8 @@ describe('automationTools', () => {
 
     const { registerAllAutomationTools, setSfPathCacheForTesting } = await import('../../../src/mcp/tools/automationTools.js');
     setSfPathCacheForTesting('sf'); // bypass probe spawn; tests control spawnStub directly
-    registerAllAutomationTools(server as unknown as McpServer);
+    // allowedPaths: [] means unrestricted — existing tests use arbitrary paths
+    registerAllAutomationTools(server as unknown as McpServer, { allowedPaths: [] });
   });
 
   afterEach(() => {
@@ -460,6 +461,45 @@ describe('automationTools', () => {
       server.call('provar.automation.config.load', { properties_path: '/proj/props.json', sf_path: '/custom/bin/sf' });
       const [cmd] = spawnStub.firstCall.args as [string, string[]];
       assert.equal(cmd, '/custom/bin/sf');
+    });
+
+    describe('path policy enforcement', () => {
+      let restrictedServer: MockMcpServer;
+      const allowedDir = os.tmpdir();
+
+      beforeEach(async () => {
+        restrictedServer = new MockMcpServer();
+        const { registerAutomationConfigLoad, setSfPathCacheForTesting } = await import('../../../src/mcp/tools/automationTools.js');
+        setSfPathCacheForTesting('sf');
+        registerAutomationConfigLoad(restrictedServer as unknown as McpServer, { allowedPaths: [allowedDir] });
+      });
+
+      it('rejects properties_path outside allowed paths', () => {
+        const result = restrictedServer.call('provar.automation.config.load', {
+          properties_path: '/etc/passwd',
+        });
+        assert.ok(isError(result));
+        assert.equal(parseBody(result).error_code, 'PATH_NOT_ALLOWED');
+        assert.ok(!spawnStub.called, 'sf should not be spawned for a rejected path');
+      });
+
+      it('rejects properties_path with .. traversal', () => {
+        const result = restrictedServer.call('provar.automation.config.load', {
+          properties_path: path.join(allowedDir, '..', 'etc', 'passwd'),
+        });
+        assert.ok(isError(result));
+        assert.equal(parseBody(result).error_code, 'PATH_TRAVERSAL');
+        assert.ok(!spawnStub.called, 'sf should not be spawned for a path traversal');
+      });
+
+      it('allows properties_path within allowed paths', () => {
+        spawnStub.returns(makeSpawnResult('', '', 0));
+        const allowed = path.join(allowedDir, 'provardx-properties.json');
+        const result = restrictedServer.call('provar.automation.config.load', {
+          properties_path: allowed,
+        });
+        assert.ok(!isError(result));
+      });
     });
   });
 

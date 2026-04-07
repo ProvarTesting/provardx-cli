@@ -1,7 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
-import { createCipheriv } from 'node:crypto';
 import { strict as assert } from 'node:assert';
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { LicenseError } from '../../../../src/mcp/licensing/licenseError.js';
@@ -18,14 +17,7 @@ import { validateLicense } from '../../../../src/mcp/licensing/licenseValidator.
 import {
   readIdeLicenses,
   findActivatedIdeLicense,
-  findLicenseByDecryptedKey,
 } from '../../../../src/mcp/licensing/ideDetection.js';
-
-/** Encrypt a raw license key with AES-128-ECB + PKCS5 to mimic IDE storage. */
-function encryptKey(rawKey: string): string {
-  const cipher = createCipheriv('aes-128-ecb', Buffer.from('provarautomation'), null);
-  return Buffer.concat([cipher.update(Buffer.from(rawKey, 'utf-8')), cipher.final()]).toString('base64');
-}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -301,74 +293,6 @@ describe('ideDetection', () => {
     assert.equal(best?.name, 'Recent');
   });
 
-  it('findLicenseByDecryptedKey returns null when no .licenses folder', () => {
-    assert.equal(findLicenseByDecryptedKey('any-key'), null);
-  });
-
-  it('findLicenseByDecryptedKey returns null when no file matches the key', () => {
-    writeLicenseFile('LicA', {
-      licenseKey: encryptKey('OTHER-KEY-111'),
-      licenseStatus: 'Activated',
-      licenseType: 'Floating',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    assert.equal(findLicenseByDecryptedKey('AAAAA-BBBBB-CCCCC-DDDDD-EEEEE'), null);
-  });
-
-  it('findLicenseByDecryptedKey returns matching state when key decrypts correctly', () => {
-    const rawKey = 'AAAAA-BBBBB-CCCCC-DDDDD-EEEEE';
-    writeLicenseFile('FloatingLic', {
-      licenseKey: encryptKey(rawKey),
-      licenseStatus: 'Activated',
-      licenseType: 'Floating',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    const state = findLicenseByDecryptedKey(rawKey);
-    assert.ok(state !== null);
-    assert.equal(state?.name, 'FloatingLic');
-    assert.equal(state?.licenseType, 'Floating');
-    assert.equal(state?.activated, true);
-  });
-
-  it('findLicenseByDecryptedKey returns state even when not Activated', () => {
-    const rawKey = 'SOME-KEY-NOT-ACTIVE';
-    writeLicenseFile('NotActive', {
-      licenseKey: encryptKey(rawKey),
-      licenseStatus: 'NotActivated',
-      licenseType: 'FixedSeat',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    const state = findLicenseByDecryptedKey(rawKey);
-    assert.ok(state !== null);
-    assert.equal(state?.activated, false);
-  });
-
-  it('findLicenseByDecryptedKey returns null when licenseKey field is absent', () => {
-    writeLicenseFile('NoKey', {
-      licenseStatus: 'Activated',
-      licenseType: 'FixedSeat',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    assert.equal(findLicenseByDecryptedKey('any'), null);
-  });
-
-  it('findLicenseByDecryptedKey matches across multiple files', () => {
-    const rawKey = 'MULTI-FILE-MATCH-KEY';
-    writeLicenseFile('Unrelated', {
-      licenseKey: encryptKey('DIFFERENT-KEY'),
-      licenseStatus: 'Activated',
-      licenseType: 'Trial',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    writeLicenseFile('Target', {
-      licenseKey: encryptKey(rawKey),
-      licenseStatus: 'Activated',
-      licenseType: 'Floating',
-      lastOnlineAvailabilityCheckUtc: String(Date.now()),
-    });
-    const state = findLicenseByDecryptedKey(rawKey);
-    assert.equal(state?.name, 'Target');
-  });
 });
 
 // ── E. licenseValidator — IDE auto-detection (non-test env) ──────────────────
