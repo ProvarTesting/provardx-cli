@@ -143,12 +143,16 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
           return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_REPORT_FAILED', result.stderr || result.stdout, requestId)) }] };
         }
 
+        const failureStatuses = new Set(['FAIL', 'FAILED']);
         let hasFailures = false;
         try {
           const parsed = JSON.parse(result.stdout) as { result?: { status?: string } };
-          hasFailures = /fail/i.test(parsed.result?.status ?? '');
+          const normalizedStatus = parsed.result?.status?.trim().toUpperCase();
+          hasFailures = normalizedStatus !== undefined && failureStatuses.has(normalizedStatus);
         } catch {
-          hasFailures = /\bFAILED?\b/i.test(result.stdout);
+          const statusMatch = result.stdout.match(/"status"\s*:\s*"([^"]+)"/i);
+          const normalizedStatus = statusMatch?.[1]?.trim().toUpperCase();
+          hasFailures = normalizedStatus !== undefined && failureStatuses.has(normalizedStatus);
         }
         const suggestion = hasFailures
           ? 'Failures detected. Use provar.qualityhub.defect.create with run_id and target_org to automatically create Defect__c records for each failure (syncs to Jira/ADO if configured).'
