@@ -484,8 +484,10 @@ describe('automationTools', () => {
       });
 
       it('rejects properties_path with .. traversal', () => {
+        // Use string concatenation (not path.join) so the ".." segment is preserved
+        // in the raw string that assertPathAllowed inspects.
         const result = restrictedServer.call('provar.automation.config.load', {
-          properties_path: path.join(allowedDir, '..', 'etc', 'passwd'),
+          properties_path: allowedDir + '/../etc/passwd',
         });
         assert.ok(isError(result));
         assert.equal(parseBody(result).error_code, 'PATH_TRAVERSAL');

@@ -93,8 +93,9 @@ describe('pathPolicy', () => {
     it('allows a real path inside an allowed dir (not a symlink)', () => {
       symlinkDir = fs.mkdtempSync(path.join(tmp, 'pathpolicy-real-'));
       const real = path.join(symlinkDir, 'real-file.txt');
+      const allowedDir = symlinkDir;
       fs.writeFileSync(real, 'content');
-      assert.doesNotThrow(() => assertPathAllowed(real, [symlinkDir]));
+      assert.doesNotThrow(() => assertPathAllowed(real, [allowedDir]));
     });
   });
 });

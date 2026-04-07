@@ -13,6 +13,7 @@ The Provar MCP server is a built-in component of the Provar DX CLI that exposes 
 - Validate test cases, suites, plans, and the full project hierarchy against quality rules
 - Read, generate, and update `provardx-properties.json` run configurations
 - Trigger Provar Automation test runs and Quality Hub managed runs directly from the AI chat
+- Discover, validate, generate, and edit NitroX (Hybrid Model) `.po.json` component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5
 
 The server runs **locally on your machine**. It does not phone home, transmit your project files to Provar servers, or require any Provar-side infrastructure changes.
 
@@ -225,6 +226,55 @@ Pre-requisite: `sf org login web -a MyQHOrg` then `sf provar quality-hub connect
 
 ---
 
+### Scenario 7: NitroX (Hybrid Model) Page Object Generation
+
+**Goal:** Have the AI discover, understand, and generate NitroX component page objects.
+
+NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-based UIs (LWC, Screen Flow, Industry Components, Experience Cloud, HTML5) into `.po.json` files stored in the `nitroX/` directory of your Provar project.
+
+**Step 1 — Discover existing page objects:**
+
+> "Discover all NitroX page objects in my Provar project at `/path/to/my/project` and tell me how many there are."
+
+**What to look for:** The AI calls `provar.nitrox.discover`, finds the `nitroX/` directory, and reports the file count.
+
+**Step 2 — Read examples for context:**
+
+> "Read up to 5 NitroX page objects from my project so you understand the structure."
+
+**What to look for:** The AI calls `provar.nitrox.read` and summarises the patterns it sees (tagName, qualifier, element types, interactions).
+
+**Step 3 — Generate a new component:**
+
+> "Generate a NitroX page object for a `lightning-combobox` component named `/com/force/ui/ComboBox`. It should have a `value` qualifier parameter and a single element with a click interaction. Save it to `/path/to/my/project/nitroX/lwc/ComboBox.po.json`."
+
+**What to look for:**
+
+- The AI calls `provar.nitrox.generate` with `dry_run: true` first, then writes after your confirmation
+- Generated JSON has valid UUIDs for all `componentId` fields
+- `tagName`, `parameters`, and `elements` match your description
+
+**Step 4 — Validate the result:**
+
+> "Validate the file you just wrote and tell me the score."
+
+**What to look for:**
+
+- `provar.nitrox.validate` returns `valid: true` and `score: 100`
+- Any issues are listed with rule IDs (NX001–NX010) and suggestions
+
+**Step 5 — Apply a targeted edit:**
+
+> "Update the qualifier parameter comparisonType from `equals` to `contains`."
+
+**What to look for:**
+
+- The AI calls `provar.nitrox.patch` with `dry_run: true` to show the change
+- After confirmation, calls again with `dry_run: false`
+- `validate_after: true` (the default) confirms the patch didn't break the schema
+
+---
+
 ## Security Model
 
 ### What the server does
@@ -232,6 +282,8 @@ Pre-requisite: `sf org login web -a MyQHOrg` then `sf provar quality-hub connect
 - Reads and writes files **only within the paths you specify via `--allowed-paths`**
 - Validates all incoming paths against those roots before any file operation
 - Blocks path traversal attempts (`../`) with a `PATH_TRAVERSAL` error
+- Resolves symlinks via `fs.realpathSync` before the containment check — a symlink inside an allowed directory pointing outside it cannot bypass the restriction
+- Validates all path-type input fields (e.g. `provar_home`, `project_path`, `results_path` in `provar.ant.generate`) before any file operation, not just the output path
 - Invokes `sf` CLI subprocesses for Quality Hub and Automation tools — these use the SF CLI's existing credential store (`~/.sf/credentials.json`), which the MCP server does not read directly
 
 ### Licence validation
@@ -277,12 +329,12 @@ The Quality Hub and Automation tools invoke `sf` subprocesses. Salesforce org cr
 
 ```
 PathPolicy: assertPathAllowed(filePath, allowedPaths)
-  → PATH_TRAVERSAL  if filePath contains ".."
-  → PATH_NOT_ALLOWED if resolved path is outside all allowed roots
+  → PATH_TRAVERSAL  if filePath contains ".." segments
+  → PATH_NOT_ALLOWED if resolved (symlink-dereferenced) path is outside all allowed roots
   → passes otherwise
 ```
 
-This check runs before every file read and write. The allowed roots are set at server startup via `--allowed-paths` and cannot be changed while the server is running.
+This check runs before every file read and write, including all path-type input fields — not just output file paths. Symlinks are dereferenced so that a symlink inside an allowed directory cannot escape containment. The allowed roots are set at server startup via `--allowed-paths` and cannot be changed while the server is running.
 
 ### Audit log
 

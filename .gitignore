@@ -58,3 +58,10 @@ mochawesome-report
 # Claude
 .claude/skills
 CLAUDE.md
+
+# NitroX schema files — do not commit until IP/licensing confirmed with Provar team
+# See: src/mcp/tools/nitroXTools.ts and plan notes
+src/mcp/rules/FactComponent.schema.json
+src/mcp/rules/FactPackage.schema.json
+FactComponent.schema
+FactPackage.schema

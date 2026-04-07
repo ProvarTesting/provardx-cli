@@ -30,7 +30,7 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 # MCP Server (AI-Assisted Quality)
 
-The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, and validate every level of the test hierarchy with quality scores that match the Provar Quality Hub API.
+The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores that match the Provar Quality Hub API, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
 
 ```sh
 sf provar mcp start --allowed-paths /path/to/your/provar/project

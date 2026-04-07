@@ -45,6 +45,12 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar.testplan.add-instance](#provartestplanadinstance)
   - [provar.testplan.create-suite](#provartestplancreatetsuite)
   - [provar.testplan.remove-instance](#provartestplanremoveinstance)
+  - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
+    - [provar.nitrox.discover](#provarnitroxdiscover)
+    - [provar.nitrox.read](#provarnitroxread)
+    - [provar.nitrox.validate](#provarnitroxvalidate)
+    - [provar.nitrox.generate](#provarnitroxgenerate)
+    - [provar.nitrox.patch](#provarnitroxpatch)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -136,7 +142,9 @@ If the license check fails, the server exits with a clear error message explaini
 
 ## Path security
 
-All file-system operations (read, write, generate) are restricted to the paths supplied via `--allowed-paths`. Any attempt to access a path outside those roots is rejected with a `PATH_NOT_ALLOWED` error. Path traversal sequences (`../`) are also blocked.
+All file-system operations (read, write, generate) are restricted to the paths supplied via `--allowed-paths`. Any attempt to access a path outside those roots is rejected with a `PATH_NOT_ALLOWED` error. Path traversal sequences (`../`) are blocked with a `PATH_TRAVERSAL` error.
+
+Symlinks are resolved via `fs.realpathSync` before the containment check, so a symlink inside an allowed directory that points outside it cannot bypass the restriction. For tools that accept multiple path inputs (such as `provar.ant.generate`'s `provar_home`, `project_path`, and `results_path`), all path fields are validated before any file operation occurs — not just the output path.
 
 ---
 
@@ -1024,6 +1032,171 @@ Remove a `.testinstance` file from a plan suite. Path is validated to stay withi
 
 ---
 
+---
+
+## NitroX — Hybrid Model page objects
+
+NitroX is Provar's **Hybrid Model** for locators. Instead of hand-written Java Page Objects it uses component-based `.po.json` files that map UI elements for any Salesforce component type: LWC, Screen Flow, Industry / OmniStudio, Experience Cloud, and standard HTML5. These files live in `nitroX/` directories inside your Provar project.
+
+The five `provar.nitrox.*` tools let an AI agent discover existing NitroX page objects, read them as training context, validate new ones against the schema, generate fresh components from a description, and apply surgical edits via JSON merge-patch.
+
+> **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
+
+---
+
+### `provar.nitrox.discover`
+
+Scan a set of directories for Provar projects (identified by a `.testproject` marker file) and inventory each project's `nitroX/` and `nitroXPackages/` directories. Useful as a first step before reading or generating files.
+
+By default the tool scans `cwd`. If no project is found there it widens the search to `~/git` and `~/Provar`.
+
+| Input             | Type      | Required | Default                  | Description                                                    |
+| ----------------- | --------- | -------- | ------------------------ | -------------------------------------------------------------- |
+| `search_roots`    | string[]  | no       | `[cwd()]`                | Directories to scan; falls back to `~/git`, `~/Provar` if empty and cwd has no project |
+| `max_depth`       | number    | no       | `6`                      | Maximum directory depth for `.testproject` search (max 20)     |
+| `include_packages`| boolean   | no       | `true`                   | Return `nitroXPackages/` package names in output               |
+
+| Output field       | Description                                              |
+| ------------------ | -------------------------------------------------------- |
+| `projects`         | Array of project result objects (see below)              |
+| `searched_roots`   | Directories actually searched                            |
+
+Each project result:
+
+| Field               | Description                                         |
+| ------------------- | --------------------------------------------------- |
+| `project_path`      | Absolute path to the project root                   |
+| `nitrox_dir`        | Absolute path to `nitroX/`, or `null`               |
+| `nitrox_file_count` | Number of `.po.json` files found                    |
+| `nitrox_files`      | Full paths to each `.po.json`                        |
+| `packages_dir`      | Absolute path to `nitroXPackages/`, or `null`       |
+| `packages`          | Array of `{ path, name? }` package entries          |
+
+Directories named `node_modules`, `.git`, or any hidden directory (`.`-prefixed) are skipped.
+
+---
+
+### `provar.nitrox.read`
+
+Read one or more NitroX `.po.json` files and return their parsed content for context or training. Provide specific `file_paths` or a `project_path` to read all files from a project's `nitroX/` directory.
+
+| Input          | Type     | Required          | Default | Description                                              |
+| -------------- | -------- | ----------------- | ------- | -------------------------------------------------------- |
+| `file_paths`   | string[] | one of these two  | —       | Specific `.po.json` paths to read                        |
+| `project_path` | string   | one of these two  | —       | Provar project root — reads all files from `nitroX/`    |
+| `max_files`    | number   | no                | `20`    | Cap on files returned to avoid context overflow          |
+
+| Output field  | Description                                                              |
+| ------------- | ------------------------------------------------------------------------ |
+| `files`       | Array of `{ file_path, content, size_bytes }` (or `{ file_path, error }` on failure) |
+| `truncated`   | `true` when more files exist than `max_files`                            |
+| `total_found` | Total number of `.po.json` files discovered before the cap               |
+
+Path policy is enforced per-file. A missing or unparseable file returns an `error` field inside the file entry rather than failing the whole call.
+
+**Error codes:** `MISSING_INPUT`, `FILE_NOT_FOUND`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
+
+---
+
+### `provar.nitrox.validate`
+
+Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a list of issues.
+
+Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, minimum 0.
+
+| Input       | Type   | Required       | Description                         |
+| ----------- | ------ | -------------- | ----------------------------------- |
+| `content`   | string | one of these   | JSON string to validate             |
+| `file_path` | string | one of these   | Path to a `.po.json` file           |
+
+| Output field  | Description                              |
+| ------------- | ---------------------------------------- |
+| `valid`       | `true` when no ERROR-severity issues     |
+| `score`       | 0–100                                    |
+| `issue_count` | Total issues                             |
+| `issues`      | Array of `ValidationIssue` (see below)   |
+
+**Validation rules:**
+
+| Rule  | Severity | Description                                                                 |
+| ----- | -------- | --------------------------------------------------------------------------- |
+| NX000 | ERROR    | Content is not valid JSON or not a JSON object                              |
+| NX001 | ERROR    | `componentId` is missing or not a valid UUID                                |
+| NX002 | ERROR    | Root component (no `parentId`) missing `name`, `type`, `pageStructureElement`, or `fieldDetailsElement` |
+| NX003 | ERROR    | `tagName` contains whitespace                                               |
+| NX004 | ERROR    | Interaction missing required field (`defaultInteraction`, `implementations` ≥ 1, `interactionType`, `name`, `testStepTitlePattern`, `title`) |
+| NX005 | ERROR    | Implementation missing `javaScriptSnippet`                                  |
+| NX006 | ERROR    | Selector missing `xpath`                                                    |
+| NX007 | WARNING  | Element missing `type`                                                      |
+| NX008 | WARNING  | `comparisonType` not one of `"equals"`, `"starts-with"`, `"contains"`      |
+| NX009 | INFO     | Interaction `name` contains characters outside `[A-Za-z0-9 ]`              |
+| NX010 | INFO     | `bodyTagName` contains whitespace                                           |
+
+**Error codes:** `MISSING_INPUT`, `NX000`, `FILE_NOT_FOUND`, `PATH_NOT_ALLOWED`
+
+---
+
+### `provar.nitrox.generate`
+
+Generate a new NitroX `.po.json` from a component description. All `componentId` fields are assigned fresh UUIDs. Returns the JSON content; writes to disk only when `dry_run=false`.
+
+Applicable to any component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.
+
+| Input                   | Type     | Required | Default   | Description                                              |
+| ----------------------- | -------- | -------- | --------- | -------------------------------------------------------- |
+| `name`                  | string   | yes      | —         | Path-like name, e.g. `/com/force/myapp/ButtonComponent`  |
+| `tag_name`              | string   | yes      | —         | LWC or HTML tag, e.g. `lightning-button`, `c-my-cmp`     |
+| `type`                  | string   | no       | `"Block"` | `"Block"` or `"Page"`                                    |
+| `page_structure_element`| boolean  | no       | `true`    | Whether this is a page structure element                 |
+| `field_details_element` | boolean  | no       | `false`   | Whether this is a field details element                  |
+| `parameters`            | object[] | no       | —         | Qualifier parameters (see below)                         |
+| `elements`              | object[] | no       | —         | Child elements (see below)                               |
+| `output_path`           | string   | no       | —         | File path to write when `dry_run=false`                  |
+| `overwrite`             | boolean  | no       | `false`   | Overwrite existing file                                  |
+| `dry_run`               | boolean  | no       | `true`    | Return JSON without writing                              |
+
+**Parameter object:** `{ name, value, comparisonType?: "equals"|"starts-with"|"contains", default?: boolean }`
+
+**Element object:** `{ label, type_ref, tag_name?, parameters?, selector_xpath? }`
+
+| Output field | Description                              |
+| ------------ | ---------------------------------------- |
+| `content`    | Generated JSON string (pretty-printed)   |
+| `file_path`  | Resolved absolute path (if `output_path` set) |
+| `written`    | `true` when file was written to disk     |
+| `dry_run`    | Echo of the `dry_run` input              |
+
+**Error codes:** `FILE_EXISTS`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`, `GENERATE_ERROR`
+
+---
+
+### `provar.nitrox.patch`
+
+Apply a [JSON merge-patch (RFC 7396)](https://www.rfc-editor.org/rfc/rfc7396) to an existing `.po.json` file. Reads the file, merges the patch, optionally validates the result, and writes back. Use `dry_run=true` (default) to preview changes before committing.
+
+Patch semantics: a key with a `null` value removes that key; any other value replaces it (or recursively merges if both target and patch values are objects).
+
+| Input           | Type    | Required | Default | Description                                                   |
+| --------------- | ------- | -------- | ------- | ------------------------------------------------------------- |
+| `file_path`     | string  | yes      | —       | Path to the existing `.po.json`                               |
+| `patch`         | object  | yes      | —       | JSON merge-patch to apply                                     |
+| `dry_run`       | boolean | no       | `true`  | Return merged result without writing                          |
+| `validate_after`| boolean | no       | `true`  | Run NX validation; blocks write if errors found               |
+
+| Output field | Description                                     |
+| ------------ | ----------------------------------------------- |
+| `content`    | Merged JSON string (pretty-printed)             |
+| `file_path`  | Absolute path of the file                       |
+| `written`    | `true` when file was written                    |
+| `dry_run`    | Echo of the `dry_run` input                     |
+| `validation` | Validation result (present when `validate_after=true`) |
+
+When `validate_after=true` and the merged content has errors, the write is blocked and the tool returns `isError=true` with code `VALIDATION_FAILED`. Set `validate_after=false` to force-write despite errors.
+
+**Error codes:** `FILE_NOT_FOUND`, `PARSE_ERROR`, `VALIDATION_FAILED`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
+
+---
+
 ## AI loop pattern
 
 The automation tools are designed to support an **AI-driven fix loop**: an agent can iteratively improve test quality without leaving the chat session.
@@ -1051,6 +1224,16 @@ provar.qualityhub.testrun           → start a Quality Hub-managed grid run
 provar.qualityhub.testrun.report    → poll until complete
 provar.qualityhub.testcase.retrieve → pull test cases scoped to a user story
 provar.qualityhub.defect.create     → file defects for failures automatically
+```
+
+NitroX (Hybrid Model) component page object loop:
+
+```
+provar.nitrox.discover   → find all NitroX projects and .po.json files on the machine
+provar.nitrox.read       → load existing page objects as AI training context
+provar.nitrox.validate   → check a generated or edited .po.json for schema issues
+provar.nitrox.generate   → create a new .po.json from a component description
+provar.nitrox.patch      → apply targeted edits to an existing .po.json (RFC 7396)
 ```
 
 > **Note:** `provar.automation.*` and `provar.qualityhub.*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
