@@ -19,9 +19,15 @@ export const sfSpawnHelper = {
 
 export class SfNotFoundError extends Error {
   public readonly code = 'SF_NOT_FOUND';
-  public constructor() {
+  public constructor(sfPath?: string) {
+    const where = sfPath
+      ? `at explicit path "${sfPath}"`
+      : 'in PATH or common npm/nvm/volta install locations';
     super(
-      'sf CLI not found in PATH. Install Salesforce CLI (`npm install -g @salesforce/cli`) and ensure it is in your PATH.'
+      `sf CLI not found ${where}. ` +
+      'Install Salesforce CLI (npm install -g @salesforce/cli) and ensure the install directory is in your PATH, ' +
+      'or pass sf_path pointing to the sf executable directly ' +
+      '(e.g. "~/.nvm/versions/node/v22.0.0/bin/sf").'
     );
     this.name = 'SfNotFoundError';
   }

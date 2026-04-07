@@ -27,7 +27,7 @@ const INCLUDE_SETUP = process.env['SMOKE_INCLUDE_SETUP'] === '1';
 // ----------------------------------------------------------------------------
 const server = spawn('sf', ['provar', 'mcp', 'start', '--allowed-paths', TMP], {
   stdio: ['pipe', 'pipe', 'inherit'],
-  shell: true,
+  shell: process.platform === 'win32',
   env: {
     ...process.env,
     PROVAR_DEV_WHITELIST_KEYS: process.env.PROVAR_DEV_WHITELIST_KEYS || '',
