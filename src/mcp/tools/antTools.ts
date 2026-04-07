@@ -251,6 +251,15 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
       });
 
       try {
+        // Validate all path inputs before writing anything — these get embedded in the
+        // generated ANT build.xml and would be accessed by ANT at execution time.
+        assertPathAllowed(input.provar_home, config.allowedPaths);
+        assertPathAllowed(input.project_path, config.allowedPaths);
+        assertPathAllowed(input.results_path, config.allowedPaths);
+        if (input.license_path) assertPathAllowed(input.license_path, config.allowedPaths);
+        if (input.smtp_path) assertPathAllowed(input.smtp_path, config.allowedPaths);
+        if (input.project_cache_path) assertPathAllowed(input.project_cache_path, config.allowedPaths);
+
         const xmlContent = buildAntXml(input);
         const filePath = input.output_path ? path.resolve(input.output_path) : undefined;
         let written = false;
@@ -559,6 +568,7 @@ function escapeXmlAttr(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
