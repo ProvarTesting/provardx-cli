@@ -27,6 +27,7 @@ import { registerAllDefectTools } from './tools/defectTools.js';
 import { registerAllAntTools } from './tools/antTools.js';
 import { registerAllRcaTools } from './tools/rcaTools.js';
 import { registerAllTestPlanTools } from './tools/testPlanTools.js';
+import { registerAllNitroXTools } from './tools/nitroXTools.js';
 
 export interface ServerConfig {
   allowedPaths: string[];
@@ -72,6 +73,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllAntTools(server, config);
   registerAllRcaTools(server);
   registerAllTestPlanTools(server, config);
+  registerAllNitroXTools(server, config);
 
   return server;
 }

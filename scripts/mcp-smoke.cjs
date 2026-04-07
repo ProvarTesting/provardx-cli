@@ -267,6 +267,42 @@ async function runTests() {
     instance_path: 'plans/SmokePlan/SmokeSuite/smoke.testinstance',
   });
 
+  // ── 34. provar.nitrox.discover ────────────────────────────────────────────
+  // TMP has no .testproject → empty projects list, no crash
+  await callTool('provar.nitrox.discover', { search_roots: [TMP] });
+
+  // ── 35. provar.nitrox.validate ────────────────────────────────────────────
+  // Minimal valid root component → score 100
+  await callTool('provar.nitrox.validate', {
+    content: JSON.stringify({
+      componentId: '550e8400-e29b-41d4-a716-446655440000',
+      name: '/com/smoke/SmokeComponent',
+      type: 'Block',
+      pageStructureElement: true,
+      fieldDetailsElement: false,
+    }),
+  });
+
+  // ── 36. provar.nitrox.generate (dry_run) ─────────────────────────────────
+  await callTool('provar.nitrox.generate', {
+    name: '/com/smoke/SmokeComponent',
+    tag_name: 'c-smoke',
+    dry_run: true,
+  });
+
+  // ── 37. provar.nitrox.read ────────────────────────────────────────────────
+  // Non-existent file → FILE_NOT_FOUND result (not a protocol error)
+  await callTool('provar.nitrox.read', {
+    file_paths: [path.join(TMP, 'nonexistent.po.json')],
+  });
+
+  // ── 38. provar.nitrox.patch ───────────────────────────────────────────────
+  // Non-existent file → FILE_NOT_FOUND result (not a protocol error)
+  await callTool('provar.nitrox.patch', {
+    file_path: path.join(TMP, 'nonexistent.po.json'),
+    patch: { name: '/com/smoke/Patched' },
+  });
+
   server.stdin.end();
 }
 
@@ -275,8 +311,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 32 tools (setup excluded from default count)
-  const TOTAL_EXPECTED = 33 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 36 tools (setup excluded from default count)
+  const TOTAL_EXPECTED = 38 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 
