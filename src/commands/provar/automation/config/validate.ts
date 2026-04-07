@@ -6,7 +6,6 @@
  */
 
 import { SfCommand } from '@salesforce/sf-plugins-core';
-import { } from '@salesforce/core';
 import { ErrorHandler, SfProvarCommandResult, populateResult, PropertyFileValidator, Messages } from '@provartesting/provardx-plugins-utils';
 
 /**

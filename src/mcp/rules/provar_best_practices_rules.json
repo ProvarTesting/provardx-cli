@@ -1,0 +1,3192 @@
+{
+  "schemaVersion": "1.0",
+  "name": "Provar Test Case Quality Best Practices",
+  "description": "Programmatic ruleset for validating and scoring Provar Automation test case quality based on the Best Practices project, README, and best-practices documentation.",
+  "artifactTypes": [
+    "Repository",
+    "Project",
+    "Folder",
+    "TestCase",
+    "Step",
+    "Parameter",
+    "PageObject",
+    "Field",
+    "DataSource"
+  ],
+  "scoring": {
+    "defaultMaxScore": 100,
+    "ruleWeighting": "weightedSum",
+    "categories": {
+      "NamingConventions": 0.2,
+      "StructureAndGrouping": 0.2,
+      "DataDrivenTesting": 0.2,
+      "ReusabilityAndCallables": 0.15,
+      "ConnectionsAndEnvironments": 0.1,
+      "TestCaseDesign": 0.1,
+      "MaintenanceAndFolders": 0.05,
+      "BuildAndCI": 0.0
+    },
+    "notes": "BuildAndCI contributes to repository health but is excluded from per-testCase quality score."
+  },
+  "rules": [
+    {
+      "id": "SCHEMA-ROOT-001",
+      "category": "XMLSchema",
+      "name": "Test case root element must be testCase",
+      "description": "The root XML element must be <testCase>. Any other root element prevents the test from being imported into Provar.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Ensure the root element is <testCase> with proper namespace and attributes.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Test Case Structure"
+    },
+    {
+      "id": "SCHEMA-ID-001",
+      "category": "XMLSchema",
+      "name": "Test case must have valid identifier",
+      "description": "Test case must have one of: 'id' (recommended), 'guid' (Provar V3), or 'registryId' (legacy) attribute. Missing identifier prevents test case import.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Add 'id' attribute to <testCase> element (e.g., id=\"1\"), or use 'guid' for Provar V3 compatibility.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Test Case Identification"
+    },
+    {
+      "id": "STRUCT-ATTR-001",
+      "category": "XMLSchema",
+      "name": "Test case should have failureBehaviour attribute",
+      "description": "The 'failureBehaviour' attribute is recommended for new tests (default: 'Continue'). While not required, it makes test behavior explicit.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Add failureBehaviour=\"Continue\" to <testCase> element for explicit failure handling.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Test Case Attributes"
+    },
+    {
+      "id": "SCHEMA-LEGACY-001",
+      "category": "XMLSchema",
+      "name": "Consider migrating from registryId to id or guid",
+      "description": "Using legacy 'registryId' attribute. Consider migrating to 'id' (simple) or 'guid' (Provar V3) for better compatibility.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Replace registryId with 'id' or 'guid' attribute for Provar V3 compatibility.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Version Compatibility"
+    },
+    {
+      "id": "SCHEMA-VALUE-001",
+      "category": "XMLSchema",
+      "name": "Value elements must not use text attribute",
+      "description": "Content must be inside <value> element, not as text=\"...\" attribute. Using text attribute causes XML parsing errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Change <value text=\"content\"/> to <value>content</value>",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Value Element Format"
+    },
+    {
+      "id": "SCHEMA-URI-001",
+      "category": "XMLSchema",
+      "name": "URI attributes must properly encode ampersands",
+      "description": "Ampersands in URI attributes must be encoded as &amp; for valid XML. Unencoded & causes XML parsing errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Replace & with &amp; in all uri=\"...\" attributes (e.g., uri=\"sf:ui:binding:object?object=Lead&amp;action=View\")",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "XML Specification: Entity Encoding"
+    },
+    {
+      "id": "SCHEMA-STEPS-001",
+      "category": "XMLSchema",
+      "name": "Test case must have steps element",
+      "description": "Test case must contain a <steps> element with at least one apiCall. Missing steps element prevents test case from loading.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Add <steps> element containing apiCall steps to the test case.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar XML Schema: Test Case Structure"
+    },
+    {
+      "id": "SCHEMA-EMPTY-001",
+      "category": "XMLSchema",
+      "name": "Test case should not be empty",
+      "description": "Test case <steps> element should contain at least one <apiCall>. Empty test cases have no executable logic.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Add apiCall steps to implement test logic.",
+      "check": {
+        "type": "disabled",
+        "comment": "Handled by validator handler's validate_schema_compliance() for early detection",
+        "target": "testCase"
+      },
+      "source": "Provar Test Design: Test Content"
+    },
+    {
+      "id": "API-UNKNOWN-001",
+      "category": "XMLSchema",
+      "name": "API identifier must be a valid Provar API",
+      "description": "The apiId attribute must reference a real Provar API. Unknown or hallucinated apiIds (like 'ApexDescribeObject') cause complete test step failures because Provar cannot find the API implementation.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Use only valid Provar apiIds. Common corrections: ApexDescribeObject→ApexReadObject, ApexQueryObject→ApexSoqlQuery, ApexInsertObject→ApexCreateObject. Refer to provar_test_step_schema.json for the complete list of valid APIs.",
+      "check": {
+        "type": "unknownApiId"
+      },
+      "notes": "CRITICAL severity - unknown apiIds cause complete test step failures. This rule catches LLM hallucinations where non-existent APIs are generated.",
+      "source": "Provar API Schema: Valid API Identifiers"
+    },
+    {
+      "id": "NC-FOLDER-001",
+      "category": "NamingConventions",
+      "name": "Folder names are modular and title-cased",
+      "description": "Test folders must be concise, modular, alphabetic, and use Title Case with spaces between words.",
+      "appliesTo": [
+        "Folder",
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Rename folder to be concise, alphabetic only, and in Title Case (e.g. 'Test Case Design').",
+      "check": {
+        "type": "regex",
+        "target": "folder.name",
+        "pattern": "^[A-Z][A-Za-z0-9]*( [A-Z][A-Za-z0-9]*)*$"
+      },
+      "source": "README: Naming Conventions - Test Folders"
+    },
+    {
+      "id": "NC-TESTCASE-001",
+      "category": "NamingConventions",
+      "name": "Test case names use consistent naming convention",
+      "description": "Test case names must follow a consistent naming pattern. NOTE: This rule only applies to test cases with an explicit 'name' attribute (typically callable test cases). The 'id' attribute can be any format.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Use a consistent naming style for callable test case names. Examples: 'CreateAndConvertLead', 'createAndConvertLead', 'Create And Convert Lead'.",
+      "check": {
+        "type": "disabled",
+        "comment": "Disabled - testCase.id can be any format (numeric, etc). Only explicit 'name' attributes need validation.",
+        "target": "testCase.name",
+        "pattern": "^([A-Z][a-z]+(?:[A-Z][a-z]+)*|[a-z]+(?:[A-Z][a-z]+)*|[A-Z][a-z]+(?: [A-Z][a-z]+)*|[a-z]+(?: [a-z]+)*|[a-z]+(?:_[a-z]+)*)$"
+      },
+      "source": "README: Naming Conventions - Test Cases"
+    },
+    {
+      "id": "NC-PARAM-001",
+      "category": "NamingConventions",
+      "name": "Parameters and variables use camelCase",
+      "description": "Test parameters, variables, and return values must be camelCase and unique within their scope.",
+      "appliesTo": [
+        "Parameter"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Rename parameters and variables to camelCase and ensure no duplicates in the same scope.",
+      "check": {
+        "type": "regex",
+        "target": "parameter.name",
+        "pattern": "^[a-z][A-Za-z0-9]*$"
+      },
+      "source": "README: Naming Conventions - Test Parameters, Variables, and Return Values"
+    },
+    {
+      "id": "NC-PO-001",
+      "category": "NamingConventions",
+      "name": "Page Objects use PascalCase",
+      "description": "Page Object names must follow PascalCase and represent a single logical page or screen.",
+      "appliesTo": [
+        "PageObject",
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Rename Page Object to PascalCase (e.g. 'AccountDetailsPage').",
+      "check": {
+        "type": "regex",
+        "target": "pageObject.name",
+        "pattern": "^[A-Z][A-Za-z0-9]*$"
+      },
+      "source": "README: Naming Conventions - Page Objects"
+    },
+    {
+      "id": "NC-FIELD-001",
+      "category": "NamingConventions",
+      "name": "Field names use camelCase",
+      "description": "Field mapping names must be camelCase for consistency and readability.",
+      "appliesTo": [
+        "Field",
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Rename field mapping to camelCase (e.g. 'billingStreet').",
+      "check": {
+        "type": "regex",
+        "target": "field.name",
+        "pattern": "^[a-z][A-Za-z0-9]*$"
+      },
+      "source": "README: Naming Conventions - Field Names"
+    },
+    {
+      "id": "STRUCT-GROUP-001",
+      "category": "StructureAndGrouping",
+      "name": "All steps are inside Group steps or BDD structure",
+      "description": "Every test step must be contained within a Group Step, BDD design step (Given/When/Then/And/But), or Finally block to improve readability and maintenance.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Wrap root-level steps into logically named Group Steps, BDD steps (Given/When/Then), or Finally blocks.",
+      "check": {
+        "type": "mustAllBeInGroups",
+        "target": "testCase.steps",
+        "acceptBddSteps": true,
+        "acceptFinallyBlocks": true
+      },
+      "source": "README: Naming Conventions - Group Steps"
+    },
+    {
+      "id": "STRUCT-SUMMARY-001",
+      "category": "StructureAndGrouping",
+      "name": "Test case has top-level summary",
+      "description": "Each test case must have a summary describing its purpose and usage.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Add a concise summary describing scenario, preconditions, and outcome.",
+      "check": {
+        "type": "mustExistAndNotEmpty",
+        "target": "testCase.summary"
+      },
+      "source": "README: Usage - Each test has its own summary"
+    },
+    {
+      "id": "STEP-NAMES-001",
+      "category": "StructureAndGrouping",
+      "name": "Custom step names for UI asserts and sets",
+      "description": "UI Assert, Set Values, and long SOQL query steps must be renamed to be descriptive.",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Rename the step to describe what is being asserted or set (e.g. 'assertAccountStatusIsActive').",
+      "check": {
+        "type": "semanticPattern",
+        "target": "step",
+        "appliesWhen": [
+          "step.type in ['UIAssert','SetValues','SOQL']"
+        ],
+        "mustHaveCustomName": true
+      },
+      "source": "README: Naming Conventions - Test Step Names"
+    },
+    {
+      "id": "DDT-EXCEL-001",
+      "category": "DataDrivenTesting",
+      "name": "Excel headers match field label or API name",
+      "description": "Excel/data source column headers must match either the field label or API name.",
+      "appliesTo": [
+        "DataSource"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Rename Excel column headers to match Salesforce field labels or API names.",
+      "check": {
+        "type": "semantic",
+        "target": "dataSource.columns[]",
+        "requireMappingTo": "SalesforceField"
+      },
+      "source": "README: Naming Conventions - Excel/Data Source"
+    },
+    {
+      "id": "DDT-NO-FUNC-001",
+      "category": "DataDrivenTesting",
+      "name": "No Excel functions in data",
+      "description": "Excel test data must be static; functions are not allowed in cells.",
+      "appliesTo": [
+        "DataSource",
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Replace Excel formulas with static values to keep tests deterministic.",
+      "check": {
+        "type": "mustNotMatchRegex",
+        "target": "dataSource.cells[]",
+        "pattern": "^="
+      },
+      "source": "README: Naming Conventions - Excel/Data Source"
+    },
+    {
+      "id": "VAR-NAMING-001",
+      "category": "DataDrivenTesting",
+      "name": "Variable names must use valid identifiers",
+      "description": "Variable names, field references, and result names must contain only letters, digits, and underscores. Spaces, hyphens, and special characters cause RUNTIME FAILURES in Provar. Examples: {Account.Name} ✅ | {Account.Account Name} ❌ (space will fail)",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Replace spaces and special characters with underscores. Use API field names (e.g., Account.Name) instead of field labels (e.g., Account.Account Name).",
+      "check": {
+        "type": "variableNaming",
+        "target": "step.variable",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      },
+      "source": "Provar Runtime Requirements - Variable identifier rules",
+      "notes": "CRITICAL severity - spaces/hyphens in variable names cause test step failures at runtime. Affects SetValues, variable references, result names (resultName, resultIdName, sfUiTargetResultName), and array notation."
+    },
+    {
+      "id": "DDT-VAR-001",
+      "category": "DataDrivenTesting",
+      "name": "No hardcoded values in steps",
+      "description": "Fields and values used more than once in a test must be parameterized or stored in variables.",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Replace repeated literal values with variables or parameters defined in the test case.",
+      "check": {
+        "type": "detectDuplicatesLiterals",
+        "target": "step.value",
+        "minOccurrences": 2
+      },
+      "source": "Best Practices: Data-Driven Testing & Additional Best Practices",
+      "notes": "Severity downgraded from major to minor in Session 4 - style/cosmetic issue, not functional"
+    },
+    {
+      "id": "REUSE-CALL-001",
+      "category": "ReusabilityAndCallables",
+      "name": "Callable tests reside in Callables folder",
+      "description": "Callable tests must be stored under a designated Callables folder for discoverability.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Move callable test into 'tests/Callables' (or equivalent) folder.",
+      "check": {
+        "type": "callableFolder",
+        "target": "testCase.path"
+      },
+      "source": "README: Test Case Reusability & Callables"
+    },
+    {
+      "id": "REUSE-CALL-002",
+      "category": "ReusabilityAndCallables",
+      "name": "Callable tests are parameterized",
+      "description": "Callable tests must define input parameters instead of using internal hardcoded values.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Add input parameters to the callable test and reference them in steps instead of literals.",
+      "check": {
+        "type": "mustHaveParameters",
+        "target": "testCase",
+        "minParameters": 1
+      },
+      "source": "README: Callables & Best Practices text"
+    },
+    {
+      "id": "REUSE-CALL-003",
+      "category": "ReusabilityAndCallables",
+      "name": "Callable tests executable in isolation",
+      "description": "Callable tests must be self-contained and executable independently for debugging.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Ensure callable tests create their own preconditions (records, connections) or accept them as parameters.",
+      "check": {
+        "type": "semantic",
+        "target": "testCase",
+        "mustNotDependOnExternalState": true
+      },
+      "source": "README: Callables & Best Practices text - Additional Best Practices"
+    },
+    {
+      "id": "ENV-CONN-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "Admin connection supports Login-As",
+      "description": "There must be an Admin connection configured to perform Login-As for other profiles.",
+      "appliesTo": [
+        "Project"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Create an Admin connection with 'login as' permissions for target profiles.",
+      "check": {
+        "type": "mustContain",
+        "target": "project.connections",
+        "connectionRole": "AdminLoginAs"
+      },
+      "source": "Best Practices: Environment Overrides"
+    },
+    {
+      "id": "ENV-CONN-002",
+      "category": "ConnectionsAndEnvironments",
+      "name": "Connection names should not contain environment specifiers",
+      "description": "Connection names should be environment-agnostic. Avoid embedding UAT, QA, Sandbox, Prod, Production, or Scratch in connection names. Use environment overrides instead.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Remove environment specifiers from connection names. Create environment-specific connections via Provar environment overrides.",
+      "check": {
+        "type": "environmentConnectionName",
+        "target": "testCase"
+      },
+      "source": "Best Practices: Environment Overrides"
+    },
+    {
+      "id": "DESIGN-APIUI-001",
+      "category": "TestCaseDesign",
+      "name": "Prefer API for setup where possible",
+      "description": "Test setup steps that only prepare data should use API/SOQL instead of UI flows when feasible.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Replace UI-based record creation for setup with API or SOQL-based data creation where appropriate.",
+      "check": {
+        "type": "semantic",
+        "target": "step",
+        "detectSetupViaUI": true,
+        "suggestAPIAlternative": true
+      },
+      "source": "Best Practices: Test Case Design - API vs UI"
+    },
+    {
+      "id": "DESIGN-GROUP-001",
+      "category": "TestCaseDesign",
+      "name": "Use Group Steps or BDD structure for logical phases",
+      "description": "Long tests should be organized using Group Steps, BDD design steps (Given/When/Then/And/But), or Finally blocks that represent logical phases of the flow.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Organize test with Group Steps (e.g. 'Setup', 'Execute Scenario', 'Validate Results'), BDD steps (Given/When/Then), or Finally blocks around related actions.",
+      "check": {
+        "type": "mustHaveMinGroups",
+        "target": "testCase.groups",
+        "minGroups": 2,
+        "acceptBddSteps": true,
+        "acceptFinallyBlocks": true
+      },
+      "source": "Best Practices: Test Case Design"
+    },
+    {
+      "id": "STEP-DISABLED-001",
+      "category": "TestCaseDesign",
+      "name": "Disabled test steps should be removed",
+      "description": "Test steps marked with <tags><string>disabled</string></tags> should be removed from the test case to maintain clean, maintainable code. Disabled steps create technical debt and confusion.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Remove disabled test steps entirely. If the step is needed for future use, consider creating a separate test case or adding it when actually required.",
+      "check": {
+        "type": "disabledStep",
+        "target": "step"
+      },
+      "source": "Best Practices: Test Case Maintenance"
+    },
+    {
+      "id": "MAINT-FOLDER-001",
+      "category": "MaintenanceAndFolders",
+      "name": "Folder-level setup test per application segment",
+      "description": "Each folder representing an application segment must include a setup test case for connections.",
+      "appliesTo": [
+        "Folder"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Add a setup test case that establishes folder-wide connections (even if folder scope bug exists).",
+      "check": {
+        "type": "mustContainSetupTest",
+        "target": "folder.tests",
+        "setupNamePattern": "(?i)setup"
+      },
+      "source": "README: Test Case Maintenance"
+    },
+    {
+      "id": "MAINT-VERSION-001",
+      "category": "MaintenanceAndFolders",
+      "name": "Consistent Provar/OS/browser versions",
+      "description": "Execution environments and authors should align on Provar, OS, and browser versions.",
+      "appliesTo": [
+        "Project"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Document and standardize supported Provar, OS, and browser versions in project configuration.",
+      "check": {
+        "type": "informational",
+        "target": "project.config"
+      },
+      "source": "Best Practices: Additional Best Practices"
+    },
+    {
+      "id": "BUILD-PLAN-001",
+      "category": "BuildAndCI",
+      "name": "Regression Test Plan exists for CI",
+      "description": "A Regression Test Plan must exist and be referenced by CI builds.",
+      "appliesTo": [
+        "Project"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Ensure there is a 'Regression' plan and that the CI workflow references it.",
+      "check": {
+        "type": "mustContain",
+        "target": "project.plans",
+        "planName": "Regression"
+      },
+      "source": "README: Builds"
+    },
+    {
+      "id": "VALID-GUID-001",
+      "category": "TestCaseDesign",
+      "name": "Test case has valid identifier",
+      "description": "Test case must have a valid identifier: 'guid' (V3), 'id', or 'registryId' (legacy) attribute.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add a valid identifier to the <testCase> element: guid (preferred), id, or registryId attribute.",
+      "check": {
+        "type": "validIdentifier",
+        "target": "testCase"
+      },
+      "source": "INSTRUCTIONS.md: Top-Level Format & Structure"
+    },
+    {
+      "id": "VALID-STEPS-001",
+      "category": "TestCaseDesign",
+      "name": "Test case has steps element",
+      "description": "Test case must contain a <steps> element with at least one step.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add a <steps> element containing apiCall steps.",
+      "check": {
+        "type": "mustExist",
+        "target": "testCase.steps"
+      },
+      "source": "INSTRUCTIONS.md: Top-Level Format & Structure"
+    },
+    {
+      "id": "UI-CONNECT-ARGS-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "UiConnect has invalid arguments (ApexConnect arguments used)",
+      "description": "UiConnect steps have different arguments than ApexConnect. UiConnect does NOT support: autoCleanup, enableObjectIdLogging, quickUiLogin, closeAllPrimaryTabs, alreadyOpenBehaviour, lightningMode, uiApplicationName, cleanupConnectionName. Valid UiConnect arguments are: connectionName, connectionId, resultName, resultScope, reuseConnectionName, privateBrowsingMode, webBrowser.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Remove invalid arguments from UiConnect. For Salesforce connections requiring autoCleanup, use ApexConnect instead of UiConnect. UiConnect is for non-Salesforce UI connections only.",
+      "check": {
+        "type": "uiConnectInvalidArgs",
+        "target": "step"
+      },
+      "source": "Provar API Reference: UiConnect vs ApexConnect"
+    },
+    {
+      "id": "APEX-AUTOCLEANUP-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "Prefer autoCleanup over manual ApexDeleteObject steps",
+      "description": "ApexConnect should use autoCleanup=true instead of manual ApexDeleteObject steps. autoCleanup is preferred because it requires fewer steps, is more reliable (cleanup happens even if test fails), and automatically handles deletion order. Only use manual deletes when records are created indirectly and IDs aren't captured. Note: With multiple ApexConnect steps, autoCleanup only deletes records created using that specific connection's resultName.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Set autoCleanup=true in ApexConnect and remove manual ApexDeleteObject steps. autoCleanup automatically deletes records created via ApexCreateObject and UiWithScreen action=New (when sfUiTargetResultName captures the ID). With multiple connections, each autoCleanup only handles its own connection's records.",
+      "check": {
+        "type": "apexConnectAutoCleanup",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Salesforce Connect Steps"
+    },
+    {
+      "id": "UI-SCREEN-NAV-001",
+      "category": "TestCaseDesign",
+      "name": "First UiWithScreen must use navigate=Always or IfNeccessary",
+      "description": "The first UiWithScreen step must use navigate='Always' or 'IfNeccessary' to ensure proper navigation. Using 'Dont' will cause failures in CLI/debug mode. This rule is skipped for callable tests (visibility='Internal').",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Set navigate='Always' (preferred) or 'IfNeccessary' for the first UiWithScreen step. Never use 'Dont' on the first UiWithScreen unless in a callable test.",
+      "check": {
+        "type": "uiScreenNavigation",
+        "target": "step"
+      },
+      "source": "Provar UI Navigation Best Practices - CLI/Pipeline Compatibility"
+    },
+    {
+      "id": "UI-SCREEN-NAV-002",
+      "category": "TestCaseDesign",
+      "name": "First UiWithScreen should prefer navigate=Always over IfNeccessary",
+      "description": "The first UiWithScreen step should use navigate='Always' rather than 'IfNeccessary' for more reliable navigation. While 'IfNeccessary' works, 'Always' provides more consistent behavior. This rule is skipped for callable tests (visibility='Internal').",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Change navigate='IfNeccessary' to navigate='Always' for the first UiWithScreen step for more reliable navigation.",
+      "check": {
+        "type": "uiScreenNavigationIfNeccessary",
+        "target": "step"
+      },
+      "source": "Provar UI Navigation Best Practices"
+    },
+    {
+      "id": "UI-SCREEN-OBJID-001",
+      "category": "TestCaseDesign",
+      "name": "UiWithScreen with navigate=Always for Edit/View must have sfUiTargetObjectId",
+      "description": "When UiWithScreen navigates to an Edit or View screen with navigate='Always', the sfUiTargetObjectId argument must be populated to specify which record to edit or view. Without this, Provar cannot determine which record to navigate to. This does not apply to New screens (which create new records) or List/Home screens.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add sfUiTargetObjectId argument referencing a previously captured record ID variable (e.g., AccountId from a prior UiWithScreen with action=New or ApexCreateObject).",
+      "check": {
+        "type": "uiScreenObjectId",
+        "target": "step"
+      },
+      "source": "Provar UI Navigation Best Practices - Record Context"
+    },
+    {
+      "id": "APEX-RESULTNAME-001",
+      "category": "NamingConventions",
+      "name": "ApexConnect resultName is unique",
+      "description": "Each ApexConnect step must have a unique resultName for proper connection tracking.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Use unique resultName values like 'ApexConnection', 'ApexConnection2', etc.",
+      "check": {
+        "type": "uniqueResultNames",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Salesforce Connect Steps",
+      "notes": "Severity downgraded from major to minor in Session 4 - naming convention, not functional issue"
+    },
+    {
+      "id": "STEP-ITEMID-001",
+      "category": "TestCaseDesign",
+      "name": "testItemId values are whole numbers",
+      "description": "All testItemId attributes must be whole numbers, not decimals.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Use whole numbers for testItemId (1, 2, 3...) not decimals (1.0, 2.5).",
+      "check": {
+        "type": "wholeNumberTestItemId",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Top-Level Format & Structure"
+    },
+    {
+      "id": "VAR-USAGE-001",
+      "category": "DataDrivenTesting",
+      "name": "Variable references use correct syntax",
+      "description": "Variable references must use {VarName[1].Field} syntax, not {VarName.1.Field}.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Use {ResultName[index].FieldName} where index starts at 1, not 0.",
+      "check": {
+        "type": "variableSyntax",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Apex CRUD Steps",
+      "notes": "Severity downgraded from major to minor in Session 4 - code cleanliness, similar to unused imports"
+    },
+    {
+      "id": "CUSTOM-FIELD-001",
+      "category": "NamingConventions",
+      "name": "Custom fields end with __c",
+      "description": "Custom field references must end with '__c' suffix.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add '__c' suffix to custom field names (e.g. 'CustomField__c').",
+      "check": {
+        "type": "customFieldSuffix",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Final Reminders"
+    },
+    {
+      "id": "SOQL-SELECT-ID-001",
+      "category": "TestCaseDesign",
+      "name": "SOQL queries include Id and Name",
+      "description": "SOQL queries should retrieve Id and Name fields by default.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Add 'Id, Name' to SELECT clause for object queries.",
+      "check": {
+        "type": "disabled",
+        "subType": "soqlSelectFields",
+        "target": "step"
+      },
+      "source": "INSTRUCTIONS.md: Apex CRUD Steps"
+    },
+    {
+      "id": "CONTROL-FOREACH-001",
+      "category": "TestCaseDesign",
+      "name": "ForEach loops have valid source collection",
+      "description": "ForEach steps must specify a valid source collection to iterate over.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 4,
+      "recommendation": "Add 'list' argument to ForEach step referencing a valid collection variable.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.ForEach",
+        "argument": "list"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-IF-001",
+      "category": "TestCaseDesign",
+      "name": "If statements have conditions",
+      "description": "If steps must have a boolean condition expression.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'condition' argument to If step with valid boolean expression.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.If",
+        "argument": "condition"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-WHILE-001",
+      "category": "TestCaseDesign",
+      "name": "While loops have exit conditions",
+      "description": "While loops must have a condition to prevent infinite loops.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'condition' argument to While step that will eventually evaluate to false.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.DoWhile",
+        "argument": "condition"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-FOREACH-002",
+      "category": "TestCaseDesign",
+      "name": "ForEach loops have valueName to store current item",
+      "description": "ForEach steps must specify a valueName argument to store the current iteration value.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'valueName' argument to ForEach step to name the variable that will hold each item during iteration.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.ForEach",
+        "argument": "valueName"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-SWITCH-001",
+      "category": "TestCaseDesign",
+      "name": "Switch statements have value expression",
+      "description": "Switch steps must specify a value argument to evaluate against cases.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'value' argument to Switch step with the expression to evaluate.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.Switch",
+        "argument": "value"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-SLEEP-002",
+      "category": "TestCaseDesign",
+      "name": "Sleep steps have duration specified",
+      "description": "Sleep steps must specify sleepSecs argument with the number of seconds to wait.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'sleepSecs' argument to Sleep step with a positive decimal value.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.Sleep",
+        "argument": "sleepSecs"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-WAITFOR-001",
+      "category": "TestCaseDesign",
+      "name": "WaitFor steps have condition",
+      "description": "WaitFor steps must specify a condition argument to evaluate each iteration.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'condition' argument to WaitFor step with a boolean expression to wait for.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.WaitFor",
+        "argument": "condition"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "CONTROL-WAITFOR-002",
+      "category": "TestCaseDesign",
+      "name": "WaitFor steps have max iterations limit",
+      "description": "WaitFor steps must specify maxIterations to prevent infinite waiting.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add 'maxIterations' argument to WaitFor step to limit wait cycles.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.control.WaitFor",
+        "argument": "maxIterations"
+      },
+      "source": "Provar Test Step Schema: Control Flow Steps"
+    },
+    {
+      "id": "ASSERT-COMPARISON-001",
+      "category": "TestCaseDesign",
+      "name": "AssertValues has comparisonType",
+      "description": "AssertValues steps must specify a comparisonType argument (EqualTo, Contains, etc.).",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'comparisonType' argument with valid value: EqualTo, NotEqualTo, Contains, NotContains, StartsWith, EndsWith, GreaterThan, LessThan, Matches, IsNull, NotNull.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.AssertValues",
+        "argument": "comparisonType"
+      },
+      "source": "Provar Test Step Schema: Assertion Steps"
+    },
+    {
+      "id": "ASSERT-EXPECTED-001",
+      "category": "TestCaseDesign",
+      "name": "AssertValues has expectedValue",
+      "description": "AssertValues steps must specify an expectedValue argument containing the value to test.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'expectedValue' argument with the variable or value being verified.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.AssertValues",
+        "argument": "expectedValue"
+      },
+      "source": "Provar Test Step Schema: Assertion Steps"
+    },
+    {
+      "id": "ASSERT-ACTUAL-001",
+      "category": "TestCaseDesign",
+      "name": "AssertValues has actualValue",
+      "description": "AssertValues steps must specify an actualValue argument containing the expected result. NOTE: actualValue CAN be empty when using NotEqualTo to check if a string is NOT blank (common pattern for null/blank checks).",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'actualValue' argument with the expected result to compare against. For blank string checks, actualValue can be empty with NotEqualTo comparison.",
+      "check": {
+        "type": "disabled",
+        "comment": "DISABLED: False positive - actualValue CAN be empty for NotEqualTo blank string checks. Valid pattern: <argument id='actualValue'/> with NotEqualTo checks if string is not blank. Need to reimplement as conditional check that allows empty actualValue when comparisonType=NotEqualTo.",
+        "subtype": "assertActualValue"
+      },
+      "source": "Provar Test Step Schema: Assertion Steps"
+    },
+    {
+      "id": "BDD-GIVEN-001",
+      "category": "TestCaseDesign",
+      "name": "Given steps have description",
+      "description": "BDD Given steps must specify a description argument explaining the precondition.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add 'description' argument to Given step with a clear precondition statement.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.bdd.Given",
+        "argument": "description"
+      },
+      "source": "Provar Test Step Schema: BDD Steps"
+    },
+    {
+      "id": "BDD-WHEN-001",
+      "category": "TestCaseDesign",
+      "name": "When steps have description",
+      "description": "BDD When steps must specify a description argument explaining the action.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add 'description' argument to When step with a clear action statement.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.bdd.When",
+        "argument": "description"
+      },
+      "source": "Provar Test Step Schema: BDD Steps"
+    },
+    {
+      "id": "BDD-THEN-001",
+      "category": "TestCaseDesign",
+      "name": "Then steps have description",
+      "description": "BDD Then steps must specify a description argument explaining the expected outcome.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add 'description' argument to Then step with a clear expected outcome statement.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.bdd.Then",
+        "argument": "description"
+      },
+      "source": "Provar Test Step Schema: BDD Steps"
+    },
+    {
+      "id": "SOQL-QUERY-001",
+      "category": "TestCaseDesign",
+      "name": "ApexSoqlQuery has soqlQuery argument",
+      "description": "ApexSoqlQuery steps must specify a soqlQuery argument with the SOQL statement.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'soqlQuery' argument with valid SOQL statement (e.g., SELECT Id, Name FROM Account).",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery",
+        "argument": "soqlQuery"
+      },
+      "source": "Provar Test Step Schema: Apex Steps"
+    },
+    {
+      "id": "DB-CONNECT-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "DbConnect has connectionName",
+      "description": "DbConnect steps must specify a connectionName argument identifying the database connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'connectionName' argument with the database connection identifier from environment settings.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.db.DbConnect",
+        "argument": "connectionName"
+      },
+      "source": "Provar Test Step Schema: Database Steps"
+    },
+    {
+      "id": "DB-CONNECT-002",
+      "category": "ConnectionsAndEnvironments",
+      "name": "DbConnect has resultName",
+      "description": "DbConnect steps must specify a resultName argument to store the connection reference.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'resultName' argument with the variable name to store the connection reference.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.db.DbConnect",
+        "argument": "resultName"
+      },
+      "source": "Provar Test Step Schema: Database Steps"
+    },
+    {
+      "id": "SQL-QUERY-001",
+      "category": "TestCaseDesign",
+      "name": "SqlQuery has query argument",
+      "description": "SqlQuery steps must specify a query argument with the SQL statement.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'query' argument with valid SQL statement.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.db.SqlQuery",
+        "argument": "query"
+      },
+      "source": "Provar Test Step Schema: Database Steps"
+    },
+    {
+      "id": "SQL-QUERY-002",
+      "category": "TestCaseDesign",
+      "name": "SqlQuery has dbConnectionName",
+      "description": "SqlQuery steps must specify a dbConnectionName argument referencing the database connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'dbConnectionName' argument with the resultName from a DbConnect step.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.db.SqlQuery",
+        "argument": "dbConnectionName"
+      },
+      "source": "Provar Test Step Schema: Database Steps"
+    },
+    {
+      "id": "REST-CONN-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "WebConnect has connectionName",
+      "description": "WebConnect steps must specify a connectionName argument identifying the web service connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'connectionName' argument with the web service connection identifier.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.WebConnect",
+        "argument": "connectionName"
+      },
+      "source": "Provar Test Step Schema: Web Service Steps"
+    },
+    {
+      "id": "REST-CONN-002",
+      "category": "ConnectionsAndEnvironments",
+      "name": "WebConnect has resultName",
+      "description": "WebConnect steps must specify a resultName argument to store the connection reference.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'resultName' argument with the variable name to store the connection reference.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.WebConnect",
+        "argument": "resultName"
+      },
+      "source": "Provar Test Step Schema: Web Service Steps"
+    },
+    {
+      "id": "REST-REQUEST-001",
+      "category": "TestCaseDesign",
+      "name": "RestRequest has connectionName",
+      "description": "RestRequest steps must specify a connectionName argument referencing the web service connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'connectionName' argument with the resultName from a WebConnect step.",
+      "check": {
+        "type": "mustContainArgument",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.RestRequest",
+        "argument": "connectionName"
+      },
+      "source": "Provar Test Step Schema: Web Service Steps"
+    },
+    {
+      "id": "VAR-REFERENCE-001",
+      "category": "TestCaseDesign",
+      "name": "Variables are defined before use",
+      "description": "Variables referenced in test should be defined via SetValues or result from previous steps.",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Define variable with SetValues step or ensure it's populated by previous step (SOQL, CreateObject, etc.).",
+      "check": {
+        "type": "variableDefinition",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: Variable Validation"
+    },
+    {
+      "id": "CONN-APEX-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "Apex API calls reference valid connections",
+      "description": "Apex API operations must reference an existing ApexConnect connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure ApexConnect step exists before Apex API calls and connection names match.",
+      "check": {
+        "type": "apexConnectionReference",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: Connection Validation"
+    },
+    {
+      "id": "CONN-DB-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "Database operations reference valid connections",
+      "description": "Database API operations must reference an existing DbConnect connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure DbConnect step exists before database operations and connection names match.",
+      "check": {
+        "type": "dbConnectionReference",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: Connection Validation"
+    },
+    {
+      "id": "CONN-UI-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "UI operations reference valid connections",
+      "description": "UI API operations must reference an existing UiConnect connection.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure UiConnect step exists before UI operations and connection names match.",
+      "check": {
+        "type": "uiConnectionReference",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: Connection Validation"
+    },
+    {
+      "id": "UI-CONN-LITERAL-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "uiConnectionName must be a literal string",
+      "description": "UiWithScreen/UiDoAction/UiAssert steps must set uiConnectionName to a literal string (the resultName from UiConnect/ApexConnect). Using <value class=\"variable\"> for uiConnectionName causes Provar to error.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Set uiConnectionName using <value class=\"value\" valueClass=\"string\">AdminConnection</value> (not a variable reference).",
+      "check": {
+        "type": "uiConnectionNameLiteral",
+        "target": "step"
+      },
+      "source": "Provar Runtime Requirement - UI connection name must be literal"
+    },
+    {
+      "id": "SOQL-STRUCTURE-001",
+      "category": "TestCaseDesign",
+      "name": "SOQL queries have SELECT and FROM clauses",
+      "description": "Valid SOQL queries must contain both SELECT and FROM clauses.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure SOQL query has format: SELECT <fields> FROM <object>",
+      "check": {
+        "type": "soqlStructure",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery"
+      },
+      "source": "Provar Test Step Schema: SOQL Validation"
+    },
+    {
+      "id": "SOQL-WHERE-001",
+      "category": "TestCaseDesign",
+      "name": "SOQL queries include WHERE or LIMIT clause",
+      "description": "SOQL queries must have WHERE clause or LIMIT to prevent unreasonably large result sets and potential heap size errors. This prevents Apex governance violations and performance issues.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add WHERE clause to filter results (e.g. WHERE Id = :recordId) or LIMIT clause to cap result size (e.g. LIMIT 100). For large data volumes, always include both WHERE and LIMIT.",
+      "check": {
+        "type": "soqlWhereOrLimit",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery"
+      },
+      "source": "SOQL Best Practices: Building Efficient & Selective Queries"
+    },
+    {
+      "id": "SOQL-IN-LOOP-001",
+      "category": "TestCaseDesign",
+      "name": "SOQL queries must not be inside loops",
+      "description": "SOQL queries inside For/ForEach/While/DoWhile loops violate Apex governor limits. Each SOQL query execution consumes from the 100 SOQL query limit per transaction. Queries in loops can quickly exceed this limit causing 'Too many SOQL queries: 101' errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Move SOQL query outside the loop and store results in a collection. Then iterate over the collection. Use SOQL WHERE clauses to filter in the query rather than filtering in a loop. Consider using aggregate queries or bulk processing patterns.",
+      "check": {
+        "type": "soqlInLoop",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery"
+      },
+      "source": "SOQL Best Practices: Avoid SOQL inside FOR Loops - Apex Governance"
+    },
+    {
+      "id": "APEX-CONNECTION-REF-001",
+      "category": "ApexAPI",
+      "name": "Apex API steps must reference a valid connection",
+      "description": "All Apex API calls (ApexCreate, ApexUpdate, ApexDelete, ApexRead, ApexSoqlQuery) must reference a valid Salesforce connection defined earlier in the test using ApexConnect. Tests will fail if connection is missing, empty, or references an undefined connection name.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add an ApexConnect step before any Apex API calls to establish a Salesforce connection. Reference the connection name in all subsequent Apex API calls. Use variables for connection names if dynamically determined.",
+      "check": {
+        "type": "apexConnectionReference",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Connection Management"
+    },
+    {
+      "id": "APEX-OBJECT-TYPE-001",
+      "category": "ApexAPI",
+      "name": "Apex CRUD operations must have valid object types",
+      "description": "ApexCreate, ApexUpdate, ApexDelete, and ApexRead steps must specify a valid Salesforce object type (e.g., Account, Contact, Broker__c). Object type must start with capital letter and contain only alphanumeric characters and underscores. Invalid or missing object types cause test failures.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Specify the correct Salesforce object API name (e.g., Account, Contact, Custom__c). Use standard object names or custom object API names ending with __c. Verify object exists in the target Salesforce org.",
+      "check": {
+        "type": "apexObjectType",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Object Validation"
+    },
+    {
+      "id": "APEX-UPDATE-ID-001",
+      "category": "ApexAPI",
+      "name": "ApexUpdateObject must have valid record ID",
+      "description": "ApexUpdateObject requires a valid Salesforce record ID (15 or 18 characters) or a variable reference containing the ID. Missing, empty, or invalid record IDs cause test failures. Record IDs must be alphanumeric Salesforce IDs.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Provide a valid 15 or 18 character Salesforce record ID, or use a variable like {AccountId} that contains a valid ID from a prior Create or Read operation. Verify the record exists before attempting update.",
+      "check": {
+        "type": "apexRecordId",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Record ID Validation"
+    },
+    {
+      "id": "APEX-UPDATE-FIELDS-001",
+      "category": "ApexAPI",
+      "name": "ApexUpdateObject must specify fields to update",
+      "description": "ApexUpdateObject steps should specify at least one field to update in the field definitions. Update operations without field specifications have no effect and represent incomplete test logic. System arguments (objectType, recordId, objectId, apexConnectionName, resultScope, assignmentRuleId, resultIdName) are excluded from this check.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add field definitions to the ApexUpdateObject step and provide values for at least one field to update. For example, specify Name, Status, or other relevant fields with test data or variable references.",
+      "check": {
+        "type": "apexUpdateFields",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Field Validation"
+    },
+    {
+      "id": "APEX-DELETE-ID-001",
+      "category": "ApexAPI",
+      "name": "ApexDeleteObject must have valid record ID",
+      "description": "ApexDeleteObject requires a valid Salesforce record ID (15 or 18 characters) or a variable reference containing the ID. Missing, empty, or invalid record IDs cause test failures. Record IDs must be alphanumeric Salesforce IDs.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Provide a valid 15 or 18 character Salesforce record ID, or use a variable like {AccountId} that contains a valid ID from a prior Create or Read operation. Verify the record exists before attempting delete.",
+      "check": {
+        "type": "apexRecordId",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Record ID Validation"
+    },
+    {
+      "id": "APEX-READ-ID-001",
+      "category": "ApexAPI",
+      "name": "ApexReadObject must have valid record ID",
+      "description": "ApexReadObject requires a valid Salesforce record ID (15 or 18 characters) or a variable reference containing the ID. Missing, empty, or invalid record IDs cause test failures. Record IDs must be alphanumeric Salesforce IDs.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Provide a valid 15 or 18 character Salesforce record ID, or use a variable like {AccountId} that contains a valid ID from a prior Create operation. Verify the record exists before attempting read.",
+      "check": {
+        "type": "apexRecordId",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Record ID Validation"
+    },
+    {
+      "id": "APEX-CREATE-FIELDS-001",
+      "category": "ApexAPI",
+      "name": "ApexCreateObject with fields must populate at least one field",
+      "description": "When ApexCreateObject includes a fields structure, at least one field must be populated with a value. Empty field structures indicate incomplete test implementation and may cause test failures or create records with default values only.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Populate at least one field with a value or variable reference in the ApexCreateObject fields structure. Remove the fields structure if not needed. Verify required fields for the object are populated.",
+      "check": {
+        "type": "apexCreateFields",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Field Validation"
+    },
+    {
+      "id": "APEX-CREATE-METADATA-001",
+      "category": "ApexAPI",
+      "name": "ApexCreateObject and ApexUpdateObject must include parameter metadata",
+      "description": "ApexCreateObject and ApexUpdateObject steps MUST include <parameterGeneratorProperties> and <generatedParameters> sections after </arguments>. These metadata sections enable Provar IDE features like field auto-complete, field suggestions, and proper object binding. Missing metadata causes degraded IDE experience and prevents field discovery.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add <parameterGeneratorProperties> with ConnectionName and CustomObjectName properties, and <generatedParameters> with apiParam elements for each field used in arguments. Study existing tier4 examples to see the exact structure required.",
+      "check": {
+        "type": "apexCreateMetadata",
+        "target": "step"
+      },
+      "source": "Provar IDE Requirements - Parameter Metadata for Object Operations"
+    },
+    {
+      "id": "APEX-CREATE-UPDATE-STRUCTURE-001",
+      "category": "ApexAPI",
+      "name": "ApexUpdateObject/ApexCreateObject field arguments must be direct, not nested in uiObjectFieldValue",
+      "description": "ApexUpdateObject and ApexCreateObject steps MUST use direct field arguments (e.g., <argument id='Status'><value.../></argument>) instead of nesting fields within uiObjectFieldValue elements inside the values argument. The values argument should contain only an empty valueList. Nested uiObjectFieldValue structures cause runtime failures and prevent proper field serialization.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use direct field arguments: <argument id='FieldName'><value class='value' valueClass='string'>FieldValue</value></argument> with a separate empty <argument id='values'><value class='valueList' mutable='Mutable'/></argument>. Do NOT nest fields inside uiObjectFieldValue within the values argument.",
+      "check": {
+        "type": "apexUpdateFieldStructure",
+        "target": "step"
+      },
+      "source": "Provar Runtime Requirements - API Object Field Structure"
+    },
+    {
+      "id": "APEX-READ-FIELDS-STRUCTURE-001",
+      "category": "ApexAPI",
+      "name": "ApexReadObject must use generatedParameters for field references, not fields argument with textType",
+      "description": "ApexReadObject steps should NOT use a 'fields' argument containing textType elements for field names. Instead, fields must be properly referenced via generatedParameters with modelBinding attributes. The incorrect pattern uses <argument id='fields'><value class='valueList'><textType>FieldName</textType></value></argument> which prevents proper field metadata and IDE integration. The correct pattern includes proper <generatedParameters> with <apiParam group='fields' modelBinding='sf:ui:binding:object?field=FieldName&object=ObjectType'> elements.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Remove the 'fields' argument with textType elements. Ensure each field has a corresponding <apiParam> entry in <generatedParameters> with proper modelBinding. Fields should be declared through generatedParameters, not through a fields argument.",
+      "check": {
+        "type": "apexReadFieldsStructure",
+        "target": "step"
+      },
+      "source": "Provar IDE Requirements - ApexReadObject Field Metadata"
+    },
+    {
+      "id": "APEX-APIPARAM-HALLUCINATION-001",
+      "category": "XMLSchema",
+      "name": "Apex CRUD apiParam elements must be self-closing without summary/type children",
+      "description": "In ApexCreateObject, ApexUpdateObject, and ApexReadObject steps, <apiParam> elements within <generatedParameters> MUST be self-closing tags without child elements. LLMs commonly hallucinate <summary> and <type> elements inside apiParam, which causes Provar to reject the test case as invalid XML. The correct pattern is: <apiParam group=\"fields\" modelBinding=\"sf:ui:binding:object?object=Account&field=Name\" name=\"Name\" title=\"Name\"/>. The hallucinated pattern includes <summary>description</summary> and <type><textType>...</textType></type> children which are ONLY valid in other contexts (RestRequest, UiDoAction) but NEVER in Apex CRUD operations.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Remove all <summary> and <type> child elements from apiParam elements in ApexCreateObject, ApexUpdateObject, and ApexReadObject steps. Use self-closing <apiParam .../> tags. For example: <apiParam group=\"fields\" modelBinding=\"sf:ui:binding:object?object=Account&amp;field=Name\" name=\"Name\" title=\"Name\"/>",
+      "check": {
+        "type": "apexApiParamHallucination",
+        "target": "step"
+      },
+      "notes": "CRITICAL severity - hallucinated summary/type elements in Apex CRUD apiParam cause Provar to mark test as invalid XML. Based on corpus analysis: 100% of Apex CRUD apiParam elements use self-closing tags without children. LLMs confuse this with RestRequest/UiDoAction patterns which DO allow summary/type children.",
+      "source": "Corpus analysis: InternalProjects - Apex CRUD apiParam structure validation"
+    },
+    {
+      "id": "APEX-READ-ASSERTIONS-001",
+      "category": "ApexAPI",
+      "name": "ApexReadObject should use resultAssertions instead of separate AssertValues",
+      "description": "When asserting field values after ApexReadObject, use <resultAssertions> within the ApexReadObject step rather than separate AssertValues API calls. This pattern is more efficient, provides better error messages, and maintains field metadata associations. The resultAssertions element should contain <resultAssertion> children with comparisonType, resultName, title, and optional <expected> elements.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Add <resultAssertions> block within ApexReadObject after the <arguments> section. Move AssertValues logic into <resultAssertion> elements with appropriate comparisonType (EqualTo, IsPresent, NotEqualTo, etc.) and expected values where applicable.",
+      "check": {
+        "type": "apexReadAssertions",
+        "target": "step"
+      },
+      "source": "Provar Best Practices - Efficient Read and Assert Pattern"
+    },
+    {
+      "id": "APEX-EXTRACT-LAYOUT-001",
+      "category": "ApexAPI",
+      "name": "ApexExtractLayout must have object, file type, and path",
+      "description": "ApexExtractLayout requires three parameters: object (Salesforce object API name), fileType (.xlsx only supported), and filePath (where to save the layout). Missing any parameter causes test failure. Only .xlsx file format is supported for layout extraction.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Specify the Salesforce object API name, set fileType to .xlsx, and provide a valid file path for the extracted layout. Ensure the directory path exists and is writable. Use relative paths for portability.",
+      "check": {
+        "type": "apexExtractLayout",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Layout Extraction"
+    },
+    {
+      "id": "APEX-ASSERT-LAYOUT-001",
+      "category": "ApexAPI",
+      "name": "ApexAssertLayout must have object and expected file",
+      "description": "ApexAssertLayout requires two parameters: object (Salesforce object API name) and expectedFile (path to expected .xlsx layout file). Missing either parameter causes test failure. Only .xlsx file format is supported for layout assertions.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Specify the Salesforce object API name and provide path to expected .xlsx layout file. Ensure the expected file exists and is in .xlsx format. Use ApexExtractLayout to generate baseline layouts.",
+      "check": {
+        "type": "apexAssertLayout",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Layout Assertion"
+    },
+    {
+      "id": "CONN-ARG-001",
+      "category": "ApexAPI",
+      "name": "Connection arguments must use correct naming convention",
+      "description": "Different step types require specific connection argument names: 'connectionName' for Connect steps (ApexConnect, UiConnect, DbConnect, WebConnect) and web requests (RestRequest, SoapRequest); 'apexConnectionName' for Apex CRUD/SOQL operations (ApexCreateObject, ApexReadObject, ApexUpdateObject, ApexDeleteObject, ApexSoqlQuery, ApexBulk, etc.); 'uiConnectionName' for UI steps (UiWithScreen, UiDoAction, UiAssert); 'dbConnectionName' for database operations (DbDelete, DbInsert, DbRead, DbUpdate, SqlQuery). Using incorrect connection argument names causes connection lookup failures.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Use the correct connection argument name for each step type. Connect steps and web requests use 'connectionName'. Apex CRUD/SOQL operations use 'apexConnectionName'. UI steps use 'uiConnectionName'. Database operations use 'dbConnectionName'. Review Provar API documentation for the specific step type being used.",
+      "check": {
+        "type": "connectionArgumentNaming",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Connection Argument Conventions"
+    },
+    {
+      "id": "APEX-PARAM-GEN-URI-001",
+      "category": "ApexAPI",
+      "name": "Apex CRUD operations should include parameterGeneratorUri",
+      "description": "ApexCreateObject, ApexReadObject, and ApexUpdateObject steps should include the parameterGeneratorUri attribute for proper IDE support. This attribute enables field auto-complete, field suggestions, and proper object binding in Provar IDE. Missing this attribute degrades IDE experience and may cause issues in some Provar versions.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Add parameterGeneratorUri attribute to Apex CRUD steps: ApexCreateObject uses 'command:com.provar.plugins.forcedotcom.ui.commands.CreateCustomObjectTestStepCommand', ApexReadObject uses 'command:com.provar.plugins.forcedotcom.ui.commands.ReadCustomObjectTestStepCommand', ApexUpdateObject uses 'command:com.provar.plugins.forcedotcom.ui.commands.UpdateCustomObjectTestStepCommand'.",
+      "check": {
+        "type": "apexParameterGeneratorUri",
+        "target": "step"
+      },
+      "source": "Provar IDE Requirements - Parameter Generator Metadata"
+    },
+    {
+      "id": "ASSERT-ARG-ORDER-001",
+      "category": "TestCaseDesign",
+      "name": "AssertValues arguments must be in correct order",
+      "description": "AssertValues steps should contain the variable being tested (from Read/Query operations) and actualValue containing the expected literal value. Reversed arguments cause assertion logic to be backwards - comparing literals against variables instead of variables against expected values. This can result in unclear test step outcomes, although results are the same.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Correct the argument order: expectedValue should contain the variable reference (e.g., {OpportunityRead.Name}), actualValue should contain the expected literal value (e.g., 'Demo Opportunity'). The assertion logic is: 'Assert that expectedValue equals actualValue', which reads as 'Assert that {variable} equals literal'.",
+      "check": {
+        "type": "assertValuesArgumentOrder",
+        "target": "step"
+      },
+      "source": "Provar API Best Practices - Assertion Patterns"
+    },
+    {
+      "id": "ASSERT-API-001",
+      "category": "TestCaseDesign",
+      "name": "Must use AssertValues API, not deprecated Assert API",
+      "description": "Test cases must use the supported com.provar.plugins.bundled.apis.AssertValues API with expectedValue/actualValue/comparisonType arguments. The com.provar.plugins.bundled.core.testapis.Assert API is not supported and will not load properly in Provar. AssertValues provides more flexible comparison operators and clearer assertion semantics.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Replace com.provar.plugins.bundled.core.testapis.Assert steps with com.provar.plugins.bundled.apis.AssertValues. Use expectedValue (the variable being tested), comparisonType (EqualTo, NotEqualTo, etc.), actualValue (the expected result), and failureMessage (explanation of what failed).",
+      "check": {
+        "type": "assertApi",
+        "target": "step"
+      },
+      "source": "Provar API Reference - Assertion Steps"
+    },
+    {
+      "id": "ASSERT-VALUES-COMPARISON-001",
+      "category": "TestCaseDesign",
+      "name": "AssertValues should have meaningful expected values",
+      "description": "AssertValues steps using comparison operators (EqualTo, Contains, GreaterThan, etc.) should specify meaningful expectedValue arguments. Empty or missing expected values defeat the purpose of assertions and provide no validation. Without expected values, assertions cannot verify correct behavior. Comparison types requiring values: EqualTo, NotEqualTo, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith, Matches, NotMatches, GreaterThan, LessThan, GreaterThanOrEqualTo, LessThanOrEqualTo.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Specify a clear expectedValue for the assertion based on requirements. Use test data variables or literals that represent the expected state. Empty expected values provide no validation. For example: expectedValue='{Account.Name}', comparisonType='EqualTo', actualValue='ACME Corporation'.",
+      "check": {
+        "type": "assertValuesComparison",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.AssertValues"
+      },
+      "source": "Provar Test Step Schema: Meaningful Assertions (Phase 2 API Usage Analysis)"
+    },
+    {
+      "id": "CONTROL-SLEEP-001",
+      "category": "TestCaseDesign",
+      "name": "Sleep step duration and frequency issues",
+      "description": "Sleep steps with duration > 10 seconds cause unnecessary test execution time (major). Sleep inside loops multiplies wait time and indicates polling anti-pattern (minor). More than 5 sleeps per 50 steps indicates excessive waiting rather than proper synchronization (minor).",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Replace long sleeps with explicit waits for conditions. Move sleeps outside loops and use proper wait-until-ready patterns. Replace multiple sleeps with single targeted waits. Use UI wait conditions, API polling with timeout, or event-driven synchronization.",
+      "check": {
+        "type": "controlSleep",
+        "target": "step"
+      },
+      "source": "Provar Best Practices - Synchronization and Waits"
+    },
+    {
+      "id": "CONTROL-WHILE-MAX-001",
+      "category": "TestCaseDesign",
+      "name": "While loop must have termination condition",
+      "description": "While loops without counterEnd and without a terminating condition (<=, <, >=, >, ==, !=) can run infinitely if no termination is defined (major). While loops with condition='true' or '{true}' are infinite loops that rely solely on break statements, making them difficult to debug (minor). A loop is valid if it has either counterEnd OR a comparison condition.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Either set counterEnd to a reasonable limit (e.g., 10, 50, 100) OR use a terminating condition with a comparison operator (e.g., {Counter <= MaxIterations}). Avoid while{true} - use a meaningful condition instead. Add timeout handling and clear exit conditions. Consider using For loop with fixed iteration count if possible.",
+      "check": {
+        "type": "controlWhileMaxIterations",
+        "target": "step"
+      },
+      "source": "Provar Best Practices - Loop Control and Safety"
+    },
+    {
+      "id": "CONTROL-FINALLY-001",
+      "category": "TestCaseDesign",
+      "name": "Finally block must have description and be at end",
+      "description": "Finally blocks without descriptions make it unclear what cleanup actions are performed (major). Finally blocks not at the end of the test may not execute if test stops before reaching them (minor). Finally is meant for cleanup that always runs regardless of test outcome.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add clear description to Finally block explaining what cleanup actions are performed (e.g., 'Delete test data', 'Logout'). Move Finally block to the end of the test to ensure cleanup runs. Use Finally for critical cleanup like deleting test records or closing connections.",
+      "check": {
+        "type": "controlFinallyEnhanced",
+        "target": "step"
+      },
+      "source": "Provar Best Practices - Exception Handling and Cleanup"
+    },
+    {
+      "id": "SOQL-RESULT-001",
+      "category": "TestCaseDesign",
+      "name": "SOQL queries specify resultListName",
+      "description": "SOQL queries must specify resultListName to capture query results.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'resultListName' argument to store query results.",
+      "check": {
+        "type": "soqlResultName",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery"
+      },
+      "source": "Provar Test Step Schema: SOQL Validation"
+    },
+    {
+      "id": "DATA-TYPE-BOOL-001",
+      "category": "TestCaseDesign",
+      "name": "Boolean values are 'true' or 'false'",
+      "description": "Boolean value elements must contain exactly 'true' or 'false' (lowercase).",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Set boolean value to 'true' or 'false' (not 'True', 'FALSE', '1', '0', etc.).",
+      "check": {
+        "type": "booleanValue",
+        "target": "step"
+      },
+      "source": "Provar Test Step Schema: Data Type Validation"
+    },
+    {
+      "id": "DATA-TYPE-NUMBER-001",
+      "category": "TestCaseDesign",
+      "name": "Numeric values are valid numbers",
+      "description": "DISABLED: Rule generates false positives. Flags numeric-looking strings in SetValues without checking Salesforce field types. Many text fields (ZIP codes, IDs with leading zeros, year fields) legitimately store numeric strings.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 0,
+      "recommendation": "Review if this value should be valueClass='decimal' for calculations, or valueClass='string' for text fields like IDs, ZIP codes, phone numbers. Consider field type in Salesforce.",
+      "check": {
+        "type": "numericValue",
+        "target": "step"
+      },
+      "source": "Provar Test Step Schema: Data Type Validation (DISABLED due to false positives - needs field-type awareness)"
+    },
+    {
+      "id": "SETVALUES-STRUCTURE-001",
+      "category": "TestCaseDesign",
+      "name": "SetValues steps have namedValues container",
+      "description": "SetValues steps must have <namedValues> container element.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add <namedValues> container inside values argument.",
+      "check": {
+        "type": "setValuesStructure",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.SetValues"
+      },
+      "source": "Provar Test Step Schema: SetValues Validation"
+    },
+    {
+      "id": "SETVALUES-NAME-001",
+      "category": "NamingConventions",
+      "name": "SetValues namedValue elements have name attribute",
+      "description": "Each namedValue element must have a 'name' attribute defining the variable name.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'name' attribute to each <namedValue> element.",
+      "check": {
+        "type": "namedValueName",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.SetValues"
+      },
+      "source": "Provar Test Step Schema: SetValues Validation"
+    },
+    {
+      "id": "SETVALUES-VALUE-001",
+      "category": "TestCaseDesign",
+      "name": "SetValues namedValue elements have value element",
+      "description": "Each namedValue must contain a <value> element defining the variable value.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add <value> element inside each <namedValue>.",
+      "check": {
+        "type": "namedValueValue",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.SetValues"
+      },
+      "source": "Provar Test Step Schema: SetValues Validation"
+    },
+    {
+      "id": "SETVALUES-INVALID-ELEMENT-001",
+      "category": "StructureAndGrouping",
+      "name": "SetValues must not contain invalid child elements",
+      "description": "SetValues steps must use the correct structure with <namedValues> containing <namedValue> elements. AI models sometimes hallucinate invalid elements like <namedValueSet>, <name>, or nested <namedValues> incorrectly. The correct structure is: <namedValues mutable=\"Mutable\"><namedValue name=\"valuePath\">...</namedValue><namedValue name=\"value\">...</namedValue><namedValue name=\"valueScope\">...</namedValue></namedValues>",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Use correct SetValues structure: <value class=\"valueList\" mutable=\"Mutable\"><namedValues mutable=\"Mutable\"><namedValue name=\"valuePath\"><value class=\"value\" valueClass=\"string\">VariableName</value></namedValue><namedValue name=\"value\"><value>...</value></namedValue><namedValue name=\"valueScope\"><value class=\"value\" valueClass=\"string\">Test</value></namedValue></namedValues></value>. Each variable requires one <namedValues> block with three <namedValue> children: valuePath, value, and valueScope.",
+      "check": {
+        "type": "setValuesInvalidElements",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.SetValues",
+        "invalidElements": ["namedValueSet", "name"]
+      },
+      "notes": "AI models hallucinate <namedValueSet> and <name> elements which are not valid in Provar SetValues. The correct child elements are: <namedValues> (container) and <namedValue> (with name attribute).",
+      "source": "Field observation: SetValues structure hallucination pattern"
+    },
+    {
+      "id": "VAR-PROPERTY-001",
+      "category": "TestCaseDesign",
+      "name": "Variable property references must be valid",
+      "description": "Variable property references (<path element>) must reference valid properties. For SOQL query results, only fields in the SELECT clause are valid. Common hallucinations include: .size, .length, .count (use Count() function), duplicate path elements, and referencing fields not in the query.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 6,
+      "recommendation": "For list size, use Count(variable) function. For properties, ensure the field is included in the SOQL SELECT clause or ApexReadObject generatedParameters. Remove duplicate path elements.",
+      "check": {
+        "type": "invalidVariableProperty",
+        "target": "step",
+        "invalidProperties": ["size", "length", "count", "empty", "isEmpty", "first", "last", "keys", "values"]
+      },
+      "notes": "AI models hallucinate properties that don't exist on Provar variables: .size/.length/.count (use Count() function), .empty (use Count()=0), .first/.last (use index notation). Also catches: duplicate path elements (VarName.VarName.Field), undefined properties not in SOQL SELECT or generatedParameters.",
+      "source": "Field observation: Variable property hallucination patterns"
+    },
+    {
+      "id": "CLEANUP-CONSISTENCY-001",
+      "category": "TestCaseDesign",
+      "name": "Manual cleanup matches object creation",
+      "description": "When autoCleanup=false, test should have ApexDeleteObject steps matching ApexCreateObject steps.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add ApexDeleteObject steps for created objects or set autoCleanup=true.",
+      "check": {
+        "type": "cleanupConsistency",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: AutoCleanup Validation"
+    },
+    {
+      "id": "CLEANUP-ORDER-001",
+      "category": "TestCaseDesign",
+      "name": "Cleanup deletes objects in reverse order",
+      "description": "When manually deleting objects, delete child objects before parent objects.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Reorder ApexDeleteObject steps: delete child records before parent records.",
+      "check": {
+        "type": "cleanupOrder",
+        "target": "testCase"
+      },
+      "source": "Provar Test Step Schema: AutoCleanup Best Practices"
+    },
+    {
+      "id": "CREATE-RESULT-001",
+      "category": "TestCaseDesign",
+      "name": "ApexCreateObject steps specify resultIdName",
+      "description": "ApexCreateObject should specify resultIdName to capture created record ID for later reference or cleanup.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add 'resultIdName' argument to store created record ID (e.g. 'CreatedAccountId', 'OpportunityId').",
+      "check": {
+        "type": "createResultName",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject"
+      },
+      "source": "Provar Test Step Schema: Apex CRUD Best Practices"
+    },
+    {
+      "id": "CALLABLE-VISIBILITY-001",
+      "category": "ReusabilityAndCallables",
+      "name": "Called test cases are marked as Callable",
+      "description": "Test cases invoked via TestCaseCall must have visibility='Callable' attribute.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Set visibility='Callable' on called test case or reference a callable test.",
+      "check": {
+        "type": "callableVisibility",
+        "target": "step",
+        "apiId": "com.provar.core.testapis.TestCaseCall"
+      },
+      "source": "Provar Test Step Schema: Callable Validation"
+    },
+    {
+      "id": "LOG-LEVEL-001",
+      "category": "TestCaseDesign",
+      "name": "Log messages use appropriate log levels",
+      "description": "Log steps should use appropriate log levels: INFO for general info, WARN for warnings, ERROR for errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Set logLevel argument to appropriate value: INFO, WARN, ERROR, or DEBUG.",
+      "check": {
+        "type": "logLevel",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.Log"
+      },
+      "source": "Provar Test Step Schema: Logging Best Practices"
+    },
+    {
+      "id": "UI-ASSERT-TYPE-001",
+      "category": "TestCaseDesign",
+      "name": "UiAssert steps specify assertion type",
+      "description": "UiAssert steps should specify assertionType (Visible, Value, Enabled, etc.) for clarity.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Add 'assertionType' argument specifying the type of assertion.",
+      "check": {
+        "type": "uiAssertType",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+      },
+      "source": "Provar Test Step Schema: UI Validation Best Practices"
+    },
+    {
+      "id": "UI-DOACTION-VALUE-001",
+      "category": "TestCaseDesign",
+      "name": "UiDoAction Set requires value argument",
+      "description": "UiDoAction steps with interactionType='Set' must have a value argument.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add 'value' argument when using Set interaction type.",
+      "check": {
+        "type": "uiDoActionValue",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction"
+      },
+      "source": "Provar Test Step Schema: UI Interaction Validation"
+    },
+    {
+      "id": "UI-LOCATOR-BINDING-001",
+      "category": "TestCaseDesign",
+      "name": "Ui locator built-in actions use object binding",
+      "description": "For Salesforce built-in actions (New, Edit, Save, Convert, etc.), uiLocator URIs must use an object binding (sf:ui:binding:object?object=...&action=...). Using the action binding form (sf:ui:binding:action?actionName=...) is known to cause runtime execution failures in generated tests.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use an object-binding locator like: ui:locator?name=<ActionName>&binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3D<ObjectApiName>%26action%3D<ActionName> (replace object/action accordingly).",
+      "check": {
+        "type": "uiLocatorBinding",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction"
+      },
+      "source": "Field observation: uiLocator bindings using action?actionName are unreliable; prefer object binding for built-in actions"
+    },
+    {
+      "id": "UI-ASSERT-FIELDLOCATOR-001",
+      "category": "TestCaseDesign",
+      "name": "UiAssert fieldLocator uses object+field binding",
+      "description": "UiAssert embedded field assertions (uiFieldAssertion) must use a fieldLocator with an object binding (sf:ui:binding:object?field=<Field>&object=<Object>) and a locator name matching the field (name=<Field>). Incorrect fieldLocator bindings can cause runtime failures or assertions targeting the wrong element.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use one of: (1) sf:ui:locator?name=<FieldApiName>&binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3D<FieldApiName>%26object%3D<ObjectApiName> (ensure name and field match), (2) ui:pageobject:field?field=<elementName>&pageId=pageobjects.<PageObjectClass>, or (3) ui:locator?name=<fieldName> for Page Object locator references.",
+      "check": {
+        "type": "uiAssertFieldLocatorBinding",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+      },
+      "source": "Field observation: UiAssert fieldLocator must use valid binding pattern (SF metadata, Page Object, or locator reference)"
+    },
+    {
+      "id": "UI-ASSERT-FIELDLOCATOR-002",
+      "category": "TestCaseDesign",
+      "name": "UiAssert fieldAssertion must not wrap fieldLocator in uiLocator",
+      "description": "UiAssert embedded field assertions (uiFieldAssertion) must use fieldLocator with a uri attribute directly. DO NOT wrap the locator in a nested <uiLocator/> element. The correct format is <fieldLocator uri=\"...\"/> not <fieldLocator><uiLocator uri=\"...\"/></fieldLocator>. This incorrect nesting causes runtime failures.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use <fieldLocator uri=\"ui:locator?name=FieldApiName&amp;binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3DFieldApiName%26object%3DObjectApiName\"/> directly without wrapping in <uiLocator/>.",
+      "check": {
+        "type": "uiAssertFieldLocatorStructure",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+      },
+      "source": "Field observation: UiAssert fieldLocator must be direct uri attribute, not nested uiLocator element"
+    },
+    {
+      "id": "UI-ASSERT-FIELDLOCATOR-003",
+      "category": "TestCaseDesign",
+      "name": "UiAssert bare locator in Salesforce metadata context causes render failure",
+      "description": "UiAssert uiFieldAssertion using a bare locator reference (ui:locator?name=X without a binding parameter) inside a UiWithScreen whose target is a Salesforce metadata context (sf:ui:target?object=...) will fail to render in Provar Automation. Bare locators are only valid inside Page Object contexts. In Salesforce metadata contexts, the fieldLocator must include a full binding (ui:locator?name=X&binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3D...%26field%3D...). This commonly occurs when asserting button visibility (e.g., Run, Edit, Delete buttons) as uiFieldAssertions — buttons are not Salesforce fields and cannot be asserted this way.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Remove the bare-locator uiFieldAssertion for non-field elements (buttons, actions). If you need to verify a button exists, use a UiDoAction click interaction instead of a UiAssert fieldAssertion. For Salesforce field assertions, always include the full binding: <fieldLocator uri=\"ui:locator?name=FieldApiName&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DObjectApiName%26field%3DFieldApiName\"/>. NEVER use bare ui:locator?name=X without a binding inside a Salesforce metadata UiWithScreen.",
+      "check": {
+        "type": "uiAssertBareLocatorInSfContext",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+      },
+      "source": "Field observation: Bare ui:locator?name=X in Salesforce metadata UiWithScreen causes Provar Automation render failure (CRITICAL)"
+    },
+    {
+      "id": "UI-LOCATOR-ACTION-001",
+      "category": "TestCaseDesign",
+      "name": "UiDoAction locator URIs must use valid patterns",
+      "description": "Validates all UiDoAction locator URI patterns including: (1) SF locators: ui:locator?name=...&binding=sf:ui:binding:object?... with required name and binding params, (2) Page Object Fields: ui:pageobject:field?field=...&pageId=pageobjects... with required field and pageId params, (3) Page Object Methods: ui:pageobject:method?pageId=...&operation=... with required pageId and operation params, (4) Lead Conversion context-aware patterns (Convert on View vs submitConvert in Dialog). Detects malformed URIs like '%3Action' which should be '%3Faction'.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "SF locators: ui:locator?name=<Name>&binding=sf%3Aui%3Abinding%3Aobject%3F<params>. Page Object Fields: ui:pageobject:field?field=<elementName>&pageId=pageobjects.<Class>. Page Object Methods: ui:pageobject:method?pageId=pageobjects.<Class>&operation=<methodName>. Ensure '%3F' (?) precedes query params in bindings, not '%3A' (colon).",
+      "check": {
+        "type": "uiLocatorActionBinding",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction"
+      },
+      "notes": "Validates: (1) SF locator structure (name, binding params), (2) Page Object Field locators (field, pageId params), (3) Page Object Method locators (pageId, operation params), (4) Lead Conversion context patterns, (5) Malformed URI detection (%3Action→%3Faction).",
+      "source": "Field observation: UiDoAction locators require specific URI formats for proper Provar UI rendering"
+    },
+    {
+      "id": "UI-SCREEN-TARGET-001",
+      "category": "TestCaseDesign",
+      "name": "UiWithScreen target URIs must use valid patterns",
+      "description": "Validates all UiWithScreen target URI patterns including: (1) SF targets with valid parameters (object/action, lightningComponent, lightningWebComponent, auraComponent, application/tab, lookup, fieldService, action-only), (2) Page Object targets: ui:pageobject:target?pageId=pageobjects... with required pageId param starting with 'pageobjects.' prefix.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "SF Object-Action targets: sf:ui:target?object=<Object>&action=<Action>. SF Lightning targets: sf:ui:target?lightningComponent=<Component>. Page Object targets: ui:pageobject:target?pageId=pageobjects.<PageObjectClass>.",
+      "check": {
+        "type": "uiWithScreenTarget",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiWithScreen"
+      },
+      "notes": "Validates: (1) SF target has at least one valid param (object, action, lightningComponent, lightningWebComponent, auraComponent, application, lookup, fieldService), (2) Page Object target has pageId with 'pageobjects.' prefix.",
+      "source": "Field observation: UiWithScreen targets require specific URI formats for proper Provar UI rendering"
+    },
+    {
+      "id": "APEX-REUSE-CONN-001",
+      "category": "TestCaseDesign",
+      "name": "ApexConnect reuseConnectionName should be left blank",
+      "description": "The reuseConnectionName argument in ApexConnect steps should be left empty/blank. AI models may hallucinate invalid values like 'Reuse' which cause runtime errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Leave reuseConnectionName blank: <argument id=\"reuseConnectionName\"/> or <argument id=\"reuseConnectionName\"><value class=\"value\"/></argument>. Do not use string values.",
+      "check": {
+        "type": "apexConnectReuseConnection",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConnect"
+      },
+      "notes": "Corpus analysis shows reuseConnectionName is always empty in valid test cases. Non-empty values are AI hallucinations.",
+      "source": "Field observation: ApexConnect reuseConnectionName hallucination pattern"
+    },
+    {
+      "id": "APEX-CONNECT-ARGS-001",
+      "category": "XMLSchema",
+      "name": "ApexConnect - Only valid argument IDs allowed",
+      "description": "ApexConnect steps must use ONLY the 21 valid argument IDs defined in Provar schema. AI models commonly hallucinate plausible-sounding but invalid arguments like autoPopulateRequiredFields, assertObjectFieldsPopulated, commandTimeout which cause Provar to reject the test case.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Only use these 21 valid ApexConnect argument IDs: connectionName, resultName, resultScope, uiApplicationName, quickUiLogin, closeAllPrimaryTabs, reuseConnectionName, alreadyOpenBehaviour, autoCleanup, cleanupConnectionName, logFileLocation, connectionId, enableObjectIdLogging, privateBrowsingMode, lightningMode, username, password, securityToken, environment, webBrowser. If you don't have a value, leave the argument empty: <argument id=\"username\"/> rather than inventing values.",
+      "check": {
+        "type": "apexConnectValidArguments",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConnect",
+        "validArgumentIds": [
+          "connectionName",
+          "resultName",
+          "resultScope",
+          "uiApplicationName",
+          "quickUiLogin",
+          "closeAllPrimaryTabs",
+          "reuseConnectionName",
+          "alreadyOpenBehaviour",
+          "autoCleanup",
+          "cleanupConnectionName",
+          "logFileLocation",
+          "connectionId",
+          "enableObjectIdLogging",
+          "privateBrowsingMode",
+          "lightningMode",
+          "username",
+          "password",
+          "securityToken",
+          "environment",
+          "webBrowser"
+        ]
+      },
+      "notes": "Provar performs strict schema validation and will reject test cases with unknown argument IDs. Common hallucinated arguments: autoPopulateRequiredFields, assertObjectFieldsPopulated, commandTimeout, autoRetry, timeout, connectionTimeout.",
+      "source": "Provar XML Schema: ApexConnect Argument Whitelist"
+    },
+    {
+      "id": "APEX-CONNECT-CONNID-001",
+      "category": "XMLSchema",
+      "name": "ApexConnect connectionId must use valueClass='id'",
+      "description": "The connectionId argument in ApexConnect steps MUST use valueClass='id' with a GUID format value (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx), NOT valueClass='string'. Using valueClass='string' breaks connection references in Provar.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Use correct format: <argument id=\"connectionId\"><value class=\"value\" valueClass=\"id\">bce7fd3f-0f81-4c5c-ab68-c3edd44b5d1e</value></argument>. NEVER use valueClass=\"string\" or value=\"default\". If you don't have a specific GUID, leave the argument empty: <argument id=\"connectionId\"/>",
+      "check": {
+        "type": "apexConnectConnectionIdValueClass",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConnect"
+      },
+      "notes": "AI models commonly use valueClass='string' with value='default' which is invalid. connectionId must reference a valid Provar connection using its GUID identifier with valueClass='id'.",
+      "source": "Provar XML Schema: connectionId Type Constraint"
+    },
+    {
+      "id": "UI-WAIT-VALUECLASS-001",
+      "category": "TestCaseDesign",
+      "name": "Wait arguments must use uiWait value class",
+      "description": "The beforeWait, afterWait, and autoRetry arguments in UiDoAction and UiAssert steps must use class=\"uiWait\" with a uri attribute. Using valueClass=\"boolean\" is incorrect and causes runtime errors.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use uiWait class with uri: <value class=\"uiWait\" uri=\"default\"/> or <value class=\"uiWait\" uri=\"ui:wait:timed?seconds=5\"/>. Valid uri patterns: default, NoWait, ui:wait:timed?seconds=N, ui:wait:autoRetry:timeout=N, ui:wait:auraBusy?timeout=N, ui:wait:pageload?timeout=N.",
+      "check": {
+        "type": "uiWaitValueClass",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction"
+      },
+      "notes": "AI models sometimes hallucinate boolean values for wait arguments. The correct pattern is class=\"uiWait\" with uri attribute.",
+      "source": "Field observation: Wait argument valueClass hallucination pattern"
+    },
+    {
+      "id": "UI-LOCATOR-SAVE-001",
+      "category": "TestCaseDesign",
+      "name": "Save button locator must use correct pattern",
+      "description": "Save button locators in UiDoAction steps must use lowercase 'save' and correct URI parameter order. Common error: using 'Save' (capital S) with action before object, or using %3A instead of %3F after object?",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use correct pattern: name=save (lowercase), binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3D<Object>%26action%3Dsave. Common mistakes: (1) Capital S in 'Save', (2) action before object in binding, (3) using %3Action instead of %3Faction, (4) using %3A instead of %3F after 'object?'",
+      "check": {
+        "type": "uiLocatorSaveButton",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction"
+      },
+      "notes": "Corpus analysis shows Save button should use lowercase 'save' with object parameter before action parameter. Pattern: object?object=<Type>&action=save",
+      "source": "Field observation: Save button locator pattern"
+    },
+    {
+      "id": "UI-TARGET-ACTION-001",
+      "category": "TestCaseDesign",
+      "name": "UiWithScreen target uses invalid action value",
+      "description": "The action parameter in sf:ui:target URIs must use valid Provar action names. AI models commonly hallucinate 'action=Home' when the correct value is 'action=ObjectHome'.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Use valid action values: ObjectHome (for object list/home), New, View, Edit, List, Convert, GlobalSearch, QuickAction, etc. Common fixes: Home→ObjectHome, Create→New, Update→Edit, Details→View.",
+      "check": {
+        "type": "uiTargetActionValue",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiWithScreen"
+      },
+      "notes": "Corpus analysis shows valid actions: ObjectHome, New, View, Edit, List, Convert, GlobalSearch, QuickAction, ChangeStatus, Search, recordTypeNew, attachFile, addProd, ownershipTransfer, PathAssistant, piSubmit, OppContactRoleMultiAdd, ActivityTimeline. 'Home' alone is never valid - always use 'ObjectHome'.",
+      "source": "Field observation: action=Home hallucination pattern"
+    },
+    {
+      "id": "CONTROL-SLEEP-001",
+      "category": "TestCaseDesign",
+      "name": "Sleep duration should be under 5 seconds",
+      "description": "Fixed sleep durations should be kept short (<5 seconds). Prefer WaitFor with condition over fixed Sleep.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Use WaitFor with condition instead of Sleep, or reduce sleep duration to <5 seconds.",
+      "check": {
+        "type": "sleepDuration",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.Sleep",
+        "maxDuration": 5
+      },
+      "source": "Provar Best Practices: Prefer conditional waits over fixed sleeps"
+    },
+    {
+      "id": "CONTROL-FINALLY-001",
+      "category": "StructureAndGrouping",
+      "name": "Finally block should be at end of test",
+      "description": "Finally blocks should be placed at the end of the test to ensure cleanup always executes.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Move Finally block to end of test case.",
+      "check": {
+        "type": "finallyPlacement",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.control.Finally"
+      },
+      "source": "Provar Best Practices: Finally blocks for reliable cleanup"
+    },
+    {
+      "id": "BDD-GIVEN-FIRST-001",
+      "category": "StructureAndGrouping",
+      "name": "BDD scenario should start with Given",
+      "description": "BDD test cases should start with Given step to establish preconditions.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Start BDD scenario with Given step.",
+      "check": {
+        "type": "bddGivenFirst",
+        "target": "testCase"
+      },
+      "source": "BDD Best Practices: Given-When-Then structure"
+    },
+    {
+      "id": "BDD-ORDER-001",
+      "category": "StructureAndGrouping",
+      "name": "BDD steps should follow logical order",
+      "description": "BDD steps should follow Given->When->Then order (with And/But as connectors).",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Reorder BDD steps to follow Given->When->Then pattern.",
+      "check": {
+        "type": "bddOrder",
+        "target": "testCase"
+      },
+      "source": "BDD Best Practices: Scenario structure"
+    },
+    {
+      "id": "BDD-AND-LIMIT-001",
+      "category": "StructureAndGrouping",
+      "name": "Limit And/But chain length",
+      "description": "Chains of And/But steps should be limited to 3-5 for readability.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Break long And/But chains into separate scenarios.",
+      "check": {
+        "type": "bddAndChainLength",
+        "target": "testCase",
+        "maxChainLength": 5
+      },
+      "source": "BDD Best Practices: Readability"
+    },
+    {
+      "id": "APEX-EXECUTE-SYNTAX-001",
+      "category": "TestCaseDesign",
+      "name": "ApexExecute code should be valid Apex syntax",
+      "description": "Anonymous Apex code blocks should be syntactically valid.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Validate Apex syntax before execution. Test in Developer Console first.",
+      "check": {
+        "type": "apexSyntax",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexExecute"
+      },
+      "source": "Salesforce Development Best Practices"
+    },
+    {
+      "id": "APEX-BULK-LIMIT-001",
+      "category": "TestCaseDesign",
+      "name": "ApexBulk should be used for large data volumes",
+      "description": "Use ApexBulk for operations with more than 200 records.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Use ApexBulk instead of individual CRUD operations for >200 records.",
+      "check": {
+        "type": "apexBulkUsage",
+        "target": "testCase"
+      },
+      "source": "Salesforce API Best Practices: Bulk operations"
+    },
+    {
+      "id": "UI-NAVIGATE-PREFER-SCREEN-001",
+      "category": "TestCaseDesign",
+      "name": "Prefer UiWithScreen over UiNavigate for Salesforce",
+      "description": "For Salesforce navigation, prefer UiWithScreen over direct URL navigation with UiNavigate.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Use UiWithScreen for Salesforce screens instead of UiNavigate.",
+      "check": {
+        "type": "uiNavigateUsage",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiNavigate"
+      },
+      "source": "Provar UI Testing Best Practices"
+    },
+    {
+      "id": "UI-FILL-VERIFY-001",
+      "category": "TestCaseDesign",
+      "name": "Verify fields after UiFill",
+      "description": "UiFill should be followed by UiAssert to verify all fields were filled correctly.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Add UiAssert steps after UiFill to verify field values.",
+      "check": {
+        "type": "uiFillVerification",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiFill"
+      },
+      "source": "Provar UI Testing Best Practices"
+    },
+    {
+      "id": "UI-ALERT-HANDLE-001",
+      "category": "TestCaseDesign",
+      "name": "UiHandleAlert should capture alert text",
+      "description": "When handling alerts with GetText action, store the text in a result variable.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Set resultName when using GetText action on UiHandleAlert.",
+      "check": {
+        "type": "uiHandleAlertResult",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiHandleAlert"
+      },
+      "source": "Provar UI Testing Best Practices"
+    },
+    {
+      "id": "UTIL-REPLACE-EMPTY-001",
+      "category": "TestCaseDesign",
+      "name": "Replace searchString should not be empty",
+      "description": "Replace step searchString parameter should not be empty string.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Provide non-empty searchString for Replace operation.",
+      "check": {
+        "type": "replaceSearchString",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.string.Replace"
+      },
+      "source": "Utility Operations Best Practices"
+    },
+    {
+      "id": "UTIL-SPLIT-DELIMITER-001",
+      "category": "TestCaseDesign",
+      "name": "Split delimiter should not be empty",
+      "description": "Split step delimiter parameter should not be empty string.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Provide non-empty delimiter for Split operation.",
+      "check": {
+        "type": "splitDelimiter",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.string.Split"
+      },
+      "source": "Utility Operations Best Practices"
+    },
+    {
+      "id": "UTIL-MATCH-REGEX-001",
+      "category": "TestCaseDesign",
+      "name": "Match regex pattern should be valid",
+      "description": "When using isRegex=true, pattern must be valid regular expression.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Validate regex pattern syntax before using in Match step.",
+      "check": {
+        "type": "matchRegexValid",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.string.Match"
+      },
+      "source": "Utility Operations Best Practices"
+    },
+    {
+      "id": "DATA-DB-WHERE-001",
+      "category": "TestCaseDesign",
+      "name": "DbDelete and DbUpdate should have WHERE clause",
+      "description": "Database delete and update operations should include WHERE clause to avoid affecting all records.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add WHERE clause to DbDelete/DbUpdate to limit affected records.",
+      "check": {
+        "type": "dbWhereClause",
+        "target": "step",
+        "apiIds": [
+          "com.provar.plugins.bundled.apis.db.DbDelete",
+          "com.provar.plugins.bundled.apis.db.DbUpdate"
+        ]
+      },
+      "source": "Database Testing Best Practices"
+    },
+    {
+      "id": "DATA-REST-METHOD-001",
+      "category": "TestCaseDesign",
+      "name": "RestRequest method should be valid HTTP method",
+      "description": "RestRequest method must be one of: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Use valid HTTP method (GET, POST, PUT, DELETE, PATCH).",
+      "check": {
+        "type": "restHttpMethod",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.RestRequest",
+        "validMethods": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "PATCH",
+          "HEAD",
+          "OPTIONS"
+        ]
+      },
+      "source": "REST API Testing Best Practices"
+    },
+    {
+      "id": "DATA-REST-BODY-001",
+      "category": "TestCaseDesign",
+      "name": "POST/PUT/PATCH should have request body",
+      "description": "RestRequest with POST, PUT, or PATCH method should include request body.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add request body for POST/PUT/PATCH operations.",
+      "check": {
+        "type": "restRequestBody",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.RestRequest"
+      },
+      "source": "REST API Testing Best Practices"
+    },
+    {
+      "id": "DATA-REST-STATUS-001",
+      "category": "TestCaseDesign",
+      "name": "Validate REST response status",
+      "description": "RestRequest should be followed by assertion to validate response status code.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Add Assert step to validate REST response status code.",
+      "check": {
+        "type": "restStatusValidation",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.restservice.RestRequest"
+      },
+      "source": "REST API Testing Best Practices"
+    },
+    {
+      "id": "DATA-SOAP-XML-001",
+      "category": "TestCaseDesign",
+      "name": "SOAP request body should be well-formed XML",
+      "description": "WebServiceRequest requestBody must be valid XML for SOAP operations.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Validate SOAP XML syntax before execution.",
+      "check": {
+        "type": "soapXmlValid",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.web.WebServiceRequest"
+      },
+      "source": "SOAP Web Service Testing Best Practices"
+    },
+    {
+      "id": "AI-SESSION-WEBCONNECT-001",
+      "category": "TestCaseDesign",
+      "name": "AIAgentSession requires WebConnect first",
+      "description": "AIAgentSession step must be preceded by WebConnect step.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add WebConnect step before AIAgentSession.",
+      "check": {
+        "type": "aiSessionWebConnect",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentSession"
+      },
+      "source": "Agentforce Testing Best Practices"
+    },
+    {
+      "id": "AI-CONVERSATION-SESSION-001",
+      "category": "TestCaseDesign",
+      "name": "AIAgentConversation requires valid session",
+      "description": "AIAgentConversation must reference sessionID from AIAgentSession.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure AIAgentSession is called first and sessionID is stored.",
+      "check": {
+        "type": "aiConversationSession",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentConversation"
+      },
+      "source": "Agentforce Testing Best Practices"
+    },
+    {
+      "id": "AI-UTTERANCE-COUNT-001",
+      "category": "TestCaseDesign",
+      "name": "GenerateUtterance count should be reasonable",
+      "description": "GenerateUtterance count parameter should be between 1-100 for performance.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Set GenerateUtterance count between 1-100.",
+      "check": {
+        "type": "aiUtteranceCount",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.GenerateUtterance",
+        "minCount": 1,
+        "maxCount": 100
+      },
+      "source": "AI Testing Best Practices"
+    },
+    {
+      "id": "AI-IMAGE-CONFIDENCE-001",
+      "category": "TestCaseDesign",
+      "name": "ImageValidator confidence should be 0.0-1.0",
+      "description": "ImageValidator confidenceThreshold must be between 0.0 and 1.0.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Set confidenceThreshold between 0.0 and 1.0.",
+      "check": {
+        "type": "imageConfidence",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.ImageValidator",
+        "minConfidence": 0.0,
+        "maxConfidence": 1.0
+      },
+      "source": "AI Image Testing Best Practices"
+    },
+    {
+      "id": "SF-LAYOUT-EXTRACT-BEFORE-ASSERT-001",
+      "category": "TestCaseDesign",
+      "name": "ExtractSalesforceLayout before AssertSalesforceLayout",
+      "description": "AssertSalesforceLayout should be preceded by ExtractSalesforceLayout to create baseline. Otherwise ensure you have a compatible data source to compare to.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Run ExtractSalesforceLayout first to create baseline layout file.",
+      "check": {
+        "type": "layoutExtractBeforeAssert",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexAssertLayout"
+      },
+      "source": "Salesforce Layout Testing Best Practices"
+    },
+    {
+      "id": "SF-CONVERT-LEAD-STATUS-001",
+      "category": "TestCaseDesign",
+      "name": "ConvertLead status must be valid",
+      "description": "ConvertLead convertedStatus must be a valid lead conversion status.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Use valid lead conversion status (Converted, Qualified, etc.).",
+      "check": {
+        "type": "convertLeadStatus",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConvertLead"
+      },
+      "source": "Salesforce Lead Management Best Practices"
+    },
+    {
+      "id": "FILE-READ-PATH-001",
+      "category": "TestCaseDesign",
+      "name": "Read dataUrl should be valid file path",
+      "description": "Read step dataUrl must point to existing Excel/CSV file.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Verify file exists before Read operation.",
+      "check": {
+        "type": "fileReadPath",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.io.Read"
+      },
+      "source": "File I/O Best Practices"
+    },
+    {
+      "id": "FILE-WRITE-PATH-001",
+      "category": "TestCaseDesign",
+      "name": "Write dataUrl should be writable",
+      "description": "Write step dataUrl directory must be writable.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Ensure output directory exists and is writable.",
+      "check": {
+        "type": "fileWritePath",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.io.Write"
+      },
+      "source": "File I/O Best Practices"
+    },
+    {
+      "id": "MESSAGING-SUBSCRIBE-BEFORE-RECEIVE-001",
+      "category": "TestCaseDesign",
+      "name": "Subscribe before ReceiveMessage",
+      "description": "ReceiveMessage should be preceded by Subscribe to topic/channel.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Add Subscribe step before ReceiveMessage.",
+      "check": {
+        "type": "subscribeBeforeReceive",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.messaging.ReceiveMessage"
+      },
+      "source": "Messaging Best Practices"
+    },
+    {
+      "id": "MESSAGING-TIMEOUT-001",
+      "category": "TestCaseDesign",
+      "name": "ReceiveMessage timeout should be reasonable",
+      "description": "ReceiveMessage timeout should be between 5-60 seconds.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "info",
+      "weight": 1,
+      "recommendation": "Set timeout between 5-60 seconds.",
+      "check": {
+        "type": "messageTimeout",
+        "target": "step",
+        "apiId": "com.provar.plugins.bundled.apis.messaging.ReceiveMessage",
+        "minTimeout": 5,
+        "maxTimeout": 60
+      },
+      "source": "Messaging Best Practices"
+    },
+    {
+      "id": "RENDER-ARG-001",
+      "category": "StructureAndGrouping",
+      "name": "All arguments must have value elements",
+      "description": "Every <argument> element must contain a <value> child element, even if empty. Missing <value> elements prevent test cases from loading in Provar.",
+      "appliesTo": [
+        "TestCase",
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Add <value class=\"value\" valueClass=\"string\"></value> (or appropriate type) to all <argument> elements.",
+      "check": {
+        "type": "disabled",
+        "comment": "DISABLED: Too many false positives (1378/1454 = 95%). Valid Provar test cases have many optional arguments without values. Need to reimplement as targeted check for specific critical arguments only (apexConnectionName, objectType, etc.).",
+        "subtype": "argumentValue"
+      },
+      "source": "Provar XML Schema Requirements"
+    },
+    {
+      "id": "RENDER-CASE-001",
+      "category": "StructureAndGrouping",
+      "name": "valueClass attributes must use lowercase",
+      "description": "All valueClass attributes must use lowercase values (e.g., 'boolean' not 'Boolean', 'string' not 'String'). Incorrect casing prevents test cases from loading in Provar.",
+      "appliesTo": [
+        "TestCase",
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Change all valueClass attributes to lowercase: boolean, string, decimal, integer, date, datetime, variable, compound, funcCall, value, valueList.",
+      "check": {
+        "type": "valueClassCasing",
+        "subtype": "valueClassCasing"
+      },
+      "source": "Provar XML Schema Requirements"
+    },
+    {
+      "id": "RENDER-BOOL-001",
+      "category": "StructureAndGrouping",
+      "name": "Boolean values must use lowercase",
+      "description": "Boolean values in <value> elements must be lowercase 'true' or 'false', not 'True', 'False', 'TRUE', or 'FALSE'. Incorrect casing prevents test cases from loading in Provar.",
+      "appliesTo": [
+        "TestCase",
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Change all boolean values to lowercase: true, false.",
+      "check": {
+        "type": "booleanCasing",
+        "subtype": "booleanCasing"
+      },
+      "source": "Provar XML Schema Requirements"
+    },
+    {
+      "id": "RENDER-ROOT-001",
+      "category": "StructureAndGrouping",
+      "name": "Test case root element should not have unknown attributes",
+      "description": "The root <testCase> element should only contain known attributes: guid, id, name, visibility, registryId, failureBehaviour. Unknown attributes may prevent test cases from loading in Provar.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Remove unknown attributes from the root <testCase> element.",
+      "check": {
+        "type": "rootAttributes",
+        "subtype": "rootAttributes"
+      },
+      "source": "Provar XML Schema Requirements"
+    },
+    {
+      "id": "TEST-LENGTH-001",
+      "category": "TestCaseDesign",
+      "name": "Test case should not be excessively long",
+      "description": "Test cases with more than 150 steps become difficult to maintain, debug, and understand. Consider breaking long tests into smaller, focused test cases or using callable test cases.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "minor",
+      "weight": 3,
+      "recommendation": "Break test into smaller test cases or extract common logic into callable test cases.",
+      "check": {
+        "type": "testLength",
+        "threshold": 150
+      },
+      "source": "Provar Best Practices: Test Design and Maintainability"
+    },
+    {
+      "id": "PICKLIST-001",
+      "category": "TestCaseDesign",
+      "name": "Picklist values should match Salesforce metadata",
+      "description": "Picklist values used in test data should match the valid values defined in Salesforce. Common hallucinated values like 'Active' for Campaign.Status or 'Open' for Opportunity.StageName are often invalid and will cause test failures.",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 7,
+      "recommendation": "Use only picklist values provided in the metadata context. For Campaign.Status, valid values are typically: Planned, In Progress, Completed, Aborted. For Opportunity.StageName, check your org's sales process stages. For Lead.Status, check your org's lead process. Never assume generic values like 'Active', 'Inactive', 'Open', 'Closed' unless explicitly confirmed.",
+      "check": {
+        "type": "hallucinatedPicklistValue",
+        "target": "step",
+        "knownHallucinations": {
+          "Campaign.Status": ["Active", "Inactive", "Running", "Paused", "Pending", "Draft"],
+          "Opportunity.StageName": ["Active", "Open", "In Progress", "Pending", "Draft", "New"],
+          "Lead.Status": ["Active", "Inactive", "Pending", "Converted", "Rejected"],
+          "Case.Status": ["Active", "Inactive", "Pending", "Draft", "Resolved"],
+          "Task.Status": ["Active", "Pending", "Done", "Cancelled"],
+          "Event.Status": ["Active", "Pending", "Cancelled"]
+        }
+      },
+      "notes": "Common AI hallucination: Using 'Active' as a status value when it doesn't exist in the org's picklist. Campaign.Status typically uses: Planned, In Progress, Completed, Aborted.",
+      "source": "Standard Salesforce object picklist values and common hallucination patterns"
+    },
+    {
+      "id": "VALUE-CLASS-001",
+      "category": "StructureAndGrouping",
+      "name": "Value elements must use valid class attribute",
+      "description": "The 'class' attribute on <value> elements must be one of the valid Provar value classes. Invalid class values like 'null' cause runtime errors. Valid classes are: value, variable, compound, funcCall, valueList, uiWait, uiLocator, uiTarget, uiInteraction, restTarget, excelTarget, csvTarget, namedValues, url, template, and expression operators (add, sub, mult, div, eq, ne, gt, lt, ge, le, and, or, match).",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Use a valid class attribute. For literal values use class='value' with appropriate valueClass (string, boolean, decimal, id, date, dateTime). For variables use class='variable'. For empty/optional arguments, omit the <value> element entirely: <argument id=\"argId\"/>",
+      "check": {
+        "type": "invalidValueClass",
+        "target": "step",
+        "validClasses": ["value", "variable", "compound", "funcCall", "valueList", "uiWait", "uiLocator", "uiTarget", "uiInteraction", "restTarget", "excelTarget", "csvTarget", "namedValues", "url", "template", "add", "sub", "mult", "div", "eq", "ne", "gt", "lt", "ge", "le", "and", "or", "match"],
+        "validValueClasses": ["string", "boolean", "decimal", "id", "date", "dateTime"]
+      },
+      "notes": "Based on corpus analysis of 1451 test files with 329,424 <value> elements. Common AI hallucination: class='null' (never valid). Empty arguments should have no <value> child.",
+      "source": "Corpus analysis: All valid value class patterns from InternalProjects"
+    },
+    {
+      "id": "UI-ASSERT-STRUCT-001",
+      "category": "StructureAndGrouping",
+      "name": "UiAssert steps must include all required arguments",
+      "description": "UiAssert steps must include columnAssertions, pageAssertions, resultScope, captureAfter, beforeWait, and autoRetry arguments. Based on corpus analysis of 4,577 UiAssert instances, 100% include these arguments (even if empty). Missing these required arguments causes Provar validation failures at runtime.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 8,
+      "recommendation": "Include all required arguments in UiAssert steps. Use empty value lists for unused assertions: <argument id=\"columnAssertions\"><value class=\"valueList\" mutable=\"Mutable\"/></argument>. For resultScope use 'Test'. For captureAfter use 'false'. For beforeWait and autoRetry, include empty argument tags: <argument id=\"beforeWait\"/><argument id=\"autoRetry\"/>",
+      "check": {
+        "type": "uiAssertMissingArguments",
+        "target": "step",
+        "requiredArguments": ["fieldAssertions", "columnAssertions", "pageAssertions", "resultScope", "captureAfter", "beforeWait", "autoRetry"],
+        "recommendedArguments": ["resultName"]
+      },
+      "notes": "Based on corpus analysis of 4,577 UiAssert instances across 694 test files. All instances include these arguments. AI commonly omits columnAssertions, pageAssertions, resultScope, beforeWait, and autoRetry.",
+      "source": "Corpus analysis: InternalProjects - 100% of UiAssert steps have these arguments"
+    },
+    {
+      "id": "UI-ASSERT-STRUCT-002",
+      "category": "StructureAndGrouping",
+      "name": "UiAssert steps must NOT contain generatedParameters",
+      "description": "UiAssert steps should NOT contain <generatedParameters> element. Based on corpus analysis of 4,577 UiAssert instances, 0% contain generatedParameters. This element is 100% hallucinated by AI and causes Provar validation failures.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Remove the entire <generatedParameters> section from UiAssert steps. Unlike UiDoAction steps which use generatedParameters for field metadata, UiAssert steps never use this element. The assertion configuration is entirely within the arguments element.",
+      "check": {
+        "type": "uiAssertHallucinatedGeneratedParameters",
+        "target": "step"
+      },
+      "notes": "Based on corpus analysis of 4,577 UiAssert instances. 0 instances have generatedParameters - this is a 100% AI hallucination. UiDoAction correctly uses generatedParameters, but UiAssert does not.",
+      "source": "Corpus analysis: InternalProjects - 0% of UiAssert steps have generatedParameters"
+    },
+    {
+      "id": "UI-BINDING-ORDER-001",
+      "category": "LocatorPatterns",
+      "name": "UI binding parameter order must have object= first",
+      "description": "In UI binding URIs, the object= parameter MUST come FIRST, followed by field= or action=. Wrong order causes 'Unknown control' errors in Provar at runtime.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Correct the binding parameter order. Use 'object?object=ObjectName&action=ActionName' or 'object?object=ObjectName&field=FieldName'. Never put action= or field= before object=.",
+      "check": {
+        "type": "bindingParameterOrder",
+        "target": "step"
+      },
+      "examples": {
+        "correct": [
+          "sf:ui:binding:object?object=Lead&action=New",
+          "sf:ui:binding:object?object=Account&field=Name",
+          "sf%3Aui%3Abinding%3Aobject%3Fobject%3DLead%26action%3DNew"
+        ],
+        "incorrect": [
+          "sf:ui:binding:object?action=New&object=Lead",
+          "sf:ui:binding:object?field=Name&object=Account",
+          "sf%3Aui%3Abinding%3Aobject%3Faction%3DNew%26object%3DLead"
+        ]
+      },
+      "notes": "Based on corpus analysis: Field bindings 94.4% have object= first (6,017 vs 354). Action bindings 94.7% have object= first (1,554 vs 87). The 5% with wrong order are edge cases that often cause issues.",
+      "source": "Corpus analysis: InternalProjects - 95% of bindings have object= parameter first"
+    },
+    {
+      "id": "UI-FIELD-METADATA-001",
+      "category": "TestCaseDesign",
+      "name": "UiDoAction/UiAssert fields should exist in Salesforce metadata",
+      "description": "When Salesforce object metadata is provided in the context, UI operations (UiDoAction field sets, UiAssert field assertions) should only reference fields that exist in the metadata. Fields mentioned in user story but not present in Salesforce metadata may cause 'Unknown control' errors at runtime. This validation catches hallucinated or non-existent fields before test execution.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Only use fields that exist in the Salesforce org metadata. If a field from the user story shows 'Unknown control' in Provar, either: (1) the field doesn't exist in this org, (2) the field API name is different, or (3) the field isn't on the page layout. Check the org's metadata or remove the field operation from the test.",
+      "check": {
+        "type": "disabled",
+        "target": "step",
+        "apiIds": [
+          "com.provar.plugins.forcedotcom.core.ui.UiDoAction",
+          "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+        ]
+      },
+      "notes": "This validation requires metadata context (objects with field information) to be passed to the validator. When metadata is not available, this validation is skipped. Common issue: user story mentions 'Account Number' but org only has 'AccountNumber' or field doesn't exist at all.",
+      "source": "Field observation: AI generates steps for fields mentioned in user story that don't exist in org metadata"
+    },
+    {
+      "id": "PO-FIELD-EXISTS-001",
+      "category": "TestCaseDesign",
+      "name": "Page Object locator references non-existent field",
+      "description": "When Page Objects are provided, ui:pageobject:field locators must reference fields (WebElement variables) that actually exist in the corresponding Page Object Java class. AI models commonly hallucinate field names that are not defined in the provided Page Objects, causing 'Unknown control' errors at runtime.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Only reference field names that exist in the provided Page Object definitions. Check the Page Object class for available WebElement variables. If the field you need is not in the Page Object, either: (1) use SF metadata binding (sf:ui:binding:object) instead, or (2) ensure the Page Object includes the required field. Available fields are listed in the Page Object section of the generation context.",
+      "check": {
+        "type": "pageObjectFieldExists",
+        "target": "step",
+        "apiIds": [
+          "com.provar.plugins.forcedotcom.core.ui.UiDoAction",
+          "com.provar.plugins.forcedotcom.core.ui.UiAssert"
+        ]
+      },
+      "notes": "This validation requires page_objects context to be passed to the validator via additional_context. When page_objects are not available, validation is skipped. Common issue: AI generates field names based on the user story text rather than the actual Page Object WebElement variable names.",
+      "source": "Field observation: AI generates PO field references for fields not defined in provided Page Objects"
+    },
+    {
+      "id": "FUNCCALL-VALID-001",
+      "category": "XMLSchema",
+      "name": "funcCall id must be a valid Provar function",
+      "description": "When using <value class=\"funcCall\" id=\"FunctionName\">, the function name must be one of Provar's known built-in functions. Unknown function names cause runtime errors as Provar cannot evaluate them. Common hallucinations include JavaScript-style functions like 'concat', 'toString', 'parseInt' instead of Provar's actual functions.",
+      "appliesTo": [
+        "TestCase"
+      ],
+      "severity": "major",
+      "weight": 6,
+      "recommendation": "Use only valid Provar function names: Count, DateAdd, DateFormat, DateParse, GetEnvironmentVariable, GetSelectedEnvironment, IsSorted, Not, NumberFormat, Round, StringNormalize, StringReplace, StringTrim, TestCaseErrors, TestCaseName, TestCaseOutcome, TestCasePath, TestCaseSuccessful, TestRunErrors, UniqueId. NOTE: Concatenate, PadLeft, PadRight, Substring are NOT valid - use valueList for string building.",
+      "check": {
+        "type": "validFuncCallId",
+        "target": "testCase"
+      },
+      "examples": {
+        "correct": [
+          "<value class=\"funcCall\" id=\"Count\">",
+          "<value class=\"funcCall\" id=\"DateAdd\">",
+          "<value class=\"funcCall\" id=\"UniqueId\">",
+          "<value class=\"funcCall\" id=\"StringReplace\">",
+          "<value class=\"funcCall\" id=\"Round\">"
+        ],
+        "incorrect": [
+          "<value class=\"funcCall\" id=\"Concatenate\">",
+          "<value class=\"funcCall\" id=\"PadLeft\">",
+          "<value class=\"funcCall\" id=\"concat\">",
+          "<value class=\"funcCall\" id=\"toString\">",
+          "<value class=\"funcCall\" id=\"Format\">"
+        ]
+      },
+      "notes": "Provar functions use PascalCase naming. Concatenate, PadLeft, PadRight, Substring are NOT valid Provar funcCalls - for string building use valueList or compound. Common hallucinations: 'concat' and 'Concatenate' should use valueList instead.",
+      "source": "Corpus analysis: PROVAR_BUILTIN_VARIABLES.md and BUILTIN_FUNCTIONS_ANALYSIS.md document all valid Provar functions"
+    },
+    {
+      "id": "UI-ASSERT-COMPOUND-001",
+      "category": "TestCaseDesign",
+      "name": "UiAssert must use compound fields for component field assertions",
+      "description": "Salesforce compound fields (Name=FirstName+LastName, BillingAddress=BillingStreet+BillingCity+BillingState+BillingPostalCode+BillingCountry, ShippingAddress, MailingAddress) are displayed as single fields in the UI View screen but set as individual component fields in UiDoAction. UiAssert steps MUST assert the compound field (e.g., 'Name', 'BillingAddress') using a compound value that combines the individual component variables, NOT assert the individual component fields directly which don't exist in the View UI.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 6,
+      "recommendation": "For Name field: Assert 'Name' using <value class=\"compound\"><parts><variable><path element=\"FirstName\"/></variable><value class=\"value\" valueClass=\"string\"> </value><variable><path element=\"LastName\"/></variable></parts></value>. For Address fields: Assert 'BillingAddress' or 'ShippingAddress' as the compound field, not individual BillingStreet/BillingCity etc. The fieldLocator should reference the compound field name (e.g., field=Name, field=BillingAddress).",
+      "check": {
+        "type": "uiAssertCompoundField",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert",
+        "compoundFields": {
+          "Name": ["FirstName", "LastName", "Salutation", "MiddleName", "Suffix"],
+          "BillingAddress": ["BillingStreet", "BillingCity", "BillingState", "BillingStateCode", "BillingPostalCode", "BillingCountry", "BillingCountryCode", "BillingLatitude", "BillingLongitude"],
+          "ShippingAddress": ["ShippingStreet", "ShippingCity", "ShippingState", "ShippingStateCode", "ShippingPostalCode", "ShippingCountry", "ShippingCountryCode", "ShippingLatitude", "ShippingLongitude"],
+          "MailingAddress": ["MailingStreet", "MailingCity", "MailingState", "MailingStateCode", "MailingPostalCode", "MailingCountry", "MailingCountryCode", "MailingLatitude", "MailingLongitude"]
+        }
+      },
+      "examples": {
+        "correct": [
+          "<uiFieldAssertion resultName=\"Name\"><fieldLocator uri=\"ui:locator?name=Name&amp;binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3DName%26object%3DLead\"/><attributeAssertions><uiAttributeAssertion attributeName=\"value\" comparisonType=\"EqualTo\"><value class=\"compound\"><parts><variable><path element=\"LeadFirstName\"/></variable><value class=\"value\" valueClass=\"string\"> </value><variable><path element=\"LeadLastName\"/></variable></parts></value></uiAttributeAssertion></attributeAssertions></uiFieldAssertion>",
+          "<uiFieldAssertion resultName=\"BillingAddress\"><fieldLocator uri=\"ui:locator?name=BillingAddress&amp;binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3DBillingAddress%26object%3DAccount\"/>...</uiFieldAssertion>"
+        ],
+        "incorrect": [
+          "<uiFieldAssertion resultName=\"FirstName\"><fieldLocator uri=\"...field=FirstName...\"/>... (FirstName doesn't exist as separate field in View UI)",
+          "<uiFieldAssertion resultName=\"BillingCity\"><fieldLocator uri=\"...field=BillingCity...\"/>... (individual address components not visible separately)"
+        ]
+      },
+      "notes": "UiDoAction sets individual fields (FirstName, LastName, BillingStreet, etc.) because the New/Edit form has separate inputs. UiAssert on View screen must use compound field names (Name, BillingAddress) because that's how Salesforce displays them. The assertion value should use <value class=\"compound\"> with <parts> containing variables for each component separated by appropriate delimiters (space for names, newlines for addresses).",
+      "source": "Field observation: Salesforce UI View screens display compound fields, not individual components"
+    },
+    {
+      "id": "UI-LOOKUP-ID-001",
+      "category": "TestCaseDesign",
+      "name": "UiDoAction lookup fields should use Name values, not IDs",
+      "description": "When setting lookup/reference fields via UiDoAction (UI automation), use the record Name (text value the user sees) instead of the record Id. The Salesforce UI expects display values like 'ABC Corp' for Account lookups, not 18-character IDs like '001xx000003DGWaAAO'. Using IDs in UI fields causes lookup failures. Note: Apex CRUD operations (ApexCreateObject, ApexUpdateObject) correctly use IDs for lookup fields.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "major",
+      "weight": 6,
+      "recommendation": "For UiDoAction on lookup fields (AccountId, ContactId, OwnerId, etc.): 1) Create a variable for the record Name BEFORE creating the record (e.g., AccountName = 'ABC Corp'), 2) Use that Name variable in UiDoAction for lookups, 3) Only use ID variables for Apex CRUD operations or sfUiTargetObjectId navigation. Example: Set AccountName='ABC Corp' via SetValues, then use {AccountName} for UiDoAction on AccountId field.",
+      "check": {
+        "type": "uiLookupIdUsage",
+        "target": "step",
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction",
+        "lookupFieldSuffixes": ["Id", "ID"],
+        "idVariableSuffixes": ["Id", "ID", "RecordId"]
+      },
+      "examples": {
+        "correct": [
+          "SetValues: AccountName = 'ABC Corp'",
+          "UiDoAction: Set AccountId field using {AccountName} variable",
+          "ApexCreateObject: Set AccountId using {AccountId} variable (IDs are correct for Apex)"
+        ],
+        "incorrect": [
+          "UiDoAction: Set AccountId field using {AccountId} variable (ID won't work in UI lookup)",
+          "UiDoAction: Set OwnerId field using {UserId} variable"
+        ]
+      },
+      "notes": "Salesforce UI lookup fields expect the display Name (what the user types/sees), not the record ID. The UI performs a search on the Name and selects the matching record. Apex CRUD operations directly accept IDs because they bypass the UI. This is a common AI generation mistake.",
+      "source": "Field observation: UI lookup fields require Name values, not record IDs"
+    },
+    {
+      "id": "ASSERT-DATE-FORMAT-001",
+      "category": "TestCaseDesign",
+      "name": "Date/DateTime assertions should use proper format functions",
+      "description": "Salesforce Date and DateTime fields are stored in specific formats: DateTime uses ISO 8601 format (2026-01-14T05:36:12.000+0000) and Date uses yyyy-MM-dd format (2026-01-14). When asserting these fields in UI or API tests, raw date strings may cause assertion failures due to format mismatches, timezone differences, or precision issues. Use Provar's date functions (DateFormat, DateParse, DateAdd, TODAY, NOW) for reliable date comparisons.",
+      "appliesTo": [
+        "Step"
+      ],
+      "severity": "minor",
+      "weight": 4,
+      "recommendation": "For date assertions: 1) Use DateFormat() to format dates consistently: DateFormat(variable, 'yyyy-MM-dd', 'GMT'), 2) Use DateParse() to parse date strings with known formats, 3) Use TODAY for current date comparisons (yyyy-MM-dd format), 4) Use NOW for current datetime (yyyy-MM-dd HH:mm:ss.SSS format), 5) Use DateAdd() for date calculations. Always specify timezone for DateTime comparisons. Example: Assert CloseDate equals DateFormat(ExpectedDate, 'yyyy-MM-dd').",
+      "check": {
+        "type": "dateFormatAssertion",
+        "target": "step",
+        "apiIds": [
+          "com.provar.plugins.forcedotcom.core.ui.UiAssert",
+          "com.provar.plugins.bundled.apis.AssertValues"
+        ],
+        "dateFieldPatterns": ["Date$", "DateTime$", "^Close", "^Start", "^End", "^Created", "^LastModified", "^Birth", "^Expir"],
+        "sfDateTimeFormat": "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
+        "sfDateFormat": "yyyy-MM-dd"
+      },
+      "examples": {
+        "correct": [
+          "AssertValues: Assert CloseDate equals DateFormat(ExpectedCloseDate, 'yyyy-MM-dd')",
+          "UiAssert: Assert CreatedDate using DateFormat(expectedDate, 'yyyy-MM-dd', 'GMT')",
+          "AssertValues: Assert field using TODAY for today's date",
+          "AssertValues: Assert datetime using DateParse(value, 'yyyy-MM-dd\\'T\\'HH:mm:ss.SSSZ')"
+        ],
+        "incorrect": [
+          "AssertValues: Assert CloseDate equals '2026-01-14' (hardcoded date string)",
+          "UiAssert: Assert CreatedDate equals {CreatedDateVariable} (raw datetime may have timezone/format issues)",
+          "AssertValues: Assert DateTime field using string comparison (precision mismatch)"
+        ]
+      },
+      "notes": "Salesforce DateTime format: 2026-01-14T05:36:12.000+0000 (ISO 8601). Salesforce Date format: 2026-01-14. NOW returns: 2026-01-15 15:03:16.690. TODAY returns: 2026-01-15. DateFormat output format defaults to yyyy-MM-dd. DateParse input format defaults to international format. Always consider timezone when comparing DateTime values across different contexts.",
+      "source": "Field observation: Date/DateTime format inconsistencies cause assertion failures"
+    },
+    {
+      "id": "RENDER-DATE-VALUECLASS-001",
+      "category": "XMLSchema",
+      "name": "valueClass='date' requires epoch timestamp, not date string",
+      "description": "When using valueClass='date' or valueClass='dateTime' in Provar test cases, the value MUST be an epoch timestamp in milliseconds (a numeric value like 1736899200000), NOT an ISO date string like '2025-01-15' or '2025-01-15T00:00:00.000Z'. Using string date formats with valueClass='date' causes the test case to fail loading in Provar IDE. This is a critical XML schema violation that completely breaks the test case.",
+      "appliesTo": [
+        "Step",
+        "TestCase"
+      ],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Either: 1) Use valueClass='string' if you want to specify dates as strings like '2025-01-15', OR 2) Use valueClass='date' with epoch timestamp in milliseconds (e.g., 1736899200000 for 2025-01-15). For ApexCreateObject/ApexUpdateObject date fields, use valueClass='string' with the date in 'YYYY-MM-DD' format. To convert: new Date('2025-01-15').getTime() = 1736899200000.",
+      "check": {
+        "type": "dateValueClassFormat",
+        "target": "step"
+      },
+      "examples": {
+        "correct": [
+          "<value class=\"value\" valueClass=\"date\">1736899200000</value>",
+          "<value class=\"value\" valueClass=\"string\">2025-01-15</value>",
+          "<value class=\"value\" valueClass=\"dateTime\">1736899200000</value>"
+        ],
+        "incorrect": [
+          "<value class=\"value\" valueClass=\"date\">2025-01-15</value>",
+          "<value class=\"value\" valueClass=\"date\">2025-01-15T00:00:00.000Z</value>",
+          "<value class=\"value\" valueClass=\"dateTime\">2025-01-15T12:30:00</value>"
+        ]
+      },
+      "notes": "Provar internally stores dates as epoch timestamps (milliseconds since 1970-01-01). When valueClass='date' is used, Provar expects a numeric epoch value. String dates cause XML parsing/loading failures. All valid corpus examples use epoch timestamps with valueClass='date': 1637798400000, 1513209600000, etc.",
+      "source": "Corpus analysis: All valueClass='date' values are epoch timestamps; string dates cause Provar IDE load failures"
+    }
+  ]
+}

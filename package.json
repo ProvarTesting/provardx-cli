@@ -1,39 +1,35 @@
 {
   "name": "@provartesting/provardx-cli",
-  "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Manager",
-  "version": "1.4.7",
+  "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
+  "version": "1.5.0-beta.1",
   "license": "BSD-3-Clause",
   "plugins": [
     "@provartesting/provardx-plugins-automation",
     "@provartesting/provardx-plugins-manager"
   ],
   "dependencies": {
-    "@oclif/core": "^3.26.2",
-    "@salesforce/core": "^6.5.1",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@oclif/core": "^3.27.0",
+    "@provartesting/provardx-plugins-automation": "1.2.2",
+    "@provartesting/provardx-plugins-manager": "1.3.2",
+    "@provartesting/provardx-plugins-utils": "1.3.3",
+    "@salesforce/core": "^7.0.0",
     "@salesforce/kit": "^3.0.15",
-    "@salesforce/sf-plugins-core": "^7.1.4",
+    "@salesforce/sf-plugins-core": "^9.0.0",
     "@salesforce/ts-types": "^2.0.9",
-    "axios": "^1.6.7",
-    "cli-ux": "^6.0.9",
     "fast-xml-parser": "^4.3.6",
-    "jsonschema": "^1.4.1",
-    "node-stream-zip": "^1.15.0",
-    "@provartesting/provardx-plugins-utils": "1.3.1",
-    "@provartesting/provardx-plugins-automation": "1.2.1",
-    "@provartesting/provardx-plugins-manager": "1.3.1",
-    "sync-request": "^6.1.0",
-    "xml-js": "^1.6.11"
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@oclif/plugin-command-snapshot": "^5.0.2",
     "@salesforce/cli-plugins-testkit": "^5.1.7",
     "@salesforce/dev-scripts": "^8.3.0",
-    "@types/unzipper": "^0.10.9",
+    "@types/sinon": "^21.0.0",
     "eslint-plugin-sf-plugin": "^1.17.2",
     "mochawesome": "^7.1.3",
     "oclif": "^4.3.4",
     "shx": "0.3.4",
-    "sinon": "10.0.0",
+    "sinon": "^21.0.3",
     "ts-node": "^10.9.1",
     "typescript": "^5.1.6",
     "wireit": "^0.14.0"
@@ -70,22 +66,45 @@
       "provar": {
         "description": "CLI commands to interact with Provar.",
         "subtopics": {
-          "automation": {
-            "description": "These commands are used to interact with Provar Automation.",
+          "mcp": {
+            "description": "Commands to start and manage the Provar MCP server."
+          },
+          "config": {
+            "description": "Commands to manage ProvarDX property configuration files."
+          },
+          "manager": {
+            "description": "Commands to connect and interact with Provar Quality Hub."
+          },
+          "quality-hub": {
+            "description": "Commands to connect and interact with Provar Quality Hub.",
             "subtopics": {
-              "config": {
-                "description": "commands to generate and manipulate provardx-properties file."
-              },
-              "subtopics": {
-                "metadata": {
-                  "description": "commands to download metadata for required connections."
+              "test": {
+                "description": "Operations related to Quality Hub test runs.",
+                "subtopics": {
+                  "run": {
+                    "description": "Commands to launch, monitor, abort, and report on Quality Hub test runs."
+                  }
                 }
               },
+              "testcase": {
+                "description": "Operations related to Quality Hub test cases."
+              }
+            }
+          },
+          "automation": {
+            "description": "Commands to interact with Provar Automation.",
+            "subtopics": {
+              "config": {
+                "description": "Commands to generate and manage the provardx-properties configuration file."
+              },
+              "metadata": {
+                "description": "Commands to download required metadata for Salesforce connections."
+              },
               "test": {
-                "description": "Operations related to test run."
+                "description": "Commands to execute and manage Provar Automation test runs."
               },
               "project": {
-                "description": "Compile the project."
+                "description": "Commands to compile and manage Provar Automation projects."
               }
             }
           }
@@ -108,6 +127,8 @@
     "test": "wireit",
     "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
+    "test:dev": "nyc mocha \"test/**/*.test.ts\"",
+    "test:watch": "mocha \"test/**/*.test.ts\" --watch --watch-files \"src/**/*.ts\" --watch-files \"test/**/*.ts\"",
     "version": "oclif readme"
   },
   "publishConfig": {
@@ -121,9 +142,10 @@
       ]
     },
     "compile": {
-      "command": "tsc -p . --pretty --incremental",
+      "command": "tsc -p . --pretty --incremental && shx mkdir -p lib/mcp/rules && shx cp src/mcp/rules/*.json lib/mcp/rules/",
       "files": [
         "src/**/*.ts",
+        "src/mcp/rules/*.json",
         "**/tsconfig.json",
         "messages/**"
       ],
