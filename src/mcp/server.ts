@@ -63,7 +63,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerProjectValidateFromPath(server, config);
   registerAllPropertiesTools(server, config);
   registerAllQualityHubTools(server);
-  registerAllAutomationTools(server);
+  registerAllAutomationTools(server, config);
   registerAllDefectTools(server);
   registerAllAntTools(server, config);
   registerAllRcaTools(server);

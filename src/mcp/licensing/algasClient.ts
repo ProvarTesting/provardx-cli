@@ -127,14 +127,22 @@ export async function validateKeyWithAlgas(licenseKey: string): Promise<AlgasRes
 
     // 401 means the Cognito token was rotated mid-session — clear the module-level cache
     // and retry exactly once with a fresh token before surfacing an error.
+    // A new AbortController is created for the retry: the original controller's timer
+    // may have partially elapsed during the first request, leaving insufficient time.
     if (res.status === 401) {
       cachedToken = null;
       tokenExpiresAt = 0;
-      const refreshedToken = await getCognitoToken();
-      res = await fetch(`${TAG_BASE_URL}/${encodeURIComponent(licenseKey)}`, {
-        headers: { Authorization: `Bearer ${refreshedToken}` },
-        signal: controller.signal,
-      });
+      const retryController = new AbortController();
+      const retryTimeout = setTimeout(() => retryController.abort(), TIMEOUT_MS);
+      try {
+        const refreshedToken = await getCognitoToken();
+        res = await fetch(`${TAG_BASE_URL}/${encodeURIComponent(licenseKey)}`, {
+          headers: { Authorization: `Bearer ${refreshedToken}` },
+          signal: retryController.signal,
+        });
+      } finally {
+        clearTimeout(retryTimeout);
+      }
     }
 
     if (res.status === 404) {

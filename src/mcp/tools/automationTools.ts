@@ -14,6 +14,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { sfSpawnHelper } from './sfSpawn.js';
+import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
+import type { ServerConfig } from '../server.js';
 
 // ── SF CLI discovery ──────────────────────────────────────────────────────────
 
@@ -135,7 +137,7 @@ function handleSpawnError(err: unknown, requestId: string, toolName: string): { 
 
 // ── Tool: provar.automation.config.load ──────────────────────────────────────
 
-export function registerAutomationConfigLoad(server: McpServer): void {
+export function registerAutomationConfigLoad(server: McpServer, config: ServerConfig): void {
   server.tool(
     'provar.automation.config.load',
     [
@@ -153,6 +155,7 @@ export function registerAutomationConfigLoad(server: McpServer): void {
       log('info', 'provar.automation.config.load', { requestId, properties_path });
 
       try {
+        assertPathAllowed(properties_path, config.allowedPaths);
         const result = runSfCommand(['provar', 'automation', 'config', 'load', '--properties-file', properties_path], sf_path);
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, properties_path };
 
@@ -162,6 +165,9 @@ export function registerAutomationConfigLoad(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
+        if (err instanceof PathPolicyError) {
+          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError(err.code, err.message, requestId, false)) }] };
+        }
         return handleSpawnError(err, requestId, 'provar.automation.config.load');
       }
     }
@@ -458,9 +464,9 @@ export function registerAutomationSetup(server: McpServer): void {
 
 // ── Bulk registration ─────────────────────────────────────────────────────────
 
-export function registerAllAutomationTools(server: McpServer): void {
+export function registerAllAutomationTools(server: McpServer, config: ServerConfig): void {
   registerAutomationSetup(server);
-  registerAutomationConfigLoad(server);
+  registerAutomationConfigLoad(server, config);
   registerAutomationTestRun(server);
   registerAutomationCompile(server);
   registerAutomationMetadataDownload(server);
