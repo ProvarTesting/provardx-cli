@@ -202,7 +202,7 @@ describe('qualityHubTools', () => {
         ));
         const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
         const body = parseBody(result);
-        assert.ok(typeof body.suggestion === 'string' && (body.suggestion as string).length > 0, 'Expected suggestion when FAILED');
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAILED');
       });
 
       it('sets suggestion when JSON result.status is "FAIL"', () => {
@@ -213,7 +213,7 @@ describe('qualityHubTools', () => {
         ));
         const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
         const body = parseBody(result);
-        assert.ok(typeof body.suggestion === 'string' && (body.suggestion as string).length > 0, 'Expected suggestion when FAIL');
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAIL');
       });
 
       it('does NOT set suggestion when status is "RUNNING"', () => {
@@ -260,7 +260,7 @@ describe('qualityHubTools', () => {
         ));
         const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
         const body = parseBody(result);
-        assert.ok(typeof body.suggestion === 'string' && (body.suggestion as string).length > 0, 'Expected suggestion from regex fallback');
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion from regex fallback');
       });
     });
   });

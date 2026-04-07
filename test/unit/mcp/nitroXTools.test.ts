@@ -422,7 +422,7 @@ describe('nitroXTools', () => {
       assert.ok(typeof body['content'] === 'string');
       assert.equal(body['written'], false);
 
-      const generated = JSON.parse(body['content'] as string) as Record<string, unknown>;
+      const generated = JSON.parse(body['content']) as Record<string, unknown>;
       assert.ok(generated['componentId']);
       assert.equal(generated['name'], '/com/test/ButtonComponent');
       assert.equal(generated['tagName'], 'lightning-button');

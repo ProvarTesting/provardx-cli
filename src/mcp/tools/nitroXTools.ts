@@ -105,10 +105,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const VALID_COMPARISON_TYPES = ['equals', 'starts-with', 'contains'];
 const INTERACTION_NAME_RE = /^[A-Za-z0-9\s]*$/;
 
-/** Validate a parsed NitroX .po.json object against schema-derived rules. */
-export function validateNitroXContent(obj: JsonObj): NitroXValidationResult {
-  const issues: NitroXIssue[] = [];
-
+/** Validate root-level scalar properties (NX001, NX002, NX003, NX010). */
+function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
   // NX001: componentId must be present and a valid UUID
   if (obj['componentId'] === undefined || obj['componentId'] === null) {
     issues.push({
@@ -158,6 +156,13 @@ export function validateNitroXContent(obj: JsonObj): NitroXValidationResult {
       suggestion: 'Remove whitespace from bodyTagName.',
     });
   }
+}
+
+/** Validate a parsed NitroX .po.json object against schema-derived rules. */
+export function validateNitroXContent(obj: JsonObj): NitroXValidationResult {
+  const issues: NitroXIssue[] = [];
+
+  validateRootProperties(obj, issues);
 
   // Validate root-level parameters
   if (Array.isArray(obj['parameters'])) {
