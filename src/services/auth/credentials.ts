@@ -73,7 +73,7 @@ export function clearCredentials(): void {
 
 export function resolveApiKey(): string | null {
   const envKey = process.env.PROVAR_API_KEY?.trim();
-  if (envKey) return envKey;
+  if (envKey?.startsWith(KEY_PREFIX)) return envKey;
   const stored = readStoredCredentials();
   return stored?.api_key ?? null;
 }

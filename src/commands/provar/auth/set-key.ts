@@ -26,7 +26,7 @@ export default class SfProvarAuthSetKey extends SfCommand<void> {
 
   public async run(): Promise<void> {
     const { flags } = await this.parse(SfProvarAuthSetKey);
-    const key = flags.key;
+    const key = flags.key.trim();
 
     if (!key.startsWith('pv_k_')) {
       this.error(

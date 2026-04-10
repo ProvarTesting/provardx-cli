@@ -181,14 +181,14 @@ describe('registerTestCaseValidate handler', () => {
 
   let capServer: CapturingServer;
   let savedApiKey: string | undefined;
-  let savedHome: string;
+  let origHomedir: () => string;
   let tempDir: string;
   let apiStub: sinon.SinonStub | null = null;
 
   beforeEach(() => {
     // Redirect home so readStoredCredentials() finds no file
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-handler-test-'));
-    savedHome = os.homedir();
+    origHomedir = os.homedir;
     (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 
     savedApiKey = process.env.PROVAR_API_KEY;
@@ -199,7 +199,7 @@ describe('registerTestCaseValidate handler', () => {
   });
 
   afterEach(() => {
-    (os as unknown as { homedir: () => string }).homedir = (): string => savedHome;
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
     fs.rmSync(tempDir, { recursive: true, force: true });
     if (savedApiKey !== undefined) {
       process.env.PROVAR_API_KEY = savedApiKey;
@@ -219,7 +219,7 @@ describe('registerTestCaseValidate handler', () => {
     assert.ok(warning.includes('Quality Hub'), 'Warning must mention Quality Hub');
   });
 
-  it('key + API success → validation_source "quality_hub"', async () => {
+  it('key + API success → validation_source "quality_hub" with local metadata', async () => {
     process.env.PROVAR_API_KEY = 'pv_k_testkey12345';
     apiStub = sinon.stub(qualityHubClient, 'validateTestCaseViaApi').resolves({
       is_valid: true,
@@ -232,6 +232,10 @@ describe('registerTestCaseValidate handler', () => {
     assert.equal(result['validation_source'], 'quality_hub');
     assert.equal(result['is_valid'], true);
     assert.equal(result['quality_score'], 90);
+    // Metadata extracted from XML locally and merged into the API response
+    assert.equal(result['test_case_id'], 'test-001');
+    assert.equal(result['test_case_name'], 'My Test');
+    assert.equal(result['step_count'], 2);
   });
 
   it('key + network error → validation_source "local_fallback" with unreachable warning', async () => {

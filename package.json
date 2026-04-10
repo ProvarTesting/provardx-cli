@@ -128,7 +128,7 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
+    "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" \"**/*key.nut.ts\" \"**/*status.nut.ts\" \"**/*clear.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
     "test:dev": "nyc mocha \"test/**/*.test.ts\"",
     "test:watch": "mocha \"test/**/*.test.ts\" --watch --watch-files \"src/**/*.ts\" --watch-files \"test/**/*.ts\"",

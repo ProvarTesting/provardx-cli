@@ -22,6 +22,15 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
     const envKey = process.env.PROVAR_API_KEY?.trim();
 
     if (envKey) {
+      if (!envKey.startsWith('pv_k_')) {
+        this.log('API key misconfigured.');
+        this.log('  Source:   environment variable (PROVAR_API_KEY)');
+        this.log(`  Value:    "${envKey.substring(0, 10)}..." does not start with "pv_k_"`);
+        this.log('');
+        this.log('  Validation mode: local only (invalid key — not used for API calls)');
+        this.log('  Fix: update PROVAR_API_KEY to a valid pv_k_ key from https://success.provartesting.com');
+        return;
+      }
       this.log('API key configured');
       this.log('  Source:   environment variable (PROVAR_API_KEY)');
       this.log(`  Prefix:   ${envKey.substring(0, 12)}`);

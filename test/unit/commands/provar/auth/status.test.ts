@@ -19,18 +19,18 @@ import {
 // The status command reads credentials and reports source. We test the
 // source-detection logic directly — the same logic the command uses.
 
-let origHome: string;
+let origHomedir: () => string;
 let tempDir: string;
 let savedEnv: string | undefined;
 
 function useTemp(): void {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-status-test-'));
-  origHome = os.homedir();
+  origHomedir = os.homedir;
   (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  (os as unknown as { homedir: () => string }).homedir = origHomedir;
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
@@ -74,5 +74,11 @@ describe('auth status logic', () => {
     // status command checks env first; if present, source = env var
     assert.ok(envKey, 'env key should be truthy');
     assert.equal(resolveApiKey(), 'pv_k_fromenv123456');
+  });
+
+  it('resolveApiKey ignores env var without pv_k_ prefix, falls through to stored file', () => {
+    writeCredentials('pv_k_fromfile12345', 'pv_k_fromfil', 'manual');
+    process.env.PROVAR_API_KEY = 'sk-wrong-prefix-key';
+    assert.equal(resolveApiKey(), 'pv_k_fromfile12345');
   });
 });

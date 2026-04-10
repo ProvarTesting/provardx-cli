@@ -16,17 +16,17 @@ import { writeCredentials, getCredentialsPath } from '../../../../../src/service
 // We test the credentials logic directly to avoid OCLIF process.argv side-effects
 // in the unit test runner. Integration / NUT tests cover the full command invocation.
 
-let origHome: string;
+let origHomedir: () => string;
 let tempDir: string;
 
 function useTemp(): void {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-setkey-test-'));
-  origHome = os.homedir();
+  origHomedir = os.homedir;
   (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  (os as unknown as { homedir: () => string }).homedir = origHomedir;
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
 

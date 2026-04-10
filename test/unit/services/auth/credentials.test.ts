@@ -26,18 +26,18 @@ import {
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-let origHome: string;
+let origHomedir: () => string;
 let tempDir: string;
 
 function useTemp(): void {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-cred-test-'));
-  origHome = os.homedir();
+  origHomedir = os.homedir;
   // Monkey-patch homedir for the duration of the test block
   (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  (os as unknown as { homedir: () => string }).homedir = origHomedir;
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
@@ -165,6 +165,12 @@ describe('resolveApiKey', () => {
 
   it('treats PROVAR_API_KEY with only whitespace as unset', () => {
     process.env.PROVAR_API_KEY = '   ';
+    writeCredentials('pv_k_fromfile', 'pv_k_fromfil', 'manual');
+    assert.equal(resolveApiKey(), 'pv_k_fromfile');
+  });
+
+  it('treats PROVAR_API_KEY without pv_k_ prefix as invalid and falls through to stored file', () => {
+    process.env.PROVAR_API_KEY = 'sk-invalid-prefix';
     writeCredentials('pv_k_fromfile', 'pv_k_fromfil', 'manual');
     assert.equal(resolveApiKey(), 'pv_k_fromfile');
   });

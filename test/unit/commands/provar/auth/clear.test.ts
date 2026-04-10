@@ -16,17 +16,17 @@ import {
   getCredentialsPath,
 } from '../../../../../src/services/auth/credentials.js';
 
-let origHome: string;
+let origHomedir: () => string;
 let tempDir: string;
 
 function useTemp(): void {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-clear-test-'));
-  origHome = os.homedir();
+  origHomedir = os.homedir;
   (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  (os as unknown as { homedir: () => string }).homedir = origHomedir;
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
 

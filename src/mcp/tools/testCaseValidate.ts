@@ -78,14 +78,15 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           const baseUrl = getQualityHubBaseUrl();
           try {
             const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
+            const localMeta = validateTestCase(source);
             const result = {
               requestId,
               ...apiResult,
-              step_count: 0, // API result — step count not returned by API
+              step_count: localMeta.step_count,
               error_count: apiResult.issues.filter((i) => i.severity === 'ERROR').length,
               warning_count: apiResult.issues.filter((i) => i.severity === 'WARNING').length,
-              test_case_id: null as string | null,
-              test_case_name: null as string | null,
+              test_case_id: localMeta.test_case_id,
+              test_case_name: localMeta.test_case_name,
               validation_source: 'quality_hub' as const,
             };
             log('info', 'provar.testcase.validate: quality_hub', { requestId });
