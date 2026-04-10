@@ -91,6 +91,9 @@
               }
             }
           },
+          "auth": {
+            "description": "Commands to manage Provar API key authentication."
+          },
           "automation": {
             "description": "Commands to interact with Provar Automation.",
             "subtopics": {
