@@ -19,35 +19,33 @@ import {
 // The status command reads credentials and reports source. We test the
 // source-detection logic directly — the same logic the command uses.
 
-let _origHome: string;
-let _tempDir: string;
-let _savedEnv: string | undefined;
+let origHome: string;
+let tempDir: string;
+let savedEnv: string | undefined;
 
 function useTemp(): void {
-  _tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-status-test-'));
-  _origHome = os.homedir();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _tempDir;
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-status-test-'));
+  origHome = os.homedir();
+  (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _origHome;
-  fs.rmSync(_tempDir, { recursive: true, force: true });
+  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
 describe('auth status logic', () => {
   beforeEach(() => {
-    _savedEnv = process.env.PROVAR_API_KEY;
+    savedEnv = process.env.PROVAR_API_KEY;
     delete process.env.PROVAR_API_KEY;
     useTemp();
   });
 
   afterEach(() => {
-    if (_savedEnv === undefined) {
+    if (savedEnv === undefined) {
       delete process.env.PROVAR_API_KEY;
     } else {
-      process.env.PROVAR_API_KEY = _savedEnv;
+      process.env.PROVAR_API_KEY = savedEnv;
     }
     restoreHome();
   });

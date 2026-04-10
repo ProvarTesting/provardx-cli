@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+/* eslint-disable camelcase */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -52,7 +53,11 @@ export function writeCredentials(key: string, prefix: string, source: StoredCred
   // mode: 0o600 sets permissions atomically on file creation (POSIX).
   // chmodSync handles re-runs on existing files. Both are no-ops on Windows.
   fs.writeFileSync(p, JSON.stringify(data, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  try { fs.chmodSync(p, 0o600); } catch { /* Windows: no file permission model */ }
+  try {
+    fs.chmodSync(p, 0o600);
+  } catch {
+    /* Windows: no file permission model */
+  }
 }
 
 export function clearCredentials(): void {

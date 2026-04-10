@@ -29,13 +29,16 @@ export default class SfProvarAuthSetKey extends SfCommand<void> {
     const key = flags.key;
 
     if (!key.startsWith('pv_k_')) {
-      this.error('Invalid API key format. Keys must start with "pv_k_". Get your key from https://success.provartesting.com.', { exit: 1 });
+      this.error(
+        'Invalid API key format. Keys must start with "pv_k_". Get your key from https://success.provartesting.com.',
+        { exit: 1 }
+      );
     }
 
     const prefix = key.substring(0, 12);
     writeCredentials(key, prefix, 'manual');
 
     this.log(`API key stored (prefix: ${prefix}).`);
-    this.log(`Run 'sf provar auth status' to verify.`);
+    this.log("Run 'sf provar auth status' to verify.");
   }
 }

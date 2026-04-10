@@ -17,12 +17,13 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   public async run(): Promise<void> {
     const envKey = process.env.PROVAR_API_KEY?.trim();
 
     if (envKey) {
       this.log('API key configured');
-      this.log(`  Source:   environment variable (PROVAR_API_KEY)`);
+      this.log('  Source:   environment variable (PROVAR_API_KEY)');
       this.log(`  Prefix:   ${envKey.substring(0, 12)}`);
       this.log('');
       this.log('  Validation mode: Quality Hub API');
@@ -32,11 +33,11 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
     const stored = readStoredCredentials();
     if (stored) {
       this.log('API key configured');
-      this.log(`  Source:   ~/.provar/credentials.json`);
+      this.log('  Source:   ~/.provar/credentials.json');
       this.log(`  Prefix:   ${stored.prefix}`);
       this.log(`  Set at:   ${stored.set_at}`);
       if (stored.username) this.log(`  Account:  ${stored.username}`);
-      if (stored.tier)     this.log(`  Tier:     ${stored.tier}`);
+      if (stored.tier) this.log(`  Tier:     ${stored.tier}`);
       if (stored.expires_at) this.log(`  Expires:  ${stored.expires_at}`);
       this.log('');
       this.log('  Validation mode: Quality Hub API');

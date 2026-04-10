@@ -16,20 +16,18 @@ import {
   getCredentialsPath,
 } from '../../../../../src/services/auth/credentials.js';
 
-let _origHome: string;
-let _tempDir: string;
+let origHome: string;
+let tempDir: string;
 
 function useTemp(): void {
-  _tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-clear-test-'));
-  _origHome = os.homedir();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _tempDir;
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-clear-test-'));
+  origHome = os.homedir();
+  (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _origHome;
-  fs.rmSync(_tempDir, { recursive: true, force: true });
+  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
 describe('auth clear logic', () => {

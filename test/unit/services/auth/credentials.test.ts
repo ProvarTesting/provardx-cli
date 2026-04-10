@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+/* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -25,21 +26,19 @@ import {
 
 // ── helpers ────────────────────────────────────────────────────────────────────
 
-let _origHome: string;
-let _tempDir: string;
+let origHome: string;
+let tempDir: string;
 
 function useTemp(): void {
-  _tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-cred-test-'));
-  _origHome = os.homedir();
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-cred-test-'));
+  origHome = os.homedir();
   // Monkey-patch homedir for the duration of the test block
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _tempDir;
+  (os as unknown as { homedir: () => string }).homedir = (): string => tempDir;
 }
 
 function restoreHome(): void {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (os as any).homedir = (): string => _origHome;
-  fs.rmSync(_tempDir, { recursive: true, force: true });
+  (os as unknown as { homedir: () => string }).homedir = (): string => origHome;
+  fs.rmSync(tempDir, { recursive: true, force: true });
 }
 
 // ── getCredentialsPath ─────────────────────────────────────────────────────────
@@ -100,10 +99,7 @@ describe('writeCredentials', () => {
   });
 
   it('rejects a key that does not start with pv_k_', () => {
-    assert.throws(
-      () => writeCredentials('invalid-key', 'invalid', 'manual'),
-      /Invalid API key format/
-    );
+    assert.throws(() => writeCredentials('invalid-key', 'invalid', 'manual'), /Invalid API key format/);
   });
 
   it('creates the parent directory if it does not exist', () => {
