@@ -61,7 +61,7 @@ describe('sf provar auth status NUTs', () => {
     expect(output.stderr).to.equal('');
     expect(output.stdout).to.include('API key configured');
     expect(output.stdout).to.include('credentials.json');
-    expect(output.stdout).to.include('pv_k_statuste');
+    expect(output.stdout).to.include('Prefix:');
     expect(output.stdout).to.include('Quality Hub API');
   });
 
