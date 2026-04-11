@@ -371,71 +371,179 @@ Replace the stub in `client.ts` with the real HTTP call. Run integration test.
 
 ---
 
-## Phase 2 — `sf provar auth login` (Cognito)
+## Phase 2 — `sf provar auth login` (Cognito PKCE)
 
-**Starts when:** AWS Phase 2 handoff received (Cognito User Pool ID + App Client ID)
+**Starts when:** AWS Phase 2 handoff received (Cognito User Pool ID + App Client ID + Hosted UI domain)
+
+> **Decisions locked in (2026-04-10):**
+>
+> - Auth flow: **PKCE / Hosted UI** (Option B). Aligns with `sf org login web` pattern;
+>   CLI never handles the user's password.
+> - Token strategy: **exchange immediately, store only `pv_k_`**. Cognito tokens are held
+>   in memory for the duration of the exchange call then discarded. The `pv_k_` key has a
+>   90-day TTL so users run `auth login` roughly once per quarter.
+> - Phase 1 CLI infrastructure (`credentials.ts`, `set-key`, `resolveApiKey`) is **unchanged**.
+> - Cognito callback ports (all three must be registered in the App Client — no wildcard
+>   support in Cognito):
+>   - `http://localhost:1717/callback` ← primary
+>   - `http://localhost:7890/callback` ← fallback 1
+>   - `http://localhost:8080/callback` ← fallback 2
+
+---
 
 ### 2.1 — New command: `sf provar auth login`
 
 **File:** `src/commands/provar/auth/login.ts`
 
-**Flow (email OTP / passwordless — simplest UX):**
+**User-visible flow:**
 
 ```
 sf provar auth login
 
-Enter your Provar Success Portal email: user@company.com
+Opening browser for login…
+(browser opens Cognito Hosted UI)
 
-A one-time code was sent to user@company.com.
-Enter code: ██████
+Waiting for authentication… (Ctrl-C to cancel)
 
-✓ Authenticated as user@company.com (enterprise)
+✓ Authenticated as user@company.com (enterprise tier)
 ✓ API key stored (pv_k_abc123...). Valid for 90 days.
   Run 'sf provar auth status' to check at any time.
 ```
 
-**Implementation notes:**
+**Implementation — port selection:**
 
-- Use the AWS Cognito `InitiateAuth` API with `USER_AUTH` flow (email OTP / MAGIC_LINK)
-- If passwordless is not available on the User Pool, use SRP (`USER_SRP_AUTH`) with a
-  temporary password flow — confirm with AWS team which flows are enabled
-- On success: call `POST /auth/exchange` with the Cognito access token
-- `/auth/exchange` returns `{ api_key, prefix, tier, username, expires_at }`
-- Call `writeCredentials(api_key, prefix, 'cognito')`
-- Never log or print the full key — only the prefix
+```typescript
+const CALLBACK_PORTS = [1717, 7890, 8080];
+
+async function findAvailablePort(): Promise<number> {
+  for (const port of CALLBACK_PORTS) {
+    if (await isPortFree(port)) return port;
+  }
+  throw new Error(
+    'Could not bind to any registered callback port (1717, 7890, 8080). ' +
+    'Check that no other process is using these ports.'
+  );
+}
+```
+
+The chosen port determines which registered `redirect_uri` is sent in the auth request.
+Cognito validates it exactly — `redirect_uri` in the token exchange must match the
+authorization request. Build the URI once and reuse it for both steps.
+
+**Implementation — PKCE flow:**
+
+```typescript
+// 1. Generate PKCE pair
+const verifier = generateCodeVerifier();          // 43–128 random chars
+const challenge = await generateCodeChallenge(verifier); // S256 SHA-256
+
+// 2. Find a free port and construct the redirect URI
+const port = await findAvailablePort();
+const redirectUri = `http://localhost:${port}/callback`;
+
+// 3. Build the Hosted UI authorize URL
+const authorizeUrl = new URL(`https://${cognitoDomain}/oauth2/authorize`);
+authorizeUrl.searchParams.set('response_type', 'code');
+authorizeUrl.searchParams.set('client_id', clientId);
+authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+authorizeUrl.searchParams.set('code_challenge', challenge);
+authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+authorizeUrl.searchParams.set('scope', 'openid email profile');
+
+// 4. Open browser (cross-platform: open / xdg-open / start)
+await open(authorizeUrl.toString());
+
+// 5. Spin up localhost listener — accept ONE request then shut down
+const authCode = await listenForCallback(port);
+
+// 6. Exchange code for tokens (standard PKCE token endpoint)
+const tokens = await exchangeCodeForTokens({
+  code: authCode, redirectUri, clientId, verifier,
+  tokenEndpoint: `https://${cognitoDomain}/oauth2/token`,
+});
+
+// 7. Exchange Cognito access token for pv_k_ key (in-memory only)
+const { api_key, prefix, tier, username, expires_at } =
+  await exchangeTokenForProvarKey(tokens.access_token, baseUrl);
+
+// 8. Persist pv_k_ key — Cognito tokens are discarded here
+writeCredentials(api_key, prefix, 'cognito');
+// Optionally write Phase 2 fields (username, tier, expires_at)
+```
+
+**The `open` package** is already a common dep in the sf-plugins ecosystem. Check if
+`@salesforce/core` already re-exports it before adding a new dependency.
+
+**`listenForCallback(port)`** — the localhost redirect server:
+
+```typescript
+async function listenForCallback(port: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url!, `http://localhost:${port}`);
+      const code = url.searchParams.get('code');
+      const error = url.searchParams.get('error');
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<html><body><p>Authentication complete. You can close this tab.</p></body></html>');
+      server.close();
+      if (code) resolve(code);
+      else reject(new Error(error ?? 'No auth code received'));
+    });
+    server.listen(port, '127.0.0.1');
+    server.on('error', reject);
+  });
+}
+```
+
+**Required config (from Phase 2 AWS handoff):**
+
+| Value | Source |
+|---|---|
+| `cognitoDomain` | AWS handoff: `https://<prefix>.auth.<region>.amazoncognito.com` |
+| `clientId` | AWS handoff: Cognito App Client ID |
+| `tokenEndpoint` | Derived: `${cognitoDomain}/oauth2/token` |
+| Exchange endpoint | AWS handoff: `POST <qualityHubBaseUrl>/auth/exchange` |
+
+Read `cognitoDomain` and `clientId` from env vars `PROVAR_COGNITO_DOMAIN` and
+`PROVAR_COGNITO_CLIENT_ID` with production defaults bundled after Phase 2 handoff.
 
 **Flags:**
 
-- `--email` (optional) — skip the prompt if provided
-- `--url` (optional) — override the Quality Hub API base URL (for testing against dev)
+- `--url` (optional) — override the Quality Hub API base URL (for testing against dev/staging)
 
 **Tests:**
 
-- Mock Cognito calls and the exchange endpoint
-- Verify credentials file is written correctly
-- Verify correct error messages for wrong code, expired code, no license
+- Unit: mock the HTTP layer (`listenForCallback`, `exchangeCodeForTokens`, exchange endpoint)
+- Assert `writeCredentials` is called with `source: 'cognito'` and correct key shape
+- Assert Cognito tokens are NOT written to disk
+- Assert error path: port-binding failure, exchange endpoint 401, no license
 
 ---
 
 ### 2.2 — Update `credentials.ts`
 
 The `StoredCredentials` interface already has `username?`, `tier?`, `expires_at?` as
-optional fields (defined in Phase 1). Phase 2 simply writes them. No migration code
-needed — Phase 1 files work correctly as Phase 2 reads (optional fields absent = fine).
+optional Phase 2 fields. Phase 2 simply populates them. No migration code needed —
+Phase 1 files remain valid (optional fields absent = fine).
 
-Add `writeCredentialsFromLogin(response: AuthExchangeResponse)` which writes all fields
-including the optional Phase 2 ones.
+The `status` command already prints `tier` and `expires_at` when present (the fields
+are read by `readStoredCredentials()` and the status command already branches on them).
 
-The `status` command should show `tier` and `expires_at` if present.
+No structural change to `credentials.ts` required. The `source: 'cognito'` value is
+already in the union type.
 
 ---
 
 ### Phase 2 Done When
 
-- [ ] `sf provar auth login` works end-to-end against staging
-- [ ] Full flow tested: `login` → `status` (shows tier + expiry) → `sf provar testcase validate` uses API
-- [ ] `sf provar auth clear` + retry `login` works
-- [ ] PROVAR_API_KEY env var still takes priority over stored credentials
+- [ ] `sf provar auth login` opens browser to Cognito Hosted UI
+- [ ] Callback received, code exchanged, `pv_k_` key written to credentials file
+- [ ] Cognito tokens confirmed absent from `~/.provar/credentials.json`
+- [ ] `sf provar auth status` shows tier and expiry from Phase 2 fields
+- [ ] `sf provar testcase validate` uses Quality Hub API with the stored key
+- [ ] `sf provar auth clear` + `auth login` round-trip works
+- [ ] `PROVAR_API_KEY` env var still takes priority over stored credentials
+- [ ] Port-conflict error message is actionable (names the three ports)
 - [ ] Existing unit tests still pass
 
 ---
