@@ -38,7 +38,7 @@ describe('sf provar auth set-key NUTs', () => {
     ).shellOutput;
     expect(output.stderr).to.equal('');
     expect(output.stdout).to.include('API key stored');
-    expect(output.stdout).to.include('pv_k_nuttest12');
+    expect(output.stdout).to.include('pv_k_nuttest');
   });
 
   it('credentials file is created with the correct content', () => {
@@ -47,7 +47,7 @@ describe('sf provar auth set-key NUTs', () => {
     const stored = JSON.parse(fs.readFileSync(CREDS_PATH, 'utf-8')) as Record<string, string>;
     expect(stored['api_key']).to.equal('pv_k_nuttest1234567890');
     expect(stored['source']).to.equal('manual');
-    expect(stored['prefix']).to.equal('pv_k_nuttest12');
+    expect(stored['prefix']).to.equal('pv_k_nuttest');
     expect(stored['set_at']).to.be.a('string');
   });
 
