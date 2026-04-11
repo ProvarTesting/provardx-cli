@@ -495,6 +495,17 @@ async function listenForCallback(port: number): Promise<string> {
 }
 ```
 
+**Confirmed API endpoints (2026-04-11):**
+
+All three endpoints share `PROVAR_QUALITY_HUB_URL` as their base URL — the same base
+used by `POST /validate`.
+
+| Endpoint | Method | Used by |
+|---|---|---|
+| `/auth/exchange` | POST | `auth login` — exchange Cognito access token → `pv_k_` key |
+| `/auth/status` | GET | `auth status` — verify key is still valid server-side |
+| `/auth/revoke` | POST | `auth clear` — invalidate key server-side before local delete |
+
 **Required config (from Phase 2 AWS handoff):**
 
 | Value | Source |
@@ -502,14 +513,16 @@ async function listenForCallback(port: number): Promise<string> {
 | `cognitoDomain` | AWS handoff: `https://<prefix>.auth.<region>.amazoncognito.com` |
 | `clientId` | AWS handoff: Cognito App Client ID |
 | `tokenEndpoint` | Derived: `${cognitoDomain}/oauth2/token` |
-| Exchange endpoint | AWS handoff: `POST <qualityHubBaseUrl>/auth/exchange` |
+| Exchange endpoint | `POST ${PROVAR_QUALITY_HUB_URL}/auth/exchange` |
+| Status endpoint | `GET ${PROVAR_QUALITY_HUB_URL}/auth/status` |
+| Revoke endpoint | `POST ${PROVAR_QUALITY_HUB_URL}/auth/revoke` |
 
 Read `cognitoDomain` and `clientId` from env vars `PROVAR_COGNITO_DOMAIN` and
 `PROVAR_COGNITO_CLIENT_ID` with production defaults bundled after Phase 2 handoff.
 
 **Flags:**
 
-- `--url` (optional) — override the Quality Hub API base URL (for testing against dev/staging)
+- `--url` (optional) — override `PROVAR_QUALITY_HUB_URL` (for testing against dev/staging)
 
 **Tests:**
 
@@ -520,26 +533,127 @@ Read `cognitoDomain` and `clientId` from env vars `PROVAR_COGNITO_DOMAIN` and
 
 ---
 
-### 2.2 — Update `credentials.ts`
+### 2.2 — Update `client.ts` with auth endpoints
+
+Add three functions to `src/services/qualityHub/client.ts`:
+
+```typescript
+/**
+ * POST /auth/exchange — exchange a Cognito access token for a pv_k_ key.
+ * Called by `sf provar auth login` immediately after PKCE callback.
+ * Cognito tokens are held in memory only; never written to disk.
+ */
+export async function exchangeTokenForKey(
+  cognitoAccessToken: string,
+  baseUrl: string
+): Promise<{ api_key: string; prefix: string; tier: string; username: string; expires_at: string }> {
+  // POST baseUrl/auth/exchange
+  // Header: Authorization: Bearer <cognitoAccessToken>
+  // Returns the shape above on 200; throws QualityHubAuthError on 401
+}
+
+/**
+ * GET /auth/status — verify a stored pv_k_ key is still valid server-side.
+ * Called by `sf provar auth status` when a key is present locally.
+ * Failures are silent — fall back to locally cached values if unreachable.
+ */
+export async function fetchKeyStatus(
+  apiKey: string,
+  baseUrl: string
+): Promise<{ valid: boolean; tier?: string; username?: string; expires_at?: string }> {
+  // GET baseUrl/auth/status
+  // Header: x-provar-key: apiKey
+}
+
+/**
+ * POST /auth/revoke — invalidate a pv_k_ key on the server.
+ * Called by `sf provar auth clear` before deleting the local credentials file.
+ * Best-effort: if the call fails (offline, key already expired), delete locally anyway.
+ */
+export async function revokeKey(apiKey: string, baseUrl: string): Promise<void> {
+  // POST baseUrl/auth/revoke
+  // Header: x-provar-key: apiKey
+  // Fire-and-forget semantics — caller catches and ignores errors
+}
+```
+
+---
+
+### 2.3 — Update `sf provar auth status` (add live check)
+
+When a key is stored locally, call `GET /auth/status` to verify it is still valid and
+refresh cached tier/expiry from the server response:
+
+```typescript
+// In status.ts — after reading stored credentials
+const stored = readStoredCredentials();
+if (stored) {
+  // Best-effort live check — silent on network failure
+  try {
+    const live = await fetchKeyStatus(stored.api_key, getQualityHubBaseUrl());
+    if (!live.valid) {
+      this.log('API key configured (EXPIRED — run sf provar auth login to refresh)');
+      return;
+    }
+    // Optionally update local cache with refreshed tier/expires_at
+  } catch {
+    // Offline or API unavailable — show locally cached values
+  }
+  this.log('API key configured');
+  // ... rest of existing output
+}
+```
+
+The `PROVAR_API_KEY` env var path is unchanged — no live check for env vars (CI
+environments may not have outbound access to the status endpoint).
+
+---
+
+### 2.4 — Update `sf provar auth clear` (add revoke)
+
+Call `POST /auth/revoke` before deleting the local file. Best-effort: if revoke fails
+(offline, key already expired, no base URL configured), log a note but still delete
+the local file:
+
+```typescript
+// In clear.ts
+const stored = readStoredCredentials();
+if (stored) {
+  try {
+    await revokeKey(stored.api_key, getQualityHubBaseUrl());
+  } catch {
+    this.log('  Note: could not reach Quality Hub to revoke key server-side (offline?).');
+    this.log('  The local credentials have been removed — the key may still be valid until it expires.');
+  }
+}
+clearCredentials();
+this.log('API key cleared.');
+```
+
+No change to the `ENOENT`-safe behaviour. Revoke is only attempted if a stored key
+exists locally.
+
+---
+
+### 2.5 — Update `credentials.ts` (no structural change)
 
 The `StoredCredentials` interface already has `username?`, `tier?`, `expires_at?` as
-optional Phase 2 fields. Phase 2 simply populates them. No migration code needed —
-Phase 1 files remain valid (optional fields absent = fine).
+optional Phase 2 fields. Phase 2 simply populates them on login and optionally refreshes
+them from `/auth/status`. No migration code needed — Phase 1 files remain valid.
 
-The `status` command already prints `tier` and `expires_at` when present (the fields
-are read by `readStoredCredentials()` and the status command already branches on them).
-
-No structural change to `credentials.ts` required. The `source: 'cognito'` value is
-already in the union type.
+The `source: 'cognito'` value is already in the union type.
 
 ---
 
 ### Phase 2 Done When
 
 - [ ] `sf provar auth login` opens browser to Cognito Hosted UI
-- [ ] Callback received, code exchanged, `pv_k_` key written to credentials file
+- [ ] Callback received, code exchanged via `/auth/exchange`, `pv_k_` key written
 - [ ] Cognito tokens confirmed absent from `~/.provar/credentials.json`
-- [ ] `sf provar auth status` shows tier and expiry from Phase 2 fields
+- [ ] `sf provar auth status` calls `/auth/status`, shows live tier and expiry
+- [ ] `sf provar auth status` gracefully degrades when offline (shows cached values)
+- [ ] `sf provar auth clear` calls `/auth/revoke` before deleting local file
+- [ ] `sf provar auth clear` still deletes locally when revoke call fails
 - [ ] `sf provar testcase validate` uses Quality Hub API with the stored key
 - [ ] `sf provar auth clear` + `auth login` round-trip works
 - [ ] `PROVAR_API_KEY` env var still takes priority over stored credentials
