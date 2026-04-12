@@ -188,7 +188,7 @@ export async function exchangeTokenForKey(cognitoAccessToken: string, baseUrl: s
   const { status, responseBody } = await httpsRequest(
     `${baseUrl}/auth/exchange`,
     'POST',
-    { 'x-api-key': getInfraKey(), 'Content-Type': 'application/json' },
+    { 'Content-Type': 'application/json' },
     body
   );
   if (status === 401)
