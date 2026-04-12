@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+/* eslint-disable camelcase */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
