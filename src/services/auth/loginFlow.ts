@@ -35,6 +35,14 @@ export function generateNonce(): string {
   return crypto.randomBytes(16).toString('base64url');
 }
 
+/**
+ * Generate a random state value for CSRF protection.
+ * Required by Cognito Managed Login even though it is optional per the OAuth 2.0 spec.
+ */
+export function generateState(): string {
+  return crypto.randomBytes(16).toString('base64url');
+}
+
 // ── Port selection ────────────────────────────────────────────────────────────
 
 /**
@@ -195,6 +203,7 @@ function httpsPost(
 export const loginFlowClient = {
   generatePkce,
   generateNonce,
+  generateState,
   findAvailablePort,
   openBrowser,
   listenForCallback,

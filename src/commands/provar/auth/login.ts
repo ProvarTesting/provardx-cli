@@ -39,22 +39,26 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     const clientId = process.env.PROVAR_COGNITO_CLIENT_ID ?? DEFAULT_CLIENT_ID;
     const baseUrl = flags.url ?? getQualityHubBaseUrl();
 
-    // ── Step 1: Generate PKCE pair and nonce ───────────────────────────────
+    // ── Step 1: Generate PKCE pair, nonce, and state ───────────────────────
     const { verifier, challenge } = loginFlowClient.generatePkce();
     const nonce = loginFlowClient.generateNonce();
+    const state = loginFlowClient.generateState();
 
     // ── Step 2: Find an available registered callback port ──────────────────
     const port = await loginFlowClient.findAvailablePort();
     const redirectUri = `http://localhost:${port}/callback`;
 
-    // ── Step 3: Build the Cognito Hosted UI authorize URL ───────────────────
-    const authorizeUrl = new URL(`https://${cognitoDomain}/oauth2/authorize`);
+    // ── Step 3: Build the Cognito Managed Login URL ─────────────────────────
+    // Uses /login (Cognito-specific) rather than /oauth2/authorize — Managed
+    // Login enforces state and behaves more reliably with the /login endpoint.
+    const authorizeUrl = new URL(`https://${cognitoDomain}/login`);
     authorizeUrl.searchParams.set('response_type', 'code');
     authorizeUrl.searchParams.set('client_id', clientId);
     authorizeUrl.searchParams.set('redirect_uri', redirectUri);
     authorizeUrl.searchParams.set('code_challenge', challenge);
     authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-    authorizeUrl.searchParams.set('scope', 'openid email');
+    authorizeUrl.searchParams.set('scope', 'email openid');
+    authorizeUrl.searchParams.set('state', state);
     authorizeUrl.searchParams.set('nonce', nonce);
 
     // ── Step 4: Open browser and wait for callback ──────────────────────────
