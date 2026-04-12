@@ -17,7 +17,7 @@ const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar
 
 // Production values bundled from Phase 2 handoff (2026-04-11).
 // Override via PROVAR_COGNITO_DOMAIN / PROVAR_COGNITO_CLIENT_ID for non-prod environments.
-const DEFAULT_COGNITO_DOMAIN = 'us-east-1qpfw.auth.us-east-1.amazoncognito.com';
+const DEFAULT_COGNITO_DOMAIN = 'us-east-1xpfwzwmop.auth.us-east-1.amazoncognito.com';
 const DEFAULT_CLIENT_ID = '29cs1a784r4cervmth8ugbkkri';
 
 export default class SfProvarAuthLogin extends SfCommand<void> {
