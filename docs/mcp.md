@@ -140,6 +140,63 @@ If the license check fails, the server exits with a clear error message explaini
 
 ---
 
+## Authentication — Quality Hub API
+
+The `provar.testcase.validate` tool can run in two modes depending on whether an API key is configured.
+
+| Mode | When | What you get |
+|---|---|---|
+| **Quality Hub API** | API key configured | 170+ rules, quality score, tier-specific thresholds |
+| **Local only** | No key | Structural/schema rules only |
+
+The `validation_source` field in every `provar.testcase.validate` response tells you which mode fired:
+
+| Value | Meaning |
+|---|---|
+| `quality_hub` | Full API validation — key is valid and the API responded |
+| `local` | No key configured — local rules only |
+| `local_fallback` | Key is configured but the API was unreachable or returned an error — local rules used as fallback |
+
+When `validation_source` is `local_fallback`, a `validation_warning` field is also returned explaining why.
+
+### Configuring an API key
+
+**Interactive login (recommended):**
+```sh
+sf provar auth login
+```
+Opens a browser to the Provar login page. After you authenticate, the key is stored automatically at `~/.provar/credentials.json`.
+
+**Manual key entry:**
+```sh
+sf provar auth set-key --key pv_k_your_key_here
+```
+
+**Check current status:**
+```sh
+sf provar auth status
+```
+
+**CI/CD — environment variable:**
+```sh
+export PROVAR_API_KEY=pv_k_your_key_here
+```
+The env var takes priority over any stored key. Keys must start with `pv_k_` — any other value is ignored.
+
+**Remove stored key:**
+```sh
+sf provar auth clear
+```
+
+### Environment variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `PROVAR_API_KEY` | API key for Quality Hub validation | None — falls back to `~/.provar/credentials.json` |
+| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL | Production URL |
+
+---
+
 ## Path security
 
 All file-system operations (read, write, generate) are restricted to the paths supplied via `--allowed-paths`. Any attempt to access a path outside those roots is rejected with a `PATH_NOT_ALLOWED` error. Path traversal sequences (`../`) are blocked with a `PATH_TRAVERSAL` error.
@@ -306,6 +363,8 @@ Validates an XML test case for schema correctness (validity score) and best prac
 | `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                       |
 | `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message` |
 | `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                |
+| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section  |
+| `validation_warning`             | string         | Present when `validation_source` is `local_fallback` — explains why       |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 

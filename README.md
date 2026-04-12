@@ -30,7 +30,9 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 # MCP Server (AI-Assisted Quality)
 
-The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores that match the Provar Quality Hub API, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
+The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
+
+Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Run `sf provar auth login` to authenticate and unlock full validation.
 
 ```sh
 sf provar mcp start --allowed-paths /path/to/your/provar/project
@@ -57,6 +59,10 @@ When `NODE_ENV=test` the validation step is skipped entirely. This is intended o
 
 # Commands
 
+- [`sf provar auth login`](#sf-provar-auth-login)
+- [`sf provar auth set-key`](#sf-provar-auth-set-key)
+- [`sf provar auth status`](#sf-provar-auth-status)
+- [`sf provar auth clear`](#sf-provar-auth-clear)
 - [`sf provar mcp start`](#sf-provar-mcp-start)
 - [`sf provar config get`](#sf-provar-config-get)
 - [`sf provar config set`](#sf-provar-config-set)
@@ -83,6 +89,91 @@ When `NODE_ENV=test` the validation step is skipped entirely. This is intended o
 - [`sf provar manager test run`](#sf-provar-manager-test-run) _(deprecated — use `sf provar quality-hub test run`)_
 - [`sf provar manager test run report`](#sf-provar-manager-test-run-report) _(deprecated — use `sf provar quality-hub test run report`)_
 - [`sf provar manager test run abort`](#sf-provar-manager-test-run-abort) _(deprecated — use `sf provar quality-hub test run abort`)_
+
+## `sf provar auth login`
+
+Log in to Provar Quality Hub and store your API key.
+
+```
+USAGE
+  $ sf provar auth login [--url <value>]
+
+FLAGS
+  --url=<value>  Override the Quality Hub API base URL (for non-production environments).
+
+DESCRIPTION
+  Opens a browser to the Provar login page. After you authenticate, your API key is
+  stored at ~/.provar/credentials.json and used automatically by the Provar MCP tools
+  and CI/CD integrations.
+
+EXAMPLES
+  Log in interactively:
+
+    $ sf provar auth login
+
+  Log in against a staging environment:
+
+    $ sf provar auth login --url https://dev.api.example.com
+```
+
+## `sf provar auth set-key`
+
+Store a Provar Quality Hub API key manually.
+
+```
+USAGE
+  $ sf provar auth set-key --key <value>
+
+FLAGS
+  --key=<value>  (required) API key to store. Must start with pv_k_.
+
+DESCRIPTION
+  Stores a pv_k_ API key in ~/.provar/credentials.json. Use this if you obtained
+  your key from https://success.provartesting.com rather than via browser login.
+  For CI/CD pipelines, set the PROVAR_API_KEY environment variable instead.
+
+EXAMPLES
+  Store an API key:
+
+    $ sf provar auth set-key --key pv_k_your_key_here
+```
+
+## `sf provar auth status`
+
+Show the current API key configuration and validate it against Quality Hub.
+
+```
+USAGE
+  $ sf provar auth status
+
+DESCRIPTION
+  Reports whether an API key is configured, where it came from (environment variable
+  or credentials file), and performs a live check against the Quality Hub API to
+  confirm the key is still valid.
+
+EXAMPLES
+  Check auth status:
+
+    $ sf provar auth status
+```
+
+## `sf provar auth clear`
+
+Remove the stored API key.
+
+```
+USAGE
+  $ sf provar auth clear
+
+DESCRIPTION
+  Deletes ~/.provar/credentials.json and revokes the key server-side. After clearing,
+  the MCP tools fall back to local validation mode. Has no effect if no key is stored.
+
+EXAMPLES
+  Remove the stored key:
+
+    $ sf provar auth clear
+```
 
 ## `sf provar mcp start`
 

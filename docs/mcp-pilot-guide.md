@@ -165,6 +165,9 @@ Prompt your AI assistant:
 - `validity_score` and `quality_score` both returned (0–100)
 - Specific rule violations called out (e.g. TC_010 missing test case ID, TC_001 missing XML declaration)
 - Best-practices suggestions (e.g. hardcoded credentials, missing step descriptions)
+- `validation_source: "local"` if no API key is configured, `"quality_hub"` if authenticated
+
+> **Tip:** Run `sf provar auth login` before this scenario to unlock Quality Hub API validation (170+ rules). Without a key the tool still returns useful results using local rules only.
 
 ---
 
@@ -223,6 +226,24 @@ Pre-requisite: `sf org login web -a MyQHOrg` then `sf provar quality-hub connect
 - The AI chaining: `provar.qualityhub.connect` → `provar.qualityhub.testrun` → `provar.qualityhub.testrun.report` (looped)
 - The run ID extracted from the `testrun` response and passed to `testrun.report`
 - Final result status reported back
+
+---
+
+### Scenario 8: Quality Hub API Validation
+
+**Goal:** Confirm that `provar.testcase.validate` upgrades from local rules to the full Quality Hub API ruleset when an API key is present.
+
+**Setup:** Run `sf provar auth login` and complete the browser login, then confirm with `sf provar auth status`.
+
+> "Validate the test case at `/path/to/project/tests/LoginTest.testcase` and tell me what validation_source was used."
+
+**What to look for:**
+
+- `validation_source: "quality_hub"` in the response — confirms the API path is active
+- `quality_score` reflecting the full 170+ rule evaluation
+- If the API is unreachable, `validation_source: "local_fallback"` and a `validation_warning` field explaining why
+
+**To reset and test the fallback:** run `sf provar auth clear`, repeat the prompt, and verify `validation_source` reverts to `"local"`.
 
 ---
 
@@ -323,7 +344,9 @@ The MCP server uses **stdio transport** exclusively. Communication travels over 
 
 ### Credential handling
 
-The Quality Hub and Automation tools invoke `sf` subprocesses. Salesforce org credentials are managed entirely by the Salesforce CLI and stored in its own credential store. The Provar MCP server never reads, parses, or transmits those credentials.
+**Salesforce org credentials** — the Quality Hub and Automation tools invoke `sf` subprocesses. Salesforce org credentials are managed entirely by the Salesforce CLI and stored in its own credential store (`~/.sf/`). The Provar MCP server never reads, parses, or transmits those credentials.
+
+**Provar API key** — the `provar.testcase.validate` tool optionally reads a `pv_k_` API key to enable Quality Hub API validation. The key is stored at `~/.provar/credentials.json` (written by `sf provar auth login` or `sf provar auth set-key`) or read from the `PROVAR_API_KEY` environment variable. The key is sent to the Provar Quality Hub API only when a validation request is made — it is never logged or written anywhere other than `~/.provar/credentials.json`.
 
 ### Path policy enforcement
 
