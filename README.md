@@ -104,7 +104,12 @@ FLAGS
 DESCRIPTION
   Opens a browser to the Provar login page. After you authenticate, your API key is
   stored at ~/.provar/credentials.json and used automatically by the Provar MCP tools
-  and CI/CD integrations.
+  and CI/CD integrations. The key is valid for approximately 90 days.
+
+  For CI/CD pipelines (GitHub Actions, Jenkins, etc.) where a browser cannot open:
+  run sf provar auth login once on your local machine, copy the api_key value from
+  ~/.provar/credentials.json, and store it as the PROVAR_API_KEY environment variable
+  or secret in your pipeline. Rotate the secret every ~90 days when the key expires.
 
 EXAMPLES
   Log in interactively:

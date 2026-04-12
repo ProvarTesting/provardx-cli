@@ -71,7 +71,7 @@ sf provar auth login
 
 This opens a browser to the Provar login page. After you authenticate, your API key is stored at `~/.provar/credentials.json` and picked up automatically by the MCP server on every subsequent tool call.
 
-For CI/CD pipelines, set the `PROVAR_API_KEY` environment variable instead of running the browser login.
+For CI/CD pipelines (GitHub Actions, Jenkins, etc.) where a browser cannot open: run `sf provar auth login` once on your local machine, copy the `api_key` value from `~/.provar/credentials.json`, and store it as the `PROVAR_API_KEY` environment variable or secret in your pipeline. The key is valid for approximately 90 days — rotate the secret when it expires by running `sf provar auth login` again locally.
 
 ### Step 4 — Configure your AI client
 
