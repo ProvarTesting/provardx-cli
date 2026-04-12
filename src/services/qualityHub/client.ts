@@ -184,10 +184,13 @@ export interface KeyStatusResponse {
  * Called immediately after PKCE callback; Cognito tokens are discarded after this call.
  */
 export async function exchangeTokenForKey(cognitoAccessToken: string, baseUrl: string): Promise<AuthExchangeResponse> {
-  const { status, responseBody } = await httpsRequest(`${baseUrl}/auth/exchange`, 'POST', {
-    Authorization: `Bearer ${cognitoAccessToken}`,
-    'Content-Type': 'application/json',
-  });
+  const body = JSON.stringify({ access_token: cognitoAccessToken });
+  const { status, responseBody } = await httpsRequest(
+    `${baseUrl}/auth/exchange`,
+    'POST',
+    { 'x-api-key': getInfraKey(), 'Content-Type': 'application/json' },
+    body
+  );
   if (status === 401)
     throw new QualityHubAuthError('Account not found or no active subscription. Check your Provar licence.');
   if (!isOk(status)) throw new Error(`Auth exchange failed (${status}): ${responseBody}`);
