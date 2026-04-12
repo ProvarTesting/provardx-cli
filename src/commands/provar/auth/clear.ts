@@ -7,7 +7,8 @@
 
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@provartesting/provardx-plugins-utils';
-import { clearCredentials } from '../../../services/auth/credentials.js';
+import { clearCredentials, readStoredCredentials } from '../../../services/auth/credentials.js';
+import { qualityHubClient, getQualityHubBaseUrl } from '../../../services/qualityHub/client.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.auth.clear');
@@ -17,8 +18,18 @@ export default class SfProvarAuthClear extends SfCommand<void> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   public async run(): Promise<void> {
+    const stored = readStoredCredentials();
+    if (stored) {
+      const baseUrl = getQualityHubBaseUrl();
+      try {
+        await qualityHubClient.revokeKey(stored.api_key, baseUrl);
+      } catch {
+        this.log('  Note: could not reach Quality Hub to revoke key server-side (offline?).');
+        this.log('  The local credentials have been removed — the key may still be valid until it expires.');
+      }
+    }
+
     clearCredentials();
     this.log('API key cleared.');
     this.log('  Next validation will use local rules only (structural checks, no quality scoring).');

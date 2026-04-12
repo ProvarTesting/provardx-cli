@@ -6,6 +6,8 @@
  */
 
 /* eslint-disable camelcase */
+import https from 'node:https';
+import { URL as NodeURL } from 'node:url';
 
 /**
  * Quality Hub validation result — our internal normalised shape.
@@ -139,10 +141,13 @@ export function validateTestCaseViaApi(
 
 /**
  * Returns the Quality Hub base URL to use for API calls.
- * Reads PROVAR_QUALITY_HUB_URL env var; falls back to empty string until production URL is known.
+ * Defaults to the dev environment URL; override via PROVAR_QUALITY_HUB_URL for production.
+ * Update DEFAULT_QUALITY_HUB_URL when the production URL is confirmed.
  */
+const DEFAULT_QUALITY_HUB_URL = 'https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev';
+
 export function getQualityHubBaseUrl(): string {
-  return process.env.PROVAR_QUALITY_HUB_URL ?? '';
+  return process.env.PROVAR_QUALITY_HUB_URL ?? DEFAULT_QUALITY_HUB_URL;
 }
 
 /**
@@ -155,11 +160,109 @@ export function getInfraKey(): string {
   return process.env.PROVAR_INFRA_KEY ?? '';
 }
 
+// ── Auth endpoint types ───────────────────────────────────────────────────────
+
+export interface AuthExchangeResponse {
+  api_key: string;
+  prefix: string;
+  tier: string;
+  username: string;
+  expires_at: string;
+}
+
+export interface KeyStatusResponse {
+  valid: boolean;
+  tier?: string;
+  username?: string;
+  expires_at?: string;
+}
+
+// ── Auth endpoint functions ───────────────────────────────────────────────────
+
 /**
- * Indirection object used by the MCP tool and testable via sinon.
- * testCaseValidate.ts calls qualityHubClient.validateTestCaseViaApi(...)
- * so tests can replace the property with a stub without ESM re-export issues.
+ * POST /auth/exchange — exchange a Cognito access token for a pv_k_ key.
+ * Called immediately after PKCE callback; Cognito tokens are discarded after this call.
+ */
+export async function exchangeTokenForKey(cognitoAccessToken: string, baseUrl: string): Promise<AuthExchangeResponse> {
+  const { status, responseBody } = await httpsRequest(`${baseUrl}/auth/exchange`, 'POST', {
+    Authorization: `Bearer ${cognitoAccessToken}`,
+    'Content-Type': 'application/json',
+  });
+  if (status === 401)
+    throw new QualityHubAuthError('Account not found or no active subscription. Check your Provar licence.');
+  if (!isOk(status)) throw new Error(`Auth exchange failed (${status}): ${responseBody}`);
+  return JSON.parse(responseBody) as AuthExchangeResponse;
+}
+
+/**
+ * GET /auth/status — verify a stored pv_k_ key is still valid server-side.
+ * Best-effort: callers should catch and fall back to locally cached values on failure.
+ */
+export async function fetchKeyStatus(apiKey: string, baseUrl: string): Promise<KeyStatusResponse> {
+  const { status, responseBody } = await httpsRequest(`${baseUrl}/auth/status`, 'GET', {
+    'x-provar-key': apiKey,
+  });
+  if (!isOk(status)) throw new Error(`Auth status check failed (${status})`);
+  return JSON.parse(responseBody) as KeyStatusResponse;
+}
+
+/**
+ * POST /auth/revoke — invalidate a pv_k_ key on the server.
+ * Best-effort: callers should catch, log a note, then delete the local file regardless.
+ */
+export async function revokeKey(apiKey: string, baseUrl: string): Promise<void> {
+  const { status, responseBody } = await httpsRequest(`${baseUrl}/auth/revoke`, 'POST', {
+    'x-provar-key': apiKey,
+    'Content-Length': '0',
+  });
+  if (!isOk(status)) throw new Error(`Key revocation failed (${status}): ${responseBody}`);
+}
+
+// ── Internal HTTPS helper ─────────────────────────────────────────────────────
+
+function isOk(status: number): boolean {
+  return status >= 200 && status < 300;
+}
+
+function httpsRequest(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: string
+): Promise<{ status: number; responseBody: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new NodeURL(url);
+    const opts = {
+      hostname: parsed.hostname,
+      path: parsed.pathname + parsed.search,
+      method,
+      headers: {
+        ...headers,
+        ...(body ? { 'Content-Length': Buffer.byteLength(body).toString() } : {}),
+      },
+    };
+    const req = https.request(opts, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => {
+        data += chunk.toString('utf-8');
+      });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, responseBody: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// ── Indirection object used by MCP tools and testable via sinon ───────────────
+
+/**
+ * MCP tools and auth commands call qualityHubClient.X() so tests can replace
+ * properties with stubs without ESM re-export issues.
  */
 export const qualityHubClient = {
   validateTestCaseViaApi,
+  exchangeTokenForKey,
+  fetchKeyStatus,
+  revokeKey,
 };

@@ -5,9 +5,11 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+/* eslint-disable camelcase */
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@provartesting/provardx-plugins-utils';
 import { readStoredCredentials } from '../../../services/auth/credentials.js';
+import { qualityHubClient, getQualityHubBaseUrl } from '../../../services/qualityHub/client.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.auth.status');
@@ -17,7 +19,6 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   public async run(): Promise<void> {
     const envKey = process.env.PROVAR_API_KEY?.trim();
 
@@ -41,6 +42,27 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
 
     const stored = readStoredCredentials();
     if (stored) {
+      // Best-effort live check — silent fallback to cached values if offline or unconfigured.
+      // Does not run for env var keys (CI environments may not have outbound access).
+      let liveValid: boolean | undefined;
+      try {
+        const live = await qualityHubClient.fetchKeyStatus(stored.api_key, getQualityHubBaseUrl());
+        liveValid = live.valid;
+        if (live.tier) stored.tier = live.tier;
+        if (live.expires_at) stored.expires_at = live.expires_at;
+      } catch {
+        // Offline or API not yet configured — use locally cached values
+      }
+
+      if (liveValid === false) {
+        this.log('API key expired or revoked.');
+        this.log('  Source:   ~/.provar/credentials.json');
+        this.log(`  Prefix:   ${stored.prefix}`);
+        this.log('');
+        this.log('  Run: sf provar auth login  to refresh your key.');
+        return;
+      }
+
       this.log('API key configured');
       this.log('  Source:   ~/.provar/credentials.json');
       this.log(`  Prefix:   ${stored.prefix}`);
@@ -56,8 +78,9 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
     this.log('No API key configured.');
     this.log('');
     this.log('To enable Quality Hub validation (170 rules):');
-    this.log('  1. Get your API key from https://success.provartesting.com');
-    this.log('  2. Run: sf provar auth set-key --key <your-key>');
+    this.log('  1. Run: sf provar auth login');
+    this.log('     Or get your key from https://success.provartesting.com and run:');
+    this.log('     sf provar auth set-key --key <your-key>');
     this.log('');
     this.log('For CI/CD: set the PROVAR_API_KEY environment variable.');
     this.log('');
