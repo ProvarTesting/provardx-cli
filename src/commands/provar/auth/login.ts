@@ -48,10 +48,8 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     const port = await loginFlowClient.findAvailablePort();
     const redirectUri = `http://localhost:${port}/callback`;
 
-    // ── Step 3: Build the Cognito Managed Login URL ─────────────────────────
-    // Uses /login (Cognito-specific) rather than /oauth2/authorize — Managed
-    // Login enforces state and behaves more reliably with the /login endpoint.
-    const authorizeUrl = new URL(`https://${cognitoDomain}/login`);
+    // ── Step 3: Build the Cognito authorize URL ────────────────────────────
+    const authorizeUrl = new URL(`https://${cognitoDomain}/oauth2/authorize`);
     authorizeUrl.searchParams.set('response_type', 'code');
     authorizeUrl.searchParams.set('client_id', clientId);
     authorizeUrl.searchParams.set('redirect_uri', redirectUri);
