@@ -55,8 +55,13 @@ describe('sf provar auth status NUTs', () => {
     expect(output.stdout).to.include('local only');
   });
 
-  it('reports key source as credentials file when set via set-key', () => {
-    execCmd<SfProvarCommandResult>('provar auth set-key --key pv_k_statustest12345');
+  it('reports key source as credentials file when credentials file exists', () => {
+    fs.mkdirSync(path.dirname(CREDS_PATH), { recursive: true });
+    fs.writeFileSync(
+      CREDS_PATH,
+      JSON.stringify({ api_key: 'pv_k_statustest12345', prefix: 'pv_k_statust', set_at: new Date().toISOString(), source: 'manual' }),
+      'utf-8'
+    );
     const output = execCmd<SfProvarCommandResult>('provar auth status').shellOutput;
     expect(output.stderr).to.equal('');
     expect(output.stdout).to.include('API key configured');

@@ -167,11 +167,6 @@ sf provar auth login
 ```
 Opens a browser to the Provar login page. After you authenticate, the key is stored automatically at `~/.provar/credentials.json`.
 
-**Manual key entry:**
-```sh
-sf provar auth set-key --key pv_k_your_key_here
-```
-
 **Check current status:**
 ```sh
 sf provar auth status

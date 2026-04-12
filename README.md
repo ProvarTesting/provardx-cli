@@ -60,7 +60,6 @@ When `NODE_ENV=test` the validation step is skipped entirely. This is intended o
 # Commands
 
 - [`sf provar auth login`](#sf-provar-auth-login)
-- [`sf provar auth set-key`](#sf-provar-auth-set-key)
 - [`sf provar auth status`](#sf-provar-auth-status)
 - [`sf provar auth clear`](#sf-provar-auth-clear)
 - [`sf provar mcp start`](#sf-provar-mcp-start)
@@ -119,28 +118,6 @@ EXAMPLES
   Log in against a staging environment:
 
     $ sf provar auth login --url https://dev.api.example.com
-```
-
-## `sf provar auth set-key`
-
-Store a Provar Quality Hub API key manually.
-
-```
-USAGE
-  $ sf provar auth set-key --key <value>
-
-FLAGS
-  --key=<value>  (required) API key to store. Must start with pv_k_.
-
-DESCRIPTION
-  Stores a pv_k_ API key in ~/.provar/credentials.json. Use this if you obtained
-  your key from https://success.provartesting.com rather than via browser login.
-  For CI/CD pipelines, set the PROVAR_API_KEY environment variable instead.
-
-EXAMPLES
-  Store an API key:
-
-    $ sf provar auth set-key --key pv_k_your_key_here
 ```
 
 ## `sf provar auth status`

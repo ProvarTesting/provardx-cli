@@ -14,6 +14,15 @@ import { SfProvarCommandResult } from '@provartesting/provardx-plugins-utils';
 
 const CREDS_PATH = path.join(os.homedir(), '.provar', 'credentials.json');
 
+function seedCredentials(): void {
+  fs.mkdirSync(path.dirname(CREDS_PATH), { recursive: true });
+  fs.writeFileSync(
+    CREDS_PATH,
+    JSON.stringify({ api_key: 'pv_k_cleartest123456', prefix: 'pv_k_clearte', set_at: new Date().toISOString(), source: 'manual' }),
+    'utf-8'
+  );
+}
+
 describe('sf provar auth clear NUTs', () => {
   let credentialsBackup: string | null = null;
 
@@ -40,7 +49,7 @@ describe('sf provar auth clear NUTs', () => {
   });
 
   it('removes the credentials file and reports success', () => {
-    execCmd<SfProvarCommandResult>('provar auth set-key --key pv_k_cleartest123456');
+    seedCredentials();
     expect(fs.existsSync(CREDS_PATH)).to.equal(true);
 
     const output = execCmd<SfProvarCommandResult>('provar auth clear').shellOutput;
@@ -50,7 +59,7 @@ describe('sf provar auth clear NUTs', () => {
   });
 
   it('is idempotent — clearing twice does not throw', () => {
-    execCmd<SfProvarCommandResult>('provar auth set-key --key pv_k_cleartest123456');
+    seedCredentials();
     execCmd<SfProvarCommandResult>('provar auth clear');
     const output = execCmd<SfProvarCommandResult>('provar auth clear').shellOutput;
     expect(output.stderr).to.equal('');
@@ -58,7 +67,7 @@ describe('sf provar auth clear NUTs', () => {
   });
 
   it('status shows no key after clear', () => {
-    execCmd<SfProvarCommandResult>('provar auth set-key --key pv_k_cleartest123456');
+    seedCredentials();
     execCmd<SfProvarCommandResult>('provar auth clear');
     const output = execCmd<SfProvarCommandResult>('provar auth status').shellOutput;
     expect(output.stdout).to.include('No API key configured');

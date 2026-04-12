@@ -346,7 +346,7 @@ The MCP server uses **stdio transport** exclusively. Communication travels over 
 
 **Salesforce org credentials** — the Quality Hub and Automation tools invoke `sf` subprocesses. Salesforce org credentials are managed entirely by the Salesforce CLI and stored in its own credential store (`~/.sf/`). The Provar MCP server never reads, parses, or transmits those credentials.
 
-**Provar API key** — the `provar.testcase.validate` tool optionally reads a `pv_k_` API key to enable Quality Hub API validation. The key is stored at `~/.provar/credentials.json` (written by `sf provar auth login` or `sf provar auth set-key`) or read from the `PROVAR_API_KEY` environment variable. The key is sent to the Provar Quality Hub API only when a validation request is made — it is never logged or written anywhere other than `~/.provar/credentials.json`.
+**Provar API key** — the `provar.testcase.validate` tool optionally reads a `pv_k_` API key to enable Quality Hub API validation. The key is stored at `~/.provar/credentials.json` (written by `sf provar auth login`) or read from the `PROVAR_API_KEY` environment variable. The key is sent to the Provar Quality Hub API only when a validation request is made — it is never logged or written anywhere other than `~/.provar/credentials.json`.
 
 ### Path policy enforcement
 

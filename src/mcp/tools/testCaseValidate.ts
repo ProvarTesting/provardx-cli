@@ -26,13 +26,12 @@ import { runBestPractices } from './bestPracticesEngine.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
-  'To enable Quality Hub (170 rules): visit https://success.provartesting.com, copy your API key, then run:\n' +
-  '  sf provar auth set-key --key <your-key>\n' +
+  'To enable Quality Hub (170 rules): run sf provar auth login\n' +
   'For CI/CD: set the PROVAR_API_KEY environment variable.';
 
 const AUTH_WARNING =
   'Quality Hub API key is invalid or expired. Running local validation only.\n' +
-  'To update your key: sf provar auth set-key --key <your-key>';
+  'Run sf provar auth login to get a new key.';
 
 const RATE_LIMIT_WARNING = 'Quality Hub API rate limit reached. Running local validation only. Try again shortly.';
 
@@ -43,7 +42,7 @@ const UNREACHABLE_WARNING =
 export function registerTestCaseValidate(server: McpServer, config: ServerConfig): void {
   server.tool(
     'provar.testcase.validate',
-    'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (sf provar auth set-key), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied.',
+    'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied.',
     {
       content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
       xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),

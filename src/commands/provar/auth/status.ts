@@ -78,9 +78,7 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
     this.log('No API key configured.');
     this.log('');
     this.log('To enable Quality Hub validation (170 rules):');
-    this.log('  1. Run: sf provar auth login');
-    this.log('     Or get your key from https://success.provartesting.com and run:');
-    this.log('     sf provar auth set-key --key <your-key>');
+    this.log('  Run: sf provar auth login');
     this.log('');
     this.log('For CI/CD: set the PROVAR_API_KEY environment variable.');
     this.log('');
