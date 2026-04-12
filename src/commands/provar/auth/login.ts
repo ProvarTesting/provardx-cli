@@ -55,7 +55,7 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     authorizeUrl.searchParams.set('redirect_uri', redirectUri);
     authorizeUrl.searchParams.set('code_challenge', challenge);
     authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-    authorizeUrl.searchParams.set('scope', 'email openid');
+    authorizeUrl.searchParams.set('scope', 'openid email aws.cognito.signin.user.admin');
     authorizeUrl.searchParams.set('state', state);
     authorizeUrl.searchParams.set('nonce', nonce);
 

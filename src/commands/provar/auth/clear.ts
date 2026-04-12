@@ -33,6 +33,7 @@ export default class SfProvarAuthClear extends SfCommand<void> {
     clearCredentials();
     this.log('API key cleared.');
     this.log('  Next validation will use local rules only (structural checks, no quality scoring).');
-    this.log('  To reconfigure, run: sf provar auth set-key --key <your-key>');
+    this.log('  To reconfigure: sf provar auth login');
+    this.log('  For CI/CD:      set the PROVAR_API_KEY environment variable.');
   }
 }
