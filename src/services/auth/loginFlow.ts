@@ -82,7 +82,9 @@ export function openBrowser(url: string): void {
       execFile('open', [url]);
       break;
     case 'win32':
-      execFile('cmd', ['/c', 'start', '', url]);
+      // cmd.exe interprets '&' in URLs as a command separator, truncating the URL.
+      // PowerShell's Start-Process passes the URL as a single argument without shell interpretation.
+      execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process '${url}'`]);
       break;
     default:
       execFile('xdg-open', [url]);
