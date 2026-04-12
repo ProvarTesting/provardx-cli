@@ -39,8 +39,9 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     const clientId = process.env.PROVAR_COGNITO_CLIENT_ID ?? DEFAULT_CLIENT_ID;
     const baseUrl = flags.url ?? getQualityHubBaseUrl();
 
-    // ── Step 1: Generate PKCE pair ──────────────────────────────────────────
+    // ── Step 1: Generate PKCE pair and nonce ───────────────────────────────
     const { verifier, challenge } = loginFlowClient.generatePkce();
+    const nonce = loginFlowClient.generateNonce();
 
     // ── Step 2: Find an available registered callback port ──────────────────
     const port = await loginFlowClient.findAvailablePort();
@@ -53,7 +54,8 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     authorizeUrl.searchParams.set('redirect_uri', redirectUri);
     authorizeUrl.searchParams.set('code_challenge', challenge);
     authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-    authorizeUrl.searchParams.set('scope', 'openid email profile');
+    authorizeUrl.searchParams.set('scope', 'openid email');
+    authorizeUrl.searchParams.set('nonce', nonce);
 
     // ── Step 4: Open browser and wait for callback ──────────────────────────
     this.log('Opening browser for login...');

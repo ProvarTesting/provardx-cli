@@ -27,6 +27,14 @@ export function generatePkce(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
+/**
+ * Generate a random nonce for OIDC replay-attack prevention.
+ * Required by the OpenID Connect spec when requesting an id_token.
+ */
+export function generateNonce(): string {
+  return crypto.randomBytes(16).toString('base64url');
+}
+
 // ── Port selection ────────────────────────────────────────────────────────────
 
 /**
@@ -186,6 +194,7 @@ function httpsPost(
  */
 export const loginFlowClient = {
   generatePkce,
+  generateNonce,
   findAvailablePort,
   openBrowser,
   listenForCallback,
