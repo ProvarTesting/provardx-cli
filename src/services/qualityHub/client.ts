@@ -109,35 +109,44 @@ export class QualityHubRateLimitError extends Error {
 /**
  * POST /validate — submit XML to the Quality Hub validation API.
  *
- * STUB: throws until the Phase 1 API URL is provided by the AWS team.
- * When this throws, the MCP tool catches it and falls back to local validation
- * (validation_source: "local_fallback"). No user-visible crash.
- *
- * Replace this stub with a real fetch() call once PROVAR_QUALITY_HUB_URL is set.
- * Expected request (from AWS memo 2026-04-10):
+ * Request:
  * POST <baseUrl>/validate
- * Headers: x-api-key: <getInfraKey()> (infra gate), x-provar-key: pv_k_... (user auth)
- * Body: { test_case_xml: xml }
+ * x-provar-key: pv_k_... (user auth — no x-api-key infra gate on this endpoint)
+ * Content-Type: application/json
+ * { "test_case_xml": "<full XML string>" }
  *
- * Map response status:
- * 401 → throw new QualityHubAuthError(...)
- * 429 → throw new QualityHubRateLimitError(...)
- * 5xx/network error → throw Error(...) [triggers "unreachable" fallback]
- *
- * Normalise response via normaliseApiResponse(raw).
+ * On failure the MCP tool catches and falls back to local validation
+ * (validation_source: "local_fallback"). No user-visible crash.
  */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-export function validateTestCaseViaApi(
-  _xml: string,
-  _apiKey: string,
-  _baseUrl: string
+export async function validateTestCaseViaApi(
+  xml: string,
+  apiKey: string,
+  baseUrl: string
 ): Promise<QualityHubValidationResult> {
-  // TODO: replace with real HTTP call after Phase 1 handoff from AWS team
-  return Promise.reject(
-    new Error('Quality Hub API URL not configured yet. Set PROVAR_QUALITY_HUB_URL. (Stub — pending Phase 1 handoff)')
+  const body = JSON.stringify({ test_case_xml: xml });
+  const { status, responseBody } = await httpsRequest(
+    `${baseUrl}/validate`,
+    'POST',
+    { 'Content-Type': 'application/json', 'x-provar-key': apiKey },
+    body
   );
+
+  if (status === 401) {
+    throw new QualityHubAuthError(
+      'API key is invalid, expired, or revoked. Run `sf provar auth login` to get a new key.'
+    );
+  }
+
+  if (status === 429) {
+    throw new QualityHubRateLimitError('Quality Hub validation rate limit exceeded. Try again later.');
+  }
+
+  if (!isOk(status)) {
+    throw new Error(`Quality Hub validate failed (${status}): ${responseBody}`);
+  }
+
+  return normaliseApiResponse(JSON.parse(responseBody) as QualityHubApiResponse);
 }
-/* eslint-enable @typescript-eslint/no-unused-vars */
 
 /**
  * Returns the Quality Hub base URL to use for API calls.
@@ -148,16 +157,6 @@ const DEFAULT_QUALITY_HUB_URL = 'https://aqqlrlhga7.execute-api.us-east-1.amazon
 
 export function getQualityHubBaseUrl(): string {
   return process.env.PROVAR_QUALITY_HUB_URL ?? DEFAULT_QUALITY_HUB_URL;
-}
-
-/**
- * Returns the shared AWS API Gateway infra key.
- * This is NOT the per-user pv_k_ key — it is a shared constant for all CLI users,
- * used as the outer API Gateway gate (spam protection). Read from PROVAR_INFRA_KEY env var;
- * the production value will be bundled as a default constant after Phase 1 handoff.
- */
-export function getInfraKey(): string {
-  return process.env.PROVAR_INFRA_KEY ?? '';
 }
 
 // ── Auth endpoint types ───────────────────────────────────────────────────────

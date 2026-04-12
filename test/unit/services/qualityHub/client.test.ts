@@ -7,8 +7,8 @@
 
 /* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeEach, afterEach } from 'mocha';
-import { normaliseApiResponse, getInfraKey } from '../../../../src/services/qualityHub/client.js';
+import { describe, it } from 'mocha';
+import { normaliseApiResponse } from '../../../../src/services/qualityHub/client.js';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -118,30 +118,3 @@ describe('normaliseApiResponse', () => {
   });
 });
 
-// ── getInfraKey ───────────────────────────────────────────────────────────────
-
-describe('getInfraKey', () => {
-  let saved: string | undefined;
-
-  beforeEach(() => {
-    saved = process.env.PROVAR_INFRA_KEY;
-    delete process.env.PROVAR_INFRA_KEY;
-  });
-
-  afterEach(() => {
-    if (saved !== undefined) {
-      process.env.PROVAR_INFRA_KEY = saved;
-    } else {
-      delete process.env.PROVAR_INFRA_KEY;
-    }
-  });
-
-  it('returns the value of PROVAR_INFRA_KEY when set', () => {
-    process.env.PROVAR_INFRA_KEY = 'infra-key-abc123';
-    assert.equal(getInfraKey(), 'infra-key-abc123');
-  });
-
-  it('returns empty string when PROVAR_INFRA_KEY is not set', () => {
-    assert.equal(getInfraKey(), '');
-  });
-});
