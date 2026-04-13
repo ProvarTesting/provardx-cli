@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
-  "version": "1.5.0-beta.1",
+  "version": "1.5.0-beta.4",
   "license": "BSD-3-Clause",
   "plugins": [
     "@provartesting/provardx-plugins-automation",
@@ -35,7 +35,7 @@
     "wireit": "^0.14.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0 <25.0.0"
   },
   "files": [
     "/lib",
@@ -91,6 +91,9 @@
               }
             }
           },
+          "auth": {
+            "description": "Commands to manage Provar API key authentication."
+          },
           "automation": {
             "description": "Commands to interact with Provar Automation.",
             "subtopics": {
@@ -125,7 +128,7 @@
     "postpack": "shx rm -f oclif.manifest.json",
     "prepack": "sf-prepack",
     "test": "wireit",
-    "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
+    "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" \"**/*key.nut.ts\" \"**/*status.nut.ts\" \"**/*clear.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
     "test:dev": "nyc mocha \"test/**/*.test.ts\"",
     "test:watch": "mocha \"test/**/*.test.ts\" --watch --watch-files \"src/**/*.ts\" --watch-files \"test/**/*.ts\"",

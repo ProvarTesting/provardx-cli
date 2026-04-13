@@ -224,7 +224,10 @@ const updatesSchema = z.object({
   pluginOutputlevel: z.enum(['SEVERE', 'WARNING', 'INFO', 'FINE', 'FINER', 'FINEST']).optional().describe('Amount of plugin output logged'),
   stopOnError: z.boolean().optional().describe('Abort test run on first failure'),
   excludeCallable: z.boolean().optional().describe('Omit callable test cases from execution'),
-  testprojectSecrets: z.string().optional().describe('Test project secrets encryption password'),
+  testprojectSecrets: z.string().optional().describe(
+    'Encryption key (password string) used to decrypt the .secrets file in the Provar project root. ' +
+    'This is the key itself — NOT a file path. Omit this field unless your project uses secrets encryption.'
+  ),
   environment: z.object({
     testEnvironment: z.string().optional().describe('Name of the test environment to run against'),
     webBrowser: z.enum(['Chrome', 'Safari', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless']).optional(),

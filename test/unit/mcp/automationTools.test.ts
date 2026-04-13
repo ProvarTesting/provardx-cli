@@ -422,6 +422,23 @@ describe('automationTools', () => {
       const result = server.call('provar.automation.metadata.download', { flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
+
+    it('includes suggestion in details when [DOWNLOAD_ERROR] is in the message', () => {
+      spawnStub.returns(makeSpawnResult('', 'Error (1): [DOWNLOAD_ERROR] ERROR\n', 1));
+      const result = server.call('provar.automation.metadata.download', { flags: ['-c', 'MyOrg'] });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'AUTOMATION_METADATA_FAILED');
+      assert.ok(body.details && typeof (body.details as Record<string, unknown>).suggestion === 'string', 'Expected suggestion in details for DOWNLOAD_ERROR');
+    });
+
+    it('does NOT include suggestion for other failure messages', () => {
+      spawnStub.returns(makeSpawnResult('', 'Error (2): Nonexistent flag: --properties-file\n', 1));
+      const result = server.call('provar.automation.metadata.download', { flags: [] });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.ok(!body.details || !(body.details as Record<string, unknown>).suggestion, 'Expected no suggestion for non-DOWNLOAD_ERROR');
+    });
   });
 
   // ── provar.automation.config.load ─────────────────────────────────────────
@@ -484,8 +501,10 @@ describe('automationTools', () => {
       });
 
       it('rejects properties_path with .. traversal', () => {
+        // Use string concatenation (not path.join) so the ".." segment is preserved
+        // in the raw string that assertPathAllowed inspects.
         const result = restrictedServer.call('provar.automation.config.load', {
-          properties_path: path.join(allowedDir, '..', 'etc', 'passwd'),
+          properties_path: allowedDir + '/../etc/passwd',
         });
         assert.ok(isError(result));
         assert.equal(parseBody(result).error_code, 'PATH_TRAVERSAL');

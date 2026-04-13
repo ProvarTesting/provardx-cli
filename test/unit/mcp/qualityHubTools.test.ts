@@ -192,6 +192,77 @@ describe('qualityHubTools', () => {
       const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
+
+    describe('failure detection', () => {
+      it('sets suggestion when JSON result.status is "FAILED"', () => {
+        spawnStub.returns(makeSpawnResult(
+          JSON.stringify({ result: { status: 'FAILED' } }),
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAILED');
+      });
+
+      it('sets suggestion when JSON result.status is "FAIL"', () => {
+        spawnStub.returns(makeSpawnResult(
+          JSON.stringify({ result: { status: 'FAIL' } }),
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAIL');
+      });
+
+      it('does NOT set suggestion when status is "RUNNING"', () => {
+        spawnStub.returns(makeSpawnResult(
+          JSON.stringify({ result: { status: 'RUNNING' } }),
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(!body.suggestion, 'Expected no suggestion for non-failure status');
+      });
+
+      it('does NOT set suggestion when status is "PASSED"', () => {
+        spawnStub.returns(makeSpawnResult(
+          JSON.stringify({ result: { status: 'PASSED' } }),
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(!body.suggestion, 'Expected no suggestion when PASSED');
+      });
+
+      it('does NOT false-positive on "failure" in plain text output (word in non-status context)', () => {
+        // Before PR #110 the check was /fail/i which would match "failure" anywhere in output;
+        // now it only matches the "status" field value.
+        spawnStub.returns(makeSpawnResult(
+          '{"message": "No failure detected in this output", "result": {"status": "PASSED"}}',
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(!body.suggestion, 'Expected no suggestion — "failure" in message should not trigger detection');
+      });
+
+      it('falls back to regex extraction when stdout is not valid JSON', () => {
+        // Non-JSON output with "status": "FAILED" substring
+        spawnStub.returns(makeSpawnResult(
+          '"status": "FAILED"',
+          '',
+          0
+        ));
+        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        const body = parseBody(result);
+        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion from regex fallback');
+      });
+    });
   });
 
   // ── provar.qualityhub.testrun.abort ──────────────────────────────────────────

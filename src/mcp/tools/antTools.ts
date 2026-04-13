@@ -192,7 +192,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
         .string()
         .default('${env.ProvarSecretsPassword}')
         .describe(
-          'Password for the Provar secrets store. Defaults to reading from the ProvarSecretsPassword environment variable.'
+          'Encryption key used to decrypt the Provar .secrets file (the password string itself, not a file path). Defaults to reading from the ProvarSecretsPassword environment variable.'
         ),
       test_environment_secrets_password: z
         .string()

@@ -46,12 +46,13 @@ function isError(result: unknown): boolean {
 
 // Minimal valid inputs for the generate tool (all fields with defaults supplied explicitly,
 // since we bypass Zod and defaults are not applied by the mock server).
+// Path fields use tmpDir so they pass assertPathAllowed when called with a strict server.
 function minimalInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    provar_home: 'C:/Program Files/Provar/',
-    project_path: '..',
-    results_path: '../ANT/Results',
-    filesets: [{ dir: '../tests' }],
+    provar_home: tmpDir,
+    project_path: tmpDir,
+    results_path: path.join(tmpDir, 'Results'),
+    filesets: [{ dir: '../tests' }],  // filesets.dir is not path-checked at runtime
     web_browser: 'Chrome',
     web_browser_configuration: 'Full Screen',
     web_browser_provider_name: 'Desktop',
@@ -93,7 +94,9 @@ let config: ServerConfig;
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'anttools-test-'));
   server = new MockMcpServer();
-  config = { allowedPaths: [tmpDir] };
+  // Use unrestricted mode for XML-generation tests; dedicated path-policy tests below
+  // use their own strictServer with { allowedPaths: [tmpDir] }.
+  config = { allowedPaths: [] };
   registerAntGenerate(server as never, config);
 });
 
@@ -179,9 +182,10 @@ describe('provar.ant.generate', () => {
     });
 
     it('sets the provar.home property to the provided provar_home value', () => {
-      const xml = getXml({ provar_home: 'D:/Provar/' });
+      const customHome = path.join(tmpDir, 'custom-provar');
+      const xml = getXml({ provar_home: customHome });
       assert.ok(
-        xml.includes('<property name="provar.home" value="D:/Provar/"/>'),
+        xml.includes(`<property name="provar.home" value="${customHome}"/>`),
         'Expected provar.home property'
       );
     });
@@ -403,13 +407,24 @@ describe('provar.ant.generate', () => {
   });
 
   describe('path policy', () => {
+    // Helper that overrides the three required path inputs to be within tmpDir,
+    // so tests can isolate a single invalid field at a time.
+    function strictInput(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+      return minimalInput({
+        provar_home: tmpDir,
+        project_path: tmpDir,
+        results_path: path.join(tmpDir, 'Results'),
+        ...overrides,
+      });
+    }
+
     it('returns PATH_NOT_ALLOWED when output_path is outside allowedPaths', () => {
       const strictServer = new MockMcpServer();
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
         'provar.ant.generate',
-        minimalInput({
+        strictInput({
           output_path: path.join(os.tmpdir(), 'evil-build.xml'),
           dry_run: false,
           overwrite: false,
@@ -424,16 +439,82 @@ describe('provar.ant.generate', () => {
       );
     });
 
-    it('does NOT check path policy in dry_run=true mode', () => {
+    it('output_path is not checked in dry_run=true mode', () => {
+      const strictServer = new MockMcpServer();
+      registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+
+      // Input paths are within tmpDir; only the output_path is outside — but dry_run
+      // skips the write so the output_path should not be validated.
+      const result = strictServer.call(
+        'provar.ant.generate',
+        strictInput({ output_path: '/etc/evil-build.xml', dry_run: true })
+      );
+
+      assert.equal(isError(result), false, 'output_path should not be checked in dry_run mode');
+    });
+
+    it('rejects provar_home outside allowedPaths', () => {
       const strictServer = new MockMcpServer();
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
         'provar.ant.generate',
-        minimalInput({ output_path: '/etc/evil-build.xml', dry_run: true })
+        strictInput({ provar_home: path.join(os.tmpdir(), 'evil-provar'), dry_run: true })
       );
 
-      assert.equal(isError(result), false, 'dry_run should not trigger path check');
+      assert.equal(isError(result), true);
+      const code = parseText(result)['error_code'] as string;
+      assert.ok(
+        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
+        `Unexpected error code: ${code}`
+      );
+    });
+
+    it('rejects project_path containing ".." (PATH_TRAVERSAL)', () => {
+      const strictServer = new MockMcpServer();
+      registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+
+      const result = strictServer.call(
+        'provar.ant.generate',
+        strictInput({ project_path: '../evil', dry_run: true })
+      );
+
+      assert.equal(isError(result), true);
+      assert.equal(parseText(result)['error_code'], 'PATH_TRAVERSAL');
+    });
+
+    it('rejects results_path outside allowedPaths', () => {
+      const strictServer = new MockMcpServer();
+      registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+
+      const result = strictServer.call(
+        'provar.ant.generate',
+        strictInput({ results_path: path.join(os.tmpdir(), 'evil-results'), dry_run: true })
+      );
+
+      assert.equal(isError(result), true);
+      const code = parseText(result)['error_code'] as string;
+      assert.ok(
+        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
+        `Unexpected error code: ${code}`
+      );
+    });
+
+    it('rejects optional license_path outside allowedPaths when provided', () => {
+      const strictServer = new MockMcpServer();
+      registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+
+      const result = strictServer.call(
+        'provar.ant.generate',
+        strictInput({ license_path: path.join(os.tmpdir(), 'evil-licenses'), dry_run: true })
+      );
+
+      assert.equal(isError(result), true);
+      const code = parseText(result)['error_code'] as string;
+      assert.ok(
+        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
+        `Unexpected error code: ${code}`
+      );
     });
   });
 });
