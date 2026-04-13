@@ -11,6 +11,8 @@ The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to au
 
 # Installation, Update, and Uninstall
 
+**Requires Node.js 18–24 (LTS 22 recommended).** Node 25+ is not yet supported due to a breaking change in a transitive dependency. Check with `node --version`.
+
 Install the plugin
 
 ```sh-session

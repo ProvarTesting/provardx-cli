@@ -57,6 +57,11 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ---
 
+## Prerequisites
+
+- **Node.js 18–24** (LTS 22 recommended). Node 25+ is not supported — a transitive dependency (`buffer-equal-constant-time`) crashes on startup. Check with `node --version`.
+- **Salesforce CLI** (`sf`) ≥ 2.x
+
 ## Starting the server
 
 ```sh
