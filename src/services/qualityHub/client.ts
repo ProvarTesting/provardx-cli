@@ -242,6 +242,8 @@ function isOk(status: number): boolean {
   return status >= 200 && status < 300;
 }
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 function httpsRequest(
   url: string,
   method: string,
@@ -252,6 +254,7 @@ function httpsRequest(
     const parsed = new NodeURL(url);
     const opts = {
       hostname: parsed.hostname,
+      port: parsed.port || undefined,
       path: parsed.pathname + parsed.search,
       method,
       headers: {
@@ -265,6 +268,9 @@ function httpsRequest(
         data += chunk.toString('utf-8');
       });
       res.on('end', () => resolve({ status: res.statusCode ?? 0, responseBody: data }));
+    });
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Quality Hub API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
     });
     req.on('error', reject);
     if (body) req.write(body);

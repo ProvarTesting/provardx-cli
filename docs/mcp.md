@@ -200,7 +200,7 @@ sf provar auth clear
 | Variable                 | Purpose                               | Default                                           |
 | ------------------------ | ------------------------------------- | ------------------------------------------------- |
 | `PROVAR_API_KEY`         | API key for Quality Hub validation    | None — falls back to `~/.provar/credentials.json` |
-| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL | Production URL                                    |
+| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL | Dev API Gateway URL (`/dev`)                      |
 
 ---
 
@@ -371,7 +371,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 | `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message` |
 | `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                |
 | `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section  |
-| `validation_warning`             | string         | Present when `validation_source` is `local_fallback` — explains why       |
+| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed) |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 

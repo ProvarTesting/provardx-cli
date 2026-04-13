@@ -38,7 +38,12 @@ export function readStoredCredentials(): StoredCredentials | null {
   }
 }
 
-export function writeCredentials(key: string, prefix: string, source: StoredCredentials['source']): void {
+export function writeCredentials(
+  key: string,
+  prefix: string,
+  source: StoredCredentials['source'],
+  extra?: { username?: string; tier?: string; expires_at?: string }
+): void {
   if (!key.startsWith(KEY_PREFIX)) {
     throw new Error(`Invalid API key format. Keys must start with "${KEY_PREFIX}".`);
   }
@@ -49,6 +54,9 @@ export function writeCredentials(key: string, prefix: string, source: StoredCred
     prefix,
     set_at: new Date().toISOString(),
     source,
+    ...(extra?.username ? { username: extra.username } : {}),
+    ...(extra?.tier ? { tier: extra.tier } : {}),
+    ...(extra?.expires_at ? { expires_at: extra.expires_at } : {}),
   };
   // mode: 0o600 sets permissions atomically on file creation (POSIX).
   // chmodSync handles re-runs on existing files. Both are no-ops on Windows.

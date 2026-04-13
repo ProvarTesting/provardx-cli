@@ -24,20 +24,19 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
 
     if (envKey) {
       if (!envKey.startsWith('pv_k_')) {
-        this.log('API key misconfigured.');
-        this.log('  Source:   environment variable (PROVAR_API_KEY)');
-        this.log(`  Value:    "${envKey.substring(0, 10)}..." does not start with "pv_k_"`);
-        this.log('');
-        this.log('  Validation mode: local only (invalid key — not used for API calls)');
+        this.log('Warning: PROVAR_API_KEY is set but invalid (does not start with "pv_k_").');
+        this.log(`  Value:    "${envKey.substring(0, 10)}..." — ignored for API calls.`);
         this.log('  Fix: update PROVAR_API_KEY to a valid pv_k_ key from https://success.provartesting.com');
+        this.log('');
+        // Fall through to check stored credentials (matches resolveApiKey behaviour)
+      } else {
+        this.log('API key configured');
+        this.log('  Source:   environment variable (PROVAR_API_KEY)');
+        this.log(`  Prefix:   ${envKey.substring(0, 12)}`);
+        this.log('');
+        this.log('  Validation mode: Quality Hub API');
         return;
       }
-      this.log('API key configured');
-      this.log('  Source:   environment variable (PROVAR_API_KEY)');
-      this.log(`  Prefix:   ${envKey.substring(0, 12)}`);
-      this.log('');
-      this.log('  Validation mode: Quality Hub API');
-      return;
     }
 
     const stored = readStoredCredentials();
@@ -48,6 +47,7 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
       try {
         const live = await qualityHubClient.fetchKeyStatus(stored.api_key, getQualityHubBaseUrl());
         liveValid = live.valid;
+        if (live.username) stored.username = live.username;
         if (live.tier) stored.tier = live.tier;
         if (live.expires_at) stored.expires_at = live.expires_at;
       } catch {

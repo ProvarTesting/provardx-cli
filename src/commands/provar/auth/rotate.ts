@@ -30,7 +30,11 @@ export default class SfProvarAuthRotate extends SfCommand<void> {
 
     try {
       const keyData = await qualityHubClient.rotateKey(stored.api_key, baseUrl);
-      writeCredentials(keyData.api_key, keyData.prefix, 'cognito');
+      writeCredentials(keyData.api_key, keyData.prefix, 'cognito', {
+        username: keyData.username,
+        tier: keyData.tier,
+        expires_at: keyData.expires_at,
+      });
       this.log(`API key rotated (new prefix: ${keyData.prefix}). Valid until ${keyData.expires_at}.`);
       this.log("  Run 'sf provar auth status' to verify.");
     } catch (err) {

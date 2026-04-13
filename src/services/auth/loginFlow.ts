@@ -82,9 +82,9 @@ export function openBrowser(url: string): void {
       execFile('open', [url]);
       break;
     case 'win32':
-      // cmd.exe interprets '&' in URLs as a command separator, truncating the URL.
-      // PowerShell's Start-Process passes the URL as a single argument without shell interpretation.
-      execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process '${url}'`]);
+      // Pass the URL via $args[0] so it is never interpolated into the -Command
+      // string — avoids quote-breaking and injection risk from special characters.
+      execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url]);
       break;
     default:
       execFile('xdg-open', [url]);
@@ -97,13 +97,27 @@ export function openBrowser(url: string): void {
  * Spin up a temporary localhost HTTP server that accepts exactly one callback
  * from Cognito's Hosted UI, extracts the auth code, and shuts down.
  */
-export function listenForCallback(port: number): Promise<string> {
+export function listenForCallback(port: number, expectedState?: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       const parsed = new URL(req.url ?? '/', `http://localhost:${port}`);
       const code = parsed.searchParams.get('code');
       const error = parsed.searchParams.get('error');
       const description = parsed.searchParams.get('error_description');
+      const callbackState = parsed.searchParams.get('state');
+
+      if (expectedState && callbackState !== expectedState) {
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(
+          '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
+            '<h2 style="color:#c23934">Authentication failed</h2>' +
+            '<p>Invalid state parameter — possible CSRF attack. Please try again.</p>' +
+            '</body></html>'
+        );
+        server.close();
+        reject(new Error('OAuth callback state mismatch — possible CSRF. Try again.'));
+        return;
+      }
 
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(
@@ -166,6 +180,8 @@ export async function exchangeCodeForTokens(opts: {
 
 // ── Internal HTTPS helper ─────────────────────────────────────────────────────
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 function httpsPost(
   url: string,
   body: string,
@@ -176,6 +192,7 @@ function httpsPost(
     const req = https.request(
       {
         hostname: parsed.hostname,
+        port: parsed.port || undefined,
         path: parsed.pathname + parsed.search,
         method: 'POST',
         headers: {
@@ -191,6 +208,9 @@ function httpsPost(
         res.on('end', () => resolve({ status: res.statusCode ?? 0, responseBody: data }));
       }
     );
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Cognito token exchange timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
+    });
     req.on('error', reject);
     req.write(body);
     req.end();
@@ -208,6 +228,6 @@ export const loginFlowClient = {
   generateState,
   findAvailablePort,
   openBrowser,
-  listenForCallback,
+  listenForCallback: listenForCallback as (port: number, expectedState?: string) => Promise<string>,
   exchangeCodeForTokens,
 };

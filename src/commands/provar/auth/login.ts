@@ -65,7 +65,7 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     loginFlowClient.openBrowser(authorizeUrl.toString());
 
     this.log('\nWaiting for authentication... (Ctrl-C to cancel)');
-    const authCode = await loginFlowClient.listenForCallback(port);
+    const authCode = await loginFlowClient.listenForCallback(port, state);
 
     // ── Step 5: Exchange code for Cognito tokens ────────────────────────────
     const tokens = await loginFlowClient.exchangeCodeForTokens({
@@ -81,7 +81,11 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
     const keyData = await qualityHubClient.exchangeTokenForKey(tokens.access_token, baseUrl);
 
     // ── Step 7: Persist the pv_k_ key ──────────────────────────────────────
-    writeCredentials(keyData.api_key, keyData.prefix, 'cognito');
+    writeCredentials(keyData.api_key, keyData.prefix, 'cognito', {
+      username: keyData.username,
+      tier: keyData.tier,
+      expires_at: keyData.expires_at,
+    });
 
     this.log(`\nAuthenticated as ${keyData.username} (${keyData.tier} tier)`);
     this.log(`API key stored (prefix: ${keyData.prefix}). Valid until ${keyData.expires_at}.`);
