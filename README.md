@@ -3,7 +3,7 @@
 [![Version](https://img.shields.io/npm/v/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![Downloads/week](https://img.shields.io/npm/dw/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![License](https://img.shields.io/npm/l/@provartesting/provardx-cli.svg)](https://github.com/ProvarTesting/provardx-cli/blob/main/LICENSE.md)
-[![Get Access](https://img.shields.io/badge/Quality%20Hub-Get%20Access-blue)](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)
+[![Get Access](https://img.shields.io/badge/Quality%20Hub%20API-Get%20Access-blue)](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)
 
 # What is the ProvarDX CLI?
 
