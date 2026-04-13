@@ -25,7 +25,7 @@ The server runs **locally on your machine**. It does not phone home, transmit yo
 | --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`. |
 | Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                  |
-| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli`                                                                                  |
+| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                  |
 | An MCP-compatible AI client | —       | Claude Desktop, Claude Code, or Cursor                                                                                            |
 | Node.js                     | ≥ 18    | Installed automatically with the SF CLI                                                                                           |
 
@@ -48,7 +48,7 @@ sf --version
 ### 2. Install the Provar DX CLI plugin
 
 ```sh
-sf plugins install @provartesting/provardx-cli
+sf plugins install @provartesting/provardx-cli@beta
 ```
 
 Verify:
@@ -416,7 +416,7 @@ After editing `claude_desktop_config.json`, you must fully restart Claude Deskto
 
 **Server starts but immediately exits**
 
-Check that the SF CLI plugin is installed: `sf plugins | grep provardx`. If missing, run `sf plugins install @provartesting/provardx-cli`.
+Check that the SF CLI plugin is installed: `sf plugins | grep provardx`. If missing, run `sf plugins install @provartesting/provardx-cli@beta`.
 
 ---
 

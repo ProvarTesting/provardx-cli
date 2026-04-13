@@ -14,7 +14,7 @@ The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to au
 Install the plugin
 
 ```sh-session
-$ sf plugins install @provartesting/provardx-cli
+$ sf plugins install @provartesting/provardx-cli@beta
 ```
 
 Update plugins
@@ -236,6 +236,11 @@ TOOLS EXPOSED
   provar.testplan.add-instance         — wire a test case into a plan suite by writing a .testinstance file
   provar.testplan.create-suite         — create a new test suite directory with .planitem inside a plan
   provar.testplan.remove-instance      — remove a .testinstance file from a plan suite
+  provar.nitrox.discover               — discover projects containing NitroX (Hybrid Model) page objects
+  provar.nitrox.read                   — read NitroX .po.json files and return parsed content
+  provar.nitrox.validate               — validate a NitroX .po.json against schema rules
+  provar.nitrox.generate               — generate a new NitroX .po.json from a component description
+  provar.nitrox.patch                  — apply a JSON merge-patch to an existing NitroX .po.json file
 
 EXAMPLES
   Start MCP server (accepts stdio connections from Claude Desktop / Cursor):
