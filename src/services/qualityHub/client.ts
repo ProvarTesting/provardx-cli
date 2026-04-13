@@ -220,6 +220,22 @@ export async function revokeKey(apiKey: string, baseUrl: string): Promise<void> 
   if (!isOk(status)) throw new Error(`Key revocation failed (${status}): ${responseBody}`);
 }
 
+/**
+ * POST /auth/rotate — atomically replace the current pv_k_ key with a new one.
+ * The old key is invalidated immediately. Returns the same shape as /auth/exchange.
+ * On 401: key is invalid/expired — caller should direct user to sf provar auth login.
+ */
+export async function rotateKey(apiKey: string, baseUrl: string): Promise<AuthExchangeResponse> {
+  const { status, responseBody } = await httpsRequest(`${baseUrl}/auth/rotate`, 'POST', {
+    'x-provar-key': apiKey,
+    'Content-Length': '0',
+  });
+  if (status === 401)
+    throw new QualityHubAuthError('API key is invalid or expired. Run `sf provar auth login` to get a new key.');
+  if (!isOk(status)) throw new Error(`Key rotation failed (${status}): ${responseBody}`);
+  return JSON.parse(responseBody) as AuthExchangeResponse;
+}
+
 // ── Internal HTTPS helper ─────────────────────────────────────────────────────
 
 function isOk(status: number): boolean {
@@ -267,4 +283,5 @@ export const qualityHubClient = {
   exchangeTokenForKey,
   fetchKeyStatus,
   revokeKey,
+  rotateKey,
 };

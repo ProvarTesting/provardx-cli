@@ -60,6 +60,7 @@ When `NODE_ENV=test` the validation step is skipped entirely. This is intended o
 # Commands
 
 - [`sf provar auth login`](#sf-provar-auth-login)
+- [`sf provar auth rotate`](#sf-provar-auth-rotate)
 - [`sf provar auth status`](#sf-provar-auth-status)
 - [`sf provar auth clear`](#sf-provar-auth-clear)
 - [`sf provar mcp start`](#sf-provar-mcp-start)
@@ -118,6 +119,28 @@ EXAMPLES
   Log in against a staging environment:
 
     $ sf provar auth login --url https://dev.api.example.com
+```
+
+## `sf provar auth rotate`
+
+Rotate your stored API key without re-authenticating via browser.
+
+```
+USAGE
+  $ sf provar auth rotate
+
+DESCRIPTION
+  Exchanges your current pv_k_ key for a new one atomically. The old key is
+  invalidated immediately. The new key is written to ~/.provar/credentials.json.
+
+  Use this to rotate your key on a regular schedule (~every 90 days) without
+  going through the browser login flow. If your current key is already expired,
+  run sf provar auth login instead.
+
+EXAMPLES
+  Rotate the stored API key:
+
+    $ sf provar auth rotate
 ```
 
 ## `sf provar auth status`
