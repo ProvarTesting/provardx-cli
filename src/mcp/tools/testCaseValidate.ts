@@ -21,17 +21,19 @@ import {
   getQualityHubBaseUrl,
   QualityHubAuthError,
   QualityHubRateLimitError,
+  REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
   'To enable Quality Hub (170 rules): run sf provar auth login\n' +
-  'For CI/CD: set the PROVAR_API_KEY environment variable.';
+  'For CI/CD: set the PROVAR_API_KEY environment variable.\n' +
+  `No account? Request access at: ${REQUEST_ACCESS_URL}`;
 
 const AUTH_WARNING =
   'Quality Hub API key is invalid or expired. Running local validation only.\n' +
-  'Run sf provar auth login to get a new key.';
+  `Run sf provar auth login to get a new key, or request access at: ${REQUEST_ACCESS_URL}`;
 
 const RATE_LIMIT_WARNING = 'Quality Hub API rate limit reached. Running local validation only. Try again shortly.';
 

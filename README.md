@@ -3,6 +3,7 @@
 [![Version](https://img.shields.io/npm/v/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![Downloads/week](https://img.shields.io/npm/dw/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![License](https://img.shields.io/npm/l/@provartesting/provardx-cli.svg)](https://github.com/ProvarTesting/provardx-cli/blob/main/LICENSE.md)
+[![Get Access](https://img.shields.io/badge/Quality%20Hub-Get%20Access-blue)](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)
 
 # What is the ProvarDX CLI?
 
@@ -32,7 +33,7 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
 
-Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Run `sf provar auth login` to authenticate and unlock full validation.
+Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Run `sf provar auth login` to authenticate and unlock full validation. Don't have an account? **[Request access](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)**.
 
 ```sh
 sf provar mcp start --allowed-paths /path/to/your/provar/project
@@ -110,6 +111,9 @@ DESCRIPTION
   run sf provar auth login once on your local machine, copy the api_key value from
   ~/.provar/credentials.json, and store it as the PROVAR_API_KEY environment variable
   or secret in your pipeline. Rotate the secret every ~90 days when the key expires.
+
+  Don't have an account? Request access at:
+  https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access
 
 EXAMPLES
   Log in interactively:

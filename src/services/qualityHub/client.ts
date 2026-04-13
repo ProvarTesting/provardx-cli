@@ -155,6 +155,13 @@ export async function validateTestCaseViaApi(
  */
 const DEFAULT_QUALITY_HUB_URL = 'https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev';
 
+/**
+ * Self-service access request page for users who do not yet have a Provar MCP account.
+ * Public HTML — no API key or Cognito token required.
+ * Update when staging/prod stages are deployed.
+ */
+export const REQUEST_ACCESS_URL = `${DEFAULT_QUALITY_HUB_URL}/auth/request-access`;
+
 export function getQualityHubBaseUrl(): string {
   return process.env.PROVAR_QUALITY_HUB_URL ?? DEFAULT_QUALITY_HUB_URL;
 }
@@ -191,7 +198,9 @@ export async function exchangeTokenForKey(cognitoAccessToken: string, baseUrl: s
     body
   );
   if (status === 401)
-    throw new QualityHubAuthError('Account not found or no active subscription. Check your Provar licence.');
+    throw new QualityHubAuthError(
+      `Account not found or no active subscription.\nRequest access at: ${REQUEST_ACCESS_URL}`
+    );
   if (!isOk(status)) throw new Error(`Auth exchange failed (${status}): ${responseBody}`);
   return JSON.parse(responseBody) as AuthExchangeResponse;
 }

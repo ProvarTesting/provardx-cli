@@ -161,6 +161,9 @@ When `validation_source` is `local_fallback`, a `validation_warning` field is al
 
 ### Configuring an API key
 
+**Don't have an account?** Request access at the self-service form:  
+<https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access>
+
 **Interactive login (recommended):**
 
 ```sh

@@ -13,6 +13,9 @@ exchange and are then discarded — only the pv*k* API key is written to disk.
 
 Run 'sf provar auth status' after login to confirm the key is configured correctly.
 
+Don't have an account? Request access at:
+https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access
+
 # flags.url.summary
 
 Override the Quality Hub API base URL (for testing against a non-production environment).

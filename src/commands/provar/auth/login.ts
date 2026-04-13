@@ -10,7 +10,12 @@ import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@provartesting/provardx-plugins-utils';
 import { writeCredentials } from '../../../services/auth/credentials.js';
 import { loginFlowClient } from '../../../services/auth/loginFlow.js';
-import { qualityHubClient, getQualityHubBaseUrl } from '../../../services/qualityHub/client.js';
+import {
+  qualityHubClient,
+  getQualityHubBaseUrl,
+  QualityHubAuthError,
+  REQUEST_ACCESS_URL,
+} from '../../../services/qualityHub/client.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.auth.login');
@@ -78,7 +83,18 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
 
     // ── Step 6: Exchange Cognito access token for pv_k_ key ─────────────────
     // Cognito tokens are held in memory only — discarded after this call.
-    const keyData = await qualityHubClient.exchangeTokenForKey(tokens.access_token, baseUrl);
+    let keyData;
+    try {
+      keyData = await qualityHubClient.exchangeTokenForKey(tokens.access_token, baseUrl);
+    } catch (err) {
+      if (err instanceof QualityHubAuthError) {
+        this.error(
+          `No Provar MCP account found for this login.\nRequest access at: ${REQUEST_ACCESS_URL}`,
+          { exit: 1 }
+        );
+      }
+      throw err;
+    }
 
     // ── Step 7: Persist the pv_k_ key ──────────────────────────────────────
     writeCredentials(keyData.api_key, keyData.prefix, 'cognito', {

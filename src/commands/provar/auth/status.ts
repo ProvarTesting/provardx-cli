@@ -9,7 +9,7 @@
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@provartesting/provardx-plugins-utils';
 import { readStoredCredentials } from '../../../services/auth/credentials.js';
-import { qualityHubClient, getQualityHubBaseUrl } from '../../../services/qualityHub/client.js';
+import { qualityHubClient, getQualityHubBaseUrl, REQUEST_ACCESS_URL } from '../../../services/qualityHub/client.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.auth.status');
@@ -81,6 +81,8 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
     this.log('  Run: sf provar auth login');
     this.log('');
     this.log('For CI/CD: set the PROVAR_API_KEY environment variable.');
+    this.log('');
+    this.log(`No account? Request access at: ${REQUEST_ACCESS_URL}`);
     this.log('');
     this.log('Validation mode: local only (structural rules, no quality scoring)');
   }
