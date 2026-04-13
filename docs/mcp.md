@@ -66,7 +66,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 ## Quick start
 
 ```sh
-# 1. Install the plugin
+# 1. Install the plugin — @beta is required for MCP support
 sf plugins install @provartesting/provardx-cli@beta
 
 # 2. (Optional) Authenticate for full 170+ rule validation

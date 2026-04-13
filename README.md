@@ -42,7 +42,7 @@ Validation runs in two modes: **local only** (structural rules, no key required)
 **Requires:** Provar Automation IDE installed with an activated license.
 
 ```sh
-# 1. Install the plugin (if not already installed)
+# 1. Install the plugin — @beta is required for MCP support
 sf plugins install @provartesting/provardx-cli@beta
 
 # 2. (Optional) Authenticate for full 170+ rule validation
