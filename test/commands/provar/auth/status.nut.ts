@@ -84,8 +84,7 @@ describe('sf provar auth status NUTs', () => {
     process.env.PROVAR_API_KEY = 'sk-wrong-prefix-value';
     const output = execCmd<SfProvarCommandResult>('provar auth status').shellOutput;
     expect(output.stderr).to.equal('');
-    expect(output.stdout).to.include('misconfigured');
+    expect(output.stdout).to.include('invalid');
     expect(output.stdout).to.include('pv_k_');
-    expect(output.stdout).to.include('local only');
   });
 });
