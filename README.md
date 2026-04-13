@@ -35,28 +35,45 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
 
-Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Run `sf provar auth login` to authenticate and unlock full validation. Don't have an account? **[Request access](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)**.
+Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Don't have an account? **[Request access](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)**.
+
+## Quick setup
+
+**Requires:** Provar Automation IDE installed with an activated license.
 
 ```sh
-sf provar mcp start --allowed-paths /path/to/your/provar/project
+# 1. Install the plugin (if not already installed)
+sf plugins install @provartesting/provardx-cli@beta
+
+# 2. (Optional) Authenticate for full 170+ rule validation
+sf provar auth login
 ```
 
-📖 **See [docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) for full setup and tool documentation.**
+**Claude Code** — run once to register the server:
 
-## License Validation
+```sh
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
 
-The MCP server verifies your Provar license before accepting any connections. Validation is automatic — no extra flags are required for standard usage.
+**Claude Desktop** — add to your config file and restart the app:
 
-**How it works:**
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
-1. **Auto-detection** — the server reads `~/Provar/.licenses/*.properties` (the same files written by Provar's IDE plugins). If a valid, activated license is found the server starts immediately.
-2. **Cache** — successful validations are cached at `~/Provar/.licenses/.mcp-license-cache.json` (2 h TTL). Subsequent starts within the TTL window skip the disk scan.
-3. **Grace fallback** — if the IDE license files cannot be found or read and the cache is stale (but ≤ 48 h old), the server starts with a warning on stderr using the cached result so CI pipelines are not broken by transient local file-access issues.
-4. **Fail closed** — if no valid license is detected the command exits with a non-zero exit code and a clear error message.
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
 
-**`NODE_ENV=test` fast-path:**
+> **Windows (Claude Desktop):** Use `sf.cmd` instead of `sf` if the server fails to start.
 
-When `NODE_ENV=test` the validation step is skipped entirely. This is intended only for the plugin's own unit-test suite.
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, troubleshooting.**
 
 ---
 

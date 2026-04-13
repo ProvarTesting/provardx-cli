@@ -61,6 +61,55 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 - **Node.js 18–24** (LTS 22 recommended). Node 25+ is not supported — a transitive dependency (`buffer-equal-constant-time`) crashes on startup. Check with `node --version`.
 - **Salesforce CLI** (`sf`) ≥ 2.x
+- **Provar Automation IDE** installed with an activated license (see [License requirement](#license-requirement) below)
+
+## Quick start
+
+```sh
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli@beta
+
+# 2. (Optional) Authenticate for full 170+ rule validation
+sf provar auth login
+
+# 3. Connect your AI assistant — pick one client below
+```
+
+**Claude Code** (one-time, works across all your projects):
+
+```sh
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+**Claude Desktop** — edit your config file, then restart the app:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows (Claude Desktop):** If `sf` is not found, use `sf.cmd` as the command instead.
+
+**Verify it's working** — ask your AI assistant: _"Call provardx.ping with message hello"_. You should get `{ "message": "hello" }` back.
+
+---
+
+## License requirement
+
+The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one license is in the `Activated` state and was last verified online within the past 48 hours.
+
+If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
+
+---
 
 ## Starting the server
 
@@ -90,12 +139,40 @@ sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 
 ## Client configuration
 
+### Claude Code
+
+The simplest approach is the `claude mcp add` CLI command:
+
+```sh
+# User-scoped — works across all your projects
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, shared — creates .mcp.json in project root (commit to source control)
+claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, private — stored in .claude/settings.local.json (not committed)
+claude mcp add provar -s local -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+You can also edit `.mcp.json` at your project root directly for the shared project config:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
 ### Claude Desktop
 
 Add a `provar` entry to your Claude Desktop MCP configuration file.
 
-**macOS / Linux:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -107,41 +184,14 @@ Add a `provar` entry to your Claude Desktop MCP configuration file.
   }
 }
 ```
+
+> **Windows:** If `sf` is not found, use `sf.cmd` as the command. Claude Desktop may not inherit the full shell PATH, so `sf.cmd` (the npm-installed wrapper) is more reliable.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
-
-### Claude Code
-
-Add the server to your project's `.claude/mcp.json` (project-scoped) or `~/.claude/mcp.json` (user-scoped):
-
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
-
-Alternatively, run directly from a Claude Code session:
-
-```
-/mcp add provar sf provar mcp start --allowed-paths /path/to/project
-```
 
 ### Cursor / other MCP clients
 
 Any MCP client that supports the **stdio transport** can use this server. Point `command` at `sf` (or the full path to the Salesforce CLI binary) and pass `["provar", "mcp", "start"]` as arguments, plus `--allowed-paths` as appropriate for your project layout.
-
----
-
-## License requirement
-
-The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one icense is in the `Activated` state and was last verified online within the past 48 hours.
-
-If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
 
 ---
 
@@ -365,20 +415,20 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Output**
 
-| Field                            | Type           | Description                                                               |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------- |
-| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                              |
-| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                           |
-| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                         |
-| `error_count`                    | integer        | Schema error count                                                        |
-| `warning_count`                  | integer        | Schema warning count                                                      |
-| `step_count`                     | integer        | Number of `<apiCall>` steps                                               |
-| `test_case_id`                   | string         | Value of the `id` attribute                                               |
-| `test_case_name`                 | string         | Value of the `name` attribute                                             |
-| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                       |
-| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message` |
-| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                |
-| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section  |
+| Field                            | Type           | Description                                                                                            |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                                                           |
+| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                        |
+| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                      |
+| `error_count`                    | integer        | Schema error count                                                                                     |
+| `warning_count`                  | integer        | Schema warning count                                                                                   |
+| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                            |
+| `test_case_id`                   | string         | Value of the `id` attribute                                                                            |
+| `test_case_name`                 | string         | Value of the `name` attribute                                                                          |
+| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                    |
+| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                              |
+| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                             |
+| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                               |
 | `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed) |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
