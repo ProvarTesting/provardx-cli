@@ -57,6 +57,60 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ---
 
+## Prerequisites
+
+- **Node.js 18–24** (LTS 22 recommended). Node 25+ is not supported — a transitive dependency (`buffer-equal-constant-time`) crashes on startup. Check with `node --version`.
+- **Salesforce CLI** (`sf`) ≥ 2.x
+- **Provar Automation IDE** installed with an activated license (see [License requirement](#license-requirement) below)
+
+## Quick start
+
+```sh
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli@beta
+
+# 2. (Optional) Authenticate for full 170+ rule validation
+sf provar auth login
+
+# 3. Connect your AI assistant — pick one client below
+```
+
+**Claude Code** (one-time, works across all your projects):
+
+```sh
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+**Claude Desktop** — edit your config file, then restart the app:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows (Claude Desktop):** If `sf` is not found, use `sf.cmd` as the command instead.
+
+**Verify it's working** — ask your AI assistant: _"Call provardx.ping with message hello"_. You should get `{ "message": "hello" }` back.
+
+---
+
+## License requirement
+
+The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one license is in the `Activated` state and was last verified online within the past 48 hours.
+
+If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
+
+---
+
 ## Starting the server
 
 ```sh
@@ -85,12 +139,40 @@ sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 
 ## Client configuration
 
+### Claude Code
+
+The simplest approach is the `claude mcp add` CLI command:
+
+```sh
+# User-scoped — works across all your projects
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, shared — creates .mcp.json in project root (commit to source control)
+claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, private — stored in .claude/settings.local.json (not committed)
+claude mcp add provar -s local -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+You can also edit `.mcp.json` at your project root directly for the shared project config:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
 ### Claude Desktop
 
 Add a `provar` entry to your Claude Desktop MCP configuration file.
 
-**macOS / Linux:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -102,29 +184,10 @@ Add a `provar` entry to your Claude Desktop MCP configuration file.
   }
 }
 ```
+
+> **Windows:** If `sf` is not found, use `sf.cmd` as the command. Claude Desktop may not inherit the full shell PATH, so `sf.cmd` (the npm-installed wrapper) is more reliable.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
-
-### Claude Code
-
-Add the server to your project's `.claude/mcp.json` (project-scoped) or `~/.claude/mcp.json` (user-scoped):
-
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
-
-Alternatively, run directly from a Claude Code session:
-
-```
-/mcp add provar sf provar mcp start --allowed-paths /path/to/project
-```
 
 ### Cursor / other MCP clients
 
@@ -132,11 +195,70 @@ Any MCP client that supports the **stdio transport** can use this server. Point 
 
 ---
 
-## License requirement
+## Authentication — Quality Hub API
 
-The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one icense is in the `Activated` state and was last verified online within the past 48 hours.
+The `provar.testcase.validate` tool can run in two modes depending on whether an API key is configured.
 
-If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
+| Mode                | When               | What you get                                        |
+| ------------------- | ------------------ | --------------------------------------------------- |
+| **Quality Hub API** | API key configured | 170+ rules, quality score, tier-specific thresholds |
+| **Local only**      | No key             | Structural/schema rules only                        |
+
+The `validation_source` field in every `provar.testcase.validate` response tells you which mode fired:
+
+| Value            | Meaning                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `quality_hub`    | Full API validation — key is valid and the API responded                                          |
+| `local`          | No key configured — local rules only                                                              |
+| `local_fallback` | Key is configured but the API was unreachable or returned an error — local rules used as fallback |
+
+When `validation_source` is `local_fallback`, a `validation_warning` field is also returned explaining why.
+
+### Configuring an API key
+
+**Don't have an account?** Request access at the self-service form:  
+<https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access>
+
+**Interactive login (recommended):**
+
+```sh
+sf provar auth login
+```
+
+Opens a browser to the Provar login page. After you authenticate, the key is stored automatically at `~/.provar/credentials.json`.
+
+**Check current status:**
+
+```sh
+sf provar auth status
+```
+
+**CI/CD — environment variable:**
+
+```sh
+export PROVAR_API_KEY=pv_k_your_key_here
+```
+
+The env var takes priority over any stored key. Keys must start with `pv_k_` — any other value is ignored.
+
+**Rotate stored key (no browser required):**
+
+```sh
+sf provar auth rotate
+```
+
+**Remove stored key:**
+
+```sh
+sf provar auth clear
+```
+
+### Environment variables
+
+| Variable                 | Purpose                               | Default                                           |
+| ------------------------ | ------------------------------------- | ------------------------------------------------- |
+| `PROVAR_API_KEY`         | API key for Quality Hub validation    | None — falls back to `~/.provar/credentials.json` |
+| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL | Dev API Gateway URL (`/dev`)                      |
 
 ---
 
@@ -293,19 +415,21 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Output**
 
-| Field                            | Type           | Description                                                               |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------- |
-| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                              |
-| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                           |
-| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                         |
-| `error_count`                    | integer        | Schema error count                                                        |
-| `warning_count`                  | integer        | Schema warning count                                                      |
-| `step_count`                     | integer        | Number of `<apiCall>` steps                                               |
-| `test_case_id`                   | string         | Value of the `id` attribute                                               |
-| `test_case_name`                 | string         | Value of the `name` attribute                                             |
-| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                       |
-| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message` |
-| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                |
+| Field                            | Type           | Description                                                                                            |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
+| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                                                           |
+| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                        |
+| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                      |
+| `error_count`                    | integer        | Schema error count                                                                                     |
+| `warning_count`                  | integer        | Schema warning count                                                                                   |
+| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                            |
+| `test_case_id`                   | string         | Value of the `id` attribute                                                                            |
+| `test_case_name`                 | string         | Value of the `name` attribute                                                                          |
+| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                    |
+| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                              |
+| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                             |
+| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                               |
+| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed) |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 
@@ -1050,27 +1174,27 @@ Scan a set of directories for Provar projects (identified by a `.testproject` ma
 
 By default the tool scans `cwd`. If no project is found there it widens the search to `~/git` and `~/Provar`.
 
-| Input             | Type      | Required | Default                  | Description                                                    |
-| ----------------- | --------- | -------- | ------------------------ | -------------------------------------------------------------- |
-| `search_roots`    | string[]  | no       | `[cwd()]`                | Directories to scan; falls back to `~/git`, `~/Provar` if empty and cwd has no project |
-| `max_depth`       | number    | no       | `6`                      | Maximum directory depth for `.testproject` search (max 20)     |
-| `include_packages`| boolean   | no       | `true`                   | Return `nitroXPackages/` package names in output               |
+| Input              | Type     | Required | Default   | Description                                                                            |
+| ------------------ | -------- | -------- | --------- | -------------------------------------------------------------------------------------- |
+| `search_roots`     | string[] | no       | `[cwd()]` | Directories to scan; falls back to `~/git`, `~/Provar` if empty and cwd has no project |
+| `max_depth`        | number   | no       | `6`       | Maximum directory depth for `.testproject` search (max 20)                             |
+| `include_packages` | boolean  | no       | `true`    | Return `nitroXPackages/` package names in output                                       |
 
-| Output field       | Description                                              |
-| ------------------ | -------------------------------------------------------- |
-| `projects`         | Array of project result objects (see below)              |
-| `searched_roots`   | Directories actually searched                            |
+| Output field     | Description                                 |
+| ---------------- | ------------------------------------------- |
+| `projects`       | Array of project result objects (see below) |
+| `searched_roots` | Directories actually searched               |
 
 Each project result:
 
-| Field               | Description                                         |
-| ------------------- | --------------------------------------------------- |
-| `project_path`      | Absolute path to the project root                   |
-| `nitrox_dir`        | Absolute path to `nitroX/`, or `null`               |
-| `nitrox_file_count` | Number of `.po.json` files found                    |
-| `nitrox_files`      | Full paths to each `.po.json`                        |
-| `packages_dir`      | Absolute path to `nitroXPackages/`, or `null`       |
-| `packages`          | Array of `{ path, name? }` package entries          |
+| Field               | Description                                   |
+| ------------------- | --------------------------------------------- |
+| `project_path`      | Absolute path to the project root             |
+| `nitrox_dir`        | Absolute path to `nitroX/`, or `null`         |
+| `nitrox_file_count` | Number of `.po.json` files found              |
+| `nitrox_files`      | Full paths to each `.po.json`                 |
+| `packages_dir`      | Absolute path to `nitroXPackages/`, or `null` |
+| `packages`          | Array of `{ path, name? }` package entries    |
 
 Directories named `node_modules`, `.git`, or any hidden directory (`.`-prefixed) are skipped.
 
@@ -1080,17 +1204,17 @@ Directories named `node_modules`, `.git`, or any hidden directory (`.`-prefixed)
 
 Read one or more NitroX `.po.json` files and return their parsed content for context or training. Provide specific `file_paths` or a `project_path` to read all files from a project's `nitroX/` directory.
 
-| Input          | Type     | Required          | Default | Description                                              |
-| -------------- | -------- | ----------------- | ------- | -------------------------------------------------------- |
-| `file_paths`   | string[] | one of these two  | —       | Specific `.po.json` paths to read                        |
-| `project_path` | string   | one of these two  | —       | Provar project root — reads all files from `nitroX/`    |
-| `max_files`    | number   | no                | `20`    | Cap on files returned to avoid context overflow          |
+| Input          | Type     | Required         | Default | Description                                          |
+| -------------- | -------- | ---------------- | ------- | ---------------------------------------------------- |
+| `file_paths`   | string[] | one of these two | —       | Specific `.po.json` paths to read                    |
+| `project_path` | string   | one of these two | —       | Provar project root — reads all files from `nitroX/` |
+| `max_files`    | number   | no               | `20`    | Cap on files returned to avoid context overflow      |
 
-| Output field  | Description                                                              |
-| ------------- | ------------------------------------------------------------------------ |
+| Output field  | Description                                                                          |
+| ------------- | ------------------------------------------------------------------------------------ |
 | `files`       | Array of `{ file_path, content, size_bytes }` (or `{ file_path, error }` on failure) |
-| `truncated`   | `true` when more files exist than `max_files`                            |
-| `total_found` | Total number of `.po.json` files discovered before the cap               |
+| `truncated`   | `true` when more files exist than `max_files`                                        |
+| `total_found` | Total number of `.po.json` files discovered before the cap                           |
 
 Path policy is enforced per-file. A missing or unparseable file returns an `error` field inside the file entry rather than failing the whole call.
 
@@ -1104,33 +1228,33 @@ Validate a NitroX `.po.json` (Hybrid Model component page object) against the FA
 
 Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, minimum 0.
 
-| Input       | Type   | Required       | Description                         |
-| ----------- | ------ | -------------- | ----------------------------------- |
-| `content`   | string | one of these   | JSON string to validate             |
-| `file_path` | string | one of these   | Path to a `.po.json` file           |
+| Input       | Type   | Required     | Description               |
+| ----------- | ------ | ------------ | ------------------------- |
+| `content`   | string | one of these | JSON string to validate   |
+| `file_path` | string | one of these | Path to a `.po.json` file |
 
-| Output field  | Description                              |
-| ------------- | ---------------------------------------- |
-| `valid`       | `true` when no ERROR-severity issues     |
-| `score`       | 0–100                                    |
-| `issue_count` | Total issues                             |
-| `issues`      | Array of `ValidationIssue` (see below)   |
+| Output field  | Description                            |
+| ------------- | -------------------------------------- |
+| `valid`       | `true` when no ERROR-severity issues   |
+| `score`       | 0–100                                  |
+| `issue_count` | Total issues                           |
+| `issues`      | Array of `ValidationIssue` (see below) |
 
 **Validation rules:**
 
-| Rule  | Severity | Description                                                                 |
-| ----- | -------- | --------------------------------------------------------------------------- |
-| NX000 | ERROR    | Content is not valid JSON or not a JSON object                              |
-| NX001 | ERROR    | `componentId` is missing or not a valid UUID                                |
-| NX002 | ERROR    | Root component (no `parentId`) missing `name`, `type`, `pageStructureElement`, or `fieldDetailsElement` |
-| NX003 | ERROR    | `tagName` contains whitespace                                               |
+| Rule  | Severity | Description                                                                                                                                  |
+| ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| NX000 | ERROR    | Content is not valid JSON or not a JSON object                                                                                               |
+| NX001 | ERROR    | `componentId` is missing or not a valid UUID                                                                                                 |
+| NX002 | ERROR    | Root component (no `parentId`) missing `name`, `type`, `pageStructureElement`, or `fieldDetailsElement`                                      |
+| NX003 | ERROR    | `tagName` contains whitespace                                                                                                                |
 | NX004 | ERROR    | Interaction missing required field (`defaultInteraction`, `implementations` ≥ 1, `interactionType`, `name`, `testStepTitlePattern`, `title`) |
-| NX005 | ERROR    | Implementation missing `javaScriptSnippet`                                  |
-| NX006 | ERROR    | Selector missing `xpath`                                                    |
-| NX007 | WARNING  | Element missing `type`                                                      |
-| NX008 | WARNING  | `comparisonType` not one of `"equals"`, `"starts-with"`, `"contains"`      |
-| NX009 | INFO     | Interaction `name` contains characters outside `[A-Za-z0-9 ]`              |
-| NX010 | INFO     | `bodyTagName` contains whitespace                                           |
+| NX005 | ERROR    | Implementation missing `javaScriptSnippet`                                                                                                   |
+| NX006 | ERROR    | Selector missing `xpath`                                                                                                                     |
+| NX007 | WARNING  | Element missing `type`                                                                                                                       |
+| NX008 | WARNING  | `comparisonType` not one of `"equals"`, `"starts-with"`, `"contains"`                                                                        |
+| NX009 | INFO     | Interaction `name` contains characters outside `[A-Za-z0-9 ]`                                                                                |
+| NX010 | INFO     | `bodyTagName` contains whitespace                                                                                                            |
 
 **Error codes:** `MISSING_INPUT`, `NX000`, `FILE_NOT_FOUND`, `PATH_NOT_ALLOWED`
 
@@ -1142,29 +1266,29 @@ Generate a new NitroX `.po.json` from a component description. All `componentId`
 
 Applicable to any component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.
 
-| Input                   | Type     | Required | Default   | Description                                              |
-| ----------------------- | -------- | -------- | --------- | -------------------------------------------------------- |
-| `name`                  | string   | yes      | —         | Path-like name, e.g. `/com/force/myapp/ButtonComponent`  |
-| `tag_name`              | string   | yes      | —         | LWC or HTML tag, e.g. `lightning-button`, `c-my-cmp`     |
-| `type`                  | string   | no       | `"Block"` | `"Block"` or `"Page"`                                    |
-| `page_structure_element`| boolean  | no       | `true`    | Whether this is a page structure element                 |
-| `field_details_element` | boolean  | no       | `false`   | Whether this is a field details element                  |
-| `parameters`            | object[] | no       | —         | Qualifier parameters (see below)                         |
-| `elements`              | object[] | no       | —         | Child elements (see below)                               |
-| `output_path`           | string   | no       | —         | File path to write when `dry_run=false`                  |
-| `overwrite`             | boolean  | no       | `false`   | Overwrite existing file                                  |
-| `dry_run`               | boolean  | no       | `true`    | Return JSON without writing                              |
+| Input                    | Type     | Required | Default   | Description                                             |
+| ------------------------ | -------- | -------- | --------- | ------------------------------------------------------- |
+| `name`                   | string   | yes      | —         | Path-like name, e.g. `/com/force/myapp/ButtonComponent` |
+| `tag_name`               | string   | yes      | —         | LWC or HTML tag, e.g. `lightning-button`, `c-my-cmp`    |
+| `type`                   | string   | no       | `"Block"` | `"Block"` or `"Page"`                                   |
+| `page_structure_element` | boolean  | no       | `true`    | Whether this is a page structure element                |
+| `field_details_element`  | boolean  | no       | `false`   | Whether this is a field details element                 |
+| `parameters`             | object[] | no       | —         | Qualifier parameters (see below)                        |
+| `elements`               | object[] | no       | —         | Child elements (see below)                              |
+| `output_path`            | string   | no       | —         | File path to write when `dry_run=false`                 |
+| `overwrite`              | boolean  | no       | `false`   | Overwrite existing file                                 |
+| `dry_run`                | boolean  | no       | `true`    | Return JSON without writing                             |
 
 **Parameter object:** `{ name, value, comparisonType?: "equals"|"starts-with"|"contains", default?: boolean }`
 
 **Element object:** `{ label, type_ref, tag_name?, parameters?, selector_xpath? }`
 
-| Output field | Description                              |
-| ------------ | ---------------------------------------- |
-| `content`    | Generated JSON string (pretty-printed)   |
+| Output field | Description                                   |
+| ------------ | --------------------------------------------- |
+| `content`    | Generated JSON string (pretty-printed)        |
 | `file_path`  | Resolved absolute path (if `output_path` set) |
-| `written`    | `true` when file was written to disk     |
-| `dry_run`    | Echo of the `dry_run` input              |
+| `written`    | `true` when file was written to disk          |
+| `dry_run`    | Echo of the `dry_run` input                   |
 
 **Error codes:** `FILE_EXISTS`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`, `GENERATE_ERROR`
 
@@ -1176,19 +1300,19 @@ Apply a [JSON merge-patch (RFC 7396)](https://www.rfc-editor.org/rfc/rfc7396) to
 
 Patch semantics: a key with a `null` value removes that key; any other value replaces it (or recursively merges if both target and patch values are objects).
 
-| Input           | Type    | Required | Default | Description                                                   |
-| --------------- | ------- | -------- | ------- | ------------------------------------------------------------- |
-| `file_path`     | string  | yes      | —       | Path to the existing `.po.json`                               |
-| `patch`         | object  | yes      | —       | JSON merge-patch to apply                                     |
-| `dry_run`       | boolean | no       | `true`  | Return merged result without writing                          |
-| `validate_after`| boolean | no       | `true`  | Run NX validation; blocks write if errors found               |
+| Input            | Type    | Required | Default | Description                                     |
+| ---------------- | ------- | -------- | ------- | ----------------------------------------------- |
+| `file_path`      | string  | yes      | —       | Path to the existing `.po.json`                 |
+| `patch`          | object  | yes      | —       | JSON merge-patch to apply                       |
+| `dry_run`        | boolean | no       | `true`  | Return merged result without writing            |
+| `validate_after` | boolean | no       | `true`  | Run NX validation; blocks write if errors found |
 
-| Output field | Description                                     |
-| ------------ | ----------------------------------------------- |
-| `content`    | Merged JSON string (pretty-printed)             |
-| `file_path`  | Absolute path of the file                       |
-| `written`    | `true` when file was written                    |
-| `dry_run`    | Echo of the `dry_run` input                     |
+| Output field | Description                                            |
+| ------------ | ------------------------------------------------------ |
+| `content`    | Merged JSON string (pretty-printed)                    |
+| `file_path`  | Absolute path of the file                              |
+| `written`    | `true` when file was written                           |
+| `dry_run`    | Echo of the `dry_run` input                            |
 | `validation` | Validation result (present when `validate_after=true`) |
 
 When `validate_after=true` and the merged content has errors, the write is blocked and the tool returns `isError=true` with code `VALIDATION_FAILED`. Set `validate_after=false` to force-write despite errors.
