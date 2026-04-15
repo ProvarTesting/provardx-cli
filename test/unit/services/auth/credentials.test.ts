@@ -220,4 +220,25 @@ describe('resolveApiKey', () => {
     fs.writeFileSync(p, JSON.stringify(data));
     assert.equal(resolveApiKey(), null);
   });
+
+  it('returns null when stored credentials are missing the api_key field', () => {
+    // Manually edited or corrupt file that lacks api_key entirely must not throw.
+    const p = getCredentialsPath();
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify({ prefix: 'pv_k_', set_at: '2026-01-01T00:00:00.000Z', source: 'manual' }));
+    assert.doesNotThrow(() => resolveApiKey());
+    assert.equal(resolveApiKey(), null);
+  });
+
+  it('returns null when stored api_key is a non-string type', () => {
+    // A file where api_key was set to a number or boolean (e.g. from a bad script) must not throw.
+    const p = getCredentialsPath();
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(
+      p,
+      JSON.stringify({ api_key: 12_345, prefix: 'pv_k_', set_at: '2026-01-01T00:00:00.000Z', source: 'manual' })
+    );
+    assert.doesNotThrow(() => resolveApiKey());
+    assert.equal(resolveApiKey(), null);
+  });
 });

@@ -82,7 +82,8 @@ export function clearCredentials(): void {
 export function resolveApiKey(): string | null {
   const envKey = process.env.PROVAR_API_KEY?.trim();
   if (envKey?.startsWith(KEY_PREFIX)) return envKey;
-  const storedKey = readStoredCredentials()?.api_key.trim() ?? null;
+  const creds = readStoredCredentials();
+  const storedKey = typeof creds?.api_key === 'string' ? creds.api_key.trim() : null;
   if (storedKey?.startsWith(KEY_PREFIX)) return storedKey;
   return null;
 }
