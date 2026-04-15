@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { execFile } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { URL } from 'node:url';
 
 // All three ports must be pre-registered in the Cognito App Client.
@@ -76,19 +76,33 @@ function isPortFree(port: number): Promise<boolean> {
  * Open a URL in the system browser. The URL is passed as an argument — not
  * interpolated into a shell string — to avoid command injection.
  */
-export function openBrowser(url: string): void {
-  switch (process.platform) {
+/**
+ * Return the platform-specific command and argument list for opening a URL
+ * in the system browser. Exported so tests can assert the correct command is
+ * chosen for each platform without actually spawning a process.
+ */
+export function getBrowserCommand(url: string, platform: NodeJS.Platform = process.platform): { cmd: string; args: string[] } {
+  switch (platform) {
     case 'darwin':
-      execFile('open', [url]);
-      break;
+      return { cmd: 'open', args: [url] };
     case 'win32':
       // Pass the URL via $args[0] so it is never interpolated into the -Command
       // string — avoids quote-breaking and injection risk from special characters.
-      execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url]);
-      break;
+      return { cmd: 'powershell.exe', args: ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url] };
     default:
-      execFile('xdg-open', [url]);
+      return { cmd: 'xdg-open', args: [url] };
   }
+}
+
+export function openBrowser(url: string): void {
+  // detached:true + stdio:'ignore' + unref() is the standard Node.js pattern for
+  // fire-and-forget child processes — the event loop will not wait for them to exit.
+  const { cmd, args } = getBrowserCommand(url);
+  const child: ChildProcess = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  // Suppress unhandled-error crashes if the browser executable is not found.
+  // The login URL is already printed to the terminal so the user can open it manually.
+  child.on('error', () => { /* intentional no-op */ });
+  child.unref();
 }
 
 // ── Localhost callback server ─────────────────────────────────────────────────
@@ -107,7 +121,7 @@ export function listenForCallback(port: number, expectedState?: string): Promise
       const callbackState = parsed.searchParams.get('state');
 
       if (expectedState && callbackState !== expectedState) {
-        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
         res.end(
           '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
             '<h2 style="color:#c23934">Authentication failed</h2>' +
@@ -115,11 +129,15 @@ export function listenForCallback(port: number, expectedState?: string): Promise
             '</body></html>'
         );
         server.close();
+        server.closeAllConnections?.();
         reject(new Error('OAuth callback state mismatch — possible CSRF. Try again.'));
         return;
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      // 'Connection: close' tells the browser to close the TCP connection after
+      // this response so server.close() has no lingering keep-alive sockets to
+      // wait for, allowing the Node.js event loop to exit promptly.
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
       res.end(
         '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
           '<h2 style="color:#0070d2">Authentication complete</h2>' +
@@ -127,6 +145,9 @@ export function listenForCallback(port: number, expectedState?: string): Promise
           '</body></html>'
       );
       server.close();
+      // Destroy any sockets that are still open (e.g. a browser that ignores
+      // the Connection:close header). Requires Node 18.2+.
+      server.closeAllConnections?.();
 
       if (code) {
         resolve(code);
