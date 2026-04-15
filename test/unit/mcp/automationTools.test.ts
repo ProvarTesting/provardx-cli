@@ -13,6 +13,7 @@ import path from 'node:path';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
+import { filterTestRunOutput } from '../../../src/mcp/tools/automationTools.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
 
@@ -119,6 +120,27 @@ describe('automationTools', () => {
       const body = parseBody(result);
       assert.equal(body.error_code, 'SF_NOT_FOUND');
       assert.ok((body.message as string).includes('npm install -g @salesforce/cli'));
+    });
+
+    it('strips schema-validator noise from stdout and sets output_lines_suppressed', () => {
+      const noisy = [
+        'com.networknt.schema.validator.SchemaLoader - loading schema',
+        'INFO Starting test run',
+        'Tests: 5 passed, 0 failed',
+      ].join('\n');
+      spawnStub.returns(makeSpawnResult(noisy, '', 0));
+      const result = server.call('provar.automation.testrun', { flags: [] });
+      const body = parseBody(result);
+      assert.ok(!(body.stdout as string).includes('networknt'), 'Filtered stdout should not contain schema noise');
+      assert.ok((body.stdout as string).includes('Tests: 5 passed'), 'Real output should remain');
+      assert.ok((body.output_lines_suppressed as number) > 0, 'output_lines_suppressed should be positive');
+    });
+
+    it('does not set output_lines_suppressed when stdout has no noise', () => {
+      spawnStub.returns(makeSpawnResult('Tests: 3 passed, 0 failed', '', 0));
+      const result = server.call('provar.automation.testrun', { flags: [] });
+      const body = parseBody(result);
+      assert.equal(body.output_lines_suppressed, undefined, 'output_lines_suppressed should be absent');
     });
   });
 
@@ -555,3 +577,63 @@ describe('automationTools', () => {
     });
   });
 });
+
+// ── filterTestRunOutput ───────────────────────────────────────────────────────
+
+describe('filterTestRunOutput', () => {
+  it('suppresses com.networknt.schema lines', () => {
+    const raw = 'INFO Starting\ncom.networknt.schema.JsonSchemaFactory - loaded schema\nINFO Done';
+    const { filtered, suppressed } = filterTestRunOutput(raw);
+    assert.equal(suppressed, 1);
+    assert.ok(!filtered.includes('networknt'), 'Schema lines should be removed');
+    assert.ok(filtered.includes('INFO Starting'), 'Real output should remain');
+  });
+
+  it('suppresses SEVERE logger lock lines', () => {
+    const raw = 'INFO Starting\nSEVERE Failed to configure logger: java.lck\nINFO Done';
+    const { filtered, suppressed } = filterTestRunOutput(raw);
+    assert.equal(suppressed, 1);
+    assert.ok(!filtered.includes('Failed to configure logger'), 'Logger lock lines should be removed');
+    assert.ok(filtered.includes('INFO Done'), 'Real output should remain');
+  });
+
+  it('keeps SEVERE lines that are real test failures', () => {
+    const raw = 'SEVERE Test execution failed: AssertionError expected true but got false';
+    const { filtered, suppressed } = filterTestRunOutput(raw);
+    assert.equal(suppressed, 0);
+    assert.ok(filtered.includes('SEVERE Test execution failed'), 'Real SEVERE lines should be kept');
+  });
+
+  it('counts suppressed lines correctly across both patterns', () => {
+    const lines = [
+      'INFO Tests running',
+      'com.networknt.schema.validator.SchemaLoader - loading',
+      'com.networknt.schema.format.FormatValidator - checking',
+      'SEVERE Failed to configure logger: file.lck',
+      'INFO Tests complete',
+    ];
+    const { suppressed } = filterTestRunOutput(lines.join('\n'));
+    assert.equal(suppressed, 3);
+  });
+
+  it('appends suppressed-count note referencing provar.testrun.rca', () => {
+    const raw = 'com.networknt.schema.SchemaLoader\nINFO Done';
+    const { filtered } = filterTestRunOutput(raw);
+    assert.ok(filtered.includes('lines suppressed'), 'Should append suppressed note');
+    assert.ok(filtered.includes('provar.testrun.rca'), 'Should mention rca tool');
+  });
+
+  it('does not append note when nothing was suppressed', () => {
+    const { filtered, suppressed } = filterTestRunOutput('INFO Starting\nINFO Done');
+    assert.equal(suppressed, 0);
+    assert.ok(!filtered.includes('lines suppressed'), 'Should not append note when nothing suppressed');
+  });
+
+  it('collapses consecutive blank lines to one', () => {
+    const { filtered } = filterTestRunOutput('line1\n\n\n\nline2');
+    assert.ok(!filtered.includes('\n\n\n'), 'Multiple blank lines should be collapsed');
+    assert.ok(filtered.includes('line1'), 'Content should be preserved');
+    assert.ok(filtered.includes('line2'), 'Content should be preserved');
+  });
+});
+

@@ -78,6 +78,36 @@ const RCA_RULES: RcaRule[] = [
     recommendation: 'Verify expected value is correct for current org state',
   },
   {
+    category: 'SALESFORCE_VALIDATION',
+    pattern: /Required fields are missing:\s*\[/i,
+    summary: 'Salesforce required-field validation failed',
+    recommendation: 'Ensure all required fields have values; check field-level security for the running user',
+  },
+  {
+    category: 'SALESFORCE_PICKLIST',
+    pattern: /bad value for restricted picklist field/i,
+    summary: 'Invalid picklist value used',
+    recommendation: 'Query valid picklist values (run metadata download or Apex describe); check for trailing spaces or case differences',
+  },
+  {
+    category: 'SALESFORCE_REFERENCE',
+    pattern: /INVALID_CROSS_REFERENCE_KEY/i,
+    summary: 'Referenced record ID does not exist or is inaccessible',
+    recommendation: 'Verify the referenced record exists and the running user has access to it',
+  },
+  {
+    category: 'SALESFORCE_ACCESS',
+    pattern: /INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY/i,
+    summary: 'Running user lacks permission on a referenced record',
+    recommendation: 'Grant the running user appropriate object and record-level permissions',
+  },
+  {
+    category: 'SALESFORCE_TRIGGER',
+    pattern: /FIELD_CUSTOM_VALIDATION_EXCEPTION/i,
+    summary: 'A Salesforce validation rule or trigger blocked the DML operation',
+    recommendation: 'Review validation rules and triggers on the target object; ensure test data satisfies all business rules',
+  },
+  {
     category: 'CREDENTIAL_FAILURE',
     pattern: /InvalidPasswordException|AuthenticationException|INVALID_LOGIN/i,
     summary: 'Salesforce login failed',
@@ -178,6 +208,29 @@ function numericChildDirs(dir: string): number[] {
       .readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isDirectory() && /^\d+$/.test(e.name))
       .map((e) => parseInt(e.name, 10))
+      .filter((n) => n > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Find Provar Increment-mode sibling directories next to resultsBase.
+ * Provar creates Results, Results(1), Results(2), … as siblings in the same
+ * parent directory — NOT as numeric children of Results. Returns the numeric
+ * suffixes of all matching siblings (e.g. [1, 2, 18]).
+ */
+function incrementSiblingDirs(resultsBase: string): number[] {
+  const parent = path.dirname(resultsBase);
+  const base = path.basename(resultsBase);
+  if (!fs.existsSync(parent)) return [];
+  try {
+    const safeName = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^${safeName}\\((\\d+)\\)$`);
+    return fs
+      .readdirSync(parent, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && pattern.test(e.name))
+      .map((e) => parseInt((pattern.exec(e.name) as RegExpExecArray)[1], 10))
       .filter((n) => n > 0);
   } catch {
     return [];
@@ -293,8 +346,20 @@ function resolveResultsLocation(
   }
 
   // Increment resolution
+  // Provar's primary Increment pattern: Results, Results(1), Results(2)… as siblings.
+  // Legacy fallback: purely-numeric children (Results/1/, Results/2/…).
+  const siblings = incrementSiblingDirs(resultsBase);
   const numericDirs = numericChildDirs(resultsBase);
-  if (disposition === 'Increment' || numericDirs.length > 0) {
+  if (disposition === 'Increment' || siblings.length > 0 || numericDirs.length > 0) {
+    if (siblings.length > 0) {
+      const targetIndex = run_index ?? Math.max(...siblings);
+      return {
+        results_dir: path.join(path.dirname(resultsBase), `${path.basename(resultsBase)}(${targetIndex})`),
+        run_index: targetIndex,
+        disposition,
+        resolution_source,
+      };
+    }
     if (numericDirs.length > 0) {
       const targetIndex = run_index ?? Math.max(...numericDirs);
       return {
@@ -304,7 +369,7 @@ function resolveResultsLocation(
         resolution_source,
       };
     }
-    // Disposition is Increment but no numeric subdirs yet — fall through to base
+    // Disposition is Increment but no numbered dirs yet — fall through to base
   }
 
   return {
