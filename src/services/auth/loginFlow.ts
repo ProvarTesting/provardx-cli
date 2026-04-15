@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
+import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { URL } from 'node:url';
 
@@ -73,13 +74,10 @@ function isPortFree(port: number): Promise<boolean> {
 // ── Browser open ──────────────────────────────────────────────────────────────
 
 /**
- * Open a URL in the system browser. The URL is passed as an argument — not
- * interpolated into a shell string — to avoid command injection.
- */
-/**
  * Return the platform-specific command and argument list for opening a URL
- * in the system browser. Exported so tests can assert the correct command is
- * chosen for each platform without actually spawning a process.
+ * in the system browser. The URL is passed as an argument — never interpolated
+ * into a shell string — to avoid command injection. Exported so tests can
+ * assert the correct command is chosen without actually spawning a process.
  */
 export function getBrowserCommand(url: string, platform: NodeJS.Platform = process.platform): { cmd: string; args: string[] } {
   switch (platform) {
@@ -113,6 +111,20 @@ export function openBrowser(url: string): void {
  */
 export function listenForCallback(port: number, expectedState?: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Track open sockets so we can forcibly destroy them on shutdown.
+    // This is a Node 18.0/18.1 fallback for server.closeAllConnections(), which
+    // was added in Node 18.2. Without it a browser that ignores Connection:close
+    // could keep the event loop alive after server.close() returns.
+    const openSockets = new Set<net.Socket>();
+    const closeServer = (srv: http.Server): void => {
+      srv.close();
+      if (typeof srv.closeAllConnections === 'function') {
+        srv.closeAllConnections();
+      } else {
+        openSockets.forEach((s) => s.destroy());
+      }
+    };
+
     const server = http.createServer((req, res) => {
       const parsed = new URL(req.url ?? '/', `http://localhost:${port}`);
       const code = parsed.searchParams.get('code');
@@ -128,8 +140,7 @@ export function listenForCallback(port: number, expectedState?: string): Promise
             '<p>Invalid state parameter — possible CSRF attack. Please try again.</p>' +
             '</body></html>'
         );
-        server.close();
-        server.closeAllConnections?.();
+        closeServer(server);
         reject(new Error('OAuth callback state mismatch — possible CSRF. Try again.'));
         return;
       }
@@ -144,16 +155,17 @@ export function listenForCallback(port: number, expectedState?: string): Promise
           '<p>You can close this tab and return to the terminal.</p>' +
           '</body></html>'
       );
-      server.close();
-      // Destroy any sockets that are still open (e.g. a browser that ignores
-      // the Connection:close header). Requires Node 18.2+.
-      server.closeAllConnections?.();
+      closeServer(server);
 
       if (code) {
         resolve(code);
       } else {
         reject(new Error(description ?? error ?? 'No authorisation code received from Cognito'));
       }
+    });
+    server.on('connection', (socket: net.Socket) => {
+      openSockets.add(socket);
+      socket.once('close', () => openSockets.delete(socket));
     });
     server.listen(port, '127.0.0.1');
     server.on('error', (err: Error) => reject(err));
