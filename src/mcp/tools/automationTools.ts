@@ -65,17 +65,19 @@ interface SpawnResult {
 // This ensures sf is always found even when ENOENT is masked by other errors (e.g. ENOBUFS).
 let cachedSfPath: string | null | undefined; // undefined = not yet probed
 
-/** Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn.
- *  Pass `undefined` to reset the cache so the next call triggers a fresh probe. */
+/**
+ * Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn.
+ * Pass `undefined` to reset the cache so the next call triggers a fresh probe.
+ */
 export function setSfPathCacheForTesting(value: string | null | undefined): void {
   cachedSfPath = value;
 }
 
 // Platform override used in tests so Windows-specific shell logic can be exercised on any OS.
-let _sfPlatform: NodeJS.Platform | undefined;
+let sfPlatformOverride: NodeJS.Platform | undefined;
 /** Exposed for testing only — overrides process.platform for needsWindowsShell decisions. */
 export function setSfPlatformForTesting(platform: NodeJS.Platform | undefined): void {
-  _sfPlatform = platform;
+  sfPlatformOverride = platform;
 }
 
 /**
@@ -97,7 +99,7 @@ export function needsWindowsShell(executable: string, platform = process.platfor
 
 function resolveSfExecutable(): string | null {
   if (cachedSfPath !== undefined) return cachedSfPath;
-  const platform = _sfPlatform ?? process.platform;
+  const platform = sfPlatformOverride ?? process.platform;
 
   // Two-phase probe avoids false-positives on Windows with shell:true.
   // When shell:true is used, cmd.exe spawns successfully even when `sf` is
@@ -151,7 +153,7 @@ function assertShellSafePath(sfPath: string): void {
     throw Object.assign(
       new Error(
         'sf_path contains characters that are unsafe for shell execution on Windows ' +
-          `(& | ; < > \` ' " or line-breaks). Provide an absolute filesystem path to the sf executable.`
+          '(& | ; < > ` \' " or line-breaks). Provide an absolute filesystem path to the sf executable.'
       ),
       { code: 'INVALID_SF_PATH' }
     );
@@ -164,7 +166,7 @@ function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   const executable = sfPath ?? resolveSfExecutable();
   if (!executable) throw new SfNotFoundError();
 
-  const platform = _sfPlatform ?? process.platform;
+  const platform = sfPlatformOverride ?? process.platform;
   const useShell = needsWindowsShell(executable, platform);
 
   // Guard against injection when shell:true is used with a user-supplied path.
