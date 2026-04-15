@@ -38,6 +38,14 @@ node scripts/mcp-smoke.cjs 2>/dev/null   # smoke — must show all PASS
 yarn compile            # TypeScript — must be clean
 ```
 
+> **Wireit caching gotcha:** `yarn test:only` is wired through wireit and can return a cached result
+> after changes (e.g. after `git stash pop` or switching branches). When you need a guaranteed fresh
+> run, bypass wireit entirely:
+> ```sh
+> node_modules/.bin/nyc node_modules/.bin/mocha "test/**/*.test.ts"
+> ```
+> This is equivalent to `yarn test:dev` and always re-executes against the current source.
+
 ---
 
 ## MCP Tool Authoring Standards
