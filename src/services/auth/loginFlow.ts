@@ -9,7 +9,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { URL } from 'node:url';
 
 // All three ports must be pre-registered in the Cognito App Client.
@@ -77,18 +77,24 @@ function isPortFree(port: number): Promise<boolean> {
  * interpolated into a shell string — to avoid command injection.
  */
 export function openBrowser(url: string): void {
+  // detached:true + stdio:'ignore' + unref() is the standard Node.js pattern for
+  // fire-and-forget child processes — the event loop will not wait for them to exit.
+  const spawnOpts = { detached: true, stdio: 'ignore' as const };
+  let child;
   switch (process.platform) {
     case 'darwin':
-      execFile('open', [url]);
+      child = spawn('open', [url], spawnOpts);
       break;
     case 'win32':
       // Pass the URL via $args[0] so it is never interpolated into the -Command
       // string — avoids quote-breaking and injection risk from special characters.
-      execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url]);
+      child = spawn('powershell.exe', ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url], spawnOpts);
       break;
     default:
-      execFile('xdg-open', [url]);
+      child = spawn('xdg-open', [url], spawnOpts);
+      break;
   }
+  child.unref();
 }
 
 // ── Localhost callback server ─────────────────────────────────────────────────
@@ -107,7 +113,7 @@ export function listenForCallback(port: number, expectedState?: string): Promise
       const callbackState = parsed.searchParams.get('state');
 
       if (expectedState && callbackState !== expectedState) {
-        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
         res.end(
           '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
             '<h2 style="color:#c23934">Authentication failed</h2>' +
@@ -115,11 +121,15 @@ export function listenForCallback(port: number, expectedState?: string): Promise
             '</body></html>'
         );
         server.close();
+        server.closeAllConnections?.();
         reject(new Error('OAuth callback state mismatch — possible CSRF. Try again.'));
         return;
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      // 'Connection: close' tells the browser to close the TCP connection after
+      // this response so server.close() has no lingering keep-alive sockets to
+      // wait for, allowing the Node.js event loop to exit promptly.
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
       res.end(
         '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
           '<h2 style="color:#0070d2">Authentication complete</h2>' +
@@ -127,6 +137,9 @@ export function listenForCallback(port: number, expectedState?: string): Promise
           '</body></html>'
       );
       server.close();
+      // Destroy any sockets that are still open (e.g. a browser that ignores
+      // the Connection:close header). Requires Node 18.2+.
+      server.closeAllConnections?.();
 
       if (code) {
         resolve(code);
