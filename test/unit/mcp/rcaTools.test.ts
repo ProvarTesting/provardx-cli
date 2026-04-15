@@ -237,6 +237,47 @@ describe('provar.testrun.report.locate', () => {
     }
   });
 
+  // Results(N) sibling detection (Provar Increment mode)
+  it('with Results(N) sibling dirs detects the highest sibling index', () => {
+    // Provar Increment mode creates Results, Results(1), Results(2)… as siblings.
+    const parent = path.join(tmpDir, 'SiblingProject');
+    fs.mkdirSync(parent, { recursive: true });
+    const resultsBase = path.join(parent, 'Results');
+    makeResultsDir(resultsBase); // base Results/ exists
+    makeResultsDir(path.join(parent, 'Results(1)'));
+    makeResultsDir(path.join(parent, 'Results(18)'), JUNIT_XML);
+
+    const result = server.call('provar.testrun.report.locate', {
+      project_path: parent,
+      results_path: resultsBase,
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    assert.equal(body['run_index'], 18);
+    assert.ok((body['results_dir'] as string).endsWith('Results(18)'));
+  });
+
+  it('with Results(N) siblings and explicit run_index returns that specific sibling', () => {
+    const parent = path.join(tmpDir, 'SiblingProject2');
+    fs.mkdirSync(parent, { recursive: true });
+    const resultsBase = path.join(parent, 'Results');
+    makeResultsDir(resultsBase);
+    makeResultsDir(path.join(parent, 'Results(3)'));
+    makeResultsDir(path.join(parent, 'Results(5)'), JUNIT_XML);
+
+    const result = server.call('provar.testrun.report.locate', {
+      project_path: parent,
+      results_path: resultsBase,
+      run_index: 3,
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    assert.equal(body['run_index'], 3);
+    assert.ok((body['results_dir'] as string).endsWith('Results(3)'));
+  });
+
   // Additional: collects per_test_reports for *.testcase.html files
   it('collects per_test_reports for *.testcase.html files', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
@@ -504,5 +545,69 @@ describe('provar.testrun.rca', () => {
     const body = parseText(result);
     const failures = body['failures'] as Array<Record<string, unknown>>;
     assert.equal((failures[0]['error_message'] as string).length, 500);
+  });
+
+  // Salesforce API error classification
+  it('classifies "Required fields are missing" as SALESFORCE_VALIDATION', () => {
+    const junit = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Suite1" tests="1" failures="1" errors="0" skipped="0" time="2.0">
+    <testcase name="CreateAccount.testcase">
+      <failure message="DML error">Insert failed. Required fields are missing: [AccountId, Name]</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-validation'), junit);
+    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_VALIDATION');
+  });
+
+  it('classifies "bad value for restricted picklist field" as SALESFORCE_PICKLIST', () => {
+    const junit = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Suite1" tests="1" failures="1" errors="0" skipped="0" time="2.0">
+    <testcase name="UpdateCase.testcase">
+      <failure message="DML error">Update failed. bad value for restricted picklist field: Status</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-picklist'), junit);
+    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_PICKLIST');
+  });
+
+  it('classifies FIELD_CUSTOM_VALIDATION_EXCEPTION as SALESFORCE_TRIGGER', () => {
+    const junit = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Suite1" tests="1" failures="1" errors="0" skipped="0" time="2.0">
+    <testcase name="CloseOpportunity.testcase">
+      <failure message="DML error">FIELD_CUSTOM_VALIDATION_EXCEPTION: Close date required when stage is Closed Won</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-trigger'), junit);
+    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_TRIGGER');
+  });
+
+  it('Salesforce error categories are not in infrastructure_issues', () => {
+    const junit = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Suite1" tests="1" failures="1" errors="0" skipped="0" time="2.0">
+    <testcase name="CreateRecord.testcase">
+      <failure message="DML error">Required fields are missing: [Name]</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-infra-check'), junit);
+    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const infra = body['infrastructure_issues'] as string[];
+    assert.ok(
+      !infra.some((s) => s.includes('SALESFORCE_')),
+      'Salesforce categories should not appear in infrastructure_issues'
+    );
   });
 });

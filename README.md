@@ -3,6 +3,7 @@
 [![Version](https://img.shields.io/npm/v/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![Downloads/week](https://img.shields.io/npm/dw/@provartesting/provardx-cli.svg)](https://npmjs.org/package/@provartesting/provardx-cli)
 [![License](https://img.shields.io/npm/l/@provartesting/provardx-cli.svg)](https://github.com/ProvarTesting/provardx-cli/blob/main/LICENSE.md)
+[![Get Access](https://img.shields.io/badge/Quality%20Hub%20API-Get%20Access-blue)](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)
 
 # What is the ProvarDX CLI?
 
@@ -10,10 +11,12 @@ The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to au
 
 # Installation, Update, and Uninstall
 
+**Requires Node.js 18–24 (LTS 22 recommended).** Node 25+ is not yet supported due to a breaking change in a transitive dependency. Check with `node --version`.
+
 Install the plugin
 
 ```sh-session
-$ sf plugins install @provartesting/provardx-cli
+$ sf plugins install @provartesting/provardx-cli@beta
 ```
 
 Update plugins
@@ -30,33 +33,56 @@ $ sf plugins uninstall @provartesting/provardx-cli
 
 # MCP Server (AI-Assisted Quality)
 
-The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores that match the Provar Quality Hub API, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
+The Provar DX CLI includes a built-in **Model Context Protocol (MCP) server** that connects AI assistants (Claude Desktop, Claude Code, Cursor) directly to your Provar project. Once connected, an AI agent can inspect your project structure, generate Page Objects and test cases, validate every level of the test hierarchy with quality scores, and work with NitroX (Hybrid Model) component page objects for LWC, Screen Flow, Industry Components, Experience Cloud, and HTML5.
+
+Validation runs in two modes: **local only** (structural rules, no key required) or **Quality Hub API** (170+ rules, quality scoring — requires a `pv_k_` API key). Don't have an account? **[Request access](https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access)**.
+
+## Quick setup
+
+**Requires:** Provar Automation IDE installed with an activated license.
 
 ```sh
-sf provar mcp start --allowed-paths /path/to/your/provar/project
+# 1. Install the plugin — @beta is required for MCP support
+sf plugins install @provartesting/provardx-cli@beta
+
+# 2. (Optional) Authenticate for full 170+ rule validation
+sf provar auth login
 ```
 
-📖 **See [docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) for full setup and tool documentation.**
+**Claude Code** — run once to register the server:
 
-## License Validation
+```sh
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
 
-The MCP server verifies your Provar license before accepting any connections. Validation is automatic — no extra flags are required for standard usage.
+**Claude Desktop** — add to your config file and restart the app:
 
-**How it works:**
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
-1. **Auto-detection** — the server reads `~/Provar/.licenses/*.properties` (the same files written by Provar's IDE plugins). If a valid, activated license is found the server starts immediately.
-2. **Cache** — successful validations are cached at `~/Provar/.licenses/.mcp-license-cache.json` (2 h TTL). Subsequent starts within the TTL window skip the disk scan.
-3. **Grace fallback** — if the IDE license files cannot be found or read and the cache is stale (but ≤ 48 h old), the server starts with a warning on stderr using the cached result so CI pipelines are not broken by transient local file-access issues.
-4. **Fail closed** — if no valid license is detected the command exits with a non-zero exit code and a clear error message.
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
 
-**`NODE_ENV=test` fast-path:**
+> **Windows (Claude Desktop):** Use `sf.cmd` instead of `sf` if the server fails to start.
 
-When `NODE_ENV=test` the validation step is skipped entirely. This is intended only for the plugin's own unit-test suite.
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, troubleshooting.**
 
 ---
 
 # Commands
 
+- [`sf provar auth login`](#sf-provar-auth-login)
+- [`sf provar auth rotate`](#sf-provar-auth-rotate)
+- [`sf provar auth status`](#sf-provar-auth-status)
+- [`sf provar auth clear`](#sf-provar-auth-clear)
 - [`sf provar mcp start`](#sf-provar-mcp-start)
 - [`sf provar config get`](#sf-provar-config-get)
 - [`sf provar config set`](#sf-provar-config-set)
@@ -83,6 +109,99 @@ When `NODE_ENV=test` the validation step is skipped entirely. This is intended o
 - [`sf provar manager test run`](#sf-provar-manager-test-run) _(deprecated — use `sf provar quality-hub test run`)_
 - [`sf provar manager test run report`](#sf-provar-manager-test-run-report) _(deprecated — use `sf provar quality-hub test run report`)_
 - [`sf provar manager test run abort`](#sf-provar-manager-test-run-abort) _(deprecated — use `sf provar quality-hub test run abort`)_
+
+## `sf provar auth login`
+
+Log in to Provar Quality Hub and store your API key.
+
+```
+USAGE
+  $ sf provar auth login [--url <value>]
+
+FLAGS
+  --url=<value>  Override the Quality Hub API base URL (for non-production environments).
+
+DESCRIPTION
+  Opens a browser to the Provar login page. After you authenticate, your API key is
+  stored at ~/.provar/credentials.json and used automatically by the Provar MCP tools
+  and CI/CD integrations. The key is valid for approximately 90 days.
+
+  For CI/CD pipelines (GitHub Actions, Jenkins, etc.) where a browser cannot open:
+  run sf provar auth login once on your local machine, copy the api_key value from
+  ~/.provar/credentials.json, and store it as the PROVAR_API_KEY environment variable
+  or secret in your pipeline. Rotate the secret every ~90 days when the key expires.
+
+  Don't have an account? Request access at:
+  https://aqqlrlhga7.execute-api.us-east-1.amazonaws.com/dev/auth/request-access
+
+EXAMPLES
+  Log in interactively:
+
+    $ sf provar auth login
+
+  Log in against a staging environment:
+
+    $ sf provar auth login --url https://dev.api.example.com
+```
+
+## `sf provar auth rotate`
+
+Rotate your stored API key without re-authenticating via browser.
+
+```
+USAGE
+  $ sf provar auth rotate
+
+DESCRIPTION
+  Exchanges your current pv_k_ key for a new one atomically. The old key is
+  invalidated immediately. The new key is written to ~/.provar/credentials.json.
+
+  Use this to rotate your key on a regular schedule (~every 90 days) without
+  going through the browser login flow. If your current key is already expired,
+  run sf provar auth login instead.
+
+EXAMPLES
+  Rotate the stored API key:
+
+    $ sf provar auth rotate
+```
+
+## `sf provar auth status`
+
+Show the current API key configuration and validate it against Quality Hub.
+
+```
+USAGE
+  $ sf provar auth status
+
+DESCRIPTION
+  Reports whether an API key is configured, where it came from (environment variable
+  or credentials file), and performs a live check against the Quality Hub API to
+  confirm the key is still valid.
+
+EXAMPLES
+  Check auth status:
+
+    $ sf provar auth status
+```
+
+## `sf provar auth clear`
+
+Remove the stored API key.
+
+```
+USAGE
+  $ sf provar auth clear
+
+DESCRIPTION
+  Deletes ~/.provar/credentials.json and revokes the key server-side. After clearing,
+  the MCP tools fall back to local validation mode. Has no effect if no key is stored.
+
+EXAMPLES
+  Remove the stored key:
+
+    $ sf provar auth clear
+```
 
 ## `sf provar mcp start`
 
@@ -136,6 +255,11 @@ TOOLS EXPOSED
   provar.testplan.add-instance         — wire a test case into a plan suite by writing a .testinstance file
   provar.testplan.create-suite         — create a new test suite directory with .planitem inside a plan
   provar.testplan.remove-instance      — remove a .testinstance file from a plan suite
+  provar.nitrox.discover               — discover projects containing NitroX (Hybrid Model) page objects
+  provar.nitrox.read                   — read NitroX .po.json files and return parsed content
+  provar.nitrox.validate               — validate a NitroX .po.json against schema rules
+  provar.nitrox.generate               — generate a new NitroX .po.json from a component description
+  provar.nitrox.patch                  — apply a JSON merge-patch to an existing NitroX .po.json file
 
 EXAMPLES
   Start MCP server (accepts stdio connections from Claude Desktop / Cursor):

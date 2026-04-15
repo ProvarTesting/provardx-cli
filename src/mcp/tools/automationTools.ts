@@ -46,7 +46,9 @@ export function getSfCommonPaths(): string[] {
       for (const v of fs.readdirSync(nvmBinDir).sort().reverse().slice(0, 3)) {
         candidates.push(path.join(nvmBinDir, v, 'bin', 'sf'));
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return candidates;
 }
@@ -160,7 +162,6 @@ function assertShellSafePath(sfPath: string): void {
   }
 }
 
-
 function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   // Use explicit path if provided; otherwise use cached probe result
   const executable = sfPath ?? resolveSfExecutable();
@@ -196,12 +197,21 @@ function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   };
 }
 
-function handleSpawnError(err: unknown, requestId: string, toolName: string): { isError: true; content: Array<{ type: 'text'; text: string }> } {
+function handleSpawnError(
+  err: unknown,
+  requestId: string,
+  toolName: string
+): { isError: true; content: Array<{ type: 'text'; text: string }> } {
   const error = err as Error & { code?: string };
   log('error', `${toolName} failed`, { requestId, error: error.message });
   return {
     isError: true as const,
-    content: [{ type: 'text' as const, text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)) }],
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)),
+      },
+    ],
   };
 }
 
@@ -217,8 +227,13 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
       'Typical workflow: provar.automation.config.load → provar.automation.compile → provar.automation.testrun.',
     ].join(' '),
     {
-      properties_path: z.string().describe('Absolute path to the provardx-properties.json file to register as active configuration'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      properties_path: z
+        .string()
+        .describe('Absolute path to the provardx-properties.json file to register as active configuration'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ properties_path, sf_path }) => {
       const requestId = makeRequestId();
@@ -226,22 +241,84 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
 
       try {
         assertPathAllowed(properties_path, config.allowedPaths);
-        const result = runSfCommand(['provar', 'automation', 'config', 'load', '--properties-file', properties_path], sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, properties_path };
+        const result = runSfCommand(
+          ['provar', 'automation', 'config', 'load', '--properties-file', properties_path],
+          sf_path
+        );
+        const response = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          properties_path,
+        };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_CONFIG_LOAD_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('AUTOMATION_CONFIG_LOAD_FAILED', result.stderr || result.stdout, requestId)
+                ),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         if (err instanceof PathPolicyError) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError(err.code, err.message, requestId, false)) }] };
+          return {
+            isError: true as const,
+            content: [
+              { type: 'text' as const, text: JSON.stringify(makeError(err.code, err.message, requestId, false)) },
+            ],
+          };
         }
         return handleSpawnError(err, requestId, 'provar.automation.config.load');
       }
     }
   );
+}
+
+// ── Testrun output filter ─────────────────────────────────────────────────────
+
+const NOISE_PATTERNS: RegExp[] = [/com\.networknt\.schema/, /SEVERE.*Failed to configure logger.*\.lck/];
+
+/**
+ * Strip Java schema-validator debug lines and stale logger-lock SEVERE warnings
+ * from Provar testrun output. These two patterns account for the bulk of output
+ * volume and cause MCP responses to be truncated before the pass/fail lines.
+ *
+ * Everything else (including real SEVERE failures) passes through unchanged.
+ * Collapses runs of blank lines to a single blank to keep the output readable.
+ * Returns the filtered text and the count of suppressed lines.
+ */
+export function filterTestRunOutput(raw: string): { filtered: string; suppressed: number } {
+  const lines = raw.split(/\r?\n/);
+  const kept: string[] = [];
+  let suppressed = 0;
+  let lastKeptWasBlank = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (NOISE_PATTERNS.some((p) => p.test(line))) {
+      suppressed++;
+      continue;
+    }
+    const isBlank = line.trim() === '';
+    if (isBlank && lastKeptWasBlank) continue; // collapse blank runs
+    kept.push(line);
+    lastKeptWasBlank = isBlank;
+  }
+
+  let filtered = kept.join('\n');
+  if (suppressed > 0) {
+    filtered += `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar.testrun.rca for full results]`;
+  }
+  return { filtered, suppressed };
 }
 
 // ── Tool: provar.automation.testrun ───────────────────────────────────────────
@@ -258,8 +335,15 @@ export function registerAutomationTestRun(server: McpServer): void {
       'Typical local AI loop: config.load → compile → testrun → inspect results.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -267,12 +351,26 @@ export function registerAutomationTestRun(server: McpServer): void {
 
       try {
         const result = runSfCommand(['provar', 'automation', 'test', 'run', ...flags], sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_TESTRUN_FAILED', result.stderr || result.stdout, requestId)) }] };
+          const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(
+            result.stderr || result.stdout
+          );
+          const errBody = {
+            ...makeError('AUTOMATION_TESTRUN_FAILED', filteredErr, requestId),
+            ...(suppressedErr > 0 ? { output_lines_suppressed: suppressedErr } : {}),
+          };
+          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(errBody) }] };
         }
 
+        const response: Record<string, unknown> = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: filtered,
+          stderr: result.stderr,
+        };
+        if (suppressed > 0) response['output_lines_suppressed'] = suppressed;
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar.automation.testrun');
@@ -292,8 +390,15 @@ export function registerAutomationCompile(server: McpServer): void {
       'Run this before triggering a test run after modifying test cases.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -304,7 +409,15 @@ export function registerAutomationCompile(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_COMPILE_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_COMPILE_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -337,10 +450,17 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
       'check that the credentials in the project .secrets file are current and that any referenced scratch orgs have not expired.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe(
-        'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
-      ),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe(
+          'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
+        ),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -355,7 +475,15 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
           const details: Record<string, unknown> | undefined = isDownloadError
             ? { suggestion: DOWNLOAD_ERROR_SUGGESTION }
             : undefined;
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)),
+              },
+            ],
+          };
         }
 
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
@@ -371,17 +499,9 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
 
 /** Known system-level Provar install paths per platform. */
 const SYSTEM_INSTALL_BASES: Record<string, string[]> = {
-  win32: [
-    'C:/Program Files',
-    'C:/Program Files (x86)',
-  ],
-  darwin: [
-    '/Applications',
-  ],
-  linux: [
-    '/opt',
-    '/usr/local',
-  ],
+  win32: ['C:/Program Files', 'C:/Program Files (x86)'],
+  darwin: ['/Applications'],
+  linux: ['/opt', '/usr/local'],
 };
 
 interface ProvarInstall {
@@ -476,13 +596,19 @@ export function registerAutomationSetup(server: McpServer): void {
       'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar.properties.set.',
     ].join(' '),
     {
-      version: z.string().optional().describe(
-        'Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'
-      ),
-      force: z.boolean().optional().default(false).describe(
-        'Force a fresh download even if an existing installation is already detected (default: false).'
-      ),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      version: z
+        .string()
+        .optional()
+        .describe('Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'),
+      force: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Force a fresh download even if an existing installation is already detected (default: false).'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ version, force, sf_path }) => {
       const requestId = makeRequestId();
@@ -519,13 +645,18 @@ export function registerAutomationSetup(server: McpServer): void {
         if (result.exitCode !== 0) {
           return {
             isError: true as const,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_SETUP_FAILED', result.stderr || result.stdout, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_SETUP_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
           };
         }
 
         // ── 3. Locate the freshly installed ProvarHome ───────────────────────
         const freshInstalls = findExistingInstallations();
-        const localInstall = freshInstalls.find(i => i.source === 'local') ?? freshInstalls[0];
+        const localInstall = freshInstalls.find((i) => i.source === 'local') ?? freshInstalls[0];
         const installPath = localInstall?.path ?? path.resolve(process.cwd(), 'ProvarHome');
         const detectedVersion = localInstall?.version ?? version ?? null;
 
