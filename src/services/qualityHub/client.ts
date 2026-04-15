@@ -74,14 +74,14 @@ export function normaliseApiResponse(raw: QualityHubApiResponse): QualityHubVali
       rule_id: v.rule_id,
       severity: 'ERROR' as const,
       message: v.message,
-      applies_to: v.applies_to[0] as string | undefined,
+      applies_to: v.applies_to?.[0] as string | undefined,
       suggestion: v.recommendation,
     })),
     ...raw.warnings.map((v) => ({
       rule_id: v.rule_id,
       severity: 'WARNING' as const,
       message: v.message,
-      applies_to: v.applies_to[0] as string | undefined,
+      applies_to: v.applies_to?.[0] as string | undefined,
       suggestion: v.recommendation,
     })),
   ];
