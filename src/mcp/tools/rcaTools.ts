@@ -401,8 +401,10 @@ export function registerTestRunLocate(server: McpServer): void {
         .describe('Explicit override for the results base directory; if provided, skip auto-detection'),
       run_index: z
         .number()
+        .int()
+        .positive()
         .optional()
-        .describe('Which Increment run to target (default: latest)'),
+        .describe('Which Increment run to target (default: latest); must be a positive integer'),
     },
     (input) => {
       const requestId = makeRequestId();
@@ -668,8 +670,10 @@ export function registerTestRunRca(server: McpServer): void {
         .describe('Explicit override for the results base directory'),
       run_index: z
         .number()
+        .int()
+        .positive()
         .optional()
-        .describe('Which Increment run to target (default: latest)'),
+        .describe('Which Increment run to target (default: latest); must be a positive integer'),
       locate_only: z
         .boolean()
         .optional()

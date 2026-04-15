@@ -177,12 +177,13 @@ const NOISE_PATTERNS: RegExp[] = [
  * Returns the filtered text and the count of suppressed lines.
  */
 export function filterTestRunOutput(raw: string): { filtered: string; suppressed: number } {
-  const lines = raw.split('\n');
+  const lines = raw.split(/\r?\n/);
   const kept: string[] = [];
   let suppressed = 0;
   let lastKeptWasBlank = false;
 
-  for (const line of lines) {
+  for (const rawLine of lines) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
     if (NOISE_PATTERNS.some((p) => p.test(line))) {
       suppressed++;
       continue;

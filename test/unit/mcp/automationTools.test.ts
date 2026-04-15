@@ -635,5 +635,14 @@ describe('filterTestRunOutput', () => {
     assert.ok(filtered.includes('line1'), 'Content should be preserved');
     assert.ok(filtered.includes('line2'), 'Content should be preserved');
   });
+
+  it('handles Windows CRLF line endings without leaving trailing \\r', () => {
+    const raw = 'INFO Starting\r\ncom.networknt.schema.JsonSchemaFactory - loaded\r\nINFO Done\r\n';
+    const { filtered, suppressed } = filterTestRunOutput(raw);
+    assert.equal(suppressed, 1, 'CRLF noise line should be suppressed');
+    assert.ok(!filtered.includes('\r'), 'No trailing \\r should remain in output');
+    assert.ok(filtered.includes('INFO Starting'), 'Real output should remain');
+    assert.ok(filtered.includes('INFO Done'), 'Real output should remain');
+  });
 });
 
