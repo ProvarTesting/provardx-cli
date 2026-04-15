@@ -65,9 +65,17 @@ interface SpawnResult {
 // This ensures sf is always found even when ENOENT is masked by other errors (e.g. ENOBUFS).
 let cachedSfPath: string | null | undefined; // undefined = not yet probed
 
-/** Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn. */
-export function setSfPathCacheForTesting(value: string | null): void {
+/** Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn.
+ *  Pass `undefined` to reset the cache so the next call triggers a fresh probe. */
+export function setSfPathCacheForTesting(value: string | null | undefined): void {
   cachedSfPath = value;
+}
+
+// Platform override used in tests so Windows-specific shell logic can be exercised on any OS.
+let _sfPlatform: NodeJS.Platform | undefined;
+/** Exposed for testing only — overrides process.platform for needsWindowsShell decisions. */
+export function setSfPlatformForTesting(platform: NodeJS.Platform | undefined): void {
+  _sfPlatform = platform;
 }
 
 /**
@@ -89,17 +97,39 @@ export function needsWindowsShell(executable: string, platform = process.platfor
 
 function resolveSfExecutable(): string | null {
   if (cachedSfPath !== undefined) return cachedSfPath;
-  // Check PATH first via a cheap version probe.
-  // On Windows, "sf" is actually "sf.cmd" so we must use shell: true.
+  const platform = _sfPlatform ?? process.platform;
+
+  // Two-phase probe avoids false-positives on Windows with shell:true.
+  // When shell:true is used, cmd.exe spawns successfully even when `sf` is
+  // missing — it exits non-zero with "not recognised" in stderr but sets no
+  // probe.error. Trying shell:false first catches both cases correctly.
+  //
+  // Phase 1: shell:false (works on Linux/macOS; gives ENOENT on Windows if
+  // sf.cmd is on PATH but requires the shell).
   const probe = sfSpawnHelper.spawnSync('sf', ['--version'], {
     encoding: 'utf-8',
-    shell: needsWindowsShell('sf'),
+    shell: false,
     maxBuffer: 1024 * 1024,
   });
-  if (!probe.error) {
+  if (!probe.error && probe.status === 0) {
     cachedSfPath = 'sf';
     return cachedSfPath;
   }
+
+  // Phase 2 (Windows only): retry with shell:true when the plain probe failed
+  // with ENOENT — meaning sf.cmd exists on PATH but can't run without the shell.
+  if (platform === 'win32' && (probe.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+    const probeShell = sfSpawnHelper.spawnSync('sf', ['--version'], {
+      encoding: 'utf-8',
+      shell: true,
+      maxBuffer: 1024 * 1024,
+    });
+    if (!probeShell.error && probeShell.status === 0) {
+      cachedSfPath = 'sf';
+      return cachedSfPath;
+    }
+  }
+
   // Fall back to common install locations
   for (const candidate of getSfCommonPaths()) {
     if (fs.existsSync(candidate)) {
@@ -111,15 +141,41 @@ function resolveSfExecutable(): string | null {
   return null;
 }
 
+/**
+ * Reject shell metacharacters in an sf_path that will be executed via shell:true.
+ * On Windows, cmd.exe interprets & | ; < > ` ' " and newlines as shell syntax.
+ * A valid filesystem path should never contain these characters.
+ */
+function assertShellSafePath(sfPath: string): void {
+  if (/[&|;<>`'"\n\r]/.test(sfPath)) {
+    throw Object.assign(
+      new Error(
+        'sf_path contains characters that are unsafe for shell execution on Windows ' +
+          `(& | ; < > \` ' " or line-breaks). Provide an absolute filesystem path to the sf executable.`
+      ),
+      { code: 'INVALID_SF_PATH' }
+    );
+  }
+}
+
 
 function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   // Use explicit path if provided; otherwise use cached probe result
   const executable = sfPath ?? resolveSfExecutable();
   if (!executable) throw new SfNotFoundError();
 
+  const platform = _sfPlatform ?? process.platform;
+  const useShell = needsWindowsShell(executable, platform);
+
+  // Guard against injection when shell:true is used with a user-supplied path.
+  // Common install locations returned by resolveSfExecutable() are safe by construction.
+  if (useShell && sfPath) {
+    assertShellSafePath(sfPath);
+  }
+
   const result = sfSpawnHelper.spawnSync(executable, args, {
     encoding: 'utf-8',
-    shell: needsWindowsShell(executable),
+    shell: useShell,
     maxBuffer: MAX_BUFFER,
   });
 

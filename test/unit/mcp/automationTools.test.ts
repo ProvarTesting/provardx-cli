@@ -13,7 +13,7 @@ import path from 'node:path';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
-import { needsWindowsShell } from '../../../src/mcp/tools/automationTools.js';
+import { needsWindowsShell, setSfPlatformForTesting } from '../../../src/mcp/tools/automationTools.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
 
@@ -558,6 +558,14 @@ describe('automationTools', () => {
   // ── Windows shell option propagation ──────────────────────────────────────
 
   describe('Windows shell option in spawnSync', () => {
+    // Override platform to win32 so these tests pass on any OS.
+    beforeEach(() => {
+      setSfPlatformForTesting('win32');
+    });
+    afterEach(() => {
+      setSfPlatformForTesting(undefined);
+    });
+
     it('passes shell: true when sf_path is a .cmd file', () => {
       spawnStub.returns(makeSpawnResult('ok', '', 0));
       server.call('provar.automation.compile', { flags: [], sf_path: 'C:\\npm\\sf.cmd' });
@@ -586,6 +594,105 @@ describe('automationTools', () => {
       server.call('provar.automation.testrun', { flags: [], sf_path: 'C:\\tools\\sf.bat' });
       const opts = spawnStub.firstCall.args[2] as { shell: boolean };
       assert.ok(opts.shell === true, 'shell should be true for a .bat executable');
+    });
+  });
+
+  // ── sf probe — two-phase discovery ───────────────────────────────────────
+
+  describe('sf probe — two-phase discovery', () => {
+    // Reset the cached path before each probe test so resolveSfExecutable() actually runs.
+    // The outer beforeEach seeds 'sf'; we override it here.
+    beforeEach(async () => {
+      const { setSfPathCacheForTesting: resetCache } = await import('../../../src/mcp/tools/automationTools.js');
+      resetCache(undefined);
+    });
+
+    afterEach(() => {
+      setSfPlatformForTesting(undefined);
+    });
+
+    it('phase 1 uses shell:false for the --version probe', () => {
+      spawnStub.onFirstCall().returns(makeSpawnResult('sf/2.0.0 linux-x64 node-v18', '', 0)); // probe
+      spawnStub.onSecondCall().returns(makeSpawnResult('testrun ok', '', 0)); // actual command
+      server.call('provar.automation.testrun', { flags: [] });
+      const probeArgs = spawnStub.firstCall.args as [string, string[], { shell: boolean }];
+      assert.deepEqual(probeArgs[1], ['--version']);
+      assert.equal(probeArgs[2].shell, false);
+    });
+
+    it('phase 1 success — does not attempt phase 2', () => {
+      spawnStub.onFirstCall().returns(makeSpawnResult('sf/2.0.0', '', 0)); // probe succeeds
+      spawnStub.onSecondCall().returns(makeSpawnResult('ok', '', 0)); // actual command
+      server.call('provar.automation.testrun', { flags: [] });
+      // Exactly 2 spawns: phase 1 probe + actual command; no phase 2 retry
+      const versionProbes = Array.from({ length: spawnStub.callCount }, (_, i) => spawnStub.getCall(i))
+        .filter(c => (c.args[1] as string[]).includes('--version'));
+      assert.equal(versionProbes.length, 1, 'only one version probe when phase 1 succeeds');
+    });
+
+    it('win32 ENOENT on phase 1 triggers a shell:true phase 2 probe', () => {
+      setSfPlatformForTesting('win32');
+      spawnStub.onFirstCall().returns(makeEnoentResult()); // phase 1 ENOENT
+      spawnStub.onSecondCall().returns(makeSpawnResult('sf/2.0.0 win32', '', 0)); // phase 2 success
+      spawnStub.onThirdCall().returns(makeSpawnResult('testrun ok', '', 0)); // actual command
+      server.call('provar.automation.testrun', { flags: [] });
+      assert.ok(spawnStub.callCount >= 2, 'phase 2 probe should have been called');
+      const phase2Args = spawnStub.secondCall.args as [string, string[], { shell: boolean }];
+      assert.deepEqual(phase2Args[1], ['--version']);
+      assert.equal(phase2Args[2].shell, true);
+    });
+
+    it('non-win32 ENOENT on phase 1 does not trigger a phase 2 probe', () => {
+      setSfPlatformForTesting('linux');
+      spawnStub.onFirstCall().returns(makeEnoentResult()); // probe ENOENT
+      // Safe default for any subsequent calls (e.g. if sf is found via common-path fallback)
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar.automation.testrun', { flags: [] });
+      // Only one --version probe; no shell:true retry on non-win32
+      const versionProbes = Array.from({ length: spawnStub.callCount }, (_, i) => spawnStub.getCall(i))
+        .filter(c => (c.args[1] as string[]).includes('--version'));
+      assert.equal(versionProbes.length, 1, 'no phase 2 on non-win32');
+    });
+  });
+
+  // ── sf_path injection hardening ───────────────────────────────────────────
+
+  describe('sf_path injection hardening', () => {
+    // Set platform to win32 so needsWindowsShell returns true for .cmd / extensionless paths,
+    // which is the only condition under which assertShellSafePath is invoked.
+    beforeEach(() => {
+      setSfPlatformForTesting('win32');
+    });
+    afterEach(() => {
+      setSfPlatformForTesting(undefined);
+    });
+
+    it('rejects sf_path with & when the path requires shell (extensionless on win32)', () => {
+      // 'sf&evil' has no extension → needsWindowsShell returns true → assertShellSafePath rejects it
+      const result = server.call('provar.automation.testrun', { flags: [], sf_path: 'sf&evil' });
+      assert.ok(isError(result));
+      assert.equal(parseBody(result).error_code, 'INVALID_SF_PATH');
+      assert.ok(spawnStub.notCalled, 'spawnSync should not be called when path is rejected');
+    });
+
+    it('rejects sf_path with | when the path requires shell', () => {
+      const result = server.call('provar.automation.testrun', { flags: [], sf_path: 'sf|evil' });
+      assert.ok(isError(result));
+      assert.equal(parseBody(result).error_code, 'INVALID_SF_PATH');
+    });
+
+    it('accepts a clean Windows .cmd path', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      const result = server.call('provar.automation.testrun', { flags: [], sf_path: 'C:\\npm\\sf.cmd' });
+      assert.ok(!isError(result));
+    });
+
+    it('does not check path safety on non-Windows (shell:false, no injection risk)', () => {
+      setSfPlatformForTesting('linux');
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      // On linux needsWindowsShell returns false → assertShellSafePath is never called
+      const result = server.call('provar.automation.testrun', { flags: [], sf_path: '/usr/bin/sf' });
+      assert.ok(!isError(result));
     });
   });
 
