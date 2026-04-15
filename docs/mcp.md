@@ -433,6 +433,10 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 
+**Warning rules:**
+- **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
+- **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
+
 ---
 
 ### `provar.testsuite.validate`
@@ -938,7 +942,9 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed] }`
+
+The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count and a note is appended to `stdout`. Use `provar.testrun.rca` to inspect the full raw JUnit output.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
@@ -1084,7 +1090,9 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 | `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null` |
 | `pre_existing`        | `true` if the same test failed in a prior Increment run  |
 
-**Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `UNKNOWN`
+**Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `SALESFORCE_VALIDATION`, `SALESFORCE_PICKLIST`, `SALESFORCE_REFERENCE`, `SALESFORCE_ACCESS`, `SALESFORCE_TRIGGER`, `UNKNOWN`
+
+Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 
 **Error codes:** `RESULTS_NOT_CONFIGURED`
 
