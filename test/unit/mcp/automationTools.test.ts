@@ -13,6 +13,7 @@ import path from 'node:path';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
+import { needsWindowsShell } from '../../../src/mcp/tools/automationTools.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
 
@@ -519,6 +520,72 @@ describe('automationTools', () => {
         });
         assert.ok(!isError(result));
       });
+    });
+  });
+
+  // ── needsWindowsShell ─────────────────────────────────────────────────────
+
+  describe('needsWindowsShell', () => {
+    it('returns true on win32 for a .cmd executable', () => {
+      assert.ok(needsWindowsShell('C:\\npm\\sf.cmd', 'win32'));
+    });
+
+    it('returns true on win32 for a .bat executable', () => {
+      assert.ok(needsWindowsShell('C:\\tools\\run.bat', 'win32'));
+    });
+
+    it('returns true on win32 for an extensionless name (bare "sf")', () => {
+      assert.ok(needsWindowsShell('sf', 'win32'));
+    });
+
+    it('returns true on win32 for an extensionless absolute path', () => {
+      assert.ok(needsWindowsShell('C:\\npm\\sf', 'win32'));
+    });
+
+    it('returns false on win32 for a .js executable (node script, no shell needed)', () => {
+      assert.ok(!needsWindowsShell('C:\\npm\\sf.js', 'win32'));
+    });
+
+    it('returns false on linux for a .cmd path', () => {
+      assert.ok(!needsWindowsShell('/usr/bin/sf.cmd', 'linux'));
+    });
+
+    it('returns false on darwin for an extensionless path', () => {
+      assert.ok(!needsWindowsShell('/usr/local/bin/sf', 'darwin'));
+    });
+  });
+
+  // ── Windows shell option propagation ──────────────────────────────────────
+
+  describe('Windows shell option in spawnSync', () => {
+    it('passes shell: true when sf_path is a .cmd file', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar.automation.compile', { flags: [], sf_path: 'C:\\npm\\sf.cmd' });
+      const opts = spawnStub.firstCall.args[2] as { shell: boolean };
+      assert.ok(opts.shell === true, 'shell should be true for a .cmd executable');
+    });
+
+    it('passes shell: false when sf_path is a .exe binary', () => {
+      // .exe has an explicit extension that is neither .cmd nor .bat, so no
+      // shell is required even on Windows.
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar.automation.compile', { flags: [], sf_path: 'C:\\Program Files\\sf.exe' });
+      const opts = spawnStub.firstCall.args[2] as { shell: boolean };
+      assert.ok(opts.shell === false, 'shell should be false for a .exe executable');
+    });
+
+    it('passes shell: false for a .js node script path', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar.automation.testrun', { flags: [], sf_path: 'C:\\npm\\sf.js' });
+      const opts = spawnStub.firstCall.args[2] as { shell: boolean };
+      assert.ok(opts.shell === false, 'shell should be false for a .js script');
+    });
+
+    it('passes shell: true when sf_path is a .bat file', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar.automation.testrun', { flags: [], sf_path: 'C:\\tools\\sf.bat' });
+      const opts = spawnStub.firstCall.args[2] as { shell: boolean };
+      assert.ok(opts.shell === true, 'shell should be true for a .bat executable');
     });
   });
 

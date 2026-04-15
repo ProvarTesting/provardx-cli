@@ -70,10 +70,32 @@ export function setSfPathCacheForTesting(value: string | null): void {
   cachedSfPath = value;
 }
 
+/**
+ * Returns true when spawning `executable` requires the Windows shell.
+ * On Windows, `.cmd` and `.bat` batch scripts cannot be executed directly by
+ * Node's spawnSync — they must be invoked through cmd.exe (i.e. shell: true).
+ * The bare name "sf" also needs this treatment on Windows because the file on
+ * disk is actually "sf.cmd" and Node won't auto-append the extension.
+ *
+ * The `platform` parameter defaults to `process.platform` and is exposed for
+ * unit testing so tests can verify both Windows and non-Windows behaviour
+ * without having to run on the corresponding OS.
+ */
+export function needsWindowsShell(executable: string, platform = process.platform): boolean {
+  if (platform !== 'win32') return false;
+  const lower = executable.toLowerCase();
+  return lower.endsWith('.cmd') || lower.endsWith('.bat') || !path.extname(lower);
+}
+
 function resolveSfExecutable(): string | null {
   if (cachedSfPath !== undefined) return cachedSfPath;
-  // Check PATH first via a cheap version probe
-  const probe = sfSpawnHelper.spawnSync('sf', ['--version'], { encoding: 'utf-8', shell: false, maxBuffer: 1024 * 1024 });
+  // Check PATH first via a cheap version probe.
+  // On Windows, "sf" is actually "sf.cmd" so we must use shell: true.
+  const probe = sfSpawnHelper.spawnSync('sf', ['--version'], {
+    encoding: 'utf-8',
+    shell: needsWindowsShell('sf'),
+    maxBuffer: 1024 * 1024,
+  });
   if (!probe.error) {
     cachedSfPath = 'sf';
     return cachedSfPath;
@@ -95,7 +117,11 @@ function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   const executable = sfPath ?? resolveSfExecutable();
   if (!executable) throw new SfNotFoundError();
 
-  const result = sfSpawnHelper.spawnSync(executable, args, { encoding: 'utf-8', shell: false, maxBuffer: MAX_BUFFER });
+  const result = sfSpawnHelper.spawnSync(executable, args, {
+    encoding: 'utf-8',
+    shell: needsWindowsShell(executable),
+    maxBuffer: MAX_BUFFER,
+  });
 
   if (result.error) {
     const err = result.error as NodeJS.ErrnoException;
