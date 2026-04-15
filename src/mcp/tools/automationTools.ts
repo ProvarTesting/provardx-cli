@@ -160,6 +160,48 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
   );
 }
 
+// ── Testrun output filter ─────────────────────────────────────────────────────
+
+const NOISE_PATTERNS: RegExp[] = [
+  /com\.networknt\.schema/,
+  /SEVERE.*Failed to configure logger.*\.lck/,
+];
+
+/**
+ * Strip Java schema-validator debug lines and stale logger-lock SEVERE warnings
+ * from Provar testrun output. These two patterns account for the bulk of output
+ * volume and cause MCP responses to be truncated before the pass/fail lines.
+ *
+ * Everything else (including real SEVERE failures) passes through unchanged.
+ * Collapses runs of blank lines to a single blank to keep the output readable.
+ * Returns the filtered text and the count of suppressed lines.
+ */
+export function filterTestRunOutput(raw: string): { filtered: string; suppressed: number } {
+  const lines = raw.split(/\r?\n/);
+  const kept: string[] = [];
+  let suppressed = 0;
+  let lastKeptWasBlank = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    if (NOISE_PATTERNS.some((p) => p.test(line))) {
+      suppressed++;
+      continue;
+    }
+    const isBlank = line.trim() === '';
+    if (isBlank && lastKeptWasBlank) continue; // collapse blank runs
+    kept.push(line);
+    lastKeptWasBlank = isBlank;
+  }
+
+  let filtered = kept.join('\n');
+  if (suppressed > 0) {
+    filtered +=
+      `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar.testrun.rca for full results]`;
+  }
+  return { filtered, suppressed };
+}
+
 // ── Tool: provar.automation.testrun ───────────────────────────────────────────
 
 export function registerAutomationTestRun(server: McpServer): void {
@@ -183,12 +225,19 @@ export function registerAutomationTestRun(server: McpServer): void {
 
       try {
         const result = runSfCommand(['provar', 'automation', 'test', 'run', ...flags], sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_TESTRUN_FAILED', result.stderr || result.stdout, requestId)) }] };
+          const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(result.stderr || result.stdout);
+          const errBody = {
+            ...makeError('AUTOMATION_TESTRUN_FAILED', filteredErr, requestId),
+            ...(suppressedErr > 0 ? { output_lines_suppressed: suppressedErr } : {}),
+          };
+          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(errBody) }] };
         }
 
+        const response: Record<string, unknown> = { requestId, exitCode: result.exitCode, stdout: filtered, stderr: result.stderr };
+        if (suppressed > 0) response['output_lines_suppressed'] = suppressed;
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar.automation.testrun');
