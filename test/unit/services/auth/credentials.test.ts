@@ -190,4 +190,34 @@ describe('resolveApiKey', () => {
     fs.writeFileSync(p, 'not-json');
     assert.equal(resolveApiKey(), null);
   });
+
+  it('trims whitespace from the stored key before returning it', () => {
+    // Manually written credentials.json with surrounding whitespace on the key
+    // (e.g. edited in a text editor or written by a buggy tool) must not reach the API as-is.
+    const p = getCredentialsPath();
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    const data: StoredCredentials = {
+      api_key: '  pv_k_trimme  \n',
+      prefix: 'pv_k_trimme',
+      set_at: '2026-01-01T00:00:00.000Z',
+      source: 'manual',
+    };
+    fs.writeFileSync(p, JSON.stringify(data));
+    assert.equal(resolveApiKey(), 'pv_k_trimme');
+  });
+
+  it('returns null when stored key does not start with pv_k_ prefix', () => {
+    // A credentials.json that pre-dates the pv_k_ format or was written by hand
+    // with the wrong format should not be sent to the API.
+    const p = getCredentialsPath();
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    const data: StoredCredentials = {
+      api_key: 'old-format-key-12345',
+      prefix: 'old-format',
+      set_at: '2026-01-01T00:00:00.000Z',
+      source: 'manual',
+    };
+    fs.writeFileSync(p, JSON.stringify(data));
+    assert.equal(resolveApiKey(), null);
+  });
 });
