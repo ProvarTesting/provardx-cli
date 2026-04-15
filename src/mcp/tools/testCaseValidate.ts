@@ -250,7 +250,8 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
       severity: 'ERROR',
       message: `testCase guid "${tcGuid}" is not a valid UUID v4.`,
       applies_to: 'testCase',
-      suggestion: 'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
+      suggestion:
+        'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
     });
   }
   // TC_013 (registryId) is intentionally not checked here — registryId is a
@@ -275,9 +276,11 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     issues.push({
       rule_id: 'DATA-001',
       severity: 'WARNING',
-      message: 'testCase declares a <dataTable> but CLI standalone execution does not bind CSV column variables — steps using <value class="variable"> references will resolve to null.',
+      message:
+        'testCase declares a <dataTable> but CLI standalone execution does not bind CSV column variables — steps using <value class="variable"> references will resolve to null.',
       applies_to: 'testCase',
-      suggestion: 'Use SetValues (Test scope) steps to bind data for standalone CLI execution, or add this test case to a test plan.',
+      suggestion:
+        'Use SetValues (Test scope) steps to bind data for standalone CLI execution, or add this test case to a test plan.',
     });
   }
 
@@ -318,7 +321,8 @@ function validateApiCall(call: Record<string, unknown>, issues: ValidationIssue[
       severity: 'ERROR',
       message: `apiCall${label} guid "${callGuid}" is not a valid UUID v4.`,
       applies_to: 'apiCall',
-      suggestion: 'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
+      suggestion:
+        'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
     });
   }
   if (!apiId) {
@@ -365,16 +369,19 @@ function validateApiCall(call: Record<string, unknown>, issues: ValidationIssue[
       const argList: Array<Record<string, unknown>> = !argRaw
         ? []
         : Array.isArray(argRaw)
-          ? (argRaw as Array<Record<string, unknown>>)
-          : [argRaw as Record<string, unknown>];
+        ? (argRaw as Array<Record<string, unknown>>)
+        : [argRaw as Record<string, unknown>];
       const hasValuesArg = argList.some((a) => (a['@_id'] as string | undefined) === 'values');
       if (hasValuesArg) {
         issues.push({
           rule_id: 'ASSERT-001',
           severity: 'WARNING',
-          message: `AssertValues step "${name ?? '(unnamed)'}" uses namedValues format (argument id="values") — designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as null=null.`,
+          message: `AssertValues step "${
+            name ?? '(unnamed)'
+          }" uses namedValues format (argument id="values") — designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as null=null.`,
           applies_to: 'apiCall',
-          suggestion: 'Use separate expectedValue, actualValue, and comparisonType arguments for variable or Apex result comparisons.',
+          suggestion:
+            'Use separate expectedValue, actualValue, and comparisonType arguments for variable or Apex result comparisons.',
         });
       }
     }

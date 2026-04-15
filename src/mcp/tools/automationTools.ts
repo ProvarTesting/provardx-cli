@@ -46,7 +46,9 @@ export function getSfCommonPaths(): string[] {
       for (const v of fs.readdirSync(nvmBinDir).sort().reverse().slice(0, 3)) {
         candidates.push(path.join(nvmBinDir, v, 'bin', 'sf'));
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   return candidates;
 }
@@ -65,19 +67,73 @@ interface SpawnResult {
 // This ensures sf is always found even when ENOENT is masked by other errors (e.g. ENOBUFS).
 let cachedSfPath: string | null | undefined; // undefined = not yet probed
 
-/** Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn. */
-export function setSfPathCacheForTesting(value: string | null): void {
+/**
+ * Exposed for testing only — pre-seeds the cached sf executable path, bypassing the probe spawn.
+ * Pass `undefined` to reset the cache so the next call triggers a fresh probe.
+ */
+export function setSfPathCacheForTesting(value: string | null | undefined): void {
   cachedSfPath = value;
+}
+
+// Platform override used in tests so Windows-specific shell logic can be exercised on any OS.
+let sfPlatformOverride: NodeJS.Platform | undefined;
+/** Exposed for testing only — overrides process.platform for needsWindowsShell decisions. */
+export function setSfPlatformForTesting(platform: NodeJS.Platform | undefined): void {
+  sfPlatformOverride = platform;
+}
+
+/**
+ * Returns true when spawning `executable` requires the Windows shell.
+ * On Windows, `.cmd` and `.bat` batch scripts cannot be executed directly by
+ * Node's spawnSync — they must be invoked through cmd.exe (i.e. shell: true).
+ * The bare name "sf" also needs this treatment on Windows because the file on
+ * disk is actually "sf.cmd" and Node won't auto-append the extension.
+ *
+ * The `platform` parameter defaults to `process.platform` and is exposed for
+ * unit testing so tests can verify both Windows and non-Windows behaviour
+ * without having to run on the corresponding OS.
+ */
+export function needsWindowsShell(executable: string, platform = process.platform): boolean {
+  if (platform !== 'win32') return false;
+  const lower = executable.toLowerCase();
+  return lower.endsWith('.cmd') || lower.endsWith('.bat') || !path.extname(lower);
 }
 
 function resolveSfExecutable(): string | null {
   if (cachedSfPath !== undefined) return cachedSfPath;
-  // Check PATH first via a cheap version probe
-  const probe = sfSpawnHelper.spawnSync('sf', ['--version'], { encoding: 'utf-8', shell: false, maxBuffer: 1024 * 1024 });
-  if (!probe.error) {
+  const platform = sfPlatformOverride ?? process.platform;
+
+  // Two-phase probe avoids false-positives on Windows with shell:true.
+  // When shell:true is used, cmd.exe spawns successfully even when `sf` is
+  // missing — it exits non-zero with "not recognised" in stderr but sets no
+  // probe.error. Trying shell:false first catches both cases correctly.
+  //
+  // Phase 1: shell:false (works on Linux/macOS; gives ENOENT on Windows if
+  // sf.cmd is on PATH but requires the shell).
+  const probe = sfSpawnHelper.spawnSync('sf', ['--version'], {
+    encoding: 'utf-8',
+    shell: false,
+    maxBuffer: 1024 * 1024,
+  });
+  if (!probe.error && probe.status === 0) {
     cachedSfPath = 'sf';
     return cachedSfPath;
   }
+
+  // Phase 2 (Windows only): retry with shell:true when the plain probe failed
+  // with ENOENT — meaning sf.cmd exists on PATH but can't run without the shell.
+  if (platform === 'win32' && (probe.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
+    const probeShell = sfSpawnHelper.spawnSync('sf', ['--version'], {
+      encoding: 'utf-8',
+      shell: true,
+      maxBuffer: 1024 * 1024,
+    });
+    if (!probeShell.error && probeShell.status === 0) {
+      cachedSfPath = 'sf';
+      return cachedSfPath;
+    }
+  }
+
   // Fall back to common install locations
   for (const candidate of getSfCommonPaths()) {
     if (fs.existsSync(candidate)) {
@@ -89,13 +145,42 @@ function resolveSfExecutable(): string | null {
   return null;
 }
 
+/**
+ * Reject shell metacharacters in an sf_path that will be executed via shell:true.
+ * On Windows, cmd.exe interprets & | ; < > ` ' " and newlines as shell syntax.
+ * A valid filesystem path should never contain these characters.
+ */
+function assertShellSafePath(sfPath: string): void {
+  if (/[&|;<>`'"\n\r]/.test(sfPath)) {
+    throw Object.assign(
+      new Error(
+        'sf_path contains characters that are unsafe for shell execution on Windows ' +
+          '(& | ; < > ` \' " or line-breaks). Provide an absolute filesystem path to the sf executable.'
+      ),
+      { code: 'INVALID_SF_PATH' }
+    );
+  }
+}
 
 function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   // Use explicit path if provided; otherwise use cached probe result
   const executable = sfPath ?? resolveSfExecutable();
   if (!executable) throw new SfNotFoundError();
 
-  const result = sfSpawnHelper.spawnSync(executable, args, { encoding: 'utf-8', shell: false, maxBuffer: MAX_BUFFER });
+  const platform = sfPlatformOverride ?? process.platform;
+  const useShell = needsWindowsShell(executable, platform);
+
+  // Guard against injection when shell:true is used with a user-supplied path.
+  // Common install locations returned by resolveSfExecutable() are safe by construction.
+  if (useShell && sfPath) {
+    assertShellSafePath(sfPath);
+  }
+
+  const result = sfSpawnHelper.spawnSync(executable, args, {
+    encoding: 'utf-8',
+    shell: useShell,
+    maxBuffer: MAX_BUFFER,
+  });
 
   if (result.error) {
     const err = result.error as NodeJS.ErrnoException;
@@ -112,12 +197,21 @@ function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   };
 }
 
-function handleSpawnError(err: unknown, requestId: string, toolName: string): { isError: true; content: Array<{ type: 'text'; text: string }> } {
+function handleSpawnError(
+  err: unknown,
+  requestId: string,
+  toolName: string
+): { isError: true; content: Array<{ type: 'text'; text: string }> } {
   const error = err as Error & { code?: string };
   log('error', `${toolName} failed`, { requestId, error: error.message });
   return {
     isError: true as const,
-    content: [{ type: 'text' as const, text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)) }],
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)),
+      },
+    ],
   };
 }
 
@@ -133,8 +227,13 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
       'Typical workflow: provar.automation.config.load → provar.automation.compile → provar.automation.testrun.',
     ].join(' '),
     {
-      properties_path: z.string().describe('Absolute path to the provardx-properties.json file to register as active configuration'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      properties_path: z
+        .string()
+        .describe('Absolute path to the provardx-properties.json file to register as active configuration'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ properties_path, sf_path }) => {
       const requestId = makeRequestId();
@@ -142,17 +241,41 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
 
       try {
         assertPathAllowed(properties_path, config.allowedPaths);
-        const result = runSfCommand(['provar', 'automation', 'config', 'load', '--properties-file', properties_path], sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, properties_path };
+        const result = runSfCommand(
+          ['provar', 'automation', 'config', 'load', '--properties-file', properties_path],
+          sf_path
+        );
+        const response = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+          properties_path,
+        };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_CONFIG_LOAD_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('AUTOMATION_CONFIG_LOAD_FAILED', result.stderr || result.stdout, requestId)
+                ),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         if (err instanceof PathPolicyError) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError(err.code, err.message, requestId, false)) }] };
+          return {
+            isError: true as const,
+            content: [
+              { type: 'text' as const, text: JSON.stringify(makeError(err.code, err.message, requestId, false)) },
+            ],
+          };
         }
         return handleSpawnError(err, requestId, 'provar.automation.config.load');
       }
@@ -162,10 +285,7 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
 
 // ── Testrun output filter ─────────────────────────────────────────────────────
 
-const NOISE_PATTERNS: RegExp[] = [
-  /com\.networknt\.schema/,
-  /SEVERE.*Failed to configure logger.*\.lck/,
-];
+const NOISE_PATTERNS: RegExp[] = [/com\.networknt\.schema/, /SEVERE.*Failed to configure logger.*\.lck/];
 
 /**
  * Strip Java schema-validator debug lines and stale logger-lock SEVERE warnings
@@ -196,8 +316,7 @@ export function filterTestRunOutput(raw: string): { filtered: string; suppressed
 
   let filtered = kept.join('\n');
   if (suppressed > 0) {
-    filtered +=
-      `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar.testrun.rca for full results]`;
+    filtered += `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar.testrun.rca for full results]`;
   }
   return { filtered, suppressed };
 }
@@ -216,8 +335,15 @@ export function registerAutomationTestRun(server: McpServer): void {
       'Typical local AI loop: config.load → compile → testrun → inspect results.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -228,7 +354,9 @@ export function registerAutomationTestRun(server: McpServer): void {
         const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
         if (result.exitCode !== 0) {
-          const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(result.stderr || result.stdout);
+          const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(
+            result.stderr || result.stdout
+          );
           const errBody = {
             ...makeError('AUTOMATION_TESTRUN_FAILED', filteredErr, requestId),
             ...(suppressedErr > 0 ? { output_lines_suppressed: suppressedErr } : {}),
@@ -236,7 +364,12 @@ export function registerAutomationTestRun(server: McpServer): void {
           return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(errBody) }] };
         }
 
-        const response: Record<string, unknown> = { requestId, exitCode: result.exitCode, stdout: filtered, stderr: result.stderr };
+        const response: Record<string, unknown> = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: filtered,
+          stderr: result.stderr,
+        };
         if (suppressed > 0) response['output_lines_suppressed'] = suppressed;
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
@@ -257,8 +390,15 @@ export function registerAutomationCompile(server: McpServer): void {
       'Run this before triggering a test run after modifying test cases.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -269,7 +409,15 @@ export function registerAutomationCompile(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_COMPILE_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_COMPILE_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -302,10 +450,17 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
       'check that the credentials in the project .secrets file are current and that any referenced scratch orgs have not expired.',
     ].join(' '),
     {
-      flags: z.array(z.string()).optional().default([]).describe(
-        'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
-      ),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe(
+          'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
+        ),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -320,7 +475,15 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
           const details: Record<string, unknown> | undefined = isDownloadError
             ? { suggestion: DOWNLOAD_ERROR_SUGGESTION }
             : undefined;
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_METADATA_FAILED', message, requestId, false, details)),
+              },
+            ],
+          };
         }
 
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
@@ -336,17 +499,9 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
 
 /** Known system-level Provar install paths per platform. */
 const SYSTEM_INSTALL_BASES: Record<string, string[]> = {
-  win32: [
-    'C:/Program Files',
-    'C:/Program Files (x86)',
-  ],
-  darwin: [
-    '/Applications',
-  ],
-  linux: [
-    '/opt',
-    '/usr/local',
-  ],
+  win32: ['C:/Program Files', 'C:/Program Files (x86)'],
+  darwin: ['/Applications'],
+  linux: ['/opt', '/usr/local'],
 };
 
 interface ProvarInstall {
@@ -441,13 +596,19 @@ export function registerAutomationSetup(server: McpServer): void {
       'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar.properties.set.',
     ].join(' '),
     {
-      version: z.string().optional().describe(
-        'Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'
-      ),
-      force: z.boolean().optional().default(false).describe(
-        'Force a fresh download even if an existing installation is already detected (default: false).'
-      ),
-      sf_path: z.string().optional().describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      version: z
+        .string()
+        .optional()
+        .describe('Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'),
+      force: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Force a fresh download even if an existing installation is already detected (default: false).'),
+      sf_path: z
+        .string()
+        .optional()
+        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
     },
     ({ version, force, sf_path }) => {
       const requestId = makeRequestId();
@@ -484,13 +645,18 @@ export function registerAutomationSetup(server: McpServer): void {
         if (result.exitCode !== 0) {
           return {
             isError: true as const,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('AUTOMATION_SETUP_FAILED', result.stderr || result.stdout, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('AUTOMATION_SETUP_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
           };
         }
 
         // ── 3. Locate the freshly installed ProvarHome ───────────────────────
         const freshInstalls = findExistingInstallations();
-        const localInstall = freshInstalls.find(i => i.source === 'local') ?? freshInstalls[0];
+        const localInstall = freshInstalls.find((i) => i.source === 'local') ?? freshInstalls[0];
         const installPath = localInstall?.path ?? path.resolve(process.cwd(), 'ProvarHome');
         const detectedVersion = localInstall?.version ?? version ?? null;
 

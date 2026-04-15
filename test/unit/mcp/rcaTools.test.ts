@@ -605,6 +605,9 @@ describe('provar.testrun.rca', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-infra-check'), junit);
     const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
     const infra = body['infrastructure_issues'] as string[];
-    assert.ok(!infra.some((s) => s.includes('SALESFORCE_')), 'Salesforce categories should not appear in infrastructure_issues');
+    assert.ok(
+      !infra.some((s) => s.includes('SALESFORCE_')),
+      'Salesforce categories should not appear in infrastructure_issues'
+    );
   });
 });

@@ -21,12 +21,12 @@ The server runs **locally on your machine**. It does not phone home, transmit yo
 
 ## Prerequisites
 
-| Requirement                 | Version | Notes                                                                                                                             |
-| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`. |
-| Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                  |
-| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                  |
-| An MCP-compatible AI client | —       | Claude Desktop, Claude Code, or Cursor                                                                                            |
+| Requirement                 | Version | Notes                                                                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`.     |
+| Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                      |
+| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                 |
+| An MCP-compatible AI client | —       | Claude Desktop, Claude Code, or Cursor                                                                                                |
 | Node.js                     | 18–24   | Installed automatically with the SF CLI. **Node 25+ is not supported** — a transitive dependency crashes on startup. Use Node 22 LTS. |
 
 ---

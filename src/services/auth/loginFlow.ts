@@ -79,7 +79,10 @@ function isPortFree(port: number): Promise<boolean> {
  * into a shell string — to avoid command injection. Exported so tests can
  * assert the correct command is chosen without actually spawning a process.
  */
-export function getBrowserCommand(url: string, platform: NodeJS.Platform = process.platform): { cmd: string; args: string[] } {
+export function getBrowserCommand(
+  url: string,
+  platform: NodeJS.Platform = process.platform
+): { cmd: string; args: string[] } {
   switch (platform) {
     case 'darwin':
       return { cmd: 'open', args: [url] };
@@ -99,7 +102,9 @@ export function openBrowser(url: string): void {
   const child: ChildProcess = spawn(cmd, args, { detached: true, stdio: 'ignore' });
   // Suppress unhandled-error crashes if the browser executable is not found.
   // The login URL is already printed to the terminal so the user can open it manually.
-  child.on('error', () => { /* intentional no-op */ });
+  child.on('error', () => {
+    /* intentional no-op */
+  });
   child.unref();
 }
 

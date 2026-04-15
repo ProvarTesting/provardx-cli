@@ -215,7 +215,10 @@ describe('validateTestCase', () => {
   </steps>
 </testCase>`
       );
-      assert.ok(r.issues.some((i) => i.rule_id === 'DATA-001'), 'Expected DATA-001');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'DATA-001'),
+        'Expected DATA-001'
+      );
       const issue = r.issues.find((i) => i.rule_id === 'DATA-001')!;
       assert.equal(issue.severity, 'WARNING');
     });
@@ -240,7 +243,10 @@ describe('validateTestCase', () => {
   </steps>
 </testCase>`
       );
-      assert.ok(r.issues.some((i) => i.rule_id === 'ASSERT-001'), 'Expected ASSERT-001');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ASSERT-001'),
+        'Expected ASSERT-001'
+      );
       const issue = r.issues.find((i) => i.rule_id === 'ASSERT-001')!;
       assert.equal(issue.severity, 'WARNING');
       assert.ok(issue.message.includes('Check values'), `Message should include step name: ${issue.message}`);
@@ -260,7 +266,10 @@ describe('validateTestCase', () => {
   </steps>
 </testCase>`
       );
-      assert.ok(!r.issues.some((i) => i.rule_id === 'ASSERT-001'), 'ASSERT-001 should not fire for non-values arguments');
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'ASSERT-001'),
+        'ASSERT-001 should not fire for non-values arguments'
+      );
     });
 
     it('does not fire for non-AssertValues apiCall with argument id="values"', () => {

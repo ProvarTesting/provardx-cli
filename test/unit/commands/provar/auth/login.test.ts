@@ -75,7 +75,10 @@ describe('getBrowserCommand', () => {
     const { cmd, args } = getBrowserCommand(url, 'win32');
     assert.equal(cmd, 'powershell.exe');
     assert.ok(args.includes('-NoProfile'), 'should pass -NoProfile');
-    assert.ok(args.includes('Start-Process $args[0]') || args.join(' ').includes('Start-Process'), 'should use Start-Process');
+    assert.ok(
+      args.includes('Start-Process $args[0]') || args.join(' ').includes('Start-Process'),
+      'should use Start-Process'
+    );
     // URL is passed as a separate arg — never interpolated into the command string
     assert.equal(args[args.length - 1], url, 'URL must be the last argument');
   });

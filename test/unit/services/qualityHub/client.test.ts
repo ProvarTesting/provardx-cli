@@ -117,4 +117,3 @@ describe('normaliseApiResponse', () => {
     assert.equal(r.issues[0].applies_to, undefined);
   });
 });
-

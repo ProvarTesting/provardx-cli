@@ -60,7 +60,12 @@ describe('sf provar auth status NUTs', () => {
     fs.mkdirSync(path.dirname(CREDS_PATH), { recursive: true });
     fs.writeFileSync(
       CREDS_PATH,
-      JSON.stringify({ api_key: 'pv_k_statustest12345', prefix: 'pv_k_statust', set_at: new Date().toISOString(), source: 'manual' }),
+      JSON.stringify({
+        api_key: 'pv_k_statustest12345',
+        prefix: 'pv_k_statust',
+        set_at: new Date().toISOString(),
+        source: 'manual',
+      }),
       'utf-8'
     );
     const output = execCmd<SfProvarCommandResult>('provar auth status').shellOutput;

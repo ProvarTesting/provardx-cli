@@ -88,10 +88,9 @@ export default class SfProvarAuthLogin extends SfCommand<void> {
       keyData = await qualityHubClient.exchangeTokenForKey(tokens.access_token, baseUrl);
     } catch (err) {
       if (err instanceof QualityHubAuthError) {
-        this.error(
-          `No Provar MCP account found for this login.\nRequest access at: ${REQUEST_ACCESS_URL}`,
-          { exit: 1 }
-        );
+        this.error(`No Provar MCP account found for this login.\nRequest access at: ${REQUEST_ACCESS_URL}`, {
+          exit: 1,
+        });
       }
       throw err;
     }

@@ -87,7 +87,8 @@ const RCA_RULES: RcaRule[] = [
     category: 'SALESFORCE_PICKLIST',
     pattern: /bad value for restricted picklist field/i,
     summary: 'Invalid picklist value used',
-    recommendation: 'Query valid picklist values (run metadata download or Apex describe); check for trailing spaces or case differences',
+    recommendation:
+      'Query valid picklist values (run metadata download or Apex describe); check for trailing spaces or case differences',
   },
   {
     category: 'SALESFORCE_REFERENCE',
@@ -105,7 +106,8 @@ const RCA_RULES: RcaRule[] = [
     category: 'SALESFORCE_TRIGGER',
     pattern: /FIELD_CUSTOM_VALIDATION_EXCEPTION/i,
     summary: 'A Salesforce validation rule or trigger blocked the DML operation',
-    recommendation: 'Review validation rules and triggers on the target object; ensure test data satisfies all business rules',
+    recommendation:
+      'Review validation rules and triggers on the target object; ensure test data satisfies all business rules',
   },
   {
     category: 'CREDENTIAL_FAILURE',
@@ -280,9 +282,13 @@ function readResultsFromPropertiesFile(projectPath: string): ResultsFromProps | 
     for (const entry of entries) {
       if (!entry.isFile() || !/provardx-properties.*\.json/i.test(entry.name)) continue;
       try {
-        const props = JSON.parse(fs.readFileSync(path.join(projectPath, entry.name), 'utf-8')) as Record<string, unknown>;
+        const props = JSON.parse(fs.readFileSync(path.join(projectPath, entry.name), 'utf-8')) as Record<
+          string,
+          unknown
+        >;
         const rp = props['resultsPath'] as string | undefined;
-        if (rp) return { resultsBase: rp, disposition: (props['resultsPathDisposition'] as string | undefined) ?? 'Replace' };
+        if (rp)
+          return { resultsBase: rp, disposition: (props['resultsPathDisposition'] as string | undefined) ?? 'Replace' };
       } catch {
         // ignore individual file parse errors
       }
@@ -392,9 +398,7 @@ export function registerTestRunLocate(server: McpServer): void {
       'Supports explicit results_path override or auto-detection from sf config, provardx properties file, or ANT build.xml.',
     ].join(' '),
     {
-      project_path: z
-        .string()
-        .describe('Absolute path to the Provar project root'),
+      project_path: z.string().describe('Absolute path to the Provar project root'),
       results_path: z
         .string()
         .optional()
@@ -580,7 +584,8 @@ function collectValidationReports(projectPath: string): string[] {
   const validationDir = path.join(projectPath, 'provardx', 'validation');
   if (!fs.existsSync(validationDir)) return [];
   try {
-    return fs.readdirSync(validationDir)
+    return fs
+      .readdirSync(validationDir)
       .filter((e) => e.endsWith('.json'))
       .map((e) => path.join(validationDir, e));
   } catch {
@@ -617,9 +622,14 @@ function buildFailureReports(
   priorFailed: Set<string>
 ): FailureReport[] {
   const errorClassPatterns = [
-    'NoSuchElementException', 'TimeoutException', 'AssertionException',
-    'SessionNotCreatedException', 'WebDriverException', 'ClassNotFoundException',
-    'LicenseException', 'InvalidPasswordException',
+    'NoSuchElementException',
+    'TimeoutException',
+    'AssertionException',
+    'SessionNotCreatedException',
+    'WebDriverException',
+    'ClassNotFoundException',
+    'LicenseException',
+    'InvalidPasswordException',
   ];
   const reports: FailureReport[] = [];
   for (const tc of testcases) {
@@ -628,7 +638,10 @@ function buildFailureReports(
     const rule = classifyFailure(failureText);
     let error_class: string | null = null;
     for (const cls of errorClassPatterns) {
-      if (failureText.includes(cls)) { error_class = cls; break; }
+      if (failureText.includes(cls)) {
+        error_class = cls;
+        break;
+      }
     }
     const poMatch = /Page Object:\s*([\w.]+)/i.exec(failureText);
     const opMatch = /operation:\s*(\w+)/i.exec(failureText);
@@ -661,13 +674,8 @@ export function registerTestRunRca(server: McpServer): void {
       'and produces recommendations. Use locate_only=true to skip parsing and just resolve artifact locations.',
     ].join(' '),
     {
-      project_path: z
-        .string()
-        .describe('Absolute path to the Provar project root'),
-      results_path: z
-        .string()
-        .optional()
-        .describe('Explicit override for the results base directory'),
+      project_path: z.string().describe('Absolute path to the Provar project root'),
+      results_path: z.string().optional().describe('Explicit override for the results base directory'),
       run_index: z
         .number()
         .int()
@@ -721,7 +729,13 @@ export function registerTestRunRca(server: McpServer): void {
 
         // ── locate_only shortcut ─────────────────────────────────────────────
         if (input.locate_only) {
-          const result = { ...locateResult, rca_skipped: true, failures: [], infrastructure_issues: [], recommendations: [] };
+          const result = {
+            ...locateResult,
+            rca_skipped: true,
+            failures: [],
+            infrastructure_issues: [],
+            recommendations: [],
+          };
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           };
