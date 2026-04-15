@@ -15,6 +15,7 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import sinon from 'sinon';
 import {
   generatePkce,
+  getBrowserCommand,
   loginFlowClient,
   type CognitoTokens,
   CALLBACK_PORTS,
@@ -58,6 +59,45 @@ function restoreHome(): void {
   (os as unknown as { homedir: () => string }).homedir = origHomedir;
   fs.rmSync(tempDir, { recursive: true, force: true });
 }
+
+// ── getBrowserCommand ─────────────────────────────────────────────────────────
+
+describe('getBrowserCommand', () => {
+  const url = 'https://example.com/login?code=abc&state=xyz';
+
+  it('uses "open" on macOS', () => {
+    const { cmd, args } = getBrowserCommand(url, 'darwin');
+    assert.equal(cmd, 'open');
+    assert.deepEqual(args, [url]);
+  });
+
+  it('uses powershell.exe with Start-Process on Windows', () => {
+    const { cmd, args } = getBrowserCommand(url, 'win32');
+    assert.equal(cmd, 'powershell.exe');
+    assert.ok(args.includes('-NoProfile'), 'should pass -NoProfile');
+    assert.ok(args.includes('Start-Process $args[0]') || args.join(' ').includes('Start-Process'), 'should use Start-Process');
+    // URL is passed as a separate arg — never interpolated into the command string
+    assert.equal(args[args.length - 1], url, 'URL must be the last argument');
+  });
+
+  it('uses "xdg-open" on Linux', () => {
+    const { cmd, args } = getBrowserCommand(url, 'linux');
+    assert.equal(cmd, 'xdg-open');
+    assert.deepEqual(args, [url]);
+  });
+
+  it('uses "xdg-open" for unknown platforms', () => {
+    const { cmd } = getBrowserCommand(url, 'freebsd');
+    assert.equal(cmd, 'xdg-open');
+  });
+
+  it('includes the full URL in args for all platforms', () => {
+    for (const platform of ['darwin', 'win32', 'linux'] as NodeJS.Platform[]) {
+      const { args } = getBrowserCommand(url, platform);
+      assert.ok(args.includes(url), `URL must appear in args for platform ${platform}`);
+    }
+  });
+});
 
 // ── generatePkce ──────────────────────────────────────────────────────────────
 
