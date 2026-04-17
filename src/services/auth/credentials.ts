@@ -87,3 +87,5 @@ export function resolveApiKey(): string | null {
   if (storedKey?.startsWith(KEY_PREFIX)) return storedKey;
   return null;
 }
+
+export const credentialsService = { resolveApiKey };

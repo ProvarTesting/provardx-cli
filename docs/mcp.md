@@ -51,6 +51,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.nitrox.validate](#provarnitroxvalidate)
     - [provar.nitrox.generate](#provarnitroxgenerate)
     - [provar.nitrox.patch](#provarnitroxpatch)
+  - [Quality Hub API tools](#quality-hub-api-tools)
+    - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
+    - [provar.org.describe](#provarorgdescribe)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -434,6 +437,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 
 **Warning rules:**
+
 - **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 
@@ -1329,12 +1333,69 @@ When `validate_after=true` and the merged content has errors, the write is block
 
 ---
 
+## Quality Hub API tools
+
+These tools call the Quality Hub HTTP API directly (no `sf` subprocess). They require a Provar API key set via `sf provar auth login`.
+
+### `provar.qualityhub.examples.retrieve`
+
+Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar.testcase.generate` to provide few-shot grounding examples.
+
+If retrieval fails for any reason (no key, invalid key, rate limit, network error), the tool returns `{ examples: [], count: 0, warning: "..." }` with `isError: false` so the generation workflow can continue without grounding. It **never** hard-errors on API failure.
+
+| Input                 | Type    | Required | Default | Description                                                                    |
+| --------------------- | ------- | -------- | ------- | ------------------------------------------------------------------------------ |
+| `query`               | string  | yes      | —       | User story, requirement, or test content to search against the corpus          |
+| `n`                   | integer | no       | `5`     | Number of examples to return. Clamped to [1, 10].                              |
+| `app_filter`          | string  | no       | —       | Bias results toward a Salesforce cloud (e.g. `"SalesCloud"`, `"ServiceCloud"`) |
+| `prefer_high_quality` | boolean | no       | `true`  | When `true`, favours tier4/tier3 corpus examples over lower tiers              |
+
+| Output field      | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `retrieval_id`    | Opaque ID for the retrieval request (useful for debugging)            |
+| `examples`        | Array of corpus examples (empty on failure or zero results)           |
+| `count`           | Number of examples returned                                           |
+| `query_truncated` | `true` if the query was truncated server-side (max 2000 chars)        |
+| `warning`         | Present when retrieval was skipped; contains onboarding/error details |
+
+Each element in `examples`:
+
+| Field               | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `id`                | Corpus path (e.g. `tier4/SalesCloud/create.xml`)                  |
+| `name`              | Test case name                                                    |
+| `xml`               | Full Provar XML test case content                                 |
+| `similarity_score`  | Similarity score in [0, 1]                                        |
+| `salesforce_object` | Primary Salesforce object the test exercises                      |
+| `quality_tier`      | Corpus tier (`tier4`, `tier3`, `tier2`, `tier1`)                  |
+| `full_content`      | `true` when the full XML was returned (not truncated server-side) |
+
+**Error codes:** `INVALID_QUERY` (empty query — only error that sets `isError: true`)
+
+---
+
+### `provar.org.describe`
+
+> **NOT YET ACTIVE.** This tool is a stub. Calling it always returns `NOT_CONFIGURED`.
+
+When fully implemented, this tool will retrieve Salesforce sObject metadata (fields, picklist values, relationships) for a connected org. For now, use the Salesforce CLI directly: `sf sobject describe --sobject <ObjectName> --target-org <alias>`.
+
+| Input        | Type     | Required | Description                                        |
+| ------------ | -------- | -------- | -------------------------------------------------- |
+| `target_org` | string   | no       | Salesforce org alias or username                   |
+| `objects`    | string[] | no       | sObject API names to describe (e.g. `["Account"]`) |
+
+**Error codes:** `NOT_CONFIGURED` (always returned; tool is not yet active)
+
+---
+
 ## AI loop pattern
 
 The automation tools are designed to support an **AI-driven fix loop**: an agent can iteratively improve test quality without leaving the chat session.
 
 ```
 provar.project.inspect             → understand what's in the project, find uncovered tests
+provar.qualityhub.examples.retrieve → fetch few-shot grounding examples from the corpus
 provar.testcase.validate           → find quality issues in a test case
 provar.testcase.generate           → regenerate or fix the test case XML
 provar.testplan.add-instance       → wire a new/fixed test case into a plan suite

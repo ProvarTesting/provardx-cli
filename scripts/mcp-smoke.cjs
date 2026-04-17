@@ -42,7 +42,11 @@ const results = [];
 rl.on('line', (line) => {
   if (!line.trim()) return;
   let msg;
-  try { msg = JSON.parse(line); } catch { return; }
+  try {
+    msg = JSON.parse(line);
+  } catch {
+    return;
+  }
 
   if (msg.id !== undefined && pending.has(msg.id)) {
     const { label, resolve, timer } = pending.get(msg.id);
@@ -106,9 +110,7 @@ async function runTests() {
     capabilities: {},
     clientInfo: { name: 'mcp-smoke', version: '1.0' },
   });
-  server.stdin.write(
-    JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n'
-  );
+  server.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} }) + '\n');
 
   // ── 1. tools/list ─────────────────────────────────────────────────────────
   await send('tools/list', {});
@@ -303,6 +305,17 @@ async function runTests() {
     patch: { name: '/com/smoke/Patched' },
   });
 
+  // ── 39. provar.qualityhub.examples.retrieve ───────────────────────────────
+  // No API key in CI → graceful degrade with warning, empty examples (isError: false)
+  await callTool('provar.qualityhub.examples.retrieve', {
+    query: 'As a sales rep I want to create an Opportunity in Salesforce',
+    n: 3,
+  });
+
+  // ── 40. provar.org.describe ───────────────────────────────────────────────
+  // Stub — always returns NOT_CONFIGURED
+  await callTool('provar.org.describe', {});
+
   server.stdin.end();
 }
 
@@ -311,8 +324,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 36 tools (setup excluded from default count)
-  const TOTAL_EXPECTED = 38 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 38 tools (setup excluded from default count)
+  const TOTAL_EXPECTED = 40 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 
@@ -328,7 +341,9 @@ server.on('close', () => {
   console.log(`\n${passed} passed, ${failed} failed (${results.length}/${TOTAL_EXPECTED} responses received)`);
 
   if (results.length < TOTAL_EXPECTED) {
-    console.error(`WARNING: Only ${results.length} of ${TOTAL_EXPECTED} expected responses received — server may have crashed mid-run`);
+    console.error(
+      `WARNING: Only ${results.length} of ${TOTAL_EXPECTED} expected responses received — server may have crashed mid-run`
+    );
   }
 
   process.exit(failed > 0 || results.length < TOTAL_EXPECTED ? 1 : 0);
