@@ -140,7 +140,8 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
           log('warn', 'provar.qualityhub.examples.retrieve: rate limited', { requestId });
         } else {
           warning = CORPUS_UNREACHABLE_WARNING;
-          log('warn', 'provar.qualityhub.examples.retrieve: api error', { requestId, error: (err as Error).message });
+          const errMsg = (err as Error).message.slice(0, 200);
+          log('warn', 'provar.qualityhub.examples.retrieve: api error', { requestId, error: errMsg });
         }
 
         // Degrade gracefully — never isError:true. The LLM continues without grounding.
