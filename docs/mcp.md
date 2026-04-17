@@ -53,7 +53,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.nitrox.patch](#provarnitroxpatch)
   - [Quality Hub API tools](#quality-hub-api-tools)
     - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
-    - [provar.org.describe](#provarorgdescribe)
+  - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -1374,11 +1374,9 @@ Each element in `examples`:
 
 ---
 
-### `provar.org.describe`
+### Org metadata via Salesforce Hosted MCP
 
-> **NOT YET ACTIVE — superseded by the Salesforce Hosted MCP Server (now GA).** This tool always returns `NOT_CONFIGURED`.
-
-**Use the Salesforce Hosted MCP Server instead.** Connect `platform/sobject-reads` to your AI client alongside Provar MCP, then call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context when calling `provar.qualityhub.examples.retrieve`.
+Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar.qualityhub.examples.retrieve` query.
 
 | Endpoint | URL |
 | -------- | --- |
@@ -1388,13 +1386,6 @@ Each element in `examples`:
 The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
 
 **Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
-
-| Input        | Type     | Required | Description                                        |
-| ------------ | -------- | -------- | -------------------------------------------------- |
-| `target_org` | string   | no       | Salesforce org alias or username                   |
-| `objects`    | string[] | no       | sObject API names to describe (e.g. `["Account"]`) |
-
-**Error codes:** `NOT_CONFIGURED` (always returned; tool is not yet active)
 
 ---
 

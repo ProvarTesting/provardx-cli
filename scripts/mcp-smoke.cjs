@@ -312,10 +312,6 @@ async function runTests() {
     n: 3,
   });
 
-  // ── 40. provar.org.describe ───────────────────────────────────────────────
-  // Stub — always returns NOT_CONFIGURED
-  await callTool('provar.org.describe', {});
-
   server.stdin.end();
 }
 
@@ -324,8 +320,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 38 tools (setup excluded from default count)
-  const TOTAL_EXPECTED = 40 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 37 tools (setup excluded from default count)
+  const TOTAL_EXPECTED = 39 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 

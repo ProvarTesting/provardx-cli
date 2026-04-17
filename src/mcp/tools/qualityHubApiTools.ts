@@ -48,6 +48,10 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
       'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
       'generation workflow can still continue without grounding. Never hard-errors on API failure.',
       '',
+      'For org-specific field metadata: first call getObjectSchema from the Salesforce Hosted MCP',
+      '(platform/sobject-reads — https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads),',
+      'then include key field names in your query (e.g. "Opportunity: CloseDate, Amount, StageName").',
+      '',
       'Requires a Provar API key (sf provar auth login). Without a key, returns empty examples with onboarding instructions.',
     ].join('\n'),
     {
