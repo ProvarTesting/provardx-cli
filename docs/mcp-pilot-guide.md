@@ -6,7 +6,7 @@ This guide is for teams evaluating the Provar MCP server. It covers prerequisite
 
 ## What is the Provar MCP Server?
 
-The Provar MCP server is a built-in component of the Provar DX CLI that exposes Provar project operations to AI assistants (Claude Desktop, Claude Code, Cursor) via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP). Once connected, an AI agent can:
+The Provar MCP server is a built-in component of the Provar DX CLI that exposes Provar project operations to AI assistants (Claude Desktop, Claude Code, GitHub Copilot, Cursor, Agentforce Vibes) via the [Model Context Protocol](https://modelcontextprotocol.io/) (MCP). Once connected, an AI agent can:
 
 - Inspect your Provar project structure and coverage gaps
 - Generate Java Page Objects and test case XML skeletons
@@ -21,12 +21,12 @@ The server runs **locally on your machine**. It does not phone home, transmit yo
 
 ## Prerequisites
 
-| Requirement                 | Version | Notes                                                                                                                             |
-| --------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`. |
-| Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                  |
-| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                  |
-| An MCP-compatible AI client | —       | Claude Desktop, Claude Code, or Cursor                                                                                            |
+| Requirement                 | Version | Notes                                                                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`.     |
+| Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                      |
+| Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                 |
+| An MCP-compatible AI client | —       | Claude Desktop, Claude Code, GitHub Copilot (VS Code), Cursor, or Agentforce Vibes                                                    |
 | Node.js                     | 18–24   | Installed automatically with the SF CLI. **Node 25+ is not supported** — a transitive dependency crashes on startup. Use Node 22 LTS. |
 
 ---
@@ -99,18 +99,66 @@ Or add directly from the Claude Code session:
 /mcp add provar sf provar mcp start --allowed-paths /path/to/project
 ```
 
-#### Cursor
+#### GitHub Copilot (VS Code)
 
-In Cursor settings → MCP, add:
+Create or edit `.vscode/mcp.json` in your workspace root:
 
 ```json
 {
-  "provar": {
-    "command": "sf",
-    "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+  "servers": {
+    "provar": {
+      "type": "stdio",
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
   }
 }
 ```
+
+Open the **GitHub Copilot Chat** panel and switch to **Agent** mode. The Provar tools will appear in the tool list.
+
+> **Windows:** Use `sf.cmd` instead of `sf` if VS Code cannot find the command.
+
+#### Cursor
+
+Add to `.cursor/mcp.json` in your workspace root (project-level) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+Restart Cursor after saving. The Provar tools will appear under **Settings → MCP**.
+
+> **Windows:** Use `sf.cmd` instead of `sf` if Cursor cannot locate the command.
+
+#### Agentforce Vibes
+
+[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code. Open `a4d_mcp_settings.json` via **Settings → Configure MCP Servers** inside the extension and add:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "disabled": false,
+      "type": "stdio",
+      "timeout": 600,
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows:** Use `sf.cmd` instead of `sf` if the extension cannot find the command.
+
+> **Tool limit:** Agentforce Vibes supports approximately 20 MCP tools at runtime. The Provar server exposes 38 — all tools are registered but you may need to explicitly ask for less common ones by name. See the [Agentforce Vibes MCP docs](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for details.
 
 ---
 
@@ -296,6 +344,47 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ---
 
+### Scenario 9 (requires API key): AI Test Generation from User Story
+
+**Goal:** Demonstrate the full Phase 2 AI-assisted test generation loop: org metadata → corpus retrieval → LLM synthesis → generate + validate.
+
+**Setup:**
+1. Run `sf provar auth login` and complete the browser login (Provar API key).
+2. *(Optional but recommended)* Connect the Salesforce Hosted MCP Server alongside Provar MCP. Add `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` to your MCP client config and authenticate with OAuth. This gives the AI real field API names for your org.
+
+> "I want to generate a Provar test case for: As a sales rep I want to create an Opportunity in Salesforce with a close date, amount, and stage. Check my org's Opportunity schema first, then find similar corpus examples."
+
+**What to look for:**
+
+- *(If SF MCP connected)* `getObjectSchema` called for `Opportunity` — AI uses real field names (e.g. `Amount`, `CloseDate`, `StageName`) in the corpus query
+- `provar.qualityhub.examples.retrieve` called with the enriched user story as query, returning `examples` array with `similarity_score` values and XML content
+- The AI using the retrieved XML as few-shot context when calling `provar.testcase.generate`
+- `provar.testcase.validate` confirming `quality_score >= 70`
+- If no API key: tool returns `{ examples: [], warning: "..." }` with `isError: false` and the AI continues without grounding
+
+**To test graceful degrade:** Run `sf provar auth clear` and repeat. Verify `examples: []` with a warning and generation still proceeds.
+
+---
+
+### Scenario 10: Corpus Retrieval — No Key / Rate Limit
+
+**Goal:** Confirm `provar.qualityhub.examples.retrieve` never hard-errors on API failure.
+
+> "Fetch 3 corpus examples for: Create a Contact in Salesforce."
+
+**Without an API key configured:**
+
+- `isError` must be `false` (NOT `true`) — the generation workflow must continue
+- `examples` must be `[]`
+- `warning` must mention `sf provar auth login`
+
+**What to look for:**
+
+- The AI acknowledges the missing key and offers to continue without grounding
+- No error is thrown that would abort the session
+
+---
+
 ## Security Model
 
 ### What the server does
@@ -340,7 +429,7 @@ At startup the server reads `~/Provar/.licenses/*.properties` to verify that a P
 
 ### Transport security
 
-The MCP server uses **stdio transport** exclusively. Communication travels over the same process pipes that your AI client (Claude Desktop, Cursor, etc.) controls. There is no exposed TCP socket, no authentication token, and no network listener. The attack surface is limited to the process you explicitly launch.
+The MCP server uses **stdio transport** exclusively. Communication travels over the same process pipes that your AI client (Claude Desktop, GitHub Copilot, Cursor, Agentforce Vibes, etc.) controls. There is no exposed TCP socket, no authentication token, and no network listener. The attack surface is limited to the process you explicitly launch.
 
 ### Credential handling
 

@@ -164,6 +164,130 @@ describe('validateTestCase', () => {
       assert.equal(r.step_count, 0);
     });
   });
+
+  describe('TC_012 / TC_031 suggestion text', () => {
+    it('TC_012 suggestion names crypto.randomUUID() and variant byte rule', () => {
+      const r = validateTestCase(
+        '<?xml version="1.0" encoding="UTF-8"?><testCase id="x" guid="not-a-uuid" registryId="r"><steps/></testCase>'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'TC_012');
+      assert.ok(issue, 'Expected TC_012 issue');
+      assert.ok(
+        issue.suggestion?.includes('crypto.randomUUID()'),
+        `Suggestion should mention crypto.randomUUID(): ${issue.suggestion}`
+      );
+      assert.ok(
+        issue.suggestion?.includes('8, 9, a, or b'),
+        `Suggestion should mention variant byte: ${issue.suggestion}`
+      );
+    });
+
+    it('TC_031 suggestion names crypto.randomUUID() and variant byte rule', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r">
+  <steps>
+    <apiCall guid="bad-guid" apiId="UiConnect" name="N" testItemId="1"/>
+  </steps>
+</testCase>`
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'TC_031');
+      assert.ok(issue, 'Expected TC_031 issue');
+      assert.ok(
+        issue.suggestion?.includes('crypto.randomUUID()'),
+        `Suggestion should mention crypto.randomUUID(): ${issue.suggestion}`
+      );
+      assert.ok(
+        issue.suggestion?.includes('8, 9, a, or b'),
+        `Suggestion should mention variant byte: ${issue.suggestion}`
+      );
+    });
+  });
+
+  describe('DATA-001', () => {
+    it('warns when testCase has a <dataTable> child element', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <dataTable>mydata.csv</dataTable>
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SetValues" name="Set" testItemId="1"/>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'DATA-001'),
+        'Expected DATA-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'DATA-001')!;
+      assert.equal(issue.severity, 'WARNING');
+    });
+
+    it('does not fire when no <dataTable> present', () => {
+      const r = validateTestCase(VALID_TC);
+      assert.ok(!r.issues.some((i) => i.rule_id === 'DATA-001'), 'DATA-001 should not fire for valid test case');
+    });
+  });
+
+  describe('ASSERT-001', () => {
+    it('warns when AssertValues uses argument id="values"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="AssertValues" name="Check values" testItemId="1">
+      <arguments>
+        <argument id="values"/>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ASSERT-001'),
+        'Expected ASSERT-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'ASSERT-001')!;
+      assert.equal(issue.severity, 'WARNING');
+      assert.ok(issue.message.includes('Check values'), `Message should include step name: ${issue.message}`);
+    });
+
+    it('does not fire for AssertValues with expectedValue/actualValue arguments', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="AssertValues" name="Compare" testItemId="1">
+      <arguments>
+        <argument id="expectedValue">expected</argument>
+        <argument id="actualValue">actual</argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'ASSERT-001'),
+        'ASSERT-001 should not fire for non-values arguments'
+      );
+    });
+
+    it('does not fire for non-AssertValues apiCall with argument id="values"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SetValues" name="Set" testItemId="1">
+      <arguments>
+        <argument id="values"/>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(!r.issues.some((i) => i.rule_id === 'ASSERT-001'), 'ASSERT-001 should not fire for SetValues');
+    });
+  });
 });
 
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────

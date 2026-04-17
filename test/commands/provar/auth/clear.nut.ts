@@ -19,7 +19,12 @@ function seedCredentials(): void {
   fs.mkdirSync(path.dirname(CREDS_PATH), { recursive: true });
   fs.writeFileSync(
     CREDS_PATH,
-    JSON.stringify({ api_key: 'pv_k_cleartest123456', prefix: 'pv_k_clearte', set_at: new Date().toISOString(), source: 'manual' }),
+    JSON.stringify({
+      api_key: 'pv_k_cleartest123456',
+      prefix: 'pv_k_clearte',
+      set_at: new Date().toISOString(),
+      source: 'manual',
+    }),
     'utf-8'
   );
 }

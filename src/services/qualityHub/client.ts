@@ -74,14 +74,14 @@ export function normaliseApiResponse(raw: QualityHubApiResponse): QualityHubVali
       rule_id: v.rule_id,
       severity: 'ERROR' as const,
       message: v.message,
-      applies_to: v.applies_to[0] as string | undefined,
+      applies_to: v.applies_to?.[0] as string | undefined,
       suggestion: v.recommendation,
     })),
     ...raw.warnings.map((v) => ({
       rule_id: v.rule_id,
       severity: 'WARNING' as const,
       message: v.message,
-      applies_to: v.applies_to[0] as string | undefined,
+      applies_to: v.applies_to?.[0] as string | undefined,
       suggestion: v.recommendation,
     })),
   ];
@@ -245,6 +245,79 @@ export async function rotateKey(apiKey: string, baseUrl: string): Promise<AuthEx
   return JSON.parse(responseBody) as AuthExchangeResponse;
 }
 
+// ── Corpus retrieval types ────────────────────────────────────────────────────
+
+export interface CorpusExample {
+  id: string;
+  name: string;
+  xml: string;
+  similarity_score: number;
+  salesforce_object: string;
+  quality_tier: string;
+  full_content?: boolean;
+}
+
+export interface CorpusRetrievalResponse {
+  retrieval_id: string;
+  examples: CorpusExample[];
+  count: number;
+  query_truncated: boolean;
+}
+
+export interface CorpusRetrievalOptions {
+  n?: number;
+  app_filter?: string;
+  prefer_high_quality?: boolean;
+}
+
+// ── Corpus retrieval function ─────────────────────────────────────────────────
+
+/**
+ * POST /corpus/retrieve — fetch N similar Provar test examples from the Bedrock KB corpus.
+ * Used by provar.qualityhub.examples.retrieve as the few-shot grounding step before
+ * the client LLM synthesises a new test case.
+ *
+ * Throws QualityHubAuthError on 401, QualityHubRateLimitError on 429.
+ * All other non-2xx responses throw a generic Error with status + body.
+ */
+export async function retrieveCorpusExamples(
+  query: string,
+  apiKey: string,
+  baseUrl: string,
+  options: CorpusRetrievalOptions = {}
+): Promise<CorpusRetrievalResponse> {
+  const n = Math.min(Math.max(options.n ?? 5, 1), 10);
+  const body = JSON.stringify({
+    query,
+    n,
+    ...(options.app_filter !== undefined ? { app_filter: options.app_filter } : {}),
+    prefer_high_quality: options.prefer_high_quality ?? true,
+  });
+
+  const { status, responseBody } = await httpsRequest(
+    `${baseUrl}/corpus/retrieve`,
+    'POST',
+    { 'Content-Type': 'application/json', 'x-provar-key': apiKey },
+    body
+  );
+
+  if (status === 401) {
+    throw new QualityHubAuthError(
+      'API key is invalid, expired, or revoked. Run `sf provar auth login` to get a new key.'
+    );
+  }
+
+  if (status === 429) {
+    throw new QualityHubRateLimitError('Quality Hub corpus retrieval rate limit exceeded. Try again later.');
+  }
+
+  if (!isOk(status)) {
+    throw new Error(`Corpus retrieval failed (${status}): ${responseBody}`);
+  }
+
+  return JSON.parse(responseBody) as CorpusRetrievalResponse;
+}
+
 // ── Internal HTTPS helper ─────────────────────────────────────────────────────
 
 function isOk(status: number): boolean {
@@ -299,4 +372,5 @@ export const qualityHubClient = {
   fetchKeyStatus,
   revokeKey,
   rotateKey,
+  retrieveCorpusExamples,
 };

@@ -78,6 +78,38 @@ const RCA_RULES: RcaRule[] = [
     recommendation: 'Verify expected value is correct for current org state',
   },
   {
+    category: 'SALESFORCE_VALIDATION',
+    pattern: /Required fields are missing:\s*\[/i,
+    summary: 'Salesforce required-field validation failed',
+    recommendation: 'Ensure all required fields have values; check field-level security for the running user',
+  },
+  {
+    category: 'SALESFORCE_PICKLIST',
+    pattern: /bad value for restricted picklist field/i,
+    summary: 'Invalid picklist value used',
+    recommendation:
+      'Query valid picklist values (run metadata download or Apex describe); check for trailing spaces or case differences',
+  },
+  {
+    category: 'SALESFORCE_REFERENCE',
+    pattern: /INVALID_CROSS_REFERENCE_KEY/i,
+    summary: 'Referenced record ID does not exist or is inaccessible',
+    recommendation: 'Verify the referenced record exists and the running user has access to it',
+  },
+  {
+    category: 'SALESFORCE_ACCESS',
+    pattern: /INSUFFICIENT_ACCESS_ON_CROSS_REFERENCE_ENTITY/i,
+    summary: 'Running user lacks permission on a referenced record',
+    recommendation: 'Grant the running user appropriate object and record-level permissions',
+  },
+  {
+    category: 'SALESFORCE_TRIGGER',
+    pattern: /FIELD_CUSTOM_VALIDATION_EXCEPTION/i,
+    summary: 'A Salesforce validation rule or trigger blocked the DML operation',
+    recommendation:
+      'Review validation rules and triggers on the target object; ensure test data satisfies all business rules',
+  },
+  {
     category: 'CREDENTIAL_FAILURE',
     pattern: /InvalidPasswordException|AuthenticationException|INVALID_LOGIN/i,
     summary: 'Salesforce login failed',
@@ -185,6 +217,29 @@ function numericChildDirs(dir: string): number[] {
 }
 
 /**
+ * Find Provar Increment-mode sibling directories next to resultsBase.
+ * Provar creates Results, Results(1), Results(2), … as siblings in the same
+ * parent directory — NOT as numeric children of Results. Returns the numeric
+ * suffixes of all matching siblings (e.g. [1, 2, 18]).
+ */
+function incrementSiblingDirs(resultsBase: string): number[] {
+  const parent = path.dirname(resultsBase);
+  const base = path.basename(resultsBase);
+  if (!fs.existsSync(parent)) return [];
+  try {
+    const safeName = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^${safeName}\\((\\d+)\\)$`);
+    return fs
+      .readdirSync(parent, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && pattern.test(e.name))
+      .map((e) => parseInt((pattern.exec(e.name) as RegExpExecArray)[1], 10))
+      .filter((n) => n > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Expand ${env.VAR} placeholders in a string using process.env.
  */
 function expandEnvVars(value: string): string {
@@ -227,9 +282,13 @@ function readResultsFromPropertiesFile(projectPath: string): ResultsFromProps | 
     for (const entry of entries) {
       if (!entry.isFile() || !/provardx-properties.*\.json/i.test(entry.name)) continue;
       try {
-        const props = JSON.parse(fs.readFileSync(path.join(projectPath, entry.name), 'utf-8')) as Record<string, unknown>;
+        const props = JSON.parse(fs.readFileSync(path.join(projectPath, entry.name), 'utf-8')) as Record<
+          string,
+          unknown
+        >;
         const rp = props['resultsPath'] as string | undefined;
-        if (rp) return { resultsBase: rp, disposition: (props['resultsPathDisposition'] as string | undefined) ?? 'Replace' };
+        if (rp)
+          return { resultsBase: rp, disposition: (props['resultsPathDisposition'] as string | undefined) ?? 'Replace' };
       } catch {
         // ignore individual file parse errors
       }
@@ -293,8 +352,20 @@ function resolveResultsLocation(
   }
 
   // Increment resolution
+  // Provar's primary Increment pattern: Results, Results(1), Results(2)… as siblings.
+  // Legacy fallback: purely-numeric children (Results/1/, Results/2/…).
+  const siblings = incrementSiblingDirs(resultsBase);
   const numericDirs = numericChildDirs(resultsBase);
-  if (disposition === 'Increment' || numericDirs.length > 0) {
+  if (disposition === 'Increment' || siblings.length > 0 || numericDirs.length > 0) {
+    if (siblings.length > 0) {
+      const targetIndex = run_index ?? Math.max(...siblings);
+      return {
+        results_dir: path.join(path.dirname(resultsBase), `${path.basename(resultsBase)}(${targetIndex})`),
+        run_index: targetIndex,
+        disposition,
+        resolution_source,
+      };
+    }
     if (numericDirs.length > 0) {
       const targetIndex = run_index ?? Math.max(...numericDirs);
       return {
@@ -304,7 +375,7 @@ function resolveResultsLocation(
         resolution_source,
       };
     }
-    // Disposition is Increment but no numeric subdirs yet — fall through to base
+    // Disposition is Increment but no numbered dirs yet — fall through to base
   }
 
   return {
@@ -327,17 +398,17 @@ export function registerTestRunLocate(server: McpServer): void {
       'Supports explicit results_path override or auto-detection from sf config, provardx properties file, or ANT build.xml.',
     ].join(' '),
     {
-      project_path: z
-        .string()
-        .describe('Absolute path to the Provar project root'),
+      project_path: z.string().describe('Absolute path to the Provar project root'),
       results_path: z
         .string()
         .optional()
         .describe('Explicit override for the results base directory; if provided, skip auto-detection'),
       run_index: z
         .number()
+        .int()
+        .positive()
         .optional()
-        .describe('Which Increment run to target (default: latest)'),
+        .describe('Which Increment run to target (default: latest); must be a positive integer'),
     },
     (input) => {
       const requestId = makeRequestId();
@@ -513,7 +584,8 @@ function collectValidationReports(projectPath: string): string[] {
   const validationDir = path.join(projectPath, 'provardx', 'validation');
   if (!fs.existsSync(validationDir)) return [];
   try {
-    return fs.readdirSync(validationDir)
+    return fs
+      .readdirSync(validationDir)
       .filter((e) => e.endsWith('.json'))
       .map((e) => path.join(validationDir, e));
   } catch {
@@ -550,9 +622,14 @@ function buildFailureReports(
   priorFailed: Set<string>
 ): FailureReport[] {
   const errorClassPatterns = [
-    'NoSuchElementException', 'TimeoutException', 'AssertionException',
-    'SessionNotCreatedException', 'WebDriverException', 'ClassNotFoundException',
-    'LicenseException', 'InvalidPasswordException',
+    'NoSuchElementException',
+    'TimeoutException',
+    'AssertionException',
+    'SessionNotCreatedException',
+    'WebDriverException',
+    'ClassNotFoundException',
+    'LicenseException',
+    'InvalidPasswordException',
   ];
   const reports: FailureReport[] = [];
   for (const tc of testcases) {
@@ -561,7 +638,10 @@ function buildFailureReports(
     const rule = classifyFailure(failureText);
     let error_class: string | null = null;
     for (const cls of errorClassPatterns) {
-      if (failureText.includes(cls)) { error_class = cls; break; }
+      if (failureText.includes(cls)) {
+        error_class = cls;
+        break;
+      }
     }
     const poMatch = /Page Object:\s*([\w.]+)/i.exec(failureText);
     const opMatch = /operation:\s*(\w+)/i.exec(failureText);
@@ -594,17 +674,14 @@ export function registerTestRunRca(server: McpServer): void {
       'and produces recommendations. Use locate_only=true to skip parsing and just resolve artifact locations.',
     ].join(' '),
     {
-      project_path: z
-        .string()
-        .describe('Absolute path to the Provar project root'),
-      results_path: z
-        .string()
-        .optional()
-        .describe('Explicit override for the results base directory'),
+      project_path: z.string().describe('Absolute path to the Provar project root'),
+      results_path: z.string().optional().describe('Explicit override for the results base directory'),
       run_index: z
         .number()
+        .int()
+        .positive()
         .optional()
-        .describe('Which Increment run to target (default: latest)'),
+        .describe('Which Increment run to target (default: latest); must be a positive integer'),
       locate_only: z
         .boolean()
         .optional()
@@ -652,7 +729,13 @@ export function registerTestRunRca(server: McpServer): void {
 
         // ── locate_only shortcut ─────────────────────────────────────────────
         if (input.locate_only) {
-          const result = { ...locateResult, rca_skipped: true, failures: [], infrastructure_issues: [], recommendations: [] };
+          const result = {
+            ...locateResult,
+            rca_skipped: true,
+            failures: [],
+            infrastructure_issues: [],
+            recommendations: [],
+          };
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           };

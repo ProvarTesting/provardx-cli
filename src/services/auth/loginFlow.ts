@@ -9,7 +9,8 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
-import { execFile } from 'node:child_process';
+import net from 'node:net';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { URL } from 'node:url';
 
 // All three ports must be pre-registered in the Cognito App Client.
@@ -73,22 +74,38 @@ function isPortFree(port: number): Promise<boolean> {
 // ── Browser open ──────────────────────────────────────────────────────────────
 
 /**
- * Open a URL in the system browser. The URL is passed as an argument — not
- * interpolated into a shell string — to avoid command injection.
+ * Return the platform-specific command and argument list for opening a URL
+ * in the system browser. The URL is passed as an argument — never interpolated
+ * into a shell string — to avoid command injection. Exported so tests can
+ * assert the correct command is chosen without actually spawning a process.
  */
-export function openBrowser(url: string): void {
-  switch (process.platform) {
+export function getBrowserCommand(
+  url: string,
+  platform: NodeJS.Platform = process.platform
+): { cmd: string; args: string[] } {
+  switch (platform) {
     case 'darwin':
-      execFile('open', [url]);
-      break;
+      return { cmd: 'open', args: [url] };
     case 'win32':
       // Pass the URL via $args[0] so it is never interpolated into the -Command
       // string — avoids quote-breaking and injection risk from special characters.
-      execFile('powershell.exe', ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url]);
-      break;
+      return { cmd: 'powershell.exe', args: ['-NoProfile', '-Command', 'Start-Process $args[0]', '-args', url] };
     default:
-      execFile('xdg-open', [url]);
+      return { cmd: 'xdg-open', args: [url] };
   }
+}
+
+export function openBrowser(url: string): void {
+  // detached:true + stdio:'ignore' + unref() is the standard Node.js pattern for
+  // fire-and-forget child processes — the event loop will not wait for them to exit.
+  const { cmd, args } = getBrowserCommand(url);
+  const child: ChildProcess = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  // Suppress unhandled-error crashes if the browser executable is not found.
+  // The login URL is already printed to the terminal so the user can open it manually.
+  child.on('error', () => {
+    /* intentional no-op */
+  });
+  child.unref();
 }
 
 // ── Localhost callback server ─────────────────────────────────────────────────
@@ -99,6 +116,20 @@ export function openBrowser(url: string): void {
  */
 export function listenForCallback(port: number, expectedState?: string): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Track open sockets so we can forcibly destroy them on shutdown.
+    // This is a Node 18.0/18.1 fallback for server.closeAllConnections(), which
+    // was added in Node 18.2. Without it a browser that ignores Connection:close
+    // could keep the event loop alive after server.close() returns.
+    const openSockets = new Set<net.Socket>();
+    const closeServer = (srv: http.Server): void => {
+      srv.close();
+      if (typeof srv.closeAllConnections === 'function') {
+        srv.closeAllConnections();
+      } else {
+        openSockets.forEach((s) => s.destroy());
+      }
+    };
+
     const server = http.createServer((req, res) => {
       const parsed = new URL(req.url ?? '/', `http://localhost:${port}`);
       const code = parsed.searchParams.get('code');
@@ -107,32 +138,39 @@ export function listenForCallback(port: number, expectedState?: string): Promise
       const callbackState = parsed.searchParams.get('state');
 
       if (expectedState && callbackState !== expectedState) {
-        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
         res.end(
           '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
             '<h2 style="color:#c23934">Authentication failed</h2>' +
             '<p>Invalid state parameter — possible CSRF attack. Please try again.</p>' +
             '</body></html>'
         );
-        server.close();
+        closeServer(server);
         reject(new Error('OAuth callback state mismatch — possible CSRF. Try again.'));
         return;
       }
 
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      // 'Connection: close' tells the browser to close the TCP connection after
+      // this response so server.close() has no lingering keep-alive sockets to
+      // wait for, allowing the Node.js event loop to exit promptly.
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', Connection: 'close' });
       res.end(
         '<html><body style="font-family:sans-serif;padding:2rem;max-width:480px">' +
           '<h2 style="color:#0070d2">Authentication complete</h2>' +
           '<p>You can close this tab and return to the terminal.</p>' +
           '</body></html>'
       );
-      server.close();
+      closeServer(server);
 
       if (code) {
         resolve(code);
       } else {
         reject(new Error(description ?? error ?? 'No authorisation code received from Cognito'));
       }
+    });
+    server.on('connection', (socket: net.Socket) => {
+      openSockets.add(socket);
+      socket.once('close', () => openSockets.delete(socket));
     });
     server.listen(port, '127.0.0.1');
     server.on('error', (err: Error) => reject(err));

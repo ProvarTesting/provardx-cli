@@ -1,6 +1,6 @@
 # Provar MCP Server
 
-The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** that exposes Provar tools to AI assistants such as Claude Desktop, Claude Code, and Cursor. The server lets an AI agent inspect your Provar project, generate Page Objects and test cases, and validate every level of the test hierarchy — all from inside your AI chat session.
+The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** that exposes Provar tools to AI assistants such as Claude Desktop, Claude Code, GitHub Copilot, Cursor, and Agentforce Vibes. The server lets an AI agent inspect your Provar project, generate Page Objects and test cases, and validate every level of the test hierarchy — all from inside your AI chat session.
 
 ---
 
@@ -10,7 +10,10 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Client configuration](#client-configuration)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code](#claude-code)
-  - [Cursor / other MCP clients](#cursor--other-mcp-clients)
+  - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
+  - [Cursor](#cursor)
+  - [Agentforce Vibes](#agentforce-vibes)
+  - [Other MCP-compatible clients](#other-mcp-compatible-clients)
 - [Path security](#path-security)
 - [Available tools](#available-tools)
   - [provardx.ping](#provardxping)
@@ -51,6 +54,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.nitrox.validate](#provarnitroxvalidate)
     - [provar.nitrox.generate](#provarnitroxgenerate)
     - [provar.nitrox.patch](#provarnitroxpatch)
+  - [Quality Hub API tools](#quality-hub-api-tools)
+    - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
+  - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -66,7 +72,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 ## Quick start
 
 ```sh
-# 1. Install the plugin
+# 1. Install the plugin — @beta is required for MCP support
 sf plugins install @provartesting/provardx-cli@beta
 
 # 2. (Optional) Authenticate for full 170+ rule validation
@@ -189,9 +195,92 @@ Add a `provar` entry to your Claude Desktop MCP configuration file.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
 
-### Cursor / other MCP clients
+### GitHub Copilot (VS Code)
 
-Any MCP client that supports the **stdio transport** can use this server. Point `command` at `sf` (or the full path to the Salesforce CLI binary) and pass `["provar", "mcp", "start"]` as arguments, plus `--allowed-paths` as appropriate for your project layout.
+Create or edit `.vscode/mcp.json` in your workspace root (commit this to source control to share with your team):
+
+```json
+{
+  "servers": {
+    "provar": {
+      "type": "stdio",
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows:** Use `sf.cmd` instead of `sf` if VS Code cannot find the command.
+
+After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will be listed in the available tools.
+
+### Cursor
+
+Cursor supports project-level and global MCP configuration.
+
+**Project-level** (`.cursor/mcp.json` in your workspace root — share via source control):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+**Global** (`~/.cursor/mcp.json` — applies across all projects):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+After saving, restart Cursor. The Provar tools will appear under **Settings → MCP**.
+
+> **Windows:** Use `sf.cmd` instead of `sf` if Cursor cannot locate the command.
+
+### Agentforce Vibes
+
+[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). It stores MCP server configuration in `a4d_mcp_settings.json`, which you can open via **Settings → Configure MCP Servers** inside the extension.
+
+Add a `provar` entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "disabled": false,
+      "type": "stdio",
+      "timeout": 600,
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows:** Use `sf.cmd` instead of `sf` if the extension cannot find the command.
+
+> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
+
+### Other MCP-compatible clients
+
+Any client that supports the **stdio transport** can connect to the Provar MCP server. The general pattern is:
+
+- **command:** `sf` (or full path to the SF CLI binary, e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`)
+- **args:** `["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]`
+
+Replace `/path/to/your/provar/project` with the actual root of your Provar Automation project on disk.
 
 ---
 
@@ -432,6 +521,11 @@ Validates an XML test case for schema correctness (validity score) and best prac
 | `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed) |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
+
+**Warning rules:**
+
+- **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
+- **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 
 ---
 
@@ -938,7 +1032,9 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed] }`
+
+The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count and a note is appended to `stdout`. Use `provar.testrun.rca` to inspect the full raw JUnit output.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
@@ -1084,7 +1180,9 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 | `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null` |
 | `pre_existing`        | `true` if the same test failed in a prior Increment run  |
 
-**Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `UNKNOWN`
+**Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `SALESFORCE_VALIDATION`, `SALESFORCE_PICKLIST`, `SALESFORCE_REFERENCE`, `SALESFORCE_ACCESS`, `SALESFORCE_TRIGGER`, `UNKNOWN`
+
+Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 
 **Error codes:** `RESULTS_NOT_CONFIGURED`
 
@@ -1321,12 +1419,70 @@ When `validate_after=true` and the merged content has errors, the write is block
 
 ---
 
+## Quality Hub API tools
+
+These tools call the Quality Hub HTTP API directly (no `sf` subprocess). They require a Provar API key set via `sf provar auth login`.
+
+### `provar.qualityhub.examples.retrieve`
+
+Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar.testcase.generate` to provide few-shot grounding examples.
+
+If retrieval fails for any reason (no key, invalid key, rate limit, network error), the tool returns `{ examples: [], count: 0, warning: "..." }` with `isError: false` so the generation workflow can continue without grounding. It **never** hard-errors on API failure.
+
+| Input                 | Type    | Required | Default | Description                                                                    |
+| --------------------- | ------- | -------- | ------- | ------------------------------------------------------------------------------ |
+| `query`               | string  | yes      | —       | User story, requirement, or test content to search against the corpus          |
+| `n`                   | integer | no       | `5`     | Number of examples to return. Clamped to [1, 10].                              |
+| `app_filter`          | string  | no       | —       | Bias results toward a Salesforce cloud (e.g. `"SalesCloud"`, `"ServiceCloud"`) |
+| `prefer_high_quality` | boolean | no       | `true`  | When `true`, favours tier4/tier3 corpus examples over lower tiers              |
+
+| Output field      | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `retrieval_id`    | Opaque ID for the retrieval request (useful for debugging)            |
+| `examples`        | Array of corpus examples (empty on failure or zero results)           |
+| `count`           | Number of examples returned                                           |
+| `query_truncated` | `true` if the query was truncated server-side (max 2000 chars)        |
+| `warning`         | Present when retrieval was skipped; contains onboarding/error details |
+
+Each element in `examples`:
+
+| Field               | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `id`                | Corpus path (e.g. `tier4/SalesCloud/create.xml`)                  |
+| `name`              | Test case name                                                    |
+| `xml`               | Full Provar XML test case content                                 |
+| `similarity_score`  | Similarity score in [0, 1]                                        |
+| `salesforce_object` | Primary Salesforce object the test exercises                      |
+| `quality_tier`      | Corpus tier (`tier4`, `tier3`, `tier2`, `tier1`)                  |
+| `full_content`      | `true` when the full XML was returned (not truncated server-side) |
+
+**Error codes:** `INVALID_QUERY` (empty query — only error that sets `isError: true`)
+
+---
+
+### Org metadata via Salesforce Hosted MCP
+
+Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar.qualityhub.examples.retrieve` query.
+
+| Endpoint | URL |
+| -------- | --- |
+| Production | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` |
+| Sandbox | `https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads` |
+
+The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
+
+**Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
+
+---
+
 ## AI loop pattern
 
 The automation tools are designed to support an **AI-driven fix loop**: an agent can iteratively improve test quality without leaving the chat session.
 
 ```
 provar.project.inspect             → understand what's in the project, find uncovered tests
+[SF MCP] getObjectSchema           → retrieve org field metadata (Salesforce Hosted MCP — optional but recommended)
+provar.qualityhub.examples.retrieve → fetch few-shot grounding examples from the corpus
 provar.testcase.validate           → find quality issues in a test case
 provar.testcase.generate           → regenerate or fix the test case XML
 provar.testplan.add-instance       → wire a new/fixed test case into a plan suite

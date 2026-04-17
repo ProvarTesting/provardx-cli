@@ -275,10 +275,10 @@ A file can be valid (no schema errors) but have a low quality score (missing des
 
 The `provar.testcase.validate` tool operates in one of two modes depending on whether a Quality Hub API key is configured:
 
-| Mode | `validation_source` | Rules | Requires |
-|---|---|---|---|
-| **Quality Hub API** | `quality_hub` | 170+ rules, full quality scoring | `sf provar auth login` (once) |
-| **Local only** | `local` | Structural and schema rules | Nothing |
+| Mode                | `validation_source` | Rules                            | Requires                      |
+| ------------------- | ------------------- | -------------------------------- | ----------------------------- |
+| **Quality Hub API** | `quality_hub`       | 170+ rules, full quality scoring | `sf provar auth login` (once) |
+| **Local only**      | `local`             | Structural and schema rules      | Nothing                       |
 
 If a key is configured but the API is temporarily unreachable, the tool falls back to local rules and sets `validation_source: "local_fallback"` with a `validation_warning` explaining why.
 
