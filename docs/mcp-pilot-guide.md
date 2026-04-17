@@ -296,6 +296,44 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ---
 
+### Scenario 9 (requires API key): AI Test Generation from User Story
+
+**Goal:** Demonstrate the full Phase 2 AI-assisted test generation loop: corpus retrieval → LLM synthesis → generate + validate.
+
+**Setup:** Run `sf provar auth login` and complete the browser login.
+
+> "I want to generate a Provar test case for: As a sales rep I want to create an Opportunity in Salesforce with a close date, amount, and stage. Use the corpus to find similar examples first."
+
+**What to look for:**
+
+- `provar.qualityhub.examples.retrieve` called with the user story as query, returning `examples` array with `similarity_score` values and XML content
+- The AI using the retrieved XML as few-shot context when calling `provar.testcase.generate`
+- `provar.testcase.validate` confirming `quality_score >= 70`
+- If no API key: tool returns `{ examples: [], warning: "..." }` with `isError: false` and the AI continues without grounding
+
+**To test graceful degrade:** Run `sf provar auth clear` and repeat. Verify `examples: []` with a warning and generation still proceeds.
+
+---
+
+### Scenario 10: Corpus Retrieval — No Key / Rate Limit
+
+**Goal:** Confirm `provar.qualityhub.examples.retrieve` never hard-errors on API failure.
+
+> "Fetch 3 corpus examples for: Create a Contact in Salesforce."
+
+**Without an API key configured:**
+
+- `isError` must be `false` (NOT `true`) — the generation workflow must continue
+- `examples` must be `[]`
+- `warning` must mention `sf provar auth login`
+
+**What to look for:**
+
+- The AI acknowledges the missing key and offers to continue without grounding
+- No error is thrown that would abort the session
+
+---
+
 ## Security Model
 
 ### What the server does
