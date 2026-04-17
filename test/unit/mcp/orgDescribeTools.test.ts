@@ -58,13 +58,16 @@ describe('orgDescribeTools', () => {
       assert.equal(body.error_code, 'NOT_CONFIGURED');
     });
 
-    it('includes actionable workaround message in error', () => {
+    it('includes actionable guidance message in error', () => {
       const result = server.call('provar.org.describe', {});
 
       const body = parseBody(result);
       const message = String(body.message);
       assert.ok(message.length > 0, 'message must be present');
-      assert.ok(message.toLowerCase().includes('workaround'), 'message should mention workaround');
+      assert.ok(
+        message.includes('sobject-reads') || message.includes('Salesforce Hosted MCP'),
+        'message should reference the Salesforce Hosted MCP alternative'
+      );
     });
 
     it('handles target_org and objects params without crashing', () => {

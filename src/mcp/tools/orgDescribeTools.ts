@@ -17,14 +17,17 @@ export function registerOrgDescribe(server: McpServer): void {
   server.tool(
     'provar.org.describe',
     [
-      'NOT YET ACTIVE — Retrieves Salesforce object and field metadata (sObject describe) from a connected org.',
-      'Implementation is pending SF auth scope confirmation (Phase 2 OQ5).',
-      'When active: returns up to 20 objects with up to 50 fields each, including field API names, types, and relationships.',
-      'This context is used to ground test generation with org-specific field names instead of generic examples.',
+      'NOT YET ACTIVE — superseded by the Salesforce Hosted MCP Server (now GA).',
       '',
-      'WORKAROUND until this tool is active: append Salesforce object names and key field API names directly',
-      'to your user story before calling provar.qualityhub.examples.retrieve. For example:',
-      '  "... [Opportunity fields: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"',
+      'RECOMMENDED: Connect the Salesforce sobject-reads MCP server alongside Provar MCP,',
+      'then call getObjectSchema to retrieve sObject field metadata for your org.',
+      '  Production: https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads',
+      '  Sandbox:    https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads',
+      'Pass the schema as additional context when calling provar.qualityhub.examples.retrieve.',
+      'The SF Hosted MCP uses per-user OAuth 2.0 and respects field-level security automatically.',
+      '',
+      'FALLBACK (no SF MCP): append key field API names directly to your query.',
+      '  Example: "... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist)]"',
     ].join('\n'),
     {
       target_org: z
@@ -50,8 +53,9 @@ export function registerOrgDescribe(server: McpServer): void {
             text: JSON.stringify(
               makeError(
                 'NOT_CONFIGURED',
-                'provar.org.describe is not yet active. SF auth scope confirmation (OQ5) is pending. ' +
-                  'Use the workaround described in the tool description: append object/field names to your user story query.',
+                'provar.org.describe is not yet active. Use the Salesforce Hosted MCP Server instead: ' +
+                  'https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads — call getObjectSchema ' +
+                  'to retrieve sObject metadata, then include it in your provar.qualityhub.examples.retrieve query.',
                 requestId,
                 false
               )

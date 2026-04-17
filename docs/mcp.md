@@ -1376,9 +1376,18 @@ Each element in `examples`:
 
 ### `provar.org.describe`
 
-> **NOT YET ACTIVE.** This tool is a stub. Calling it always returns `NOT_CONFIGURED`.
+> **NOT YET ACTIVE — superseded by the Salesforce Hosted MCP Server (now GA).** This tool always returns `NOT_CONFIGURED`.
 
-When fully implemented, this tool will retrieve Salesforce sObject metadata (fields, picklist values, relationships) for a connected org. For now, use the Salesforce CLI directly: `sf sobject describe --sobject <ObjectName> --target-org <alias>`.
+**Use the Salesforce Hosted MCP Server instead.** Connect `platform/sobject-reads` to your AI client alongside Provar MCP, then call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context when calling `provar.qualityhub.examples.retrieve`.
+
+| Endpoint | URL |
+| -------- | --- |
+| Production | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` |
+| Sandbox | `https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads` |
+
+The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
+
+**Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
 
 | Input        | Type     | Required | Description                                        |
 | ------------ | -------- | -------- | -------------------------------------------------- |
@@ -1395,6 +1404,7 @@ The automation tools are designed to support an **AI-driven fix loop**: an agent
 
 ```
 provar.project.inspect             → understand what's in the project, find uncovered tests
+[SF MCP] getObjectSchema           → retrieve org field metadata (Salesforce Hosted MCP — optional but recommended)
 provar.qualityhub.examples.retrieve → fetch few-shot grounding examples from the corpus
 provar.testcase.validate           → find quality issues in a test case
 provar.testcase.generate           → regenerate or fix the test case XML
