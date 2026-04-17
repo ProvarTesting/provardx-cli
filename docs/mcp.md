@@ -51,6 +51,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.nitrox.validate](#provarnitroxvalidate)
     - [provar.nitrox.generate](#provarnitroxgenerate)
     - [provar.nitrox.patch](#provarnitroxpatch)
+  - [Quality Hub API tools](#quality-hub-api-tools)
+    - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
+  - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -1330,12 +1333,70 @@ When `validate_after=true` and the merged content has errors, the write is block
 
 ---
 
+## Quality Hub API tools
+
+These tools call the Quality Hub HTTP API directly (no `sf` subprocess). They require a Provar API key set via `sf provar auth login`.
+
+### `provar.qualityhub.examples.retrieve`
+
+Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar.testcase.generate` to provide few-shot grounding examples.
+
+If retrieval fails for any reason (no key, invalid key, rate limit, network error), the tool returns `{ examples: [], count: 0, warning: "..." }` with `isError: false` so the generation workflow can continue without grounding. It **never** hard-errors on API failure.
+
+| Input                 | Type    | Required | Default | Description                                                                    |
+| --------------------- | ------- | -------- | ------- | ------------------------------------------------------------------------------ |
+| `query`               | string  | yes      | —       | User story, requirement, or test content to search against the corpus          |
+| `n`                   | integer | no       | `5`     | Number of examples to return. Clamped to [1, 10].                              |
+| `app_filter`          | string  | no       | —       | Bias results toward a Salesforce cloud (e.g. `"SalesCloud"`, `"ServiceCloud"`) |
+| `prefer_high_quality` | boolean | no       | `true`  | When `true`, favours tier4/tier3 corpus examples over lower tiers              |
+
+| Output field      | Description                                                           |
+| ----------------- | --------------------------------------------------------------------- |
+| `retrieval_id`    | Opaque ID for the retrieval request (useful for debugging)            |
+| `examples`        | Array of corpus examples (empty on failure or zero results)           |
+| `count`           | Number of examples returned                                           |
+| `query_truncated` | `true` if the query was truncated server-side (max 2000 chars)        |
+| `warning`         | Present when retrieval was skipped; contains onboarding/error details |
+
+Each element in `examples`:
+
+| Field               | Description                                                       |
+| ------------------- | ----------------------------------------------------------------- |
+| `id`                | Corpus path (e.g. `tier4/SalesCloud/create.xml`)                  |
+| `name`              | Test case name                                                    |
+| `xml`               | Full Provar XML test case content                                 |
+| `similarity_score`  | Similarity score in [0, 1]                                        |
+| `salesforce_object` | Primary Salesforce object the test exercises                      |
+| `quality_tier`      | Corpus tier (`tier4`, `tier3`, `tier2`, `tier1`)                  |
+| `full_content`      | `true` when the full XML was returned (not truncated server-side) |
+
+**Error codes:** `INVALID_QUERY` (empty query — only error that sets `isError: true`)
+
+---
+
+### Org metadata via Salesforce Hosted MCP
+
+Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar.qualityhub.examples.retrieve` query.
+
+| Endpoint | URL |
+| -------- | --- |
+| Production | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` |
+| Sandbox | `https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads` |
+
+The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
+
+**Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
+
+---
+
 ## AI loop pattern
 
 The automation tools are designed to support an **AI-driven fix loop**: an agent can iteratively improve test quality without leaving the chat session.
 
 ```
 provar.project.inspect             → understand what's in the project, find uncovered tests
+[SF MCP] getObjectSchema           → retrieve org field metadata (Salesforce Hosted MCP — optional but recommended)
+provar.qualityhub.examples.retrieve → fetch few-shot grounding examples from the corpus
 provar.testcase.validate           → find quality issues in a test case
 provar.testcase.generate           → regenerate or fix the test case XML
 provar.testplan.add-instance       → wire a new/fixed test case into a plan suite

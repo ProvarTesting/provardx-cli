@@ -6,9 +6,20 @@
  */
 
 /* eslint-disable camelcase */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { strict as assert } from 'node:assert';
+import https from 'node:https';
+import { EventEmitter } from 'node:events';
 import { describe, it } from 'mocha';
-import { normaliseApiResponse } from '../../../../src/services/qualityHub/client.js';
+import sinon from 'sinon';
+import {
+  normaliseApiResponse,
+  retrieveCorpusExamples,
+  QualityHubAuthError,
+  QualityHubRateLimitError,
+} from '../../../../src/services/qualityHub/client.js';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -115,5 +126,186 @@ describe('normaliseApiResponse', () => {
     assert.doesNotThrow(() => normaliseApiResponse({ ...BASE_RESPONSE, valid: false, errors: [violation] }));
     const r = normaliseApiResponse({ ...BASE_RESPONSE, valid: false, errors: [violation] });
     assert.equal(r.issues[0].applies_to, undefined);
+  });
+});
+
+// ── retrieveCorpusExamples ────────────────────────────────────────────────────
+
+const MOCK_CORPUS_RESPONSE = JSON.stringify({
+  retrieval_id: 'ret-abc123',
+  examples: [
+    {
+      id: 'tier4/SalesCloud/create_opportunity.xml',
+      name: 'create_opportunity',
+      xml: '<testCase guid="abc"><steps/></testCase>',
+      similarity_score: 0.94,
+      salesforce_object: 'Opportunity',
+      quality_tier: 'tier4',
+    },
+  ],
+  count: 1,
+  query_truncated: false,
+});
+
+function makeHttpsStub(statusCode: number, body: string): sinon.SinonStub {
+  const stub = sinon.stub(https, 'request');
+  (stub as any).callsFake((_opts: unknown, cb: (res: EventEmitter & { statusCode: number }) => void) => {
+    const res = new EventEmitter() as EventEmitter & { statusCode: number };
+    res.statusCode = statusCode;
+    const req = new EventEmitter() as EventEmitter & {
+      write: sinon.SinonStub;
+      end: sinon.SinonStub;
+      setTimeout: sinon.SinonStub;
+      destroy: sinon.SinonStub;
+    };
+    req.write = sinon.stub();
+    req.end = sinon.stub().callsFake(() => {
+      if (cb) cb(res);
+      res.emit('data', Buffer.from(body));
+      res.emit('end');
+    });
+    req.setTimeout = sinon.stub();
+    req.destroy = sinon.stub();
+    return req;
+  });
+  return stub;
+}
+
+describe('retrieveCorpusExamples', () => {
+  afterEach(() => sinon.restore());
+
+  it('returns parsed corpus response on 200', async () => {
+    makeHttpsStub(200, MOCK_CORPUS_RESPONSE);
+
+    const result = await retrieveCorpusExamples('Create an Opportunity', 'pv_k_test', 'https://api.example.com');
+
+    assert.equal(result.retrieval_id, 'ret-abc123');
+    assert.equal(result.count, 1);
+    assert.equal(result.examples[0].name, 'create_opportunity');
+    assert.equal(result.query_truncated, false);
+  });
+
+  it('throws QualityHubAuthError on 401', async () => {
+    makeHttpsStub(401, '{"error":"Unauthorized"}');
+
+    await assert.rejects(
+      () => retrieveCorpusExamples('query', 'bad_key', 'https://api.example.com'),
+      QualityHubAuthError
+    );
+  });
+
+  it('throws QualityHubRateLimitError on 429', async () => {
+    makeHttpsStub(429, '{"error":"Too Many Requests"}');
+
+    await assert.rejects(
+      () => retrieveCorpusExamples('query', 'pv_k_test', 'https://api.example.com'),
+      QualityHubRateLimitError
+    );
+  });
+
+  it('throws generic Error on 500', async () => {
+    makeHttpsStub(500, '{"error":"Internal Server Error"}');
+
+    await assert.rejects(
+      () => retrieveCorpusExamples('query', 'pv_k_test', 'https://api.example.com'),
+      (err: Error) => err.message.includes('500')
+    );
+  });
+
+  it('clamps n to [1, 10] — n=50 becomes 10', async () => {
+    let capturedBody = '';
+    const stub = sinon.stub(https, 'request');
+    (stub as any).callsFake((_opts: unknown, cb: (res: EventEmitter & { statusCode: number }) => void) => {
+      const res = new EventEmitter() as EventEmitter & { statusCode: number };
+      res.statusCode = 200;
+      const req = new EventEmitter() as EventEmitter & {
+        write: (data: string) => void;
+        end: sinon.SinonStub;
+        setTimeout: sinon.SinonStub;
+        destroy: sinon.SinonStub;
+      };
+      req.write = (data: string): void => {
+        capturedBody += data;
+      };
+      req.end = sinon.stub().callsFake(() => {
+        if (cb) cb(res);
+        res.emit('data', Buffer.from(MOCK_CORPUS_RESPONSE));
+        res.emit('end');
+      });
+      req.setTimeout = sinon.stub();
+      req.destroy = sinon.stub();
+      return req;
+    });
+
+    await retrieveCorpusExamples('query', 'pv_k_test', 'https://api.example.com', { n: 50 });
+
+    const parsed = JSON.parse(capturedBody) as { n: number };
+    assert.equal(parsed.n, 10);
+  });
+
+  it('sends app_filter and prefer_high_quality when provided', async () => {
+    let capturedBody = '';
+    const stub = sinon.stub(https, 'request');
+    (stub as any).callsFake((_opts: unknown, cb: (res: EventEmitter & { statusCode: number }) => void) => {
+      const res = new EventEmitter() as EventEmitter & { statusCode: number };
+      res.statusCode = 200;
+      const req = new EventEmitter() as EventEmitter & {
+        write: (data: string) => void;
+        end: sinon.SinonStub;
+        setTimeout: sinon.SinonStub;
+        destroy: sinon.SinonStub;
+      };
+      req.write = (data: string): void => {
+        capturedBody += data;
+      };
+      req.end = sinon.stub().callsFake(() => {
+        if (cb) cb(res);
+        res.emit('data', Buffer.from(MOCK_CORPUS_RESPONSE));
+        res.emit('end');
+      });
+      req.setTimeout = sinon.stub();
+      req.destroy = sinon.stub();
+      return req;
+    });
+
+    await retrieveCorpusExamples('query', 'pv_k_test', 'https://api.example.com', {
+      app_filter: 'SalesCloud',
+      prefer_high_quality: false,
+    });
+
+    const parsed = JSON.parse(capturedBody) as { app_filter: string; prefer_high_quality: boolean };
+    assert.equal(parsed.app_filter, 'SalesCloud');
+    assert.equal(parsed.prefer_high_quality, false);
+  });
+
+  it('omits app_filter from request body when not provided', async () => {
+    let capturedBody = '';
+    const stub = sinon.stub(https, 'request');
+    (stub as any).callsFake((_opts: unknown, cb: (res: EventEmitter & { statusCode: number }) => void) => {
+      const res = new EventEmitter() as EventEmitter & { statusCode: number };
+      res.statusCode = 200;
+      const req = new EventEmitter() as EventEmitter & {
+        write: (data: string) => void;
+        end: sinon.SinonStub;
+        setTimeout: sinon.SinonStub;
+        destroy: sinon.SinonStub;
+      };
+      req.write = (data: string): void => {
+        capturedBody += data;
+      };
+      req.end = sinon.stub().callsFake(() => {
+        if (cb) cb(res);
+        res.emit('data', Buffer.from(MOCK_CORPUS_RESPONSE));
+        res.emit('end');
+      });
+      req.setTimeout = sinon.stub();
+      req.destroy = sinon.stub();
+      return req;
+    });
+
+    await retrieveCorpusExamples('query', 'pv_k_test', 'https://api.example.com');
+
+    const parsed = JSON.parse(capturedBody) as Record<string, unknown>;
+    assert.ok(!('app_filter' in parsed), 'app_filter should not be in request body when not specified');
   });
 });

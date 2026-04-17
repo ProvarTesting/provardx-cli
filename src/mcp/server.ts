@@ -22,6 +22,7 @@ import { registerTestPlanValidate } from './tools/testPlanValidate.js';
 import { registerProjectValidateFromPath } from './tools/projectValidateFromPath.js';
 import { registerAllPropertiesTools } from './tools/propertiesTools.js';
 import { registerAllQualityHubTools } from './tools/qualityHubTools.js';
+import { registerAllQualityHubApiTools } from './tools/qualityHubApiTools.js';
 import { registerAllAutomationTools } from './tools/automationTools.js';
 import { registerAllDefectTools } from './tools/defectTools.js';
 import { registerAllAntTools } from './tools/antTools.js';
@@ -68,6 +69,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerProjectValidateFromPath(server, config);
   registerAllPropertiesTools(server, config);
   registerAllQualityHubTools(server);
+  registerAllQualityHubApiTools(server);
   registerAllAutomationTools(server, config);
   registerAllDefectTools(server);
   registerAllAntTools(server, config);
