@@ -8,15 +8,15 @@ This file is read automatically by Claude Code at the start of every session. Fo
 
 **Every PR that adds, modifies, or removes an MCP tool must update documentation.** The full set of places to update:
 
-| What changed | Where to update |
-|---|---|
-| New MCP tool | `docs/mcp.md` (add tool entry with schema + example), `docs/mcp-pilot-guide.md` (add evaluation scenario if user-facing), `README.md` (update tool count if referenced) |
-| Modified tool description / parameters / errors | `docs/mcp.md` (update the relevant tool section) |
-| Removed tool | `docs/mcp.md`, `docs/mcp-pilot-guide.md`, `README.md` |
-| New error code or suggestion field | `docs/mcp.md` (Troubleshooting or Error Codes section) |
-| Security model change (path policy, licence, transport) | `docs/mcp.md` (Security Model section), `docs/mcp-pilot-guide.md` (Security Model section) |
-| New NitroX tool or schema rule | `docs/mcp.md` (NitroX section), `docs/mcp-pilot-guide.md` (Scenario 7) |
-| Smoke test count change | Update `TOTAL_EXPECTED` in `scripts/mcp-smoke.cjs` |
+| What changed                                            | Where to update                                                                                                                                                         |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New MCP tool                                            | `docs/mcp.md` (add tool entry with schema + example), `docs/mcp-pilot-guide.md` (add evaluation scenario if user-facing), `README.md` (update tool count if referenced) |
+| Modified tool description / parameters / errors         | `docs/mcp.md` (update the relevant tool section)                                                                                                                        |
+| Removed tool                                            | `docs/mcp.md`, `docs/mcp-pilot-guide.md`, `README.md`                                                                                                                   |
+| New error code or suggestion field                      | `docs/mcp.md` (Troubleshooting or Error Codes section)                                                                                                                  |
+| Security model change (path policy, licence, transport) | `docs/mcp.md` (Security Model section), `docs/mcp-pilot-guide.md` (Security Model section)                                                                              |
+| New NitroX tool or schema rule                          | `docs/mcp.md` (NitroX section), `docs/mcp-pilot-guide.md` (Scenario 7)                                                                                                  |
+| Smoke test count change                                 | Update `TOTAL_EXPECTED` in `scripts/mcp-smoke.cjs`                                                                                                                      |
 
 **External / customer-facing docs** (`docs/provar-mcp-public-docs.md`, `docs/university-of-provar-mcp-course.md`) are maintained separately by the Provar team — flag changes that affect public-facing behaviour in your PR description so those can be updated manually.
 
@@ -32,6 +32,7 @@ Every PR must include tests for new or changed behaviour:
 - **Smoke test** → add an entry in `scripts/mcp-smoke.cjs` for each new tool; update `TOTAL_EXPECTED`
 
 Run before every commit:
+
 ```sh
 yarn test:only          # unit tests — must all pass
 node scripts/mcp-smoke.cjs 2>/dev/null   # smoke — must show all PASS
@@ -41,9 +42,11 @@ yarn compile            # TypeScript — must be clean
 > **Wireit caching gotcha:** `yarn test:only` is wired through wireit and can return a cached result
 > after changes (e.g. after `git stash pop` or switching branches). When you need a guaranteed fresh
 > run, bypass wireit entirely:
+>
 > ```sh
 > node_modules/.bin/nyc node_modules/.bin/mocha "test/**/*.test.ts"
 > ```
+>
 > This is equivalent to `yarn test:dev` and always re-executes against the current source.
 
 ---
