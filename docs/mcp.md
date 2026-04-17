@@ -1,6 +1,6 @@
 # Provar MCP Server
 
-The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** that exposes Provar tools to AI assistants such as Claude Desktop, Claude Code, and Cursor. The server lets an AI agent inspect your Provar project, generate Page Objects and test cases, and validate every level of the test hierarchy — all from inside your AI chat session.
+The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** that exposes Provar tools to AI assistants such as Claude Desktop, Claude Code, GitHub Copilot, Cursor, and Agentforce Vibes. The server lets an AI agent inspect your Provar project, generate Page Objects and test cases, and validate every level of the test hierarchy — all from inside your AI chat session.
 
 ---
 
@@ -10,7 +10,10 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Client configuration](#client-configuration)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code](#claude-code)
-  - [Cursor / other MCP clients](#cursor--other-mcp-clients)
+  - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
+  - [Cursor](#cursor)
+  - [Agentforce Vibes](#agentforce-vibes)
+  - [Other MCP-compatible clients](#other-mcp-compatible-clients)
 - [Path security](#path-security)
 - [Available tools](#available-tools)
   - [provardx.ping](#provardxping)
@@ -192,9 +195,92 @@ Add a `provar` entry to your Claude Desktop MCP configuration file.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
 
-### Cursor / other MCP clients
+### GitHub Copilot (VS Code)
 
-Any MCP client that supports the **stdio transport** can use this server. Point `command` at `sf` (or the full path to the Salesforce CLI binary) and pass `["provar", "mcp", "start"]` as arguments, plus `--allowed-paths` as appropriate for your project layout.
+Create or edit `.vscode/mcp.json` in your workspace root (commit this to source control to share with your team):
+
+```json
+{
+  "servers": {
+    "provar": {
+      "type": "stdio",
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows:** Use `sf.cmd` instead of `sf` if VS Code cannot find the command.
+
+After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will be listed in the available tools.
+
+### Cursor
+
+Cursor supports project-level and global MCP configuration.
+
+**Project-level** (`.cursor/mcp.json` in your workspace root — share via source control):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+**Global** (`~/.cursor/mcp.json` — applies across all projects):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+After saving, restart Cursor. The Provar tools will appear under **Settings → MCP**.
+
+> **Windows:** Use `sf.cmd` instead of `sf` if Cursor cannot locate the command.
+
+### Agentforce Vibes
+
+[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). It stores MCP server configuration in `a4d_mcp_settings.json`, which you can open via **Settings → Configure MCP Servers** inside the extension.
+
+Add a `provar` entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "disabled": false,
+      "type": "stdio",
+      "timeout": 600,
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> **Windows:** Use `sf.cmd` instead of `sf` if the extension cannot find the command.
+
+> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
+
+### Other MCP-compatible clients
+
+Any client that supports the **stdio transport** can connect to the Provar MCP server. The general pattern is:
+
+- **command:** `sf` (or full path to the SF CLI binary, e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`)
+- **args:** `["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]`
+
+Replace `/path/to/your/provar/project` with the actual root of your Provar Automation project on disk.
 
 ---
 
