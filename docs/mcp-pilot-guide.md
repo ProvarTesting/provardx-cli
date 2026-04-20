@@ -80,7 +80,19 @@ Restart Claude Desktop after saving the file. The Provar tools will appear in th
 
 #### Claude Code (VS Code / CLI)
 
-Add to your project's `.claude/mcp.json`:
+Claude Code can be configured via the `claude` CLI command or by editing a JSON config file. Both work whether you're in the terminal, the VS Code extension, or the Claude Code Desktop app.
+
+**Via terminal (recommended for first-time setup):**
+
+```sh
+# User-scoped — works across all projects
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, shared — writes .mcp.json at project root; commit to source control
+claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+**Via config file** — create `.mcp.json` at your project root:
 
 ```json
 {
@@ -93,10 +105,23 @@ Add to your project's `.claude/mcp.json`:
 }
 ```
 
-Or add directly from the Claude Code session:
+**`sf` not found?** GUI environments often start with a restricted PATH. Use `npx` instead:
 
+```sh
+claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allowed-paths /path/to/your/provar/project
 ```
-/mcp add provar sf provar mcp start --allowed-paths /path/to/project
+
+Or in the config file:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "npx",
+      "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
 ```
 
 #### GitHub Copilot (VS Code)
@@ -349,14 +374,15 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 **Goal:** Demonstrate the full Phase 2 AI-assisted test generation loop: org metadata → corpus retrieval → LLM synthesis → generate + validate.
 
 **Setup:**
+
 1. Run `sf provar auth login` and complete the browser login (Provar API key).
-2. *(Optional but recommended)* Connect the Salesforce Hosted MCP Server alongside Provar MCP. Add `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` to your MCP client config and authenticate with OAuth. This gives the AI real field API names for your org.
+2. _(Optional but recommended)_ Connect the Salesforce Hosted MCP Server alongside Provar MCP. Add `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` to your MCP client config and authenticate with OAuth. This gives the AI real field API names for your org.
 
 > "I want to generate a Provar test case for: As a sales rep I want to create an Opportunity in Salesforce with a close date, amount, and stage. Check my org's Opportunity schema first, then find similar corpus examples."
 
 **What to look for:**
 
-- *(If SF MCP connected)* `getObjectSchema` called for `Opportunity` — AI uses real field names (e.g. `Amount`, `CloseDate`, `StageName`) in the corpus query
+- _(If SF MCP connected)_ `getObjectSchema` called for `Opportunity` — AI uses real field names (e.g. `Amount`, `CloseDate`, `StageName`) in the corpus query
 - `provar.qualityhub.examples.retrieve` called with the enriched user story as query, returning `examples` array with `similarity_score` values and XML content
 - The AI using the retrieved XML as few-shot context when calling `provar.testcase.generate`
 - `provar.testcase.validate` confirming `quality_score >= 70`
