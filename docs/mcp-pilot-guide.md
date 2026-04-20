@@ -134,7 +134,7 @@ Create or edit `.vscode/mcp.json` in your workspace root:
     "provar": {
       "type": "stdio",
       "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
     }
   }
 }
@@ -142,7 +142,7 @@ Create or edit `.vscode/mcp.json` in your workspace root:
 
 Open the **GitHub Copilot Chat** panel and switch to **Agent** mode. The Provar tools will appear in the tool list.
 
-> **Windows:** Use `sf.cmd` instead of `sf` if VS Code cannot find the command.
+> **`sf` not found?** Use `npx` instead: replace `"command": "sf"` with `"command": "npx"` and prepend `"-y", "@salesforce/cli"` to the `args` array. On Windows, you can also try `sf.cmd`.
 
 #### Cursor
 

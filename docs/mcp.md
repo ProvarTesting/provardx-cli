@@ -157,7 +157,7 @@ Run one of the following in a terminal, choosing your preferred scope:
 # User-scoped — registers once and works across all your projects
 claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 
-# Project-scoped, shared — writes .mcp.json in the current directory; commit to source control
+# Project-scoped, shared — run from your project root; writes .mcp.json there; commit to source control
 claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 
 # Project-scoped, private — stored in .claude/settings.local.json; not committed
