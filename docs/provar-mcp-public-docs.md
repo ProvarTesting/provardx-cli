@@ -97,7 +97,19 @@ Restart Claude Desktop after saving. The Provar tools will appear in the tool li
 
 #### Claude Code (VS Code / CLI)
 
-Add to your project's `.claude/mcp.json`:
+Claude Code can be configured via the `claude` CLI command or by editing a JSON config file. Both approaches work in the terminal, the VS Code extension, and the Claude Code Desktop app.
+
+**Via terminal (recommended):**
+
+```sh
+# User-scoped — works across all your projects
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+
+# Project-scoped, shared — creates .mcp.json at project root; commit to source control
+claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+**Via config file** — create `.mcp.json` at your project root:
 
 ```json
 {
@@ -110,26 +122,64 @@ Add to your project's `.claude/mcp.json`:
 }
 ```
 
-Or add directly from a Claude Code session:
+**`sf` not found?** GUI environments (VS Code, Claude Code Desktop) often launch with a restricted PATH that doesn't include `sf`. Use `npx` as the command instead:
 
+```sh
+# Terminal
+claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allowed-paths /path/to/your/provar/project
 ```
-/mcp add provar sf provar mcp start --allowed-paths /path/to/project
-```
-
-#### Cursor
-
-In Cursor Settings → MCP, add:
 
 ```json
 {
-  "provar": {
-    "command": "sf",
-    "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+  "mcpServers": {
+    "provar": {
+      "command": "npx",
+      "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
   }
 }
 ```
 
-> **Important:** Set `--allowed-paths` to the root of your Provar Automation project directory. This is the folder containing your `.testproject` file. The server will only read and write files within this boundary.
+#### GitHub Copilot (VS Code)
+
+Create `.vscode/mcp.json` in your workspace root (commit to share with your team):
+
+```json
+{
+  "servers": {
+    "provar": {
+      "type": "stdio",
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+Open the **GitHub Copilot Chat** panel and switch to **Agent** mode. The Provar tools will appear in the tool list.
+
+> **`sf` not found?** Replace `"command": "sf"` with `"command": "npx"` and prepend `"-y", "@salesforce/cli"` to the `args` array.
+
+#### Cursor
+
+Add to `.cursor/mcp.json` in your workspace root (project-level) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+Restart Cursor after saving. The Provar tools will appear under **Settings → MCP**.
+
+> **`sf` not found?** Replace `"command": "sf"` with `"command": "npx"` and prepend `"-y", "@salesforce/cli"` to the `args` array.
+
+> **Important:** Set `--allowed-paths` to the root of your Provar Automation project directory (the folder containing your `.testproject` file). The server will only read and write files within this boundary.
 
 ---
 
@@ -364,11 +414,13 @@ Open Provar Automation IDE → Help → Manage License → ensure the license is
 The server started successfully but the license cache is over 2 hours old. This is a warning only. If the cache exceeds 48 hours without a successful online re-validation, the next startup will fail. Restart the server while Provar Automation IDE is connected to the internet to refresh the cache.
 
 **`SF_NOT_FOUND` error from Quality Hub / Automation tools**
-The `sf` CLI binary is not on the PATH that the MCP server sees (common with macOS GUI apps). Use the full binary path in your MCP config:
+The `sf` CLI binary is not on the PATH that the MCP server sees (common with macOS and Windows GUI apps). Use `npx` as the command in your MCP config — it resolves `@salesforce/cli` from your npm cache without needing `sf` on PATH:
 
 ```json
-{ "command": "/usr/local/bin/sf", "args": ["provar", "mcp", "start", "--allowed-paths", "..."] }
+{ "command": "npx", "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "..."] }
 ```
+
+Alternatively, use the full path to the `sf` binary (e.g. `/usr/local/bin/sf` on macOS).
 
 **`PATH_NOT_ALLOWED` error**
 The path passed to a tool is outside the `--allowed-paths` root. Update `--allowed-paths` in your client config and restart the server.

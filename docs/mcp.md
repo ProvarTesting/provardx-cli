@@ -147,20 +147,26 @@ sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 
 ### Claude Code
 
-The simplest approach is the `claude mcp add` CLI command:
+Claude Code can be configured via the `claude` CLI command or by editing a JSON config file. Both approaches work whether you're using the Claude Code terminal, the VS Code extension, or the Claude Code Desktop app.
+
+#### Via terminal (one-time setup)
+
+Run one of the following in a terminal, choosing your preferred scope:
 
 ```sh
-# User-scoped — works across all your projects
+# User-scoped — registers once and works across all your projects
 claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 
-# Project-scoped, shared — creates .mcp.json in project root (commit to source control)
+# Project-scoped, shared — run from your project root; writes .mcp.json there; commit to source control
 claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 
-# Project-scoped, private — stored in .claude/settings.local.json (not committed)
+# Project-scoped, private — stored in .claude/settings.local.json; not committed
 claude mcp add provar -s local -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 ```
 
-You can also edit `.mcp.json` at your project root directly for the shared project config:
+#### Via config file (manual / VS Code)
+
+Create or edit `.mcp.json` at your project root for project-scoped configuration shared with your team:
 
 ```json
 {
@@ -173,9 +179,36 @@ You can also edit `.mcp.json` at your project root directly for the shared proje
 }
 ```
 
+For user-scoped (global) configuration that applies across all projects, add the same `provar` entry under `mcpServers` in `~/.claude.json`.
+
+#### `sf` not found? Use `npx`
+
+GUI environments (VS Code, Claude Code Desktop, Claude Desktop) often start with a restricted PATH that doesn't include the `sf` binary. Using `npx` as the command resolves this — it finds `@salesforce/cli` from your npm cache without requiring `sf` to be on PATH.
+
+**Via terminal:**
+
+```sh
+claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allowed-paths /path/to/your/provar/project
+```
+
+**Via config file:**
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "npx",
+      "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli@beta`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
+
 ### Claude Desktop
 
-Add a `provar` entry to your Claude Desktop MCP configuration file.
+Edit the Claude Desktop MCP configuration file. Open it via **Claude menu → Settings → Developer → Edit Config**, or navigate to it directly:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
@@ -191,9 +224,22 @@ Add a `provar` entry to your Claude Desktop MCP configuration file.
 }
 ```
 
-> **Windows:** If `sf` is not found, use `sf.cmd` as the command. Claude Desktop may not inherit the full shell PATH, so `sf.cmd` (the npm-installed wrapper) is more reliable.
+Fully quit and relaunch Claude Desktop after saving (Cmd+Q on macOS, not just close the window). The Provar tools will appear in the tool list.
 
-Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
+> **`sf` not found?** Claude Desktop launches with a restricted PATH on macOS and Windows. If the server fails to start, use `npx` instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "provar": {
+>       "command": "npx",
+>       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+>     }
+>   }
+> }
+> ```
+>
+> On Windows, you may also try `sf.cmd` as the command if npx is not available.
 
 ### GitHub Copilot (VS Code)
 
@@ -205,15 +251,29 @@ Create or edit `.vscode/mcp.json` in your workspace root (commit this to source 
     "provar": {
       "type": "stdio",
       "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
     }
   }
 }
 ```
 
-> **Windows:** Use `sf.cmd` instead of `sf` if VS Code cannot find the command.
+After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will appear in the available tools.
 
-After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will be listed in the available tools.
+> **`sf` not found?** VS Code may not inherit your shell PATH. Use `npx` instead:
+>
+> ```json
+> {
+>   "servers": {
+>     "provar": {
+>       "type": "stdio",
+>       "command": "npx",
+>       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
+>     }
+>   }
+> }
+> ```
+>
+> On Windows, you can also try `sf.cmd` as the command.
 
 ### Cursor
 
@@ -247,7 +307,20 @@ Cursor supports project-level and global MCP configuration.
 
 After saving, restart Cursor. The Provar tools will appear under **Settings → MCP**.
 
-> **Windows:** Use `sf.cmd` instead of `sf` if Cursor cannot locate the command.
+> **`sf` not found?** Use `npx` as the command instead:
+>
+> ```json
+> {
+>   "mcpServers": {
+>     "provar": {
+>       "command": "npx",
+>       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+>     }
+>   }
+> }
+> ```
+>
+> On Windows, you can also try `sf.cmd` if `npx` is unavailable.
 
 ### Agentforce Vibes
 
@@ -1464,10 +1537,10 @@ Each element in `examples`:
 
 Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar.qualityhub.examples.retrieve` query.
 
-| Endpoint | URL |
-| -------- | --- |
-| Production | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads` |
-| Sandbox | `https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads` |
+| Endpoint   | URL                                                                         |
+| ---------- | --------------------------------------------------------------------------- |
+| Production | `https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads`         |
+| Sandbox    | `https://api.salesforce.com/platform/mcp/v1/sandbox/platform/sobject-reads` |
 
 The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
 
