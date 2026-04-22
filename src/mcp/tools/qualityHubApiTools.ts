@@ -49,8 +49,8 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
     'provar.qualityhub.examples.retrieve',
     [
       'Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests in Bedrock KB).',
-      'Use this BEFORE calling provar.testcase.generate to get few-shot grounding examples.',
-      'Pass a user story, requirement, or source test file content as the query.',
+      'Use this BEFORE writing any Provar .testcase XML — whether via provar.testcase.generate, Write, or Edit.',
+      'Pass a user story, requirement, source test file content, or step type keywords as the query.',
       'Returns up to N example Provar XML test cases ordered by similarity score.',
       'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
       'generation workflow can still continue without grounding. Never hard-errors on API failure.',

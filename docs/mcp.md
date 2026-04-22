@@ -67,6 +67,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.loop.fix](#provarloopfix)
     - [provar.loop.review](#provarloopreview)
     - [provar.loop.coverage](#provarloopcoverage)
+    - [provar.loop.db](#provarloopdb)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
 - [AI loop pattern](#ai-loop-pattern)
@@ -1704,6 +1705,28 @@ Analyse coverage gaps for a Salesforce object or feature area. Inspects the proj
 | `objectName`  | string | yes      | Primary Salesforce object to check coverage for (e.g. `"Opportunity"`, `"Lead"`).                                                                                                          |
 | `projectPath` | string | yes      | Absolute path to the Provar project root.                                                                                                                                                  |
 | `targetOrg`   | string | no       | Salesforce org alias or username. When provided, existing Quality Hub test cases for this object are retrieved via `provar.qualityhub.testcase.retrieve` before the coverage gap analysis. |
+
+---
+
+#### `provar.loop.db`
+
+Generate a Provar XML test case that connects to an **external database** (SQL Server, Oracle, MySQL, PostgreSQL, etc.) and verifies query results. This prompt is distinct from the Salesforce/SOQL loop — it targets `DbConnect` + `SqlQuery` steps and enforces the correct patterns for `funcCall` row counts and structured variable paths for field access, which are the most common source of errors in database test generation.
+
+**Arguments**
+
+| Parameter        | Type   | Required | Description                                                                                                                                                                          |
+| ---------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `story`          | string | yes      | Description of what the database test should verify. Include the database type, table name, query intent, and what values should be asserted.                                        |
+| `projectPath`    | string | no       | Absolute path to the Provar project root. Used to locate the `tests/` directory when writing the output file.                                                                        |
+| `testName`       | string | no       | Optional file name for the test case (without extension). Inferred from the story if omitted.                                                                                        |
+| `connectionName` | string | no       | The Provar Connection Manager database connection name (`DbConnect.connectionName`). Identifies which connection entry to use. If omitted, the story should describe the connection. |
+
+**What the prompt enforces:**
+
+- `DbConnect.connectionId` must use `valueClass="id"` — not `"string"`
+- `DbConnect.resultName` must exactly equal `SqlQuery.dbConnectionName` (the coupling point)
+- Row counts use `<value class="funcCall" id="Count">` — not `{Count(Var)}` string expressions
+- Indexed field access uses a structured `<value class="variable"><path><filter class="index">` — not `{Var[0].Field}` string expressions
 
 ---
 

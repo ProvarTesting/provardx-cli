@@ -394,3 +394,108 @@ Begin with step 1: list the .testcase files in ${projectPath}/tests/ and search 
     })
   );
 }
+
+// ── Prompt: provar.loop.db ────────────────────────────────────────────────────
+
+export function registerLoopDbPrompt(server: McpServer): void {
+  server.prompt(
+    'provar.loop.db',
+    'Generate a Provar XML test case that connects to an external database (SQL Server, Oracle, MySQL, etc.) and verifies query results. Distinct from Salesforce/SOQL flows — this targets DbConnect + SqlQuery steps. Retrieves corpus examples for grounding, enforces correct funcCall/variable-path patterns, generates the test, then validates.',
+    {
+      story: z
+        .string()
+        .describe(
+          'Description of what the database test should verify. Include the database type (e.g. "SQL Server"), table name, query intent, and what values should be asserted (e.g. "Verify that the Users table contains an active user record with Status=Active after a Salesforce flow runs").'
+        ),
+      projectPath: z
+        .string()
+        .optional()
+        .describe('Absolute path to the Provar project root. Used to locate the tests/ directory.'),
+      testName: z
+        .string()
+        .optional()
+        .describe('Optional file name for the test case (without extension). Inferred from the story if omitted.'),
+      connectionName: z
+        .string()
+        .optional()
+        .describe(
+          'The Provar Connection Manager database connection name (DbConnect.connectionName). This identifies which connection entry to use. If omitted, the story should describe the connection to use.'
+        ),
+    },
+    ({ story, projectPath, testName, connectionName }) => ({
+      messages: [
+        {
+          role: 'user' as const,
+          content: {
+            type: 'text' as const,
+            text: `You are a Provar test automation expert. Generate a Provar XML test case that validates database state using DbConnect and SqlQuery steps.
+
+This is a **database test**, NOT a Salesforce UI or Apex test. Do not use UiConnect, UiWithScreen, ApexConnect, or ApexCreateObject — use the database step types: DbConnect, SqlQuery, SetValues, AssertValues.
+
+## Workflow
+
+Follow these steps in order:
+
+1. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with a query that includes "database DbConnect SqlQuery" plus keywords from the story (e.g. "database SQL Server verify record count"). Use the returned XML examples as the reference for correct step structure.
+   If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured), fall back: read the \`provar://docs/step-reference\` MCP resource — specifically the Database Steps section — for the correct attribute schema, then continue.
+
+2. **Generate the test case** — produce valid Provar XML. Apply these database-specific rules:
+
+   **DbConnect rules:**
+   - \`connectionName\` argument identifies the Connection Manager entry (e.g. \`"MyDatabase"\`).${
+     connectionName ? `\n   - Use connection name: ${connectionName}` : ''
+   }
+   - \`connectionId\` argument MUST use \`valueClass="id"\` — NOT \`"string"\`. Using \`"string"\` causes a runtime type error.
+   - \`resultName\` sets the **connection handle** — the variable name used to refer to this open connection (e.g. \`"DbConnection"\`). Choose any valid identifier.
+   - This handle must be reused exactly as \`dbConnectionName\` on every SqlQuery step that uses this connection.
+
+   **SqlQuery rules:**
+   - \`dbConnectionName\` must exactly equal the \`resultName\` from the DbConnect step above.
+   - \`resultName\` names the variable that will hold the query result rows (e.g. \`"DbResults"\`).
+
+   **Accessing results in SetValues/AssertValues — critical:**
+   - To count result rows: use \`<value class="funcCall" id="Count">\` — NEVER use \`{Count(Var)}\` string expressions.
+   - To access a field from row N (0-based): use the structured variable path with a \`<filter class="index">\` — NEVER use \`{Var[0].Field}\` string expressions.
+   - String \`{...}\` expressions are stored verbatim and never evaluated. They will always produce wrong results.
+
+   **Pattern for extracting values from results:**
+   \`\`\`xml
+   <!-- Count rows -->
+   <value class="funcCall" id="Count">
+     <argument id="value">
+       <value class="variable"><path element="DbResults"/></value>
+     </argument>
+   </value>
+
+   <!-- Access field from row 0 -->
+   <value class="variable">
+     <path element="DbResults">
+       <filter class="index"><index valueClass="decimal">0</index></filter>
+     </path>
+     <path element="FieldName"/>
+   </value>
+   \`\`\`
+
+3. **Write the file** — save the XML to the tests/ directory in the Provar project.
+   ${projectHint(projectPath)}
+   ${testName ? `Target file name: ${testName}.testcase` : 'Infer the file name from the story (snake_case).'}
+
+4. **Validate** — call \`provar.testcase.validate\` on the saved file. If it reports errors, fix them and re-validate until the file passes clean.
+
+5. **Report** — summarise:
+   - Which query/assertion was implemented
+   - The DbConnect resultName and SqlQuery dbConnectionName used (confirm they match)
+   - Any validation warnings
+   - Any aspects of the story that could not be automated (add \`<!-- TODO: manual verification — <reason> -->\` in the XML)
+
+## Database Test Story
+
+${story}
+
+Begin with step 1: call provar.qualityhub.examples.retrieve with "database DbConnect SqlQuery" plus keywords from the story above.`,
+          },
+        },
+      ],
+    })
+  );
+}
