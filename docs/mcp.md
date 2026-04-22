@@ -60,13 +60,13 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [MCP Prompts](#mcp-prompts)
   - [Migration prompts](#migration-prompts)
     - [provar.migrate.crt](#provarmigratecrt)
-    - [provar.migrate.selenium](#provarmigratselenium)
-    - [provar.migrate.playwright](#provarmigrationplaywright)
+    - [provar.migrate.selenium](#provarmigrateselenium)
+    - [provar.migrate.playwright](#provarmigrateplaywright)
   - [AI loop prompts](#ai-loop-prompts)
     - [provar.loop.generate](#provarloopgenerate)
     - [provar.loop.fix](#provarloopfix)
     - [provar.loop.review](#provarloopreview)
-    - [provar.loop.coverage](#provarloopcount)
+    - [provar.loop.coverage](#provarloopcoverage)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
 - [AI loop pattern](#ai-loop-pattern)
@@ -1677,10 +1677,11 @@ Analyse coverage gaps for a Salesforce object or feature area. Inspects the proj
 
 **Arguments**
 
-| Parameter     | Type   | Required | Description                                                                       |
-| ------------- | ------ | -------- | --------------------------------------------------------------------------------- |
-| `objectName`  | string | yes      | Primary Salesforce object to check coverage for (e.g. `"Opportunity"`, `"Lead"`). |
-| `projectPath` | string | yes      | Absolute path to the Provar project root.                                         |
+| Parameter     | Type   | Required | Description                                                                                                                                                                                |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `objectName`  | string | yes      | Primary Salesforce object to check coverage for (e.g. `"Opportunity"`, `"Lead"`).                                                                                                          |
+| `projectPath` | string | yes      | Absolute path to the Provar project root.                                                                                                                                                  |
+| `targetOrg`   | string | no       | Salesforce org alias or username. When provided, existing Quality Hub test cases for this object are retrieved via `provar.qualityhub.testcase.retrieve` before the coverage gap analysis. |
 
 ---
 
