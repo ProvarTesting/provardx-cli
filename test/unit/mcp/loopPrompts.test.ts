@@ -12,6 +12,7 @@ import {
   registerLoopFixPrompt,
   registerLoopReviewPrompt,
   registerLoopCoveragePrompt,
+  registerLoopDbPrompt,
 } from '../../../src/mcp/prompts/loopPrompts.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -59,11 +60,12 @@ beforeEach(() => {
   registerLoopFixPrompt(server as never);
   registerLoopReviewPrompt(server as never);
   registerLoopCoveragePrompt(server as never);
+  registerLoopDbPrompt(server as never);
 });
 
 describe('loopPrompts — registration', () => {
-  it('registers all 4 loop prompts', () => {
-    assert.equal(server.registrations.length, 4);
+  it('registers all 5 loop prompts', () => {
+    assert.equal(server.registrations.length, 5);
   });
 
   it('registers provar.loop.generate', () => {
@@ -259,5 +261,95 @@ describe('loopPrompts — provar.loop.coverage', () => {
     const text = getMessageText(result);
     // When no targetOrg, the step 2 should be corpus retrieval, not QH testcase retrieve
     assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should still include corpus retrieval');
+  });
+});
+
+describe('loopPrompts — provar.loop.db', () => {
+  it('registers provar.loop.db', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar.loop.db');
+    assert.ok(reg, 'provar.loop.db should be registered');
+    assert.ok(reg.description.toLowerCase().includes('database'), 'description should mention database');
+  });
+
+  it('includes story text in message', () => {
+    const story = 'Verify Users table has Active records after SF flow runs';
+    const result = server.call('provar.loop.db', { story });
+    const text = getMessageText(result);
+    assert.ok(text.includes(story), 'message should contain the story text');
+  });
+
+  it('includes corpus retrieval and validate in workflow', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar.testcase.validate'), 'should reference validator tool');
+  });
+
+  it('references DbConnect and SqlQuery step types', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    assert.ok(text.includes('DbConnect'), 'should reference DbConnect step type');
+    assert.ok(text.includes('SqlQuery'), 'should reference SqlQuery step type');
+  });
+
+  it('warns about funcCall vs string expressions', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    assert.ok(text.includes('funcCall'), 'should mention funcCall for count');
+    assert.ok(text.includes('valueClass="id"'), 'should warn about connectionId valueClass="id"');
+  });
+
+  it('warns about resultName / dbConnectionName coupling', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    assert.ok(
+      text.includes('resultName') && text.includes('dbConnectionName'),
+      'should mention the resultName / dbConnectionName coupling'
+    );
+  });
+
+  it('includes dbConnectionName in message when provided', () => {
+    const result = server.call('provar.loop.db', {
+      story: 'any db test',
+      dbConnectionName: 'MyDB',
+    });
+    const text = getMessageText(result);
+    assert.ok(text.includes('MyDB'), 'message should include provided dbConnectionName');
+  });
+
+  it('includes projectPath when provided', () => {
+    const result = server.call('provar.loop.db', {
+      story: 'any db test',
+      projectPath: '/provar/project',
+    });
+    const text = getMessageText(result);
+    assert.ok(text.includes('/provar/project'), 'message should include project path');
+  });
+
+  it('includes testName when provided', () => {
+    const result = server.call('provar.loop.db', {
+      story: 'any db test',
+      testName: 'VerifyUsersTable',
+    });
+    const text = getMessageText(result);
+    assert.ok(text.includes('VerifyUsersTable'), 'message should include target test name');
+  });
+
+  it('explicitly forbids Salesforce UI and Apex steps', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    // The prompt names these steps to explicitly forbid them — verify that context
+    assert.ok(
+      text.includes('Do not use') || text.includes('do not use'),
+      'should explicitly forbid Salesforce/Apex steps'
+    );
+    assert.ok(text.includes('UiConnect'), 'should name UiConnect in the forbidden list');
+    assert.ok(text.includes('ApexConnect'), 'should name ApexConnect in the forbidden list');
+  });
+
+  it('includes step-reference fallback instruction', () => {
+    const result = server.call('provar.loop.db', { story: 'any db test' });
+    const text = getMessageText(result);
+    assert.ok(text.includes('provar://docs/step-reference'), 'should include step-reference fallback');
   });
 });

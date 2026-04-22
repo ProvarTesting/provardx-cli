@@ -22,25 +22,25 @@ import { validateTestCase } from './testCaseValidate.js';
 // and expanded automatically before writing XML.
 
 const SHORTHAND_TO_FQID: Record<string, string> = {
-  UiConnect:          'com.provar.plugins.forcedotcom.core.ui.UiConnect',
-  UiDoAction:         'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
-  UiWithScreen:       'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
-  UiAssert:           'com.provar.plugins.forcedotcom.core.ui.UiAssert',
-  UiNavigate:         'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
-  UiWithRow:          'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
-  UiScrollToElement:  'com.provar.plugins.forcedotcom.core.ui.UiScrollToElement',
-  ApexConnect:        'com.provar.plugins.forcedotcom.core.testapis.ApexConnect',
-  ApexSoqlQuery:      'com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery',
-  ApexCreateObject:   'com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject',
-  ApexReadObject:     'com.provar.plugins.forcedotcom.core.testapis.ApexReadObject',
-  ApexUpdateObject:   'com.provar.plugins.forcedotcom.core.testapis.ApexUpdateObject',
-  ApexDeleteObject:   'com.provar.plugins.forcedotcom.core.testapis.ApexDeleteObject',
-  SetValues:          'com.provar.plugins.bundled.apis.control.SetValues',
-  AssertValues:       'com.provar.plugins.bundled.apis.AssertValues',
-  StepGroup:          'com.provar.plugins.bundled.apis.control.StepGroup',
-  Sleep:              'com.provar.plugins.bundled.apis.control.Sleep',
-  ForEach:            'com.provar.plugins.bundled.apis.control.ForEach',
-  CaseCall:           'com.provar.plugins.bundled.apis.control.CaseCall',
+  UiConnect: 'com.provar.plugins.forcedotcom.core.ui.UiConnect',
+  UiDoAction: 'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
+  UiWithScreen: 'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
+  UiAssert: 'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  UiNavigate: 'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
+  UiWithRow: 'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+  UiScrollToElement: 'com.provar.plugins.forcedotcom.core.ui.UiScrollToElement',
+  ApexConnect: 'com.provar.plugins.forcedotcom.core.testapis.ApexConnect',
+  ApexSoqlQuery: 'com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery',
+  ApexCreateObject: 'com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject',
+  ApexReadObject: 'com.provar.plugins.forcedotcom.core.testapis.ApexReadObject',
+  ApexUpdateObject: 'com.provar.plugins.forcedotcom.core.testapis.ApexUpdateObject',
+  ApexDeleteObject: 'com.provar.plugins.forcedotcom.core.testapis.ApexDeleteObject',
+  SetValues: 'com.provar.plugins.bundled.apis.control.SetValues',
+  AssertValues: 'com.provar.plugins.bundled.apis.AssertValues',
+  StepGroup: 'com.provar.plugins.bundled.apis.control.StepGroup',
+  Sleep: 'com.provar.plugins.bundled.apis.control.Sleep',
+  ForEach: 'com.provar.plugins.bundled.apis.control.ForEach',
+  CaseCall: 'com.provar.plugins.bundled.apis.control.CaseCall',
 };
 
 function resolveApiId(apiId: string): string {
@@ -56,16 +56,16 @@ function buildStepWarnings(steps: Array<{ api_id: string }>): string[] {
   if (resolvedIds.includes(SHORTHAND_TO_FQID['ApexReadObject'] ?? '')) {
     warnings.push(
       'ApexReadObject: You must specify field names in the attributes (e.g. fieldList); ' +
-      'if none are provided Provar generates "SELECT  FROM ..." which throws MALFORMED_QUERY. ' +
-      'Prefer ApexSoqlQuery for full control over the SELECT clause and result binding.'
+        'if none are provided Provar generates "SELECT  FROM ..." which throws MALFORMED_QUERY. ' +
+        'Prefer ApexSoqlQuery for full control over the SELECT clause and result binding.'
     );
   }
 
   if (resolvedIds.includes(SHORTHAND_TO_FQID['AssertValues'] ?? '')) {
     warnings.push(
       'AssertValues: Direct index paths like "ResultList[0].FieldName" are NOT supported for ApexSoqlQuery results. ' +
-      'To assert SOQL results use either: (a) a ForEach loop over the result list with AssertValues inside, ' +
-      'or (b) a SetValues step to extract a specific field into a named variable, then assert that variable.'
+        'To assert SOQL results use either: (a) a ForEach loop over the result list with AssertValues inside, ' +
+        'or (b) a SetValues step to extract a specific field into a named variable, then assert that variable.'
     );
   }
 
@@ -79,10 +79,10 @@ const StepSchema = z.object({
     .string()
     .describe(
       'Provar step API ID. Shorthand forms are accepted and auto-expanded to fully-qualified IDs: ' +
-      'UiConnect, UiDoAction, UiWithScreen, UiAssert, UiNavigate, UiWithRow, ' +
-      'ApexConnect, ApexSoqlQuery, ApexCreateObject, ApexReadObject, ApexUpdateObject, ApexDeleteObject, ' +
-      'SetValues, AssertValues, StepGroup, Sleep, ForEach, CaseCall. ' +
-      'Or pass the fully-qualified ID directly (com.provar.plugins.*).'
+        'UiConnect, UiDoAction, UiWithScreen, UiAssert, UiNavigate, UiWithRow, ' +
+        'ApexConnect, ApexSoqlQuery, ApexCreateObject, ApexReadObject, ApexUpdateObject, ApexDeleteObject, ' +
+        'SetValues, AssertValues, StepGroup, Sleep, ForEach, CaseCall. ' +
+        'Or pass the fully-qualified ID directly (com.provar.plugins.*).'
     ),
   name: z.string().describe('Human-readable step name'),
   attributes: z
@@ -90,9 +90,9 @@ const StepSchema = z.object({
     .default({})
     .describe(
       'Step argument values as key/value pairs. Written as <arguments><argument id="key"><value .../></argument></arguments> ' +
-      'inside the <apiCall> element — the format Provar runtime requires. ' +
-      'Do NOT rely on XML attributes on <apiCall>; the runtime silently ignores them. ' +
-      'Example: { "connectionName": "MyOrg", "objectApiName": "Opportunity" }'
+        'inside the <apiCall> element — the format Provar runtime requires. ' +
+        'Do NOT rely on XML attributes on <apiCall>; the runtime silently ignores them. ' +
+        'Example: { "connectionName": "MyOrg", "objectApiName": "Opportunity" }'
     ),
 });
 
@@ -109,6 +109,7 @@ const TOOL_DESCRIPTION = [
   'AssertValues on SOQL results: index paths like "ResultList[0].Field" are not supported.',
   'Use ForEach to iterate the result list, or SetValues to extract a field into a variable first.',
   'Validation: the response always includes a validation field with is_valid, validity_score, quality_score, and any structural issues — check this before attempting to run the test case.',
+  'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
 ].join(' ');
 
 export function registerTestCaseGenerate(server: McpServer, config: ServerConfig): void {
@@ -117,24 +118,12 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
     TOOL_DESCRIPTION,
     {
       test_case_name: z.string().describe('Test case name (human-readable label)'),
-      test_case_id: z
-        .string()
-        .optional()
-        .describe('Explicit test case id; auto-generated UUID v4 if omitted'),
+      test_case_id: z.string().optional().describe('Explicit test case id; auto-generated UUID v4 if omitted'),
       steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
-      output_path: z
-        .string()
-        .optional()
-        .describe('Suggested file path for the .xml file (returned in response)'),
+      output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
       overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('true = return XML only (default); false = write to output_path'),
-      idempotency_key: z
-        .string()
-        .optional()
-        .describe('Caller-provided key echoed back for deduplication tracking'),
+      dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
+      idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
     },
     (input) => {
       const requestId = makeRequestId();
@@ -146,9 +135,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
       try {
         const xmlContent = buildTestCaseXml(input);
-        const filePath: string | undefined = input.output_path
-          ? path.resolve(input.output_path)
-          : undefined;
+        const filePath: string | undefined = input.output_path ? path.resolve(input.output_path) : undefined;
         let written = false;
 
         if (filePath && !input.dry_run) {
@@ -197,7 +184,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
         const errResult = makeError(
-          error instanceof PathPolicyError ? error.code : (error.code ?? 'GENERATE_ERROR'),
+          error instanceof PathPolicyError ? error.code : error.code ?? 'GENERATE_ERROR',
           error.message,
           requestId,
           false
@@ -215,10 +202,11 @@ function buildArgumentsXml(attributes: Record<string, string>): string {
   const entries = Object.entries(attributes);
   if (entries.length === 0) return '';
   const argLines = entries
-    .map(([k, v]) =>
-      `      <argument id="${escapeXmlAttr(k)}">\n` +
-      `        <value class="value" valueClass="String">${escapeXmlContent(v)}</value>\n` +
-      '      </argument>'
+    .map(
+      ([k, v]) =>
+        `      <argument id="${escapeXmlAttr(k)}">\n` +
+        `        <value class="value" valueClass="String">${escapeXmlContent(v)}</value>\n` +
+        '      </argument>'
     )
     .join('\n');
   return `\n      <arguments>\n${argLines}\n      </arguments>\n    `;
@@ -264,16 +252,9 @@ function buildTestCaseXml(input: {
 }
 
 function escapeXmlAttr(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function escapeXmlContent(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

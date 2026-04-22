@@ -16,6 +16,7 @@ import {
   registerLoopFixPrompt,
   registerLoopReviewPrompt,
   registerLoopCoveragePrompt,
+  registerLoopDbPrompt,
 } from './loopPrompts.js';
 
 export function registerAllPrompts(server: McpServer): void {
@@ -26,4 +27,5 @@ export function registerAllPrompts(server: McpServer): void {
   registerLoopFixPrompt(server);
   registerLoopReviewPrompt(server);
   registerLoopCoveragePrompt(server);
+  registerLoopDbPrompt(server);
 }

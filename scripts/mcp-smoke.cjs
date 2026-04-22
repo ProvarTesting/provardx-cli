@@ -350,6 +350,12 @@ async function runTests() {
     arguments: { objectName: 'Opportunity', projectPath: '/tmp/provar-project' },
   });
 
+  // ── 48. provar.loop.db prompt ─────────────────────────────────────────────
+  await rpc('provar.loop.db (prompt)', 'prompts/get', {
+    name: 'provar.loop.db',
+    arguments: { story: 'Verify Users table has at least one Active record after Salesforce flow runs' },
+  });
+
   server.stdin.end();
 }
 
@@ -358,8 +364,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 37 tools + prompts/list + 7 prompts/get (setup excluded from default count)
-  const TOTAL_EXPECTED = 47 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 37 tools + prompts/list + 8 prompts/get (setup excluded from default count)
+  const TOTAL_EXPECTED = 48 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 

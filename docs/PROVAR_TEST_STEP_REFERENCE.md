@@ -1125,6 +1125,12 @@ Variable-to-variable or variable-to-literal comparison. For UI field assertions 
 
 ## Database Steps
 
+> **Critical constraints — read before generating any Database step XML:**
+>
+> 1. **`connectionId` must use `valueClass="id"`** — not `"string"`. Using `"string"` causes a runtime type error.
+> 2. **`DbConnect.resultName` must exactly equal `SqlQuery.dbConnectionName`** — these two values are the coupling point between the steps. A mismatch causes "connection not found" at runtime.
+> 3. **Never use `{Count(Var)}` or `{Var[0].Field}` string expressions in SetValues/AssertValues** — these are stored verbatim and never evaluated. Use `<value class="funcCall">` for Count and the structured `<value class="variable"><path>` form for indexed field access. See the examples below.
+
 ### DbConnect
 
 ```xml
@@ -1136,12 +1142,14 @@ Variable-to-variable or variable-to-literal comparison. For UI field assertions 
       <value class="value" valueClass="string">MyDatabase</value>
     </argument>
     <argument id="connectionId">
-      <value class="value" valueClass="string">database-connection-id</value>
+      <!-- MUST be valueClass="id" — not "string" -->
+      <value class="value" valueClass="id">database-connection-uuid</value>
     </argument>
     <argument id="autoCommit">
       <value class="value" valueClass="boolean">true</value>
     </argument>
     <argument id="resultName">
+      <!-- This value must exactly match dbConnectionName on every SqlQuery that uses this connection -->
       <value class="value" valueClass="string">DbConnection</value>
     </argument>
     <argument id="resultScope">
@@ -1159,13 +1167,98 @@ Variable-to-variable or variable-to-literal comparison. For UI field assertions 
          title="SQL Query: DbConnection=&gt;DbResults">
   <arguments>
     <argument id="dbConnectionName">
+      <!-- Must exactly equal the resultName on the DbConnect step above -->
       <value class="value" valueClass="string">DbConnection</value>
     </argument>
     <argument id="query">
-      <value class="value" valueClass="string">SELECT * FROM Users WHERE Status = 'Active'</value>
+      <value class="value" valueClass="string">SELECT Id, Name, Status FROM Users WHERE Status = 'Active'</value>
     </argument>
     <argument id="resultName">
       <value class="value" valueClass="string">DbResults</value>
+    </argument>
+    <argument id="resultScope">
+      <value class="value" valueClass="string">Test</value>
+    </argument>
+  </arguments>
+</apiCall>
+```
+
+### Accessing Database Results — funcCall and structured variable paths
+
+After `SqlQuery`, the result variable (e.g. `DbResults`) is a list of rows. To use the results in `SetValues` or `AssertValues`, you must use structured XML — not `{...}` string expressions.
+
+#### Count the result rows (funcCall)
+
+```xml
+<!-- ✅ CORRECT — funcCall element evaluates at runtime -->
+<argument id="value">
+  <value class="funcCall" id="Count">
+    <argument id="value">
+      <value class="variable">
+        <path element="DbResults"/>
+      </value>
+    </argument>
+  </value>
+</argument>
+
+<!-- ❌ WRONG — string expression stored verbatim, never evaluated -->
+<argument id="value">
+  <value class="value" valueClass="string">{Count(DbResults)}</value>
+</argument>
+```
+
+#### Access a field from a specific row (structured variable path)
+
+```xml
+<!-- ✅ CORRECT — structured path with index filter (0-based) -->
+<argument id="value">
+  <value class="variable">
+    <path element="DbResults">
+      <filter class="index">
+        <index valueClass="decimal">0</index>
+      </filter>
+    </path>
+    <path element="Status"/>
+  </value>
+</argument>
+
+<!-- ❌ WRONG — string expression stored verbatim, never evaluated -->
+<argument id="value">
+  <value class="value" valueClass="string">{DbResults[0].Status}</value>
+</argument>
+```
+
+#### Full SetValues example — extract row count and first-row field
+
+```xml
+<apiCall apiId="com.provar.plugins.bundled.apis.control.SetValues"
+         name="SetValues" testItemId="3"
+         title="Extract DB result values">
+  <arguments>
+    <argument id="values">
+      <value class="list">
+        <!-- Row count into RowCount variable -->
+        <value class="namedValue" name="RowCount">
+          <value class="funcCall" id="Count">
+            <argument id="value">
+              <value class="variable">
+                <path element="DbResults"/>
+              </value>
+            </argument>
+          </value>
+        </value>
+        <!-- First row Status field into FirstStatus variable -->
+        <value class="namedValue" name="FirstStatus">
+          <value class="variable">
+            <path element="DbResults">
+              <filter class="index">
+                <index valueClass="decimal">0</index>
+              </filter>
+            </path>
+            <path element="Status"/>
+          </value>
+        </value>
+      </value>
     </argument>
     <argument id="resultScope">
       <value class="value" valueClass="string">Test</value>
