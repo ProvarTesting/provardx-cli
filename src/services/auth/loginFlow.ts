@@ -13,7 +13,7 @@ import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { URL } from 'node:url';
 
-// All three ports must be pre-registered in both the Cognito App Client and the SF ECA.
+// All three ports must be pre-registered in both the Cognito App Client and the Salesforce External Client Application (SF ECA).
 // Both providers require redirect_uri to exactly match a registered callback URL — no wildcards.
 export const CALLBACK_PORTS = [1717, 7890, 8080];
 

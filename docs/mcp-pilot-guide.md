@@ -74,7 +74,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-> **license:** The server reads your Provar Automation IDE license automatically from `~/Provar/.licenses/`. No extra configuration is required — just ensure Provar Automation IDE is installed and activated on this machine.
+> **License:** The server reads your Provar Automation IDE license automatically from `~/Provar/.licenses/`. No extra configuration is required — just ensure Provar Automation IDE is installed and activated on this machine.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
 
