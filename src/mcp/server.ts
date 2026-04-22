@@ -6,6 +6,9 @@
  */
 
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { log } from './logging/logger.js';
@@ -29,6 +32,7 @@ import { registerAllAntTools } from './tools/antTools.js';
 import { registerAllRcaTools } from './tools/rcaTools.js';
 import { registerAllTestPlanTools } from './tools/testPlanTools.js';
 import { registerAllNitroXTools } from './tools/nitroXTools.js';
+import { registerAllPrompts } from './prompts/index.js';
 
 export interface ServerConfig {
   allowedPaths: string[];
@@ -76,6 +80,45 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllRcaTools(server);
   registerAllTestPlanTools(server, config);
   registerAllNitroXTools(server, config);
+
+  // ── Provar prompts ───────────────────────────────────────────────────────────
+  registerAllPrompts(server);
+
+  // ── Documentation resources ──────────────────────────────────────────────────
+  const docsDir = join(dirname(fileURLToPath(import.meta.url)), 'docs');
+  server.resource(
+    'provar-step-reference',
+    'provar://docs/step-reference',
+    {
+      description:
+        'Canonical reference for all Provar XML test step API IDs, argument formats, validation rules, and corpus-verified examples. Use this to understand correct step structure when generating or reviewing test cases.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const content = readFileSync(join(docsDir, 'PROVAR_TEST_STEP_REFERENCE.md'), 'utf-8');
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/step-reference',
+              mimeType: 'text/markdown',
+              text: content,
+            },
+          ],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/step-reference',
+              mimeType: 'text/markdown',
+              text: '# Provar Test Step Reference\n\nReference doc not found. Run `yarn compile` to build.',
+            },
+          ],
+        };
+      }
+    }
+  );
 
   return server;
 }
