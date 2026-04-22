@@ -1,7 +1,15 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.provartesting/provar",
+  "title": "Provar MCP Server",
   "description": "Provar MCP server — AI-powered Salesforce test automation. Generate, validate, and migrate Provar test cases; connect to Quality Hub for test corpus retrieval and test run orchestration.",
+  "websiteUrl": "https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/ProvarTesting/provardx-cli/main/assets/icon.png",
+      "mimeType": "image/png"
+    }
+  ],
   "repository": {
     "url": "https://github.com/ProvarTesting/provardx-cli",
     "source": "github"
