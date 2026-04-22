@@ -308,13 +308,13 @@ describe('loopPrompts — provar.loop.db', () => {
     );
   });
 
-  it('includes dbConnectionName in message when provided', () => {
+  it('includes connectionName in message when provided', () => {
     const result = server.call('provar.loop.db', {
       story: 'any db test',
-      dbConnectionName: 'MyDB',
+      connectionName: 'MyDB',
     });
     const text = getMessageText(result);
-    assert.ok(text.includes('MyDB'), 'message should include provided dbConnectionName');
+    assert.ok(text.includes('MyDB'), 'message should include provided connectionName');
   });
 
   it('includes projectPath when provided', () => {

@@ -1692,12 +1692,12 @@ Generate a Provar XML test case that connects to an **external database** (SQL S
 
 **Arguments**
 
-| Parameter          | Type   | Required | Description                                                                                                                                                                                        |
-| ------------------ | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `story`            | string | yes      | Description of what the database test should verify. Include the database type, table name, query intent, and what values should be asserted.                                                      |
-| `projectPath`      | string | no       | Absolute path to the Provar project root. Used to locate the `tests/` directory when writing the output file.                                                                                      |
-| `testName`         | string | no       | Optional file name for the test case (without extension). Inferred from the story if omitted.                                                                                                      |
-| `dbConnectionName` | string | no       | The name of the database connection as configured in Provar Connection Manager. Used as the `connectionName` argument on `DbConnect`. If omitted, the story should describe the connection to use. |
+| Parameter        | Type   | Required | Description                                                                                                                                                                          |
+| ---------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `story`          | string | yes      | Description of what the database test should verify. Include the database type, table name, query intent, and what values should be asserted.                                        |
+| `projectPath`    | string | no       | Absolute path to the Provar project root. Used to locate the `tests/` directory when writing the output file.                                                                        |
+| `testName`       | string | no       | Optional file name for the test case (without extension). Inferred from the story if omitted.                                                                                        |
+| `connectionName` | string | no       | The Provar Connection Manager database connection name (`DbConnect.connectionName`). Identifies which connection entry to use. If omitted, the story should describe the connection. |
 
 **What the prompt enforces:**
 

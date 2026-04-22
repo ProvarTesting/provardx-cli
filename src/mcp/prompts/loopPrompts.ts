@@ -415,14 +415,14 @@ export function registerLoopDbPrompt(server: McpServer): void {
         .string()
         .optional()
         .describe('Optional file name for the test case (without extension). Inferred from the story if omitted.'),
-      dbConnectionName: z
+      connectionName: z
         .string()
         .optional()
         .describe(
-          'The name of the database connection as configured in Provar Connection Manager. Used as the connectionName argument on DbConnect. If omitted, the story should describe it.'
+          'The Provar Connection Manager database connection name (DbConnect.connectionName). This identifies which connection entry to use. If omitted, the story should describe the connection to use.'
         ),
     },
-    ({ story, projectPath, testName, dbConnectionName }) => ({
+    ({ story, projectPath, testName, connectionName }) => ({
       messages: [
         {
           role: 'user' as const,
@@ -442,10 +442,12 @@ Follow these steps in order:
 2. **Generate the test case** — produce valid Provar XML. Apply these database-specific rules:
 
    **DbConnect rules:**
+   - \`connectionName\` argument identifies the Connection Manager entry (e.g. \`"MyDatabase"\`).${
+     connectionName ? `\n   - Use connection name: ${connectionName}` : ''
+   }
    - \`connectionId\` argument MUST use \`valueClass="id"\` — NOT \`"string"\`. Using \`"string"\` causes a runtime type error.
-   - \`resultName\` sets the connection handle name (e.g. \`"DbConnection"\`).
-   - This name must be reused exactly as \`dbConnectionName\` on every SqlQuery step that uses this connection.
-${dbConnectionName ? `   - Use connection name: ${dbConnectionName}` : ''}
+   - \`resultName\` sets the **connection handle** — the variable name used to refer to this open connection (e.g. \`"DbConnection"\`). Choose any valid identifier.
+   - This handle must be reused exactly as \`dbConnectionName\` on every SqlQuery step that uses this connection.
 
    **SqlQuery rules:**
    - \`dbConnectionName\` must exactly equal the \`resultName\` from the DbConnect step above.

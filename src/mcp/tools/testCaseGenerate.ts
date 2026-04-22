@@ -205,7 +205,7 @@ function buildArgumentsXml(attributes: Record<string, string>): string {
     .map(
       ([k, v]) =>
         `      <argument id="${escapeXmlAttr(k)}">\n` +
-        `        <value class="value" valueClass="String">${escapeXmlContent(v)}</value>\n` +
+        `        <value class="value" valueClass="string">${escapeXmlContent(v)}</value>\n` +
         '      </argument>'
     )
     .join('\n');
