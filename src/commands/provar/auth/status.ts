@@ -69,7 +69,24 @@ export default class SfProvarAuthStatus extends SfCommand<void> {
       this.log(`  Set at:   ${stored.set_at}`);
       if (stored.username) this.log(`  Account:  ${stored.username}`);
       if (stored.tier) this.log(`  Tier:     ${stored.tier}`);
-      if (stored.expires_at) this.log(`  Expires:  ${stored.expires_at}`);
+      if (stored.expires_at) {
+        this.log(`  Expires:  ${stored.expires_at}`);
+        const expiresMs = new Date(stored.expires_at).getTime();
+        if (Number.isFinite(expiresMs)) {
+          const daysLeft = Math.ceil((expiresMs - Date.now()) / (1000 * 60 * 60 * 24));
+          if (daysLeft <= 14 && daysLeft > 0) {
+            this.log('');
+            this.log(`  Warning: API key expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`);
+            this.log("  Run 'sf provar auth rotate' now to avoid CI/CD disruption.");
+          } else if (daysLeft <= 0) {
+            this.log('');
+            this.log('  Warning: API key has expired. Run: sf provar auth login');
+          }
+        } else {
+          this.log('');
+          this.log('  Warning: API key expiry timestamp is invalid.');
+        }
+      }
       this.log('');
       this.log('  Validation mode: Quality Hub API');
       return;

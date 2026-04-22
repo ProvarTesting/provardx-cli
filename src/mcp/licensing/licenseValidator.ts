@@ -36,10 +36,10 @@ export interface LicenseValidationResult {
 /**
  * Validate the Provar license before starting the MCP server.
  *
- * Requires Provar Automation IDE to be installed with an activated licence.
+ * Requires Provar Automation IDE to be installed with an activated license.
  * We trust the IDE's own licenseStatus field — if it says "Activated" we
  * accept it. The IDE is responsible for setting licenseStatus to "Expired"
- * or "Invalid" when a licence lapses; we do not re-check timing ourselves.
+ * or "Invalid" when a license lapses; we do not re-check timing ourselves.
  *
  * The result is cached so repeated starts within 2 hours skip the IDE file
  * read entirely. The 48-hour grace window lets the MCP server keep running
@@ -48,7 +48,7 @@ export interface LicenseValidationResult {
  *
  * Validation flow:
  * 1. MCP cache fresh (< 2h) → serve from cache, skip IDE read
- * 2. Scan ~/Provar/.licenses/*.properties for an Activated licence
+ * 2. Scan ~/Provar/.licenses/*.properties for an Activated license
  * 3. Found → write cache, accept (offlineGrace=false)
  * 4. Not found but MCP cache within 48h grace → serve, offlineGrace=true
  * 5. Not found, no usable cache → throw LICENSE_NOT_FOUND
@@ -128,7 +128,7 @@ function validateViaIdeDetection(): LicenseValidationResult {
   };
   writeCacheEntry(entry);
 
-  log('info', 'licenseValidator: IDE licence validated and cached', {
+  log('info', 'licenseValidator: IDE license validated and cached', {
     name: ideState.name,
     licenseType: ideState.licenseType,
   });

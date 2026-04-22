@@ -14,7 +14,7 @@ This file is read automatically by Claude Code at the start of every session. Fo
 | Modified tool description / parameters / errors         | `docs/mcp.md` (update the relevant tool section)                                                                                                                        |
 | Removed tool                                            | `docs/mcp.md`, `docs/mcp-pilot-guide.md`, `README.md`                                                                                                                   |
 | New error code or suggestion field                      | `docs/mcp.md` (Troubleshooting or Error Codes section)                                                                                                                  |
-| Security model change (path policy, licence, transport) | `docs/mcp.md` (Security Model section), `docs/mcp-pilot-guide.md` (Security Model section)                                                                              |
+| Security model change (path policy, license, transport) | `docs/mcp.md` (Security Model section), `docs/mcp-pilot-guide.md` (Security Model section)                                                                              |
 | New NitroX tool or schema rule                          | `docs/mcp.md` (NitroX section), `docs/mcp-pilot-guide.md` (Scenario 7)                                                                                                  |
 | Smoke test count change                                 | Update `TOTAL_EXPECTED` in `scripts/mcp-smoke.cjs`                                                                                                                      |
 
