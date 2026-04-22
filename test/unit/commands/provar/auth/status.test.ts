@@ -5,6 +5,7 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+/* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
