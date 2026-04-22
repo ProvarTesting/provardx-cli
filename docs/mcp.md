@@ -291,6 +291,28 @@ After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. 
 >
 > On Windows, you can also try `sf.cmd` as the command.
 
+> **`TypeError: Cannot read properties of undefined (reading 'prototype')` on Windows?**
+> VS Code's MCP server process inherits the _system_ PATH, which may differ from your shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — see [Prerequisites](#prerequisites).
+>
+> Fix: remove or downgrade the system-wide Node.js to LTS 22, or use the `env` field in `.vscode/mcp.json` to override the PATH:
+>
+> ```json
+> {
+>   "servers": {
+>     "provar": {
+>       "type": "stdio",
+>       "command": "sf",
+>       "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"],
+>       "env": {
+>         "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use). Run `node --version` from a VS Code terminal to confirm which version it sees.
+
 ### Cursor
 
 Cursor supports project-level and global MCP configuration.
@@ -1566,7 +1588,7 @@ The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sha
 
 ## MCP Prompts
 
-The Provar MCP server registers **7 MCP prompts** that pre-wire the tool chain into turnkey workflows. AI clients that support MCP prompts (Claude Desktop, Claude Code) can invoke them directly by name instead of manually orchestrating the underlying tool sequence.
+The Provar MCP server registers **7 MCP prompts** that pre-wire the tool chain into guided workflows. AI clients that support MCP prompts can invoke them directly by name instead of manually orchestrating the underlying tool sequence. **Important:** prompts that need to list, read, or write local project files (for example, `.testcase` files used by `provar.loop.fix` and `provar.loop.coverage`) also require a client with its own workspace/file tools, such as Claude Code or another MCP-compatible client with local file access configured; MCP prompt support alone is not sufficient for those workflows.
 
 ---
 
