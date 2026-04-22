@@ -411,6 +411,34 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ---
 
+### Scenario 11: Migration Prompts — Convert a Test from Another Framework
+
+**Goal:** Use the MCP migration prompts to convert a test written in CRT, Selenium, or Playwright into a Provar XML test case in one step.
+
+**Prerequisites:** A Provar project on disk and (optional) a Provar API key for corpus grounding.
+
+**CRT migration** — paste a QWord step sequence or `.robot` file:
+
+> "Use the provar.migrate.crt prompt to migrate the following CRT test to Provar: `Step 1: OpenBrowser https://login.salesforce.com` `Step 2: TypeText Username myuser@example.com` `Step 3: ClickText Log In` `Step 4: VerifyText Home`"
+
+**Selenium migration:**
+
+> "Use the provar.migrate.selenium prompt to migrate my JUnit test that creates an Opportunity in Salesforce. The test calls `driver.findElement(By.id('opp-name')).sendKeys('Q4 Deal')` and `driver.findElement(By.id('save-btn')).click()`."
+
+**Playwright migration:**
+
+> "Use the provar.migrate.playwright prompt to convert this Playwright test: `await page.getByLabel('Close Date').fill('12/31/2025'); await page.getByRole('button', { name: 'Save' }).click();`"
+
+**What to look for:**
+
+- The AI calls `provar.qualityhub.examples.retrieve` first to retrieve grounding examples (if an API key is configured)
+- A valid Provar XML test case is generated, using `<apiCall>` steps that correspond to the source test's actions
+- Salesforce login/navigation is omitted from the generated XML (Provar handles this via Connection Manager)
+- `provar.testcase.validate` is called on the result and returns `is_valid: true`
+- Any steps that could not be mapped are left as `<!-- TODO: manual step -->` comments in the XML
+
+---
+
 ## Security Model
 
 ### What the server does
