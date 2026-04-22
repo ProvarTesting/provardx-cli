@@ -19,21 +19,28 @@ import {
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
 
+const CORPUS_FALLBACK_HINT =
+  'Fallback: read the provar://docs/step-reference MCP resource for step types and attribute formats, then continue.';
+
 const CORPUS_ONBOARDING_WARNING =
   'Corpus retrieval skipped — no Provar API key configured. Continuing without example grounding.\n' +
   'To enable corpus retrieval: run sf provar auth login\n' +
-  `No account? Request access at: ${REQUEST_ACCESS_URL}`;
+  `No account? Request access at: ${REQUEST_ACCESS_URL}\n` +
+  CORPUS_FALLBACK_HINT;
 
 const CORPUS_AUTH_WARNING =
   'Corpus retrieval skipped — API key is invalid or expired. Continuing without example grounding.\n' +
-  `Run sf provar auth login to get a new key, or request access at: ${REQUEST_ACCESS_URL}`;
+  `Run sf provar auth login to get a new key, or request access at: ${REQUEST_ACCESS_URL}\n` +
+  CORPUS_FALLBACK_HINT;
 
 const CORPUS_RATE_LIMIT_WARNING =
-  'Corpus retrieval skipped — rate limit reached. Continuing without example grounding. Try again shortly.';
+  'Corpus retrieval skipped — rate limit reached. Continuing without example grounding. Try again shortly.\n' +
+  CORPUS_FALLBACK_HINT;
 
 const CORPUS_UNREACHABLE_WARNING =
   'Corpus retrieval skipped — API unreachable. Continuing without example grounding.\n' +
-  'Check your network connection or try again later.';
+  'Check your network connection or try again later.\n' +
+  CORPUS_FALLBACK_HINT;
 
 // ── Tool: provar.qualityhub.examples.retrieve ─────────────────────────────────
 

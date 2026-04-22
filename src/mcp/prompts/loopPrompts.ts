@@ -65,6 +65,9 @@ Follow these steps in order:
 2. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with the keywords you extracted
    (e.g. "close opportunity" or "create lead"). Use the returned XML examples as the sole reference for
    Provar step structure and argument patterns. Do not invent XML structure from prior knowledge.
+   If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured),
+   fall back: read the \`provar://docs/step-reference\` MCP resource for step types and attribute
+   formats, then continue.
 
 3. **Map acceptance criteria to steps** — for each acceptance criterion, identify the corresponding Provar
    step type: field fills → UiDoAction (set), button clicks → UiDoAction (action), field checks →
@@ -160,6 +163,9 @@ Follow these steps in order:
 3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with keywords describing the
    failing step's scenario (e.g. "close opportunity UiDoAction" or "assert field value UiAssert").
    Use the returned examples to verify the correct structure for the failing step type.
+   If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
+   \`provar://docs/step-reference\` MCP resource for the correct attribute schema for the failing
+   step type, then continue.
 
 4. **Diagnose the root cause** — compare the failing step's XML against the corpus examples. Common issues:
    - Wrong interaction URI (action vs set vs file)
@@ -228,7 +234,9 @@ Follow these steps in order:
 
 3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with keywords describing the
    test scenario (e.g. "create opportunity", "close opportunity"). Use the returned examples as a
-   quality baseline.
+   quality baseline. If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read
+   the \`provar://docs/step-reference\` MCP resource for step type schemas, then continue the review
+   using that as the quality baseline.
 
 4. **Review for quality gaps** — check for each of the following, noting pass or fail:
 
@@ -332,9 +340,13 @@ ${
    coverage inventory.
 
 3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with "${objectName.toLowerCase()}"
-   as the query to understand what test patterns exist in the corpus for this object.`
+   as the query to understand what test patterns exist in the corpus for this object.
+   If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
+   \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
     : `2. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with "${objectName.toLowerCase()}"
-   as the query to understand what test patterns exist in the corpus for this object.`
+   as the query to understand what test patterns exist in the corpus for this object.
+   If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
+   \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
 }
 
 ${targetOrg ? '4' : '3'}. **Build the coverage matrix** — define the standard test scenarios for "${objectName}":

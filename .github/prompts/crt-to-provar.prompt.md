@@ -20,6 +20,7 @@ Robot Framework sections: `*** Keywords ***` = reusable blocks, `*** Test Cases 
 ## Migration workflow
 
 1. **Get examples** — call `provar.qualityhub.examples.retrieve` with keywords that describe the test scenario (e.g. "create account", "close opportunity"). Use the returned XML examples as the sole reference for Provar format and step patterns.
+   If the response has `"count": 0` with a `"warning"` field (API unavailable or not configured), fall back: read the `provar://docs/step-reference` MCP resource for step types and attribute formats, then continue with generation based on that reference.
 2. **Generate** — produce valid Provar XML that captures the intent of the source test, based on the retrieved examples. Omit login/browser setup — Provar handles that via Connection Manager.
 3. **Write** — save the XML to the `tests/` directory in the Provar project.
 4. **Validate** — call `provar.testcase.validate` on the saved file. Fix any errors and re-validate until clean.
