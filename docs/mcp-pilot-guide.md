@@ -23,7 +23,7 @@ The server runs **locally on your machine**. It does not phone home, transmit yo
 
 | Requirement                 | Version | Notes                                                                                                                                 |
 | --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Provar Automation IDE       | ≥ 2.x   | Must be installed with an **activated licence** on the same machine. The MCP server reads the licence from `~/Provar/.licenses/`.     |
+| Provar Automation IDE       | ≥ 3.x   | Must be installed with an **activated license** on the same machine. The MCP server reads the license from `~/Provar/.licenses/`.     |
 | Salesforce CLI (`sf`)       | ≥ 2.x   | `npm install -g @salesforce/cli`                                                                                                      |
 | Provar DX CLI plugin        | ≥ 1.5.0 | `sf plugins install @provartesting/provardx-cli@beta`                                                                                 |
 | An MCP-compatible AI client | —       | Claude Desktop, Claude Code, GitHub Copilot (VS Code), Cursor, or Agentforce Vibes                                                    |
@@ -74,7 +74,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
 }
 ```
 
-> **Licence:** The server reads your Provar Automation IDE licence automatically from `~/Provar/.licenses/`. No extra configuration is required — just ensure Provar Automation IDE is installed and activated on this machine.
+> **license:** The server reads your Provar Automation IDE license automatically from `~/Provar/.licenses/`. No extra configuration is required — just ensure Provar Automation IDE is installed and activated on this machine.
 
 Restart Claude Desktop after saving the file. The Provar tools will appear in the tool list.
 
@@ -422,11 +422,11 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 - Validates all path-type input fields (e.g. `provar_home`, `project_path`, `results_path` in `provar.ant.generate`) before any file operation, not just the output path
 - Invokes `sf` CLI subprocesses for Quality Hub and Automation tools — these use the SF CLI's existing credential store (`~/.sf/credentials.json`), which the MCP server does not read directly
 
-### Licence validation
+### License validation
 
-At startup the server reads `~/Provar/.licenses/*.properties` to verify that a Provar Automation IDE licence is activated on the machine. No network call is made during this check — it relies entirely on the licence state that the IDE has already validated and written to disk. The server makes no outbound connections for licence purposes.
+At startup the server reads `~/Provar/.licenses/*.properties` to verify that a Provar Automation IDE license is activated on the machine. No network call is made during this check — it relies entirely on the license state that the IDE has already validated and written to disk. The server makes no outbound connections for license purposes.
 
-**Evaluating without a local Provar IDE installation?** Set the `PROVAR_DEV_WHITELIST_KEYS` environment variable to one or more comma-separated licence keys to bypass the licence check entirely. This is intended for Provar engineering and CI environments:
+**Evaluating without a local Provar IDE installation?** Set the `PROVAR_DEV_WHITELIST_KEYS` environment variable to one or more comma-separated license keys to bypass the license check entirely. This is intended for Provar engineering and CI environments:
 
 ```json
 {
@@ -435,19 +435,19 @@ At startup the server reads `~/Provar/.licenses/*.properties` to verify that a P
       "command": "sf",
       "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/project"],
       "env": {
-        "PROVAR_DEV_WHITELIST_KEYS": "your-provar-licence-key"
+        "PROVAR_DEV_WHITELIST_KEYS": "your-provar-license-key"
       }
     }
   }
 }
 ```
 
-> ⚠️ Do not use `PROVAR_DEV_WHITELIST_KEYS` in production environments — it bypasses all licence enforcement.
+> ⚠️ Do not use `PROVAR_DEV_WHITELIST_KEYS` in production environments — it bypasses all license enforcement.
 
 ### What the server does NOT do
 
 - It does not transmit your project files, test code, or credentials to Provar servers
-- It does not make any network calls (licence is validated locally from the IDE's state)
+- It does not make any network calls (license is validated locally from the IDE's state)
 - It does not open any network ports or HTTP listeners (stdio transport only)
 - It does not store state between requests — every tool call is stateless
 - It does not read or modify files outside `--allowed-paths`
@@ -502,13 +502,13 @@ You can capture stderr from the MCP server process to maintain an audit trail of
 
 **"No activated Provar license found on this machine" / `LICENSE_NOT_FOUND`**
 
-The server could not find an activated licence in `~/Provar/.licenses/`. Open Provar Automation IDE, go to **Help → Manage Licence**, and ensure your licence is activated. Then retry starting the MCP server.
+The server could not find an activated license in `~/Provar/.licenses/`. Open Provar Automation IDE, go to **Help → Manage license**, and ensure your license is activated. Then retry starting the MCP server.
 
-If you are evaluating without a local Provar IDE installation, set `PROVAR_DEV_WHITELIST_KEYS` in the MCP server environment to bypass the licence check (see below).
+If you are evaluating without a local Provar IDE installation, set `PROVAR_DEV_WHITELIST_KEYS` in the MCP server environment to bypass the license check (see below).
 
 **"[provar-mcp] Warning: license validated from offline cache" (appears on stderr)**
 
-The server started successfully but the MCP licence cache is stale (more than 2 hours since the last validation). This is a warning only — the server is running. The grace window is 48 hours; if the cache exceeds that without a successful re-validation the next startup will fail with `LICENSE_NOT_FOUND`. To reset: restart the MCP server while Provar Automation IDE is open and connected to the internet.
+The server started successfully but the MCP license cache is stale (more than 2 hours since the last validation). This is a warning only — the server is running. The grace window is 48 hours; if the cache exceeds that without a successful re-validation the next startup will fail with `LICENSE_NOT_FOUND`. To reset: restart the MCP server while Provar Automation IDE is open and connected to the internet.
 
 **"SF_NOT_FOUND" error from quality hub / automation tools**
 

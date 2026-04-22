@@ -13,8 +13,8 @@ import net from 'node:net';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { URL } from 'node:url';
 
-// All three ports must be pre-registered in the Cognito App Client.
-// Cognito requires redirect_uri to exactly match a registered callback URL — no wildcards.
+// All three ports must be pre-registered in both the Cognito App Client and the SF ECA.
+// Both providers require redirect_uri to exactly match a registered callback URL — no wildcards.
 export const CALLBACK_PORTS = [1717, 7890, 8080];
 
 // ── PKCE ─────────────────────────────────────────────────────────────────────
@@ -165,7 +165,7 @@ export function listenForCallback(port: number, expectedState?: string): Promise
       if (code) {
         resolve(code);
       } else {
-        reject(new Error(description ?? error ?? 'No authorisation code received from Cognito'));
+        reject(new Error(description ?? error ?? 'No authorisation code received from identity provider'));
       }
     });
     server.on('connection', (socket: net.Socket) => {
@@ -210,7 +210,7 @@ export async function exchangeCodeForTokens(opts: {
   });
 
   if (status !== 200) {
-    throw new Error(`Cognito token exchange failed (${status}): ${responseBody}`);
+    throw new Error(`Token exchange failed (${status}): ${responseBody}`);
   }
 
   return JSON.parse(responseBody) as CognitoTokens;
@@ -247,7 +247,7 @@ function httpsPost(
       }
     );
     req.setTimeout(REQUEST_TIMEOUT_MS, () => {
-      req.destroy(new Error(`Cognito token exchange timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
+      req.destroy(new Error(`Token exchange timed out after ${REQUEST_TIMEOUT_MS / 1000}s`));
     });
     req.on('error', reject);
     req.write(body);

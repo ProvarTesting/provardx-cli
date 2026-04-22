@@ -90,7 +90,8 @@ claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/yo
 **Claude Desktop** — edit your config file, then restart the app:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Windows (direct installer): `%APPDATA%\Claude\claude_desktop_config.json`
+- Windows (Microsoft Store): `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` _(see note below about Store sandbox limitations)_
 
 ```json
 {
@@ -211,7 +212,10 @@ claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allow
 Edit the Claude Desktop MCP configuration file. Open it via **Claude menu → Settings → Developer → Edit Config**, or navigate to it directly:
 
 - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Windows (direct installer):** `%APPDATA%\Claude\claude_desktop_config.json`
+- **Windows (Microsoft Store):** `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`
+
+> **Windows Store version:** The Store edition of Claude Desktop runs in an app sandbox that can block child process spawning, causing the MCP server to disconnect immediately with "Server disconnected" errors. Use the **direct installer** from claude.ai/download instead. If you must use the Store version, run Claude Desktop as administrator.
 
 ```json
 {
