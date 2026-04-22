@@ -73,7 +73,7 @@ claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/yo
 
 > **Windows (Claude Desktop):** Use `sf.cmd` instead of `sf` if the server fails to start.
 
-📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, troubleshooting.**
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, 7 MCP prompts, troubleshooting.**
 
 ---
 
