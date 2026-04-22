@@ -112,7 +112,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
             {
               uri: 'provar://docs/step-reference',
               mimeType: 'text/markdown',
-              text: '# Provar Test Step Reference\n\nReference doc not found. Run `yarn compile` to build.',
+              text: '# Provar Test Step Reference\n\nReference doc not found. If you are developing from source, rebuild the package. Otherwise, reinstall or upgrade the plugin/package and try again.',
             },
           ],
         };
