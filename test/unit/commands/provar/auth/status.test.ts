@@ -166,9 +166,11 @@ describe('auth status — expiry warning logic', () => {
 
   it('writeCredentials stores expires_at and readStoredCredentials returns it', () => {
     const expires = new Date(NOW + 30 * 24 * 60 * 60 * 1000).toISOString();
+    // eslint-disable-next-line camelcase
     writeCredentials('pv_k_expirytestkey1', 'pv_k_expiry', 'manual', { expires_at: expires });
     const stored = readStoredCredentials();
     assert.ok(stored, 'credentials should exist');
+    // eslint-disable-next-line camelcase
     assert.equal(stored?.expires_at, expires);
   });
 });

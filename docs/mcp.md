@@ -57,6 +57,19 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [Quality Hub API tools](#quality-hub-api-tools)
     - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
   - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
+- [MCP Prompts](#mcp-prompts)
+  - [Migration prompts](#migration-prompts)
+    - [provar.migrate.crt](#provarmigratecrt)
+    - [provar.migrate.selenium](#provarmigrateselenium)
+    - [provar.migrate.playwright](#provarmigrateplaywright)
+  - [AI loop prompts](#ai-loop-prompts)
+    - [provar.loop.generate](#provarloopgenerate)
+    - [provar.loop.fix](#provarloopfix)
+    - [provar.loop.review](#provarloopreview)
+    - [provar.loop.coverage](#provarloopcoverage)
+    - [provar.loop.db](#provarloopdb)
+- [MCP Resources](#mcp-resources)
+  - [provar://docs/step-reference](#provardocsstep-reference)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -278,6 +291,28 @@ After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. 
 > ```
 >
 > On Windows, you can also try `sf.cmd` as the command.
+
+> **`TypeError: Cannot read properties of undefined (reading 'prototype')` on Windows?**
+> VS Code's MCP server process inherits the _system_ PATH, which may differ from your shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — see [Prerequisites](#prerequisites).
+>
+> Fix: remove or downgrade the system-wide Node.js to LTS 22, or use the `env` field in `.vscode/mcp.json` to override the PATH:
+>
+> ```json
+> {
+>   "servers": {
+>     "provar": {
+>       "type": "stdio",
+>       "command": "sf",
+>       "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"],
+>       "env": {
+>         "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
+>       }
+>     }
+>   }
+> }
+> ```
+>
+> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use). Run `node --version` from a VS Code terminal to confirm which version it sees.
 
 ### Cursor
 
@@ -1549,6 +1584,166 @@ Provar MCP does not include a built-in org introspection tool. Instead, connect 
 The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
 
 **Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
+
+---
+
+## MCP Prompts
+
+The Provar MCP server registers **7 MCP prompts** that pre-wire the tool chain into guided workflows. AI clients that support MCP prompts can invoke them directly by name instead of manually orchestrating the underlying tool sequence. **Important:** prompts that need to list, read, or write local project files (for example, `.testcase` files used by `provar.loop.fix` and `provar.loop.coverage`) also require a client with its own workspace/file tools, such as Claude Code or another MCP-compatible client with local file access configured; MCP prompt support alone is not sufficient for those workflows.
+
+---
+
+### Migration prompts
+
+These prompts convert tests from other frameworks into Provar XML. Each prompt:
+
+1. Calls `provar.qualityhub.examples.retrieve` with keywords from the source test to load few-shot grounding examples.
+2. Generates a Provar XML test case using those examples as structural context.
+3. Writes the file to the target project.
+4. Calls `provar.testcase.validate` and iterates until the output is clean.
+
+---
+
+#### `provar.migrate.crt`
+
+Convert a Copado Robotic Testing (CRT) test — either a QWord step sequence or a Robot Framework `.robot` file — into a Provar XML test case.
+
+**Arguments**
+
+| Parameter     | Type   | Required | Description                                                                      |
+| ------------- | ------ | -------- | -------------------------------------------------------------------------------- |
+| `source`      | string | yes      | The CRT test content. Accepts a numbered QWord sequence or a full `.robot` file. |
+| `projectPath` | string | no       | Absolute path to the Provar project root for writing the output file.            |
+| `testName`    | string | no       | Target test case name. Inferred from the source if omitted.                      |
+
+---
+
+#### `provar.migrate.selenium`
+
+Convert a Selenium WebDriver test (Java, Python, or JavaScript) that targets a Salesforce org into a Provar XML test case.
+
+**Arguments**
+
+| Parameter     | Type   | Required | Description                                                                    |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------ |
+| `source`      | string | yes      | The Selenium test file content (JUnit/TestNG, unittest/pytest, or Jest/Mocha). |
+| `projectPath` | string | no       | Absolute path to the Provar project root for writing the output file.          |
+| `testName`    | string | no       | Target test case name. Inferred from the class/method name if omitted.         |
+
+---
+
+#### `provar.migrate.playwright`
+
+Convert a Playwright test (TypeScript or JavaScript) that targets a Salesforce org into a Provar XML test case.
+
+**Arguments**
+
+| Parameter     | Type   | Required | Description                                                                     |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------- |
+| `source`      | string | yes      | The Playwright test file content (`@playwright/test` or `playwright` library).  |
+| `projectPath` | string | no       | Absolute path to the Provar project root for writing the output file.           |
+| `testName`    | string | no       | Target test case name. Inferred from the `test()` block description if omitted. |
+
+---
+
+### AI loop prompts
+
+These prompts drive the iterative test generation and quality improvement loop.
+
+---
+
+#### `provar.loop.generate`
+
+Generate a Provar XML test case from a user story or acceptance criteria. Retrieves corpus examples for grounding, generates the test, writes it to the project, then validates it.
+
+**Arguments**
+
+| Parameter     | Type   | Required | Description                                                                           |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------- |
+| `story`       | string | yes      | The user story or acceptance criteria. Include the Salesforce object and action.      |
+| `projectPath` | string | no       | Absolute path to the Provar project root.                                             |
+| `testName`    | string | no       | Output test case file name (without extension). Inferred from the story if omitted.   |
+| `objectName`  | string | no       | Primary Salesforce object under test (e.g. `"Opportunity"`). Scopes the corpus query. |
+
+---
+
+#### `provar.loop.fix`
+
+Fix a failing Provar test case using RCA output. Reads the current XML, interprets the failure, applies targeted fixes, and re-validates until the test passes.
+
+**Arguments**
+
+| Parameter      | Type   | Required | Description                                                            |
+| -------------- | ------ | -------- | ---------------------------------------------------------------------- |
+| `testcasePath` | string | yes      | Absolute path to the `.testcase` file to fix.                          |
+| `rcaOutput`    | string | yes      | The failure message or RCA output from `provar.testrun.rca`.           |
+| `projectPath`  | string | no       | Absolute path to the Provar project root (used for context if needed). |
+
+---
+
+#### `provar.loop.review`
+
+Review a Provar test case for quality, coverage, and best practices. Returns a scored report with specific improvement suggestions.
+
+**Arguments**
+
+| Parameter      | Type   | Required | Description                                      |
+| -------------- | ------ | -------- | ------------------------------------------------ |
+| `testcasePath` | string | yes      | Absolute path to the `.testcase` file to review. |
+| `projectPath`  | string | no       | Absolute path to the Provar project root.        |
+
+---
+
+#### `provar.loop.coverage`
+
+Analyse coverage gaps for a Salesforce object or feature area. Inspects the project's existing tests, identifies what is not covered, and generates new test cases to close the gaps.
+
+**Arguments**
+
+| Parameter     | Type   | Required | Description                                                                                                                                                                                |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `objectName`  | string | yes      | Primary Salesforce object to check coverage for (e.g. `"Opportunity"`, `"Lead"`).                                                                                                          |
+| `projectPath` | string | yes      | Absolute path to the Provar project root.                                                                                                                                                  |
+| `targetOrg`   | string | no       | Salesforce org alias or username. When provided, existing Quality Hub test cases for this object are retrieved via `provar.qualityhub.testcase.retrieve` before the coverage gap analysis. |
+
+---
+
+#### `provar.loop.db`
+
+Generate a Provar XML test case that connects to an **external database** (SQL Server, Oracle, MySQL, PostgreSQL, etc.) and verifies query results. This prompt is distinct from the Salesforce/SOQL loop — it targets `DbConnect` + `SqlQuery` steps and enforces the correct patterns for `funcCall` row counts and structured variable paths for field access, which are the most common source of errors in database test generation.
+
+**Arguments**
+
+| Parameter        | Type   | Required | Description                                                                                                                                                                          |
+| ---------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `story`          | string | yes      | Description of what the database test should verify. Include the database type, table name, query intent, and what values should be asserted.                                        |
+| `projectPath`    | string | no       | Absolute path to the Provar project root. Used to locate the `tests/` directory when writing the output file.                                                                        |
+| `testName`       | string | no       | Optional file name for the test case (without extension). Inferred from the story if omitted.                                                                                        |
+| `connectionName` | string | no       | The Provar Connection Manager database connection name (`DbConnect.connectionName`). Identifies which connection entry to use. If omitted, the story should describe the connection. |
+
+**What the prompt enforces:**
+
+- `DbConnect.connectionId` must use `valueClass="id"` — not `"string"`
+- `DbConnect.resultName` must exactly equal `SqlQuery.dbConnectionName` (the coupling point)
+- Row counts use `<value class="funcCall" id="Count">` — not `{Count(Var)}` string expressions
+- Indexed field access uses a structured `<value class="variable"><path><filter class="index">` — not `{Var[0].Field}` string expressions
+
+---
+
+## MCP Resources
+
+The Provar MCP server also exposes one **MCP resource** — structured reference content that AI clients can read directly from the server.
+
+---
+
+### `provar://docs/step-reference`
+
+Canonical reference for all Provar XML test step API IDs, argument formats, validation rules, and corpus-verified examples. AI clients can read this resource to understand correct step structure when generating or reviewing test cases — without needing to fetch it from disk.
+
+**URI:** `provar://docs/step-reference`  
+**MIME type:** `text/markdown`
+
+The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this repository, compiled into the package at build time.
 
 ---
 

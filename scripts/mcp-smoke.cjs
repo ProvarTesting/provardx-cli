@@ -312,6 +312,50 @@ async function runTests() {
     n: 3,
   });
 
+  // ── 40. prompts/list ──────────────────────────────────────────────────────
+  await send('prompts/list', {});
+
+  // ── 41–43. provar.migrate.* prompts ──────────────────────────────────────
+  await rpc('provar.migrate.crt (prompt)', 'prompts/get', {
+    name: 'provar.migrate.crt',
+    arguments: { source: 'Step 1: ClickText Accounts' },
+  });
+  await rpc('provar.migrate.selenium (prompt)', 'prompts/get', {
+    name: 'provar.migrate.selenium',
+    arguments: { source: 'driver.get("https://example.com")' },
+  });
+  await rpc('provar.migrate.playwright (prompt)', 'prompts/get', {
+    name: 'provar.migrate.playwright',
+    arguments: { source: 'await page.goto("https://example.com")' },
+  });
+
+  // ── 44–47. provar.loop.* prompts ─────────────────────────────────────────
+  await rpc('provar.loop.generate (prompt)', 'prompts/get', {
+    name: 'provar.loop.generate',
+    arguments: { story: 'As a sales rep I want to close an opportunity so that revenue is recorded.' },
+  });
+  await rpc('provar.loop.fix (prompt)', 'prompts/get', {
+    name: 'provar.loop.fix',
+    arguments: {
+      testcasePath: '/tmp/CloseOpportunity.testcase',
+      rcaOutput: 'STEP FAILED: Click the Save button — element not found',
+    },
+  });
+  await rpc('provar.loop.review (prompt)', 'prompts/get', {
+    name: 'provar.loop.review',
+    arguments: { testcasePath: '/tmp/CloseOpportunity.testcase' },
+  });
+  await rpc('provar.loop.coverage (prompt)', 'prompts/get', {
+    name: 'provar.loop.coverage',
+    arguments: { objectName: 'Opportunity', projectPath: '/tmp/provar-project' },
+  });
+
+  // ── 48. provar.loop.db prompt ─────────────────────────────────────────────
+  await rpc('provar.loop.db (prompt)', 'prompts/get', {
+    name: 'provar.loop.db',
+    arguments: { story: 'Verify Users table has at least one Active record after Salesforce flow runs' },
+  });
+
   server.stdin.end();
 }
 
@@ -320,8 +364,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 37 tools (setup excluded from default count)
-  const TOTAL_EXPECTED = 39 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 37 tools + prompts/list + 8 prompts/get (setup excluded from default count)
+  const TOTAL_EXPECTED = 48 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 

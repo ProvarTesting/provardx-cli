@@ -156,9 +156,9 @@ describe('provar.testcase.generate', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Multi Step',
         steps: [
-          { api_id: 'UiConnect',  name: 'Connect',  attributes: {} },
+          { api_id: 'UiConnect', name: 'Connect', attributes: {} },
           { api_id: 'UiNavigate', name: 'Navigate', attributes: {} },
-          { api_id: 'UiDoAction', name: 'Click',    attributes: {} },
+          { api_id: 'UiDoAction', name: 'Click', attributes: {} },
         ],
         dry_run: true,
         overwrite: false,
@@ -177,7 +177,7 @@ describe('provar.testcase.generate', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Count Test',
         steps: [
-          { api_id: 'UiConnect',  name: 'Step 1', attributes: {} },
+          { api_id: 'UiConnect', name: 'Step 1', attributes: {} },
           { api_id: 'UiNavigate', name: 'Step 2', attributes: {} },
         ],
         dry_run: true,
@@ -202,7 +202,10 @@ describe('provar.testcase.generate', () => {
       assert.equal(typeof validation['validity_score'], 'number');
       assert.equal(typeof validation['quality_score'], 'number');
       assert.equal(validation['is_valid'], true, 'Well-formed generated XML should be valid');
-      assert.ok(!('best_practices_violations' in validation), 'best_practices_violations should be omitted from slim response');
+      assert.ok(
+        !('best_practices_violations' in validation),
+        'best_practices_violations should be omitted from slim response'
+      );
     });
 
     it('emits a TODO comment when no steps are provided', () => {
@@ -366,6 +369,27 @@ describe('provar.testcase.generate', () => {
       });
 
       assert.equal(parseText(result)['idempotency_key'], 'dedup-key-abc');
+    });
+  });
+
+  describe('XML argument valueClass casing', () => {
+    it('emits lowercase valueClass="string" not uppercase "String"', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'ValueClass Test',
+        steps: [
+          {
+            api_id: 'UiConnect',
+            name: 'Connect',
+            attributes: { connectionName: 'MyOrg' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('valueClass="string"'), 'Expected lowercase valueClass="string"');
+      assert.ok(!xml.includes('valueClass="String"'), 'Must not emit uppercase valueClass="String"');
     });
   });
 });
