@@ -709,10 +709,12 @@ export function registerTestRunRca(server: McpServer, config: ServerConfig): voi
       log('info', 'provar.testrun.rca', { requestId, locate_only: input.locate_only, mode: input.mode });
 
       try {
-        // ── Path policy on explicit results_path ─────────────────────────────
-        if (input.results_path) {
+        // ── Path policy ──────────────────────────────────────────────────────
+        const pathsToCheck: string[] = [path.resolve(input.project_path)];
+        if (input.results_path) pathsToCheck.push(input.results_path);
+        for (const p of pathsToCheck) {
           try {
-            assertPathAllowed(input.results_path, config.allowedPaths);
+            assertPathAllowed(p, config.allowedPaths);
           } catch (pErr: unknown) {
             const e = pErr as Error & { code?: string };
             const err = makeError(e instanceof PathPolicyError ? e.code : 'PATH_NOT_ALLOWED', e.message, requestId);

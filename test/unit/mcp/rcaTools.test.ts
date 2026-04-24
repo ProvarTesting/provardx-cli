@@ -693,4 +693,23 @@ describe('provar.testrun.rca mode=failures', () => {
       `expected path policy error, got: ${String(body['error_code'])}`
     );
   });
+
+  it('rejects project_path outside allowed paths', () => {
+    const restrictedServer = new MockMcpServer();
+    const allowedDir = path.join(tmpDir, 'allowed');
+    fs.mkdirSync(allowedDir, { recursive: true });
+    registerTestRunRca(restrictedServer as never, { allowedPaths: [allowedDir] });
+
+    const result = restrictedServer.call('provar.testrun.rca', {
+      project_path: tmpDir, // tmpDir root is outside allowed subdir
+      mode: 'failures',
+    });
+
+    assert.equal(isError(result), true);
+    const body = parseText(result);
+    assert.ok(
+      body['error_code'] === 'PATH_NOT_ALLOWED' || body['error_code'] === 'PATH_TRAVERSAL',
+      `expected path policy error for project_path, got: ${String(body['error_code'])}`
+    );
+  });
 });

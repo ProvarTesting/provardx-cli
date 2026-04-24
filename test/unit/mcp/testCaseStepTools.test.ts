@@ -197,6 +197,25 @@ describe('provar.testcase.step.edit', () => {
     assert.equal(written, VALID_TESTCASE_XML);
   });
 
+  // INVALID_STEP_XML — step_xml contains multiple <apiCall> elements
+  it('mode=add returns INVALID_STEP_XML when step_xml contains multiple <apiCall> elements', () => {
+    const multiStep =
+      '<apiCall apiId="a" testItemId="10" guid="550e8400-e29b-41d4-a716-446655440010" name="A"/>' +
+      '<apiCall apiId="b" testItemId="11" guid="550e8400-e29b-41d4-a716-446655440011" name="B"/>';
+
+    const result = server.call('provar.testcase.step.edit', {
+      test_case_path: tcPath,
+      mode: 'add',
+      test_item_id: '1',
+      step_xml: multiStep,
+    });
+
+    assert.equal(isError(result), true);
+    const body = parseText(result);
+    assert.equal(body['error_code'], 'INVALID_STEP_XML');
+    assert.ok(!fs.existsSync(tcPath + '.bak'), 'no backup should be written for pre-mutation errors');
+  });
+
   // mode=add with missing step_xml
   it('mode=add returns MISSING_INPUT when step_xml is absent', () => {
     const result = server.call('provar.testcase.step.edit', {

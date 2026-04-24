@@ -70,9 +70,10 @@ function parseNewStep(stepXml: string): { step: ApiCallNode } | { error: string 
     const fragDoc = fragParser.parse(`<root>${stepXml}</root>`) as Record<string, unknown>;
     const rootEl = fragDoc['root'] as Record<string, unknown> | undefined;
     const callEl = rootEl?.['apiCall'];
-    if (!callEl) return { error: 'step_xml must contain an <apiCall> element' };
-    const step = (Array.isArray(callEl) ? (callEl as ApiCallNode[])[0] : callEl) as ApiCallNode;
-    return { step };
+    if (!callEl) return { error: 'step_xml must contain exactly one <apiCall> element' };
+    const calls = Array.isArray(callEl) ? (callEl as ApiCallNode[]) : [callEl as ApiCallNode];
+    if (calls.length !== 1) return { error: 'step_xml must contain exactly one <apiCall> element' };
+    return { step: calls[0] };
   } catch (e: unknown) {
     return { error: (e as Error).message };
   }
@@ -84,15 +85,16 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
   server.tool(
     'provar.testcase.step.edit',
     [
-      'Atomically add or remove a single step (apiCall) in a Provar XML test case file.',
+      'Add or remove a single step (apiCall) in a Provar XML test case file.',
+      'Uses write-to-temp-then-rename to minimise partial-write risk.',
       'Prerequisites: the test case must exist and be valid XML.',
       'For mode=remove: supply test_item_id of the step to remove.',
       'For mode=add: supply test_item_id of the anchor step, position (before|after, default after),',
-      'and step_xml (the <apiCall ...>...</apiCall> XML fragment for the new step).',
+      'and step_xml (the <apiCall ...>...</apiCall> XML fragment for the new step; must contain exactly one <apiCall>).',
       'A backup is written to <test_case_path>.bak before any mutation and restored automatically if',
       'the post-edit validation fails.',
       'Returns STEP_NOT_FOUND (with all_test_item_ids list) when the target step is absent.',
-      'Returns INVALID_STEP_XML when step_xml cannot be parsed.',
+      'Returns INVALID_STEP_XML when step_xml cannot be parsed or contains ≠1 <apiCall> elements.',
       'Returns INVALID_XML_AFTER_EDIT (backup restored) when the mutated file fails validation.',
     ].join(' '),
     {
@@ -197,9 +199,11 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
         // Rebuild XML
         const mutatedXml = buildTestCaseXml(parsed);
 
-        // Write backup, then write mutated file
+        // Write backup, then write mutated file via temp→rename to minimise partial-write risk
+        const tmpPath = resolvedPath + '.tmp';
         fs.writeFileSync(bakPath, original, 'utf-8');
-        fs.writeFileSync(resolvedPath, mutatedXml, 'utf-8');
+        fs.writeFileSync(tmpPath, mutatedXml, 'utf-8');
+        fs.renameSync(tmpPath, resolvedPath);
 
         // Validate if requested
         let validation: ReturnType<typeof validateTestCase> | null | undefined;
@@ -211,7 +215,7 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
             validation = null;
           }
 
-          if (validation && !validation.is_valid) {
+          if (!validation || !validation.is_valid) {
             // Restore from backup
             fs.writeFileSync(resolvedPath, original, 'utf-8');
             fs.unlinkSync(bakPath);
@@ -220,7 +224,7 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
               `Validation failed after ${input.mode}; original file restored from backup`,
               requestId,
               false,
-              { validation_issues: validation.issues }
+              { validation_issues: validation?.issues ?? ['Validation threw an unexpected error'] }
             );
             return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
           }
