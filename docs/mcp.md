@@ -807,7 +807,9 @@ Generates a `provardx-properties.json` file from the standard template. Placehol
 
 ### `provar.properties.read`
 
-Reads and parses a `provardx-properties.json` file. Use this to inspect the current configuration before making changes with `provar.properties.set`.
+Reads and parses a `provardx-properties.json` file directly from disk. Use this to inspect the current configuration before making changes with `provar.properties.set`.
+
+If the file you read differs on critical fields (`provarHome`, `projectPath`, `resultsPath`) from the file currently registered via `provar.automation.config.load`, the response will include a `details.warning` listing the divergent keys. This catches the common case where the agent reads one file but test runs use another.
 
 **Input**
 
@@ -815,9 +817,9 @@ Reads and parses a `provardx-properties.json` file. Use this to inspect the curr
 | ----------- | ------ | -------- | ------------------------------------------- |
 | `file_path` | string | yes      | Path to the `provardx-properties.json` file |
 
-**Output** — `{ file_path, content }` where `content` is the parsed JSON object.
+**Output** — `{ requestId, file_path, content[, details.warning] }` where `content` is the parsed JSON object. `details.warning` is present when the file diverges from the active sf config.
 
-**Error codes:** `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
 
 ---
 
@@ -853,7 +855,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 **Output** — `{ file_path, updated_fields, content }`
 
-**Error codes:** `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -877,7 +879,7 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 | `warning_count` | Number of warnings (e.g. unfilled placeholders) |
 | `issues`        | Array of `{ field, severity, message }`         |
 
-**Error codes:** `MISSING_INPUT`, `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `MISSING_INPUT`, `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -1144,9 +1146,20 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed] }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning] }`
 
-The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count and a note is appended to `stdout`. Use `provar.testrun.rca` to inspect the full raw JUnit output.
+The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
+
+After each run, the tool scans the results directory for JUnit XML files and adds a `steps` array when results are found:
+
+```json
+"steps": [
+  { "testItemId": "1", "title": "TC-Login-001-LoginAndVerify.testcase", "status": "pass" },
+  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "Execution failed: Element not found" }
+]
+```
+
+Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
