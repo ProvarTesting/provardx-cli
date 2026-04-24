@@ -12,6 +12,8 @@ import path from 'node:path';
 import { z } from 'zod';
 import { XMLParser } from 'fast-xml-parser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ServerConfig } from '../server.js';
+import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 
@@ -665,17 +667,23 @@ function buildFailureReports(
 
 // ── provar.testrun.rca tool ───────────────────────────────────────────────────
 
-export function registerTestRunRca(server: McpServer): void {
+export function registerTestRunRca(server: McpServer, config: ServerConfig): void {
   server.tool(
     'provar.testrun.rca',
     [
       'Parse a completed Provar test run and produce a structured Root Cause Analysis (RCA) report.',
       'Resolves the results directory, parses JUnit.xml, classifies each failure by category,',
       'and produces recommendations. Use locate_only=true to skip parsing and just resolve artifact locations.',
+      'Use mode="failures" to get a lightweight array of failed test cases',
+      '([{ testItemId, title, errorMessage }]) without the full RCA classification — useful when you',
+      'need failure names quickly without loading the HTML report.',
     ].join(' '),
     {
       project_path: z.string().describe('Absolute path to the Provar project root'),
-      results_path: z.string().optional().describe('Explicit override for the results base directory'),
+      results_path: z
+        .string()
+        .optional()
+        .describe('Explicit override for the results base directory; must be within --allowed-paths if provided'),
       run_index: z
         .number()
         .int()
@@ -687,12 +695,33 @@ export function registerTestRunRca(server: McpServer): void {
         .optional()
         .default(false)
         .describe('If true, skip parsing and return just artifact locations'),
+      mode: z
+        .enum(['rca', 'failures'])
+        .optional()
+        .default('rca')
+        .describe(
+          '"rca" (default): full root-cause analysis with classification and recommendations. ' +
+            '"failures": lightweight array of failed test cases [{ testItemId, title, errorMessage }].'
+        ),
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testrun.rca', { requestId, locate_only: input.locate_only });
+      log('info', 'provar.testrun.rca', { requestId, locate_only: input.locate_only, mode: input.mode });
 
       try {
+        // ── Path policy ──────────────────────────────────────────────────────
+        const pathsToCheck: string[] = [path.resolve(input.project_path)];
+        if (input.results_path) pathsToCheck.push(input.results_path);
+        for (const p of pathsToCheck) {
+          try {
+            assertPathAllowed(p, config.allowedPaths);
+          } catch (pErr: unknown) {
+            const e = pErr as Error & { code?: string };
+            const err = makeError(e instanceof PathPolicyError ? e.code : 'PATH_NOT_ALLOWED', e.message, requestId);
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
+          }
+        }
+
         // ── Resolve location ─────────────────────────────────────────────────
         const resolved = resolveResultsLocation(input.project_path, input.results_path, input.run_index);
         if ('error' in resolved) {
@@ -739,6 +768,30 @@ export function registerTestRunRca(server: McpServer): void {
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           };
+        }
+
+        // ── mode=failures: lightweight failure list ──────────────────────────
+        if (input.mode === 'failures') {
+          if (!junit_xml) {
+            const result = {
+              requestId,
+              results_dir,
+              failures: [] as Array<{ testItemId: string; title: string; errorMessage: string }>,
+              details: { warning: 'JUnit.xml not found in results directory — no failure data available' },
+            };
+            return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+          }
+          const xmlContent = fs.readFileSync(junit_xml, 'utf-8');
+          const parsed = parseJUnit(xmlContent);
+          const failures = parsed.testcases
+            .filter((tc) => tc.failureText !== null && !tc.isSkipped)
+            .map((tc) => ({
+              testItemId: tc.name,
+              title: tc.name,
+              errorMessage: (tc.failureText ?? '').slice(0, 500),
+            }));
+          const result = { requestId, results_dir, failures };
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         }
 
         // ── Check JUnit.xml exists ───────────────────────────────────────────
@@ -809,7 +862,7 @@ export function registerTestRunRca(server: McpServer): void {
 
 // ── Registration entry point ──────────────────────────────────────────────────
 
-export function registerAllRcaTools(server: McpServer): void {
+export function registerAllRcaTools(server: McpServer, config: ServerConfig): void {
   registerTestRunLocate(server);
-  registerTestRunRca(server);
+  registerTestRunRca(server, config);
 }

@@ -46,6 +46,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar.qualityhub.defect.create](#provarqualityhubdefectcreate)
   - [provar.testrun.report.locate](#provartestrunreportlocate)
   - [provar.testrun.rca](#provartestrunrca)
+  - [provar.testcase.step.edit](#provartestcasestepedit)
   - [provar.testplan.add-instance](#provartestplanadinstance)
   - [provar.testplan.create-suite](#provartestplancreatetsuite)
   - [provar.testplan.remove-instance](#provartestplanremoveinstance)
@@ -1335,12 +1336,15 @@ Uses a 4-step resolution algorithm (explicit path → `~/.sf/config.json` → `p
 
 Analyse a completed test run and return a structured Root Cause Analysis report. Reads `JUnit.xml`, classifies each failure into a root cause category, extracts page object and operation names, and flags pre-existing failures across prior Increment runs.
 
-| Input          | Type    | Required | Description                                               |
-| -------------- | ------- | -------- | --------------------------------------------------------- |
-| `project_path` | string  | yes      | Absolute path to the Provar project root                  |
-| `results_path` | string  | no       | Explicit results directory override                       |
-| `run_index`    | integer | no       | Specific Increment run to analyse (default: latest)       |
-| `locate_only`  | boolean | no       | Skip parsing; return artifact paths only (default: false) |
+| Input          | Type    | Required | Description                                                                                                                              |
+| -------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path` | string  | yes      | Absolute path to the Provar project root                                                                                                 |
+| `results_path` | string  | no       | Explicit results directory override; must be within `--allowed-paths` if provided                                                        |
+| `run_index`    | integer | no       | Specific Increment run to analyse (default: latest)                                                                                      |
+| `locate_only`  | boolean | no       | Skip parsing; return artifact paths only (default: false)                                                                                |
+| `mode`         | string  | no       | `"rca"` (default) — full classification report. `"failures"` — lightweight `[{ testItemId, title, errorMessage }]` array, no RCA fields. |
+
+**mode=rca output fields:**
 
 | Output field            | Description                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------- |
@@ -1352,7 +1356,17 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 | `infrastructure_issues` | Recommendations for infra-category failures (credential, driver, license, etc.) |
 | `recommendations`       | Deduplicated list of all recommended actions                                    |
 
-**`FailureReport` fields:**
+**mode=failures output fields:**
+
+| Output field      | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `results_dir`     | Resolved results directory                                           |
+| `failures`        | `Array<{ testItemId: string, title: string, errorMessage: string }>` |
+| `details.warning` | Set when `JUnit.xml` is absent; `failures` will be empty             |
+
+Use `mode="failures"` when you only need the list of failing test case names without loading the full HTML report. Use `mode="rca"` (default) for root-cause classification and fix recommendations.
+
+**`FailureReport` fields (mode=rca only):**
 
 | Field                 | Description                                              |
 | --------------------- | -------------------------------------------------------- |
@@ -1372,7 +1386,64 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 
 Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 
-**Error codes:** `RESULTS_NOT_CONFIGURED`
+**Error codes:** `RESULTS_NOT_CONFIGURED`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
+
+---
+
+### `provar.testcase.step.edit`
+
+Atomically add or remove a single step (`<apiCall>`) in a Provar XML test case file. Writes a `.bak` backup before mutating, runs structural validation after the edit, and automatically restores the backup if validation fails.
+
+Prerequisites: the test case file must exist and be valid XML with a `<testCase><steps>` structure.
+
+| Input                 | Type    | Required       | Description                                                                                                             |
+| --------------------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `test_case_path`      | string  | yes            | Absolute path to the `.testcase` file; must be within `--allowed-paths`                                                 |
+| `mode`                | string  | yes            | `"remove"` — delete a step; `"add"` — insert a new step                                                                 |
+| `test_item_id`        | string  | yes            | For `remove`: `testItemId` of the step to delete. For `add`: `testItemId` of the anchor step.                           |
+| `position`            | string  | no (add only)  | `"before"` or `"after"` relative to the anchor step (default: `"after"`)                                                |
+| `step_xml`            | string  | yes (add only) | The `<apiCall ...>...</apiCall>` XML fragment for the new step. Must be well-formed and contain an `<apiCall>` element. |
+| `validate_after_edit` | boolean | no             | Run structural validation after the mutation; restores backup on failure (default: `true`)                              |
+
+| Output field   | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| `success`      | `true` on successful mutation                              |
+| `test_item_id` | The `test_item_id` that was targeted                       |
+| `mode`         | `"remove"` or `"add"`                                      |
+| `validation`   | `TestCaseValidationResult` when `validate_after_edit=true` |
+
+**Error codes:**
+
+| Code                     | Meaning                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `STEP_NOT_FOUND`         | No step with the given `testItemId` found; `details.all_test_item_ids` lists every ID in the file |
+| `INVALID_STEP_XML`       | `step_xml` failed XML parsing or contains no `<apiCall>` element; file is not modified            |
+| `INVALID_XML_AFTER_EDIT` | Post-mutation validation failed; original file has been restored from backup                      |
+| `FILE_NOT_FOUND`         | `test_case_path` does not exist                                                                   |
+| `MISSING_INPUT`          | `step_xml` is required for `mode=add` but was not provided                                        |
+| `PATH_NOT_ALLOWED`       | `test_case_path` or its `.bak` path is outside `--allowed-paths`                                  |
+
+**Example — remove step 3:**
+
+```json
+{
+  "test_case_path": "/projects/myapp/tests/Login.testcase",
+  "mode": "remove",
+  "test_item_id": "3"
+}
+```
+
+**Example — insert a Sleep step after step 2:**
+
+```json
+{
+  "test_case_path": "/projects/myapp/tests/Login.testcase",
+  "mode": "add",
+  "test_item_id": "2",
+  "position": "after",
+  "step_xml": "<apiCall apiId=\"com.provar.plugins.bundled.apis.control.Sleep\" testItemId=\"99\" guid=\"550e8400-e29b-41d4-a716-446655440099\" name=\"Wait 2s\"><arguments><argument apiId=\"sleepTime\" value=\"2000\"/></arguments></apiCall>"
+}
+```
 
 ---
 
