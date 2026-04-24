@@ -20,7 +20,7 @@ import {
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.auth.login');
 
-// Production values bundled from Phase 2 handoff (2026-04-11).
+// Production values bundled at auth handoff (2026-04-11).
 // Override via PROVAR_COGNITO_DOMAIN / PROVAR_COGNITO_CLIENT_ID for non-prod environments.
 const DEFAULT_COGNITO_DOMAIN = 'us-east-1xpfwzwmop.auth.us-east-1.amazoncognito.com';
 const DEFAULT_CLIENT_ID = '29cs1a784r4cervmth8ugbkkri';

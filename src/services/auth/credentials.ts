@@ -15,7 +15,7 @@ export interface StoredCredentials {
   prefix: string;
   set_at: string;
   source: 'manual' | 'cognito' | 'salesforce';
-  // Phase 2 fields — optional so Phase 1 files remain valid after upgrade
+  // Extended fields — optional so earlier credential files remain valid after upgrade
   username?: string;
   tier?: string;
   expires_at?: string;

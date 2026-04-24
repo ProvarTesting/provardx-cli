@@ -108,7 +108,7 @@ function resolveSfExecutable(): string | null {
   // missing — it exits non-zero with "not recognised" in stderr but sets no
   // probe.error. Trying shell:false first catches both cases correctly.
   //
-  // Phase 1: shell:false (works on Linux/macOS; gives ENOENT on Windows if
+  // First attempt: shell:false (works on Linux/macOS; gives ENOENT on Windows if
   // sf.cmd is on PATH but requires the shell).
   const probe = sfSpawnHelper.spawnSync('sf', ['--version'], {
     encoding: 'utf-8',
@@ -120,7 +120,7 @@ function resolveSfExecutable(): string | null {
     return cachedSfPath;
   }
 
-  // Phase 2 (Windows only): retry with shell:true when the plain probe failed
+  // Windows fallback: retry with shell:true when the plain probe failed
   // with ENOENT — meaning sf.cmd exists on PATH but can't run without the shell.
   if (platform === 'win32' && (probe.error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') {
     const probeShell = sfSpawnHelper.spawnSync('sf', ['--version'], {

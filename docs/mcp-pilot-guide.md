@@ -371,7 +371,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ### Scenario 9 (requires API key): AI Test Generation from User Story
 
-**Goal:** Demonstrate the full Phase 2 AI-assisted test generation loop: org metadata → corpus retrieval → LLM synthesis → generate + validate.
+**Goal:** Demonstrate the full AI-assisted test generation loop: org metadata → corpus retrieval → LLM synthesis → generate + validate.
 
 **Setup:**
 
