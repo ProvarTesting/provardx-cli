@@ -143,7 +143,7 @@ export function registerQualityHubTestRun(server: McpServer): void {
         .optional()
         .default([])
         .describe(
-          'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in plan names — they skip QH plan-level reporting.'
+          'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.'
         ),
     },
     ({ target_org, flags }) => {

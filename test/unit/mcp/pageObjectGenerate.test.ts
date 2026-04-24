@@ -496,5 +496,24 @@ describe('provar.pageobject.generate', () => {
       assert.equal(isError(result), true);
       assert.equal(parseText(result)['error_code'], 'FILE_EXISTS');
     });
+
+    it('does not write main file when SSO stub preflight fails (atomic write)', () => {
+      const poPath = path.join(tmpDir, 'LoginPage.java');
+      const ssoPath = path.join(tmpDir, 'LoginPageSso.java');
+      fs.writeFileSync(ssoPath, '// existing stub', 'utf-8');
+
+      server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        output_path: poPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(fs.existsSync(poPath), false, 'Main .java should not be written when SSO preflight fails');
+    });
   });
 });

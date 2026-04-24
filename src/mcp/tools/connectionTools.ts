@@ -60,12 +60,16 @@ const TP_PARSER = new XMLParser({
   isArray: (name): boolean => name === 'connectionClass' || name === 'connection' || name === 'environment',
 });
 
+class XmlParseError extends Error {
+  public code = 'CONNECTION_XML_PARSE_ERROR';
+}
+
 function parseTestProjectXml(content: string): Record<string, unknown> {
   let parsed: Record<string, unknown>;
   try {
     parsed = TP_PARSER.parse(content) as Record<string, unknown>;
-  } catch {
-    return {};
+  } catch (e) {
+    throw new XmlParseError(`Failed to parse .testproject XML: ${(e as Error).message}`);
   }
   const raw = parsed['testProject'];
   return raw !== null && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
@@ -160,6 +164,8 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
           );
           return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
         }
+
+        assertPathAllowed(testProjectPath, config.allowedPaths);
 
         let content: string;
         try {

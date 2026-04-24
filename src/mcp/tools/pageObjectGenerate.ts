@@ -50,6 +50,56 @@ const FieldSchema = z.object({
   element_type: z.enum(VALID_ELEMENT_TYPES).default('TextType'),
 });
 
+type ToolResult = { isError: true; content: Array<{ type: 'text'; text: string }> } | null;
+
+function preflightAndWrite(
+  filePath: string,
+  javaSource: string,
+  ssoFilePath: string | undefined,
+  ssoSource: string | undefined,
+  overwrite: boolean,
+  requestId: string
+): ToolResult {
+  if (fs.existsSync(filePath) && !overwrite) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            makeError('FILE_EXISTS', `File already exists: ${filePath}. Set overwrite=true to replace.`, requestId)
+          ),
+        },
+      ],
+    };
+  }
+  if (ssoSource && ssoFilePath && fs.existsSync(ssoFilePath) && !overwrite) {
+    return {
+      isError: true,
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            makeError(
+              'FILE_EXISTS',
+              `SSO stub file already exists: ${ssoFilePath}. Set overwrite=true to replace.`,
+              requestId
+            )
+          ),
+        },
+      ],
+    };
+  }
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, javaSource, 'utf-8');
+  log('info', 'provar.pageobject.generate: wrote file', { requestId, filePath });
+  if (ssoSource && ssoFilePath) {
+    fs.writeFileSync(ssoFilePath, ssoSource, 'utf-8');
+    log('info', 'provar.pageobject.generate: wrote SSO stub', { requestId, ssoFilePath });
+  }
+  return null;
+}
+
 export function registerPageObjectGenerate(server: McpServer, config: ServerConfig): void {
   server.tool(
     'provar.pageobject.generate',
@@ -115,32 +165,16 @@ export function registerPageObjectGenerate(server: McpServer, config: ServerConf
           assertPathAllowed(filePath, config.allowedPaths);
           if (ssoFilePath) assertPathAllowed(ssoFilePath, config.allowedPaths);
 
-          if (fs.existsSync(filePath) && !input.overwrite) {
-            const err = makeError(
-              'FILE_EXISTS',
-              `File already exists: ${filePath}. Set overwrite=true to replace.`,
-              requestId
-            );
-            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
-          }
-
-          fs.mkdirSync(path.dirname(filePath), { recursive: true });
-          fs.writeFileSync(filePath, javaSource, 'utf-8');
+          const preflightErr = preflightAndWrite(
+            filePath,
+            javaSource,
+            ssoFilePath,
+            ssoSource,
+            input.overwrite,
+            requestId
+          );
+          if (preflightErr) return preflightErr;
           written = true;
-          log('info', 'provar.pageobject.generate: wrote file', { requestId, filePath });
-
-          if (ssoSource && ssoFilePath) {
-            if (fs.existsSync(ssoFilePath) && !input.overwrite) {
-              const err = makeError(
-                'FILE_EXISTS',
-                `SSO stub file already exists: ${ssoFilePath}. Set overwrite=true to replace.`,
-                requestId
-              );
-              return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
-            }
-            fs.writeFileSync(ssoFilePath, ssoSource, 'utf-8');
-            log('info', 'provar.pageobject.generate: wrote SSO stub', { requestId, ssoFilePath });
-          }
         }
 
         const result: Record<string, unknown> = {

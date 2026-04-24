@@ -203,7 +203,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           if (!validationFull.is_valid) {
             const errResult = makeError(
               'TESTCASE_INVALID',
-              `Generated test case failed structural validation (${validationFull.error_count} error(s)). See validation field.`,
+              `Generated test case failed structural validation (${validationFull.error_count} error(s)). See details.validation.`,
               requestId,
               false,
               { validation: validationSlim }

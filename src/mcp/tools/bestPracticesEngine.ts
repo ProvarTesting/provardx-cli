@@ -743,7 +743,7 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
   for (const call of getAllApiCalls(tc)) {
     const apiId = call['@_apiId'] as string | undefined;
     if (!apiId) continue;
-    if (targetApiId && !apiId.includes('UiWithScreen')) continue;
+    if (targetApiId && !apiId.includes(targetApiId)) continue;
 
     const target = getUiWithScreenTarget(call);
     if (!target) continue;

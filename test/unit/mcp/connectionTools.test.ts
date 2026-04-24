@@ -211,5 +211,12 @@ describe('provar.connection.list', () => {
       const code = parseText(result)['error_code'] as string;
       assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected: ${code}`);
     });
+
+    it('returns CONNECTION_XML_PARSE_ERROR for malformed .testproject XML', () => {
+      writeTestProject(tmpDir, '<unclosed');
+      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      assert.equal(isError(result), true);
+      assert.equal(parseText(result)['error_code'], 'CONNECTION_XML_PARSE_ERROR');
+    });
   });
 });

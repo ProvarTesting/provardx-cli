@@ -577,20 +577,20 @@ Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePa
 
 **Input**
 
-| Parameter                   | Type                                                   | Required | Description                                                                                             |
-| --------------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
-| `class_name`                | string                                                 | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)                                                   |
-| `package_name`              | string                                                 | yes      | Java package (e.g. `pageobjects.accounts`)                                                              |
-| `page_type`                 | `standard` \| `salesforce`                             | yes      | Generates `@Page` or `@SalesforcePage` annotation                                                       |
-| `title`                     | string                                                 | no       | Page title for the annotation                                                                           |
-| `connection_name`           | string                                                 | no       | Salesforce connection name (for `@SalesforcePage`)                                                      |
-| `salesforce_page_attribute` | string                                                 | no       | Additional Salesforce page attribute                                                                    |
-| `fields`                    | array of `{ name, type, locator_type, locator_value }` | no       | WebElement field definitions                                                                            |
-| `sso_class`                 | string                                                 | no       | PascalCase class name for an `ILoginPage` stub (non-SF SSO). Written alongside the page object on disk. |
-| `output_path`               | string                                                 | no       | Full file path to write (must be within `allowed-paths`)                                                |
-| `overwrite`                 | boolean                                                | no       | Overwrite existing file (default: `false`)                                                              |
-| `dry_run`                   | boolean                                                | no       | Return content without writing to disk                                                                  |
-| `idempotency_key`           | string                                                 | no       | Prevents duplicate generation for the same key                                                          |
+| Parameter                   | Type                                                               | Required | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `class_name`                | string                                                             | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)                                                   |
+| `package_name`              | string                                                             | yes      | Java package (e.g. `pageobjects.accounts`)                                                              |
+| `page_type`                 | `standard` \| `salesforce`                                         | yes      | Generates `@Page` or `@SalesforcePage` annotation                                                       |
+| `title`                     | string                                                             | no       | Page title for the annotation                                                                           |
+| `connection_name`           | string                                                             | no       | Salesforce connection name (for `@SalesforcePage`)                                                      |
+| `salesforce_page_attribute` | string                                                             | no       | Additional Salesforce page attribute                                                                    |
+| `fields`                    | array of `{ name, element_type, locator_strategy, locator_value }` | no       | WebElement field definitions                                                                            |
+| `sso_class`                 | string                                                             | no       | PascalCase class name for an `ILoginPage` stub (non-SF SSO). Written alongside the page object on disk. |
+| `output_path`               | string                                                             | no       | Full file path to write (must be within `allowed-paths`)                                                |
+| `overwrite`                 | boolean                                                            | no       | Overwrite existing file (default: `false`)                                                              |
+| `dry_run`                   | boolean                                                            | no       | Return content without writing to disk                                                                  |
+| `idempotency_key`           | string                                                             | no       | Prevents duplicate generation for the same key                                                          |
 
 **Output** — `{ java_source: string, file_path?: string, written: boolean, sso_stub_source?: string, sso_stub_file_path?: string, sso_stub_written?: boolean }`
 
@@ -638,17 +638,17 @@ Generates an XML test case skeleton with UUID v4 guids and sequential `testItemI
 
 **Input**
 
-| Parameter             | Type                                    | Required | Description                                                                                                               |
-| --------------------- | --------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `test_case_name`      | string                                  | yes      | Human-readable test case name                                                                                             |
-| `test_case_id`        | string                                  | no       | Custom test case ID (auto-generated if omitted)                                                                           |
-| `steps`               | array of `{ api_id, name, arguments? }` | no       | Step definitions                                                                                                          |
-| `target_uri`          | string                                  | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
-| `output_path`         | string                                  | no       | File path to write (must be within `allowed-paths`)                                                                       |
-| `overwrite`           | boolean                                 | no       | Overwrite existing file (default: `false`)                                                                                |
-| `dry_run`             | boolean                                 | no       | Return XML without writing to disk                                                                                        |
-| `validate_after_edit` | boolean                                 | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
-| `idempotency_key`     | string                                  | no       | Prevents duplicate generation for the same key                                                                            |
+| Parameter             | Type                                     | Required | Description                                                                                                               |
+| --------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                             |
+| `test_case_id`        | string                                   | no       | Custom test case ID (auto-generated if omitted)                                                                           |
+| `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                          |
+| `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
+| `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                       |
+| `overwrite`           | boolean                                  | no       | Overwrite existing file (default: `false`)                                                                                |
+| `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                        |
+| `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
+| `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                            |
 
 **Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
 
@@ -1099,10 +1099,10 @@ Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Retur
 
 **Input**
 
-| Parameter    | Type     | Required | Description                                                                                                                         |
-| ------------ | -------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `target_org` | string   | yes      | SF CLI org alias or username                                                                                                        |
-| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--plan-name", "SmokeTests"]`). Avoid wildcards in plan names — they skip QH plan-level reporting. |
+| Parameter    | Type     | Required | Description                                                                                                                                   |
+| ------------ | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_org` | string   | yes      | SF CLI org alias or username                                                                                                                  |
+| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--plan-name", "SmokeTests"]`). Avoid wildcards in `--plan-name` values — they skip QH plan-level reporting. |
 
 **Output** — `{ requestId, exitCode, stdout, stderr, details?: { warning: string } }`
 
