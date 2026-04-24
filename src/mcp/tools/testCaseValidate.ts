@@ -170,6 +170,21 @@ export interface TestCaseValidationResult {
   validation_warning?: string;
 }
 
+/**
+ * Reads a test case file from disk, validates it, and returns the result.
+ * Used by Wave 2 (testCaseGenerate) and Wave 3 (testCaseStepEdit) to validate
+ * after mutations without spawning a separate MCP tool call.
+ * Throws on path-policy violation or missing file.
+ */
+export function validateTestCaseXml(filePath: string, config: ServerConfig): TestCaseValidationResult {
+  assertPathAllowed(filePath, config.allowedPaths);
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) {
+    throw Object.assign(new Error(`File not found: ${resolved}`), { code: 'TESTCASE_FILE_NOT_FOUND' });
+  }
+  return validateTestCase(fs.readFileSync(resolved, 'utf-8'));
+}
+
 /** Pure function — exported for unit testing */
 export function validateTestCase(xmlContent: string, testName?: string): TestCaseValidationResult {
   const issues: ValidationIssue[] = [];
