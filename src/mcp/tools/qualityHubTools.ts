@@ -12,13 +12,21 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { runSfCommand } from './sfSpawn.js';
 
-
-function handleSpawnError(err: unknown, requestId: string, toolName: string): { isError: true; content: Array<{ type: 'text'; text: string }> } {
+function handleSpawnError(
+  err: unknown,
+  requestId: string,
+  toolName: string
+): { isError: true; content: Array<{ type: 'text'; text: string }> } {
   const error = err as Error & { code?: string };
   log('error', `${toolName} failed`, { requestId, error: error.message });
   return {
     isError: true as const,
-    content: [{ type: 'text' as const, text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)) }],
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)),
+      },
+    ],
   };
 }
 
@@ -30,7 +38,11 @@ export function registerQualityHubConnect(server: McpServer): void {
     'Connect to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` with the supplied flags.',
     {
       target_org: z.string().describe('SF org alias or username to connect as'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
@@ -41,7 +53,15 @@ export function registerQualityHubConnect(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_CONNECT_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_CONNECT_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -74,7 +94,15 @@ export function registerQualityHubDisplay(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_DISPLAY_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_DISPLAY_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -87,24 +115,65 @@ export function registerQualityHubDisplay(server: McpServer): void {
 
 // ── Tool: provar.qualityhub.testrun ──────────────────────────────────────────
 
+function detectWildcardFlags(flags: string[]): string | undefined {
+  for (let i = 0; i < flags.length - 1; i++) {
+    if (flags[i] === '--plan-name') {
+      const value = flags[i + 1];
+      if (value.includes('*') || value.includes('?')) {
+        return (
+          `Wildcard testPlan scope detected ("${value}"). ` +
+          'QH plan-level reporting will be skipped. ' +
+          'Use exact plan names for QH plan reporting.'
+        );
+      }
+    }
+  }
+  return undefined;
+}
+
 export function registerQualityHubTestRun(server: McpServer): void {
   server.tool(
     'provar.qualityhub.testrun',
-    'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`.',
+    'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`. ' +
+      'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
     {
       target_org: z.string().describe('SF org alias or username'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"])'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe(
+          'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in plan names — they skip QH plan-level reporting.'
+        ),
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
       log('info', 'provar.qualityhub.testrun', { requestId, target_org });
 
       try {
+        const wildcardWarning = detectWildcardFlags(flags);
         const result = runSfCommand(['provar', 'quality-hub', 'test', 'run', '--target-org', target_org, ...flags]);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        const response: Record<string, unknown> = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        };
+
+        if (wildcardWarning) {
+          response['details'] = { warning: wildcardWarning };
+        }
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_TESTRUN_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_TESTRUN_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -132,15 +201,29 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
 
       try {
         const result = runSfCommand([
-          'provar', 'quality-hub', 'test', 'run', 'report',
-          '--target-org', target_org,
-          '--run-id', run_id,
+          'provar',
+          'quality-hub',
+          'test',
+          'run',
+          'report',
+          '--target-org',
+          target_org,
+          '--run-id',
+          run_id,
           ...flags,
         ]);
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_REPORT_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_REPORT_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         const failureStatuses = new Set(['FAIL', 'FAILED']);
@@ -187,15 +270,29 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
 
       try {
         const result = runSfCommand([
-          'provar', 'quality-hub', 'test', 'run', 'abort',
-          '--target-org', target_org,
-          '--run-id', run_id,
+          'provar',
+          'quality-hub',
+          'test',
+          'run',
+          'abort',
+          '--target-org',
+          target_org,
+          '--run-id',
+          run_id,
           ...flags,
         ]);
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_ABORT_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_ABORT_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -214,18 +311,38 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
     'Retrieve Quality Hub test cases by user story or component. Invokes `sf provar quality-hub testcase retrieve`.',
     {
       target_org: z.string().describe('SF org alias or username'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
+      flags: z
+        .array(z.string())
+        .optional()
+        .default([])
+        .describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
       log('info', 'provar.qualityhub.testcase.retrieve', { requestId, target_org });
 
       try {
-        const result = runSfCommand(['provar', 'quality-hub', 'testcase', 'retrieve', '--target-org', target_org, ...flags]);
+        const result = runSfCommand([
+          'provar',
+          'quality-hub',
+          'testcase',
+          'retrieve',
+          '--target-org',
+          target_org,
+          ...flags,
+        ]);
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
-          return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(makeError('QH_RETRIEVE_FAILED', result.stderr || result.stdout, requestId)) }] };
+          return {
+            isError: true as const,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('QH_RETRIEVE_FAILED', result.stderr || result.stdout, requestId)),
+              },
+            ],
+          };
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };

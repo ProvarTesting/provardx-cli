@@ -392,4 +392,101 @@ describe('provar.testcase.generate', () => {
       assert.ok(!xml.includes('valueClass="String"'), 'Must not emit uppercase valueClass="String"');
     });
   });
+
+  describe('target_uri — non-SF page object (ui:) nesting', () => {
+    it('wraps steps in UiWithScreen when target_uri uses ?pageId= format', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Non-SF Login',
+        steps: [{ api_id: 'UiDoAction', name: 'Enter username', attributes: { field: 'username' } }],
+        target_uri: 'ui:pageobject:target?pageId=pageobjects.LoginPage',
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: true,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('UiWithScreen'), 'Expected UiWithScreen wrapper');
+      assert.ok(xml.includes('testItemId="1"'), 'UiWithScreen should be testItemId=1');
+      assert.ok(xml.includes('ui:pageobject:target?pageId=pageobjects.LoginPage'), 'Expected target URI in XML');
+      assert.ok(xml.includes('<clause name="substeps"'), 'Expected substeps clause wrapper');
+    });
+
+    it('substeps clause uses testItemId=2, inner steps start at testItemId=3', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Non-SF Multi',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Step A', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Step B', attributes: {} },
+        ],
+        target_uri: 'ui:pageobject:target?pageId=pageobjects.LoginPage',
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: true,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('testItemId="2"'), 'substeps clause should be testItemId=2');
+      assert.ok(xml.includes('testItemId="3"'), 'First inner step should be testItemId=3');
+      assert.ok(xml.includes('testItemId="4"'), 'Second inner step should be testItemId=4');
+    });
+
+    it('uses flat structure when target_uri starts with sf:', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'SF Target',
+        steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
+        target_uri: 'sf:ui:target:Salesforce__Standard__Account',
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: true,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(!xml.includes('UiWithScreen'), 'Should not wrap in UiWithScreen for sf: target');
+      assert.ok(xml.includes('testItemId="1"'), 'Step should be testItemId=1 directly');
+    });
+
+    it('uses flat structure when target_uri is omitted', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'No URI',
+        steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: true,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(!xml.includes('UiWithScreen'), 'No UiWithScreen without target_uri');
+    });
+  });
+
+  describe('validate_after_edit', () => {
+    it('includes validation field when validate_after_edit=true (default)', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Validated',
+        steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: true,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(body['validation'], 'Expected validation field');
+    });
+
+    it('omits validation field when validate_after_edit=false', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Skip Validation',
+        steps: [],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(!('validation' in body), 'validation field should be absent when validate_after_edit=false');
+    });
+  });
 });

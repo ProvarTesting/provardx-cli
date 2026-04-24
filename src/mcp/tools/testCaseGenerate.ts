@@ -99,6 +99,9 @@ const StepSchema = z.object({
 const TOOL_DESCRIPTION = [
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
+  'URI-aware generation: use target_uri to control the XML nesting structure.',
+  '  - sf:ui:target (or omit target_uri) → flat Salesforce XML structure (existing behaviour).',
+  '  - ui:pageobject:target?pageId=pageobjects.PageClass → wraps all steps in a UiWithScreen element targeting that non-SF page object.',
   'API IDs: shorthand forms (e.g. UiConnect, ApexSoqlQuery) are automatically expanded to fully-qualified IDs required by the Provar runtime.',
   'Step arguments: attributes are emitted as <arguments><argument id="..."><value .../></argument></arguments> — the only format the Provar runtime processes.',
   'Shorthand XML attributes on <apiCall> are silently ignored at runtime; always supply arguments via the attributes map.',
@@ -108,7 +111,7 @@ const TOOL_DESCRIPTION = [
   'ApexReadObject requires field names in attributes; omitting them produces MALFORMED_QUERY. Prefer ApexSoqlQuery.',
   'AssertValues on SOQL results: index paths like "ResultList[0].Field" are not supported.',
   'Use ForEach to iterate the result list, or SetValues to extract a field into a variable first.',
-  'Validation: the response always includes a validation field with is_valid, validity_score, quality_score, and any structural issues — check this before attempting to run the test case.',
+  'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
   'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
 ].join(' ');
 
@@ -120,9 +123,26 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
       test_case_name: z.string().describe('Test case name (human-readable label)'),
       test_case_id: z.string().optional().describe('Explicit test case id; auto-generated UUID v4 if omitted'),
       steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
+      target_uri: z
+        .string()
+        .optional()
+        .describe(
+          'Page object URI that determines the XML nesting structure. ' +
+            'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
+            'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
+            'steps are wrapped in a UiWithScreen element targeting that class.'
+        ),
       output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
       overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
       dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
+      validate_after_edit: z
+        .boolean()
+        .default(true)
+        .describe(
+          'Run structural validation after generation (default: true). ' +
+            'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
+            'Set false to skip validation and omit the validation field from the response.'
+        ),
       idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
     },
     (input) => {
@@ -131,6 +151,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
         requestId,
         test_case_name: input.test_case_name,
         dry_run: input.dry_run,
+        target_uri: input.target_uri,
       });
 
       try {
@@ -157,16 +178,8 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
         }
 
         const warnings = buildStepWarnings(input.steps);
-        const validationFull = validateTestCase(xmlContent, input.test_case_name);
-        const validationSlim = {
-          is_valid: validationFull.is_valid,
-          validity_score: validationFull.validity_score,
-          quality_score: validationFull.quality_score,
-          error_count: validationFull.error_count,
-          warning_count: validationFull.warning_count,
-          issues: validationFull.issues,
-        };
-        const result = {
+        const runValidation = input.validate_after_edit !== false;
+        const baseResult = {
           requestId,
           xml_content: xmlContent,
           file_path: filePath,
@@ -174,12 +187,40 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           dry_run: input.dry_run,
           step_count: input.steps.length,
           idempotency_key: input.idempotency_key,
-          validation: validationSlim,
           ...(warnings.length > 0 ? { warnings } : {}),
         };
+
+        if (runValidation) {
+          const validationFull = validateTestCase(xmlContent, input.test_case_name);
+          const validationSlim = {
+            is_valid: validationFull.is_valid,
+            validity_score: validationFull.validity_score,
+            quality_score: validationFull.quality_score,
+            error_count: validationFull.error_count,
+            warning_count: validationFull.warning_count,
+            issues: validationFull.issues,
+          };
+          if (!validationFull.is_valid) {
+            const errResult = makeError(
+              'TESTCASE_INVALID',
+              `Generated test case failed structural validation (${validationFull.error_count} error(s)). See validation field.`,
+              requestId,
+              false,
+              { validation: validationSlim }
+            );
+            log('warn', 'provar.testcase.generate: TESTCASE_INVALID', { requestId });
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
+          }
+          const result = { ...baseResult, validation: validationSlim };
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+            structuredContent: result,
+          };
+        }
+
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-          structuredContent: result,
+          content: [{ type: 'text' as const, text: JSON.stringify(baseResult) }],
+          structuredContent: baseResult,
         };
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
@@ -198,56 +239,89 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
 // ── XML builder ───────────────────────────────────────────────────────────────
 
-function buildArgumentsXml(attributes: Record<string, string>): string {
+function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      '): string {
   const entries = Object.entries(attributes);
   if (entries.length === 0) return '';
   const argLines = entries
     .map(
       ([k, v]) =>
-        `      <argument id="${escapeXmlAttr(k)}">\n` +
-        `        <value class="value" valueClass="string">${escapeXmlContent(v)}</value>\n` +
-        '      </argument>'
+        `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` +
+        `${baseIndent}  <value class="value" valueClass="string">${escapeXmlContent(v)}</value>\n` +
+        `${baseIndent}</argument>`
     )
     .join('\n');
-  return `\n      <arguments>\n${argLines}\n      </arguments>\n    `;
+  return `\n${baseIndent}<arguments>\n${argLines}\n${baseIndent}</arguments>\n${baseIndent.slice(0, -2)}`;
+}
+
+function buildFlatStepXml(
+  step: { api_id: string; name: string; attributes: Record<string, string> },
+  testItemId: number,
+  indent: string
+): string {
+  const guid = randomUUID();
+  const resolvedApiId = resolveApiId(step.api_id);
+  const argumentsXml = buildArgumentsXml(step.attributes, indent + '  ');
+  if (argumentsXml) {
+    return (
+      `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
+      ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}">${argumentsXml}</apiCall>`
+    );
+  }
+  return (
+    `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
+    ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}"/>`
+  );
 }
 
 function buildTestCaseXml(input: {
   test_case_name: string;
   test_case_id?: string;
   steps: Array<{ api_id: string; name: string; attributes: Record<string, string> }>;
+  target_uri?: string;
 }): string {
   const testCaseId = input.test_case_id ?? randomUUID();
   const testCaseGuid = randomUUID();
   const registryId = randomUUID();
 
-  const stepLines = input.steps
-    .map((step, i) => {
-      const guid = randomUUID();
-      const testItemId = i + 1;
-      const resolvedApiId = resolveApiId(step.api_id);
-      const argumentsXml = buildArgumentsXml(step.attributes);
-      if (argumentsXml) {
-        return (
-          `    <apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
-          ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}">${argumentsXml}</apiCall>`
-        );
-      }
-      return (
-        `    <apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
-        ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}"/>`
-      );
-    })
-    .join('\n');
+  let stepLines: string;
+  const isNonSf = !!input.target_uri && input.target_uri.startsWith('ui:');
+
+  if (isNonSf && input.target_uri) {
+    stepLines = buildUiWithScreenXml(input.steps, input.target_uri);
+  } else {
+    const lines = input.steps.map((step, i) => buildFlatStepXml(step, i + 1, '    ')).join('\n');
+    stepLines = lines || '    <!-- TODO: Add test steps here -->';
+  }
 
   return (
     '<?xml version="1.0" encoding="UTF-8"?>\n' +
     `<testCase id="${testCaseId}" guid="${testCaseGuid}" registryId="${registryId}"` +
     ` name="${escapeXmlAttr(input.test_case_name)}">\n` +
     '  <steps>\n' +
-    (stepLines || '    <!-- TODO: Add test steps here -->') +
+    stepLines +
     '\n  </steps>\n' +
     '</testCase>\n'
+  );
+}
+
+function buildUiWithScreenXml(
+  steps: Array<{ api_id: string; name: string; attributes: Record<string, string> }>,
+  targetUri: string
+): string {
+  const wrapperGuid = randomUUID();
+  const wrapperApiId = resolveApiId('UiWithScreen');
+  // Inner steps use testItemIds starting at 3; the substeps clause itself occupies testItemId=2
+  const innerLines = steps.map((step, i) => buildFlatStepXml(step, i + 3, '            ')).join('\n');
+  const stepsContent = innerLines ? `\n${innerLines}\n          ` : '';
+  const clausesXml =
+    '\n      <clauses>\n' +
+    '        <clause name="substeps" testItemId="2">\n' +
+    `          <steps>${stepsContent}</steps>\n` +
+    '        </clause>\n' +
+    '      </clauses>\n    ';
+  return (
+    `    <apiCall guid="${wrapperGuid}" apiId="${wrapperApiId}"` +
+    ` name="With page" testItemId="1">${buildArgumentsXml({ target: targetUri }).trimEnd()}${clausesXml}</apiCall>`
   );
 }
 

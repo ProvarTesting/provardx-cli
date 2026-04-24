@@ -31,11 +31,23 @@ class MockMcpServer {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeSpawnResult(stdout: string, stderr: string, status: number): { stdout: string; stderr: string; status: number; error: undefined; pid: number; output: never[]; signal: null } {
+function makeSpawnResult(
+  stdout: string,
+  stderr: string,
+  status: number
+): { stdout: string; stderr: string; status: number; error: undefined; pid: number; output: never[]; signal: null } {
   return { stdout, stderr, status, error: undefined, pid: 1, output: [], signal: null };
 }
 
-function makeEnoentResult(): { stdout: string; stderr: string; status: null; error: Error & { code: string }; pid: undefined; output: never[]; signal: null } {
+function makeEnoentResult(): {
+  stdout: string;
+  stderr: string;
+  status: null;
+  error: Error & { code: string };
+  pid: undefined;
+  output: never[];
+  signal: null;
+} {
   const err = Object.assign(new Error('spawn sf ENOENT'), { code: 'ENOENT' });
   return { stdout: '', stderr: '', status: null, error: err, pid: undefined, output: [], signal: null };
 }
@@ -167,6 +179,40 @@ describe('qualityHubTools', () => {
       const result = server.call('provar.qualityhub.testrun', { target_org: 'myorg', flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
+
+    it('adds wildcard warning when flags contain * glob pattern', () => {
+      spawnStub.returns(makeSpawnResult('run started', '', 0));
+      const result = server.call('provar.qualityhub.testrun', {
+        target_org: 'myorg',
+        flags: ['--plan-name', 'Suite/E2E*'],
+      });
+      assert.equal(isError(result), false, 'wildcard should not block execution');
+      const body = parseBody(result);
+      const details = body.details as Record<string, unknown> | undefined;
+      assert.ok(details?.warning, 'Expected warning in details');
+      assert.ok((details.warning as string).includes('Wildcard'), 'Warning should mention wildcard');
+    });
+
+    it('adds wildcard warning when flags contain ? pattern', () => {
+      spawnStub.returns(makeSpawnResult('run started', '', 0));
+      const result = server.call('provar.qualityhub.testrun', {
+        target_org: 'myorg',
+        flags: ['--plan-name', 'Suite?Test'],
+      });
+      const body = parseBody(result);
+      const details = body.details as Record<string, unknown> | undefined;
+      assert.ok(details?.warning, 'Expected warning for ? wildcard');
+    });
+
+    it('does not add warning for exact plan name flags', () => {
+      spawnStub.returns(makeSpawnResult('run started', '', 0));
+      const result = server.call('provar.qualityhub.testrun', {
+        target_org: 'myorg',
+        flags: ['--plan-name', 'SmokeTests'],
+      });
+      const body = parseBody(result);
+      assert.ok(!body.details, 'No details warning for exact plan name');
+    });
   });
 
   // ── provar.qualityhub.testrun.report ─────────────────────────────────────────
@@ -182,58 +228,66 @@ describe('qualityHubTools', () => {
 
     it('returns QH_REPORT_FAILED on non-zero exit', () => {
       spawnStub.returns(makeSpawnResult('', 'not found', 1));
-      const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+      const result = server.call('provar.qualityhub.testrun.report', {
+        target_org: 'myorg',
+        run_id: 'abc-123',
+        flags: [],
+      });
       assert.ok(isError(result));
       assert.equal(parseBody(result).error_code, 'QH_REPORT_FAILED');
     });
 
     it('returns SF_NOT_FOUND on ENOENT', () => {
       spawnStub.returns(makeEnoentResult());
-      const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+      const result = server.call('provar.qualityhub.testrun.report', {
+        target_org: 'myorg',
+        run_id: 'abc-123',
+        flags: [],
+      });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
 
     describe('failure detection', () => {
       it('sets suggestion when JSON result.status is "FAILED"', () => {
-        spawnStub.returns(makeSpawnResult(
-          JSON.stringify({ result: { status: 'FAILED' } }),
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(makeSpawnResult(JSON.stringify({ result: { status: 'FAILED' } }), '', 0));
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
         assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAILED');
       });
 
       it('sets suggestion when JSON result.status is "FAIL"', () => {
-        spawnStub.returns(makeSpawnResult(
-          JSON.stringify({ result: { status: 'FAIL' } }),
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(makeSpawnResult(JSON.stringify({ result: { status: 'FAIL' } }), '', 0));
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
         assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion when FAIL');
       });
 
       it('does NOT set suggestion when status is "RUNNING"', () => {
-        spawnStub.returns(makeSpawnResult(
-          JSON.stringify({ result: { status: 'RUNNING' } }),
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(makeSpawnResult(JSON.stringify({ result: { status: 'RUNNING' } }), '', 0));
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
         assert.ok(!body.suggestion, 'Expected no suggestion for non-failure status');
       });
 
       it('does NOT set suggestion when status is "PASSED"', () => {
-        spawnStub.returns(makeSpawnResult(
-          JSON.stringify({ result: { status: 'PASSED' } }),
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(makeSpawnResult(JSON.stringify({ result: { status: 'PASSED' } }), '', 0));
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
         assert.ok(!body.suggestion, 'Expected no suggestion when PASSED');
       });
@@ -241,26 +295,31 @@ describe('qualityHubTools', () => {
       it('does NOT false-positive on "failure" in plain text output (word in non-status context)', () => {
         // Before PR #110 the check was /fail/i which would match "failure" anywhere in output;
         // now it only matches the "status" field value.
-        spawnStub.returns(makeSpawnResult(
-          '{"message": "No failure detected in this output", "result": {"status": "PASSED"}}',
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(
+          makeSpawnResult('{"message": "No failure detected in this output", "result": {"status": "PASSED"}}', '', 0)
+        );
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
         assert.ok(!body.suggestion, 'Expected no suggestion — "failure" in message should not trigger detection');
       });
 
       it('falls back to regex extraction when stdout is not valid JSON', () => {
         // Non-JSON output with "status": "FAILED" substring
-        spawnStub.returns(makeSpawnResult(
-          '"status": "FAILED"',
-          '',
-          0
-        ));
-        const result = server.call('provar.qualityhub.testrun.report', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+        spawnStub.returns(makeSpawnResult('"status": "FAILED"', '', 0));
+        const result = server.call('provar.qualityhub.testrun.report', {
+          target_org: 'myorg',
+          run_id: 'abc-123',
+          flags: [],
+        });
         const body = parseBody(result);
-        assert.ok(typeof body.suggestion === 'string' && body.suggestion.length > 0, 'Expected suggestion from regex fallback');
+        assert.ok(
+          typeof body.suggestion === 'string' && body.suggestion.length > 0,
+          'Expected suggestion from regex fallback'
+        );
       });
     });
   });
@@ -278,14 +337,22 @@ describe('qualityHubTools', () => {
 
     it('returns QH_ABORT_FAILED on non-zero exit', () => {
       spawnStub.returns(makeSpawnResult('', 'abort failed', 1));
-      const result = server.call('provar.qualityhub.testrun.abort', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+      const result = server.call('provar.qualityhub.testrun.abort', {
+        target_org: 'myorg',
+        run_id: 'abc-123',
+        flags: [],
+      });
       assert.ok(isError(result));
       assert.equal(parseBody(result).error_code, 'QH_ABORT_FAILED');
     });
 
     it('returns SF_NOT_FOUND on ENOENT', () => {
       spawnStub.returns(makeEnoentResult());
-      const result = server.call('provar.qualityhub.testrun.abort', { target_org: 'myorg', run_id: 'abc-123', flags: [] });
+      const result = server.call('provar.qualityhub.testrun.abort', {
+        target_org: 'myorg',
+        run_id: 'abc-123',
+        flags: [],
+      });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
   });
@@ -295,7 +362,10 @@ describe('qualityHubTools', () => {
   describe('provar.qualityhub.testcase.retrieve', () => {
     it('calls sf with testcase retrieve args', () => {
       spawnStub.returns(makeSpawnResult('[]', '', 0));
-      const result = server.call('provar.qualityhub.testcase.retrieve', { target_org: 'myorg', flags: ['--user-story', 'US-1'] });
+      const result = server.call('provar.qualityhub.testcase.retrieve', {
+        target_org: 'myorg',
+        flags: ['--user-story', 'US-1'],
+      });
       const body = parseBody(result);
       assert.equal(body.exitCode, 0);
       const args = spawnStub.firstCall.args[1] as string[];

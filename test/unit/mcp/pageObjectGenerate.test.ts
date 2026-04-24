@@ -168,8 +168,18 @@ describe('provar.pageobject.generate', () => {
         package_name: 'pageobjects',
         page_type: 'standard',
         fields: [
-          { name: 'accountName', locator_strategy: 'xpath', locator_value: "//input[@name='accountName']", element_type: 'TextType' },
-          { name: 'saveButton',  locator_strategy: 'css',   locator_value: "[data-testid='save']",          element_type: 'ButtonType' },
+          {
+            name: 'accountName',
+            locator_strategy: 'xpath',
+            locator_value: "//input[@name='accountName']",
+            element_type: 'TextType',
+          },
+          {
+            name: 'saveButton',
+            locator_strategy: 'css',
+            locator_value: "[data-testid='save']",
+            element_type: 'ButtonType',
+          },
         ],
         dry_run: true,
         overwrite: false,
@@ -360,6 +370,131 @@ describe('provar.pageobject.generate', () => {
       });
 
       assert.equal(parseText(result)['idempotency_key'], undefined);
+    });
+  });
+
+  describe('sso_class — ILoginPage stub generation', () => {
+    it('returns sso_stub_source when sso_class is provided', () => {
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const ssoSource = body['sso_stub_source'] as string;
+      assert.ok(typeof ssoSource === 'string' && ssoSource.length > 0, 'Expected sso_stub_source');
+      assert.ok(ssoSource.includes('implements ILoginPage'), 'Stub must implement ILoginPage');
+      assert.ok(ssoSource.includes('class LoginPageSso'), 'Stub class name must match sso_class');
+    });
+
+    it('sso stub includes loginAs and logout method stubs', () => {
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const ssoSource = parseText(result)['sso_stub_source'] as string;
+      assert.ok(ssoSource.includes('loginAs'), 'Expected loginAs method');
+      assert.ok(ssoSource.includes('logout'), 'Expected logout method');
+    });
+
+    it('uses the correct package in sso stub', () => {
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects.auth',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'AuthSso',
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const ssoSource = parseText(result)['sso_stub_source'] as string;
+      assert.ok(ssoSource.includes('package pageobjects.auth;'), 'Expected correct package');
+    });
+
+    it('does not include sso fields when sso_class is omitted', () => {
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'AccountPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const body = parseText(result);
+      assert.ok(!('sso_stub_source' in body), 'sso_stub_source should be absent when no sso_class');
+    });
+
+    it('writes both page object and SSO stub to disk when dry_run=false', () => {
+      const poPath = path.join(tmpDir, 'LoginPage.java');
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        output_path: poPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(fs.existsSync(poPath), true, 'Page object file should be written');
+      const ssoPath = path.join(tmpDir, 'LoginPageSso.java');
+      assert.equal(fs.existsSync(ssoPath), true, 'SSO stub file should be written');
+    });
+
+    it('validates path policy on SSO stub path', () => {
+      const strictServer = new MockMcpServer();
+      registerPageObjectGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+
+      const result = strictServer.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        output_path: path.join(os.tmpdir(), 'some-other-dir', 'LoginPage.java'),
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), true);
+      const code = parseText(result)['error_code'] as string;
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected: ${code}`);
+    });
+
+    it('returns FILE_EXISTS when SSO stub already exists and overwrite=false', () => {
+      const poPath = path.join(tmpDir, 'LoginPage.java');
+      const ssoPath = path.join(tmpDir, 'LoginPageSso.java');
+      fs.writeFileSync(ssoPath, '// existing stub', 'utf-8');
+
+      const result = server.call('provar.pageobject.generate', {
+        class_name: 'LoginPage',
+        package_name: 'pageobjects',
+        page_type: 'standard',
+        fields: [],
+        sso_class: 'LoginPageSso',
+        output_path: poPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(parseText(result)['error_code'], 'FILE_EXISTS');
     });
   });
 });
