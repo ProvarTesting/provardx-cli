@@ -390,14 +390,14 @@ describe('provar.properties.set', () => {
     assert.deepEqual(written['testCase'], ['new/test2.testcase']);
   });
 
-  it('returns FILE_NOT_FOUND when file does not exist', () => {
+  it('returns PROPERTIES_FILE_NOT_FOUND when file does not exist', () => {
     const result = server.call('provar.properties.set', {
       file_path: path.join(tmpDir, 'ghost.json'),
       updates: { provarHome: '/x' },
     });
 
     assert.equal(isError(result), true);
-    assert.equal(parseText(result)['error_code'], 'FILE_NOT_FOUND');
+    assert.equal(parseText(result)['error_code'], 'PROPERTIES_FILE_NOT_FOUND');
   });
 
   it('returns PATH_NOT_ALLOWED for path outside allowedPaths', () => {
@@ -484,13 +484,13 @@ describe('provar.properties.validate', () => {
     assert.equal(parseText(result)['error_code'], 'MISSING_INPUT');
   });
 
-  it('returns FILE_NOT_FOUND when file_path points to a missing file', () => {
+  it('returns PROPERTIES_FILE_NOT_FOUND when file_path points to a missing file', () => {
     const result = server.call('provar.properties.validate', {
       file_path: path.join(tmpDir, 'nope.json'),
     });
 
     assert.equal(isError(result), true);
-    assert.equal(parseText(result)['error_code'], 'FILE_NOT_FOUND');
+    assert.equal(parseText(result)['error_code'], 'PROPERTIES_FILE_NOT_FOUND');
   });
 
   it('returns is_valid=false with root-level error for malformed JSON content', () => {

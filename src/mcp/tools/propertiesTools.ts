@@ -501,7 +501,7 @@ export function registerPropertiesSet(server: McpServer, config: ServerConfig): 
                 type: 'text' as const,
                 text: JSON.stringify(
                   makeError(
-                    'FILE_NOT_FOUND',
+                    'PROPERTIES_FILE_NOT_FOUND',
                     `File not found: ${resolved}. Use provar.properties.generate to create it first.`,
                     requestId
                   )
@@ -601,7 +601,9 @@ export function registerPropertiesValidate(server: McpServer, config: ServerConf
               content: [
                 {
                   type: 'text' as const,
-                  text: JSON.stringify(makeError('FILE_NOT_FOUND', `File not found: ${resolved}`, requestId)),
+                  text: JSON.stringify(
+                    makeError('PROPERTIES_FILE_NOT_FOUND', `File not found: ${resolved}`, requestId)
+                  ),
                 },
               ],
             };

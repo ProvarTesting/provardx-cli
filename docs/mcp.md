@@ -817,9 +817,9 @@ If the file you read differs on critical fields (`provarHome`, `projectPath`, `r
 | ----------- | ------ | -------- | ------------------------------------------- |
 | `file_path` | string | yes      | Path to the `provardx-properties.json` file |
 
-**Output** — `{ file_path, content[, details.warning] }` where `content` is the parsed JSON object. `details.warning` is present when the file diverges from the active sf config.
+**Output** — `{ requestId, file_path, content[, details.warning] }` where `content` is the parsed JSON object. `details.warning` is present when the file diverges from the active sf config.
 
-**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
 
 ---
 
@@ -855,7 +855,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 **Output** — `{ file_path, updated_fields, content }`
 
-**Error codes:** `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -879,7 +879,7 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 | `warning_count` | Number of warnings (e.g. unfilled placeholders) |
 | `issues`        | Array of `{ field, severity, message }`         |
 
-**Error codes:** `MISSING_INPUT`, `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `MISSING_INPUT`, `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -1150,7 +1150,7 @@ Triggers a Provar Automation test run using the currently loaded properties file
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
-After each run, the tool scans the results directory for `JUnit.xml` and adds a `steps` array when results are found:
+After each run, the tool scans the results directory for JUnit XML files and adds a `steps` array when results are found:
 
 ```json
 "steps": [

@@ -360,9 +360,9 @@ function resolveLatestResultsDir(resultsBase: string): string {
 /**
  * Reads resultsPath from the currently active provardx-properties.json (via ~/.sf/config.json),
  * then resolves to the latest Increment-mode sibling directory.
- * Returns null when the sf config or properties file cannot be read.
+ * Returns null when the sf config or properties file cannot be read or is outside allowed paths.
  */
-function readResultsPathFromSfConfig(): string | null {
+function readResultsPathFromSfConfig(config: ServerConfig): string | null {
   if (sfResultsPathOverride !== undefined) return sfResultsPathOverride;
   try {
     const sfConfigPath = path.join(os.homedir(), '.sf', 'config.json');
@@ -370,10 +370,15 @@ function readResultsPathFromSfConfig(): string | null {
     const sfConfig = JSON.parse(fs.readFileSync(sfConfigPath, 'utf-8')) as Record<string, unknown>;
     const propFilePath = sfConfig['PROVARDX_PROPERTIES_FILE_PATH'] as string | undefined;
     if (!propFilePath || !fs.existsSync(propFilePath)) return null;
+    // Guard: only read the properties file if it is within the session's allowed paths.
+    assertPathAllowed(propFilePath, config.allowedPaths);
     const props = JSON.parse(fs.readFileSync(propFilePath, 'utf-8')) as Record<string, unknown>;
     const resultsBase = props['resultsPath'] as string | undefined;
     if (!resultsBase) return null;
-    return resolveLatestResultsDir(resultsBase);
+    const resultsDir = resolveLatestResultsDir(resultsBase);
+    // Guard: only read the results directory if it is within the session's allowed paths.
+    assertPathAllowed(resultsDir, config.allowedPaths);
+    return resultsDir;
   } catch {
     return null;
   }
@@ -381,7 +386,7 @@ function readResultsPathFromSfConfig(): string | null {
 
 // ── Tool: provar.automation.testrun ───────────────────────────────────────────
 
-export function registerAutomationTestRun(server: McpServer): void {
+export function registerAutomationTestRun(server: McpServer, config: ServerConfig): void {
   server.tool(
     'provar.automation.testrun',
     [
@@ -412,7 +417,7 @@ export function registerAutomationTestRun(server: McpServer): void {
         const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
         // Attempt to enrich the response with structured step data from JUnit XML
-        const resultsPath = readResultsPathFromSfConfig();
+        const resultsPath = readResultsPathFromSfConfig(config);
         const { steps, warning: junitWarning } = resultsPath
           ? parseJUnitResults(resultsPath)
           : { steps: [], warning: undefined };
@@ -764,7 +769,7 @@ export function registerAutomationSetup(server: McpServer): void {
 export function registerAllAutomationTools(server: McpServer, config: ServerConfig): void {
   registerAutomationSetup(server);
   registerAutomationConfigLoad(server, config);
-  registerAutomationTestRun(server);
+  registerAutomationTestRun(server, config);
   registerAutomationCompile(server);
   registerAutomationMetadataDownload(server);
 }
