@@ -15,6 +15,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
+import { parseJUnitResults } from './antTools.js';
 import { sfSpawnHelper, SfNotFoundError } from './sfSpawn.js';
 
 // ── SF CLI discovery ──────────────────────────────────────────────────────────
@@ -321,6 +322,63 @@ export function filterTestRunOutput(raw: string): { filtered: string; suppressed
   return { filtered, suppressed };
 }
 
+// ── JUnit results enrichment ──────────────────────────────────────────────────
+
+// Overrideable in tests — bypasses the sf config file read
+let sfResultsPathOverride: string | null | undefined;
+
+/** Exposed for testing only — set the results path returned by the sf config reader. Pass undefined to reset. */
+export function setSfResultsPathForTesting(p: string | null | undefined): void {
+  sfResultsPathOverride = p;
+}
+
+/**
+ * Resolves the actual results directory for the latest run.
+ * Provar's Increment disposition creates Results(1), Results(2)… as siblings of Results/.
+ * Returns the latest sibling dir, or the base path if no siblings exist.
+ */
+function resolveLatestResultsDir(resultsBase: string): string {
+  const parent = path.dirname(resultsBase);
+  const base = path.basename(resultsBase);
+  try {
+    const safeName = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^${safeName}\\((\\d+)\\)$`);
+    const indices = fs
+      .readdirSync(parent, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && pattern.test(e.name))
+      .map((e) => parseInt((pattern.exec(e.name) as RegExpExecArray)[1], 10));
+    if (indices.length > 0) {
+      const maxIdx = indices.reduce((a, b) => (a > b ? a : b), 0);
+      return path.join(parent, `${base}(${maxIdx})`);
+    }
+  } catch {
+    // ignore filesystem errors
+  }
+  return resultsBase;
+}
+
+/**
+ * Reads resultsPath from the currently active provardx-properties.json (via ~/.sf/config.json),
+ * then resolves to the latest Increment-mode sibling directory.
+ * Returns null when the sf config or properties file cannot be read.
+ */
+function readResultsPathFromSfConfig(): string | null {
+  if (sfResultsPathOverride !== undefined) return sfResultsPathOverride;
+  try {
+    const sfConfigPath = path.join(os.homedir(), '.sf', 'config.json');
+    if (!fs.existsSync(sfConfigPath)) return null;
+    const sfConfig = JSON.parse(fs.readFileSync(sfConfigPath, 'utf-8')) as Record<string, unknown>;
+    const propFilePath = sfConfig['PROVARDX_PROPERTIES_FILE_PATH'] as string | undefined;
+    if (!propFilePath || !fs.existsSync(propFilePath)) return null;
+    const props = JSON.parse(fs.readFileSync(propFilePath, 'utf-8')) as Record<string, unknown>;
+    const resultsBase = props['resultsPath'] as string | undefined;
+    if (!resultsBase) return null;
+    return resolveLatestResultsDir(resultsBase);
+  } catch {
+    return null;
+  }
+}
+
 // ── Tool: provar.automation.testrun ───────────────────────────────────────────
 
 export function registerAutomationTestRun(server: McpServer): void {
@@ -353,14 +411,28 @@ export function registerAutomationTestRun(server: McpServer): void {
         const result = runSfCommand(['provar', 'automation', 'test', 'run', ...flags], sf_path);
         const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
+        // Attempt to enrich the response with structured step data from JUnit XML
+        const resultsPath = readResultsPathFromSfConfig();
+        const { steps, warning: junitWarning } = resultsPath
+          ? parseJUnitResults(resultsPath)
+          : { steps: [], warning: undefined };
+
         if (result.exitCode !== 0) {
           const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(
             result.stderr || result.stdout
           );
-          const errBody = {
+          const errBody: Record<string, unknown> = {
             ...makeError('AUTOMATION_TESTRUN_FAILED', filteredErr, requestId),
             ...(suppressedErr > 0 ? { output_lines_suppressed: suppressedErr } : {}),
           };
+          if (steps.length > 0) errBody['steps'] = steps;
+          if (!resultsPath || junitWarning) {
+            errBody['details'] = {
+              warning:
+                junitWarning ??
+                'Could not locate results directory — step-level output unavailable. Run provar.automation.config.load first.',
+            };
+          }
           return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(errBody) }] };
         }
 
@@ -371,6 +443,8 @@ export function registerAutomationTestRun(server: McpServer): void {
           stderr: result.stderr,
         };
         if (suppressed > 0) response['output_lines_suppressed'] = suppressed;
+        if (steps.length > 0) response['steps'] = steps;
+        if (junitWarning) response['details'] = { warning: junitWarning };
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar.automation.testrun');
