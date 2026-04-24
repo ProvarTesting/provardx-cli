@@ -16,6 +16,7 @@ import {
   registerPropertiesRead,
   registerPropertiesSet,
   registerPropertiesValidate,
+  setSfConfigDirForTesting,
 } from '../../../src/mcp/tools/propertiesTools.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 
@@ -219,13 +220,81 @@ describe('provar.properties.read', () => {
     assert.equal(content['projectPath'], '/proj');
   });
 
-  it('returns FILE_NOT_FOUND when file does not exist', () => {
+  it('returns PROPERTIES_FILE_NOT_FOUND when file does not exist', () => {
     const result = server.call('provar.properties.read', {
       file_path: path.join(tmpDir, 'missing.json'),
     });
 
     assert.equal(isError(result), true);
-    assert.equal(parseText(result)['error_code'], 'FILE_NOT_FOUND');
+    const body = parseText(result);
+    assert.equal(body['error_code'], 'PROPERTIES_FILE_NOT_FOUND');
+    assert.ok((body['message'] as string).includes('provar.properties.generate'), 'suggestion should mention generate');
+  });
+
+  it('surfaces divergence warning when active sf config points to a different file with different values', () => {
+    // "disk" file — the one we're about to read
+    const diskFile = path.join(tmpDir, 'props-disk.json');
+    fs.writeFileSync(diskFile, JSON.stringify({ provarHome: '/disk/provar', projectPath: '/disk/proj' }), 'utf-8');
+
+    // "active" file — what config.load registered
+    const activeFile = path.join(tmpDir, 'props-active.json');
+    fs.writeFileSync(
+      activeFile,
+      JSON.stringify({ provarHome: '/active/provar', projectPath: '/active/proj' }),
+      'utf-8'
+    );
+
+    // Write a temp sf config pointing to the active file
+    const sfDir = path.join(tmpDir, '.sf');
+    fs.mkdirSync(sfDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sfDir, 'config.json'),
+      JSON.stringify({ PROVARDX_PROPERTIES_FILE_PATH: activeFile }),
+      'utf-8'
+    );
+
+    setSfConfigDirForTesting(sfDir);
+    try {
+      const result = server.call('provar.properties.read', { file_path: diskFile });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(body['details'], 'details should be present');
+      const details = body['details'] as Record<string, unknown>;
+      assert.ok(typeof details['warning'] === 'string', 'details.warning should be a string');
+      assert.ok(
+        typeof details['warning'] === 'string' && details['warning'].includes('provarHome'),
+        'warning should mention the divergent key'
+      );
+    } finally {
+      setSfConfigDirForTesting(null);
+    }
+  });
+
+  it('does not surface divergence warning when reading the same file that is active', () => {
+    const filePath = path.join(tmpDir, 'props.json');
+    const props = { provarHome: '/opt/provar', projectPath: '/proj' };
+    fs.writeFileSync(filePath, JSON.stringify(props), 'utf-8');
+
+    // Active file points to the same file
+    const sfDir = path.join(tmpDir, '.sf');
+    fs.mkdirSync(sfDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sfDir, 'config.json'),
+      JSON.stringify({ PROVARDX_PROPERTIES_FILE_PATH: filePath }),
+      'utf-8'
+    );
+
+    setSfConfigDirForTesting(sfDir);
+    try {
+      const result = server.call('provar.properties.read', { file_path: filePath });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(!body['details'], 'details should be absent when no divergence');
+    } finally {
+      setSfConfigDirForTesting(null);
+    }
   });
 
   it('returns MALFORMED_JSON when file contains invalid JSON', () => {
@@ -260,7 +329,12 @@ describe('provar.properties.set', () => {
     const initial = {
       provarHome: '/opt/provar',
       projectPath: '/proj',
-      environment: { webBrowser: 'Chrome', webBrowserConfig: 'default', webBrowserProviderName: 'Desktop', webBrowserDeviceName: 'HD' },
+      environment: {
+        webBrowser: 'Chrome',
+        webBrowserConfig: 'default',
+        webBrowserProviderName: 'Desktop',
+        webBrowserDeviceName: 'HD',
+      },
     };
     fs.writeFileSync(filePath, JSON.stringify(initial, null, 2), 'utf-8');
 
@@ -364,7 +438,10 @@ describe('provar.properties.validate', () => {
     const body = parseText(result);
     assert.equal(body['is_valid'], false);
     const errors = body['errors'] as Array<{ field: string }>;
-    assert.ok(errors.some((e) => e.field === 'provarHome'), 'Expected error for provarHome');
+    assert.ok(
+      errors.some((e) => e.field === 'provarHome'),
+      'Expected error for provarHome'
+    );
   });
 
   it('reports warning for placeholder value ${PROVAR_HOME}', () => {
@@ -434,7 +511,10 @@ describe('provar.properties.validate', () => {
     const body = parseText(result);
     assert.equal(body['is_valid'], false);
     const errors = body['errors'] as Array<{ field: string }>;
-    assert.ok(errors.some((e) => e.field === 'environment.webBrowser'), 'Expected error on environment.webBrowser');
+    assert.ok(
+      errors.some((e) => e.field === 'environment.webBrowser'),
+      'Expected error on environment.webBrowser'
+    );
   });
 
   it('flags invalid metadataLevel enum value', () => {
@@ -446,6 +526,9 @@ describe('provar.properties.validate', () => {
     const body = parseText(result);
     assert.equal(body['is_valid'], false);
     const errors = body['errors'] as Array<{ field: string }>;
-    assert.ok(errors.some((e) => e.field === 'metadata.metadataLevel'), 'Expected error on metadata.metadataLevel');
+    assert.ok(
+      errors.some((e) => e.field === 'metadata.metadataLevel'),
+      'Expected error on metadata.metadataLevel'
+    );
   });
 });
