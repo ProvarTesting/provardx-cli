@@ -32,6 +32,7 @@ import { registerAllAntTools } from './tools/antTools.js';
 import { registerAllRcaTools } from './tools/rcaTools.js';
 import { registerAllTestPlanTools } from './tools/testPlanTools.js';
 import { registerAllNitroXTools } from './tools/nitroXTools.js';
+import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllPrompts } from './prompts/index.js';
 
 export interface ServerConfig {
@@ -77,9 +78,10 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllAutomationTools(server, config);
   registerAllDefectTools(server);
   registerAllAntTools(server, config);
-  registerAllRcaTools(server);
+  registerAllRcaTools(server, config);
   registerAllTestPlanTools(server, config);
   registerAllNitroXTools(server, config);
+  registerAllTestCaseStepTools(server, config);
 
   // ── Provar prompts ───────────────────────────────────────────────────────────
   registerAllPrompts(server);

@@ -80,11 +80,13 @@ const UNKNOWN_JUNIT_XML = `<?xml version="1.0" encoding="UTF-8"?>
 let tmpDir: string;
 let server: MockMcpServer;
 
+const UNRESTRICTED_CONFIG = { allowedPaths: [] };
+
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rcatools-test-'));
   server = new MockMcpServer();
   registerTestRunLocate(server as never);
-  registerTestRunRca(server as never);
+  registerTestRunRca(server as never, UNRESTRICTED_CONFIG);
 });
 
 afterEach(() => {
@@ -608,6 +610,87 @@ describe('provar.testrun.rca', () => {
     assert.ok(
       !infra.some((s) => s.includes('SALESFORCE_')),
       'Salesforce categories should not appear in infrastructure_issues'
+    );
+  });
+
+  it('mode=rca is the default and produces existing RCA output shape', () => {
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'rca-default'), JUNIT_XML);
+    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    // Full RCA shape must be present
+    assert.ok('run_summary' in body, 'run_summary should be present for mode=rca');
+    assert.ok('failures' in body, 'failures should be present');
+    assert.ok('recommendations' in body, 'recommendations should be present');
+    assert.ok('infrastructure_issues' in body, 'infrastructure_issues should be present');
+  });
+});
+
+// ── provar.testrun.rca mode=failures ──────────────────────────────────────────
+
+describe('provar.testrun.rca mode=failures', () => {
+  it('returns lightweight failure array when JUnit.xml is present', () => {
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-mode'), JUNIT_XML);
+    const body = parseText(
+      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+    );
+
+    assert.ok('failures' in body, 'failures should be present');
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    assert.equal(failures.length, 1, 'JUNIT_XML has exactly 1 failing test case');
+
+    const f = failures[0];
+    assert.ok('testItemId' in f, 'testItemId should be present');
+    assert.ok('title' in f, 'title should be present');
+    assert.ok('errorMessage' in f, 'errorMessage should be present');
+    assert.equal(f['testItemId'], 'SearchTest.testcase');
+    assert.ok(typeof f['errorMessage'] === 'string' && f['errorMessage'].length > 0);
+
+    // Should NOT contain full RCA fields
+    assert.ok(!('run_summary' in body), 'mode=failures should not include run_summary');
+    assert.ok(!('infrastructure_issues' in body), 'mode=failures should not include infrastructure_issues');
+    assert.ok(!('recommendations' in body), 'mode=failures should not include recommendations');
+  });
+
+  it('returns empty array with warning when results dir has no JUnit.xml', () => {
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-empty'));
+    const body = parseText(
+      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+    );
+
+    const failures = body['failures'] as unknown[];
+    assert.equal(failures.length, 0, 'should return empty array');
+
+    const details = body['details'] as Record<string, unknown>;
+    assert.ok(typeof details?.['warning'] === 'string', 'details.warning should be set');
+  });
+
+  it('skipped tests are not included in failures list', () => {
+    const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-skip'), JUNIT_XML);
+    const body = parseText(
+      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+    );
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    const testItemIds = failures.map((f) => f['testItemId']);
+    assert.ok(!testItemIds.includes('DataTest.testcase'), 'skipped test should not appear in failures');
+  });
+
+  it('rejects explicit results_path outside allowed paths', () => {
+    const restrictedServer = new MockMcpServer();
+    const allowedDir = path.join(tmpDir, 'allowed');
+    fs.mkdirSync(allowedDir, { recursive: true });
+    registerTestRunRca(restrictedServer as never, { allowedPaths: [allowedDir] });
+
+    const outsideDir = makeResultsDir(path.join(tmpDir, 'outside'), JUNIT_XML);
+    const result = restrictedServer.call('provar.testrun.rca', {
+      project_path: tmpDir,
+      results_path: outsideDir,
+      mode: 'failures',
+    });
+
+    assert.equal(isError(result), true);
+    const body = parseText(result);
+    assert.ok(
+      body['error_code'] === 'PATH_NOT_ALLOWED' || body['error_code'] === 'PATH_TRAVERSAL',
+      `expected path policy error, got: ${String(body['error_code'])}`
     );
   });
 });

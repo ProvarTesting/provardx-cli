@@ -356,6 +356,14 @@ async function runTests() {
     arguments: { story: 'Verify Users table has at least one Active record after Salesforce flow runs' },
   });
 
+  // ── 49. provar.testcase.step.edit ─────────────────────────────────────────
+  // TMP/nonexistent.testcase does not exist → FILE_NOT_FOUND result
+  await callTool('provar.testcase.step.edit', {
+    test_case_path: path.join(TMP, 'nonexistent.testcase'),
+    mode: 'remove',
+    test_item_id: '1',
+  });
+
   server.stdin.end();
 }
 
@@ -364,8 +372,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 37 tools + prompts/list + 8 prompts/get (setup excluded from default count)
-  const TOTAL_EXPECTED = 48 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 38 tools + prompts/list + 8 prompts/get (setup excluded from default count)
+  const TOTAL_EXPECTED = 49 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 
