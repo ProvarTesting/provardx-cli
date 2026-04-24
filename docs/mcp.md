@@ -18,6 +18,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Available tools](#available-tools)
   - [provardx.ping](#provardxping)
   - [provar.project.inspect](#provarprojectinspect)
+  - [provar.connection.list](#provarconnectionlist)
   - [provar.pageobject.generate](#provarpageobjectgenerate)
   - [provar.pageobject.validate](#provarpageobjectvalidate)
   - [provar.testcase.generate](#provartestcasegenerate)
@@ -529,27 +530,71 @@ Provar test plans live in `plans/`. Each plan is a directory containing a `.plan
 
 ---
 
-### `provar.pageobject.generate`
+### `provar.connection.list`
 
-Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePage` annotation and `@FindBy` field stubs.
+Lists all connections and named environments defined in the project's `.testproject` file. Use this **before** generating test cases or page objects to discover the exact connection names to use.
+
+**Prerequisite:** the project must have a `.testproject` file. Run `provar.project.validate` first if unsure of the project root.
+
+**Security:** only connection names, types, and URLs are returned — credential values from `.secrets` are never included in the output.
 
 **Input**
 
-| Parameter                   | Type                                                   | Required | Description                                              |
-| --------------------------- | ------------------------------------------------------ | -------- | -------------------------------------------------------- |
-| `class_name`                | string                                                 | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)    |
-| `package_name`              | string                                                 | yes      | Java package (e.g. `pageobjects.accounts`)               |
-| `page_type`                 | `standard` \| `salesforce`                             | yes      | Generates `@Page` or `@SalesforcePage` annotation        |
-| `title`                     | string                                                 | no       | Page title for the annotation                            |
-| `connection_name`           | string                                                 | no       | Salesforce connection name (for `@SalesforcePage`)       |
-| `salesforce_page_attribute` | string                                                 | no       | Additional Salesforce page attribute                     |
-| `fields`                    | array of `{ name, type, locator_type, locator_value }` | no       | WebElement field definitions                             |
-| `output_path`               | string                                                 | no       | Full file path to write (must be within `allowed-paths`) |
-| `overwrite`                 | boolean                                                | no       | Overwrite existing file (default: `false`)               |
-| `dry_run`                   | boolean                                                | no       | Return content without writing to disk                   |
-| `idempotency_key`           | string                                                 | no       | Prevents duplicate generation for the same key           |
+| Parameter      | Type   | Required | Description                                                       |
+| -------------- | ------ | -------- | ----------------------------------------------------------------- |
+| `project_path` | string | yes      | Absolute path to the Provar project root (within `allowed-paths`) |
 
-**Output** — `{ content: string, file_path?: string, written: boolean }`
+**Output**
+
+```json
+{
+  "connections": [
+    { "name": "MyOrg", "type": "Salesforce", "url": "sfdc://...", "sso_configured": false },
+    { "name": "OktaSso", "type": "SSO", "url": "sso://...", "sso_configured": true }
+  ],
+  "environments": [
+    { "name": "QA", "connection": "MyOrg", "url": "https://qa.example.com" },
+    { "name": "UAT", "connection": "AdminOrg" }
+  ],
+  "summary": { "connection_count": 2, "environment_count": 2 }
+}
+```
+
+Connection `type` values: `Salesforce`, `Web`, `Quality Hub`, `Web Service`, `Database`, `Google`, `Microsoft`, `Zephyr`, `SSO`, or the raw class name for unknown types.
+
+**Error codes**
+
+| Code                        | Meaning                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `CONNECTION_FILE_NOT_FOUND` | No `.testproject` at the given path. Run `provar.project.validate` first. |
+| `PATH_NOT_ALLOWED`          | `project_path` is outside the server's `--allowed-paths`                  |
+
+---
+
+### `provar.pageobject.generate`
+
+Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePage` annotation and `@FindBy` field stubs. Optionally generates an `ILoginPage` implementation stub for non-SF SSO connections.
+
+**Input**
+
+| Parameter                   | Type                                                               | Required | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `class_name`                | string                                                             | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)                                                   |
+| `package_name`              | string                                                             | yes      | Java package (e.g. `pageobjects.accounts`)                                                              |
+| `page_type`                 | `standard` \| `salesforce`                                         | yes      | Generates `@Page` or `@SalesforcePage` annotation                                                       |
+| `title`                     | string                                                             | no       | Page title for the annotation                                                                           |
+| `connection_name`           | string                                                             | no       | Salesforce connection name (for `@SalesforcePage`)                                                      |
+| `salesforce_page_attribute` | string                                                             | no       | Additional Salesforce page attribute                                                                    |
+| `fields`                    | array of `{ name, element_type, locator_strategy, locator_value }` | no       | WebElement field definitions                                                                            |
+| `sso_class`                 | string                                                             | no       | PascalCase class name for an `ILoginPage` stub (non-SF SSO). Written alongside the page object on disk. |
+| `output_path`               | string                                                             | no       | Full file path to write (must be within `allowed-paths`)                                                |
+| `overwrite`                 | boolean                                                            | no       | Overwrite existing file (default: `false`)                                                              |
+| `dry_run`                   | boolean                                                            | no       | Return content without writing to disk                                                                  |
+| `idempotency_key`           | string                                                             | no       | Prevents duplicate generation for the same key                                                          |
+
+**Output** — `{ java_source: string, file_path?: string, written: boolean, sso_stub_source?: string, sso_stub_file_path?: string, sso_stub_written?: boolean }`
+
+When `sso_class` is provided the response includes `sso_stub_source` (the `ILoginPage` implementation), `sso_stub_file_path` (derived from `output_path`'s directory), and `sso_stub_written`.
 
 ---
 
@@ -586,19 +631,35 @@ Validates a Java Page Object source file against 30+ quality rules (structural c
 
 Generates an XML test case skeleton with UUID v4 guids and sequential `testItemId` values.
 
+**URI-aware XML structure:** use `target_uri` to pick the correct XML nesting:
+
+- Omit or use a `sf:` URI → flat Salesforce step structure (existing behaviour)
+- `ui:pageobject:target?pageId=pageobjects.Page` → wraps all steps in a `UiWithScreen` element (testItemId=1); substeps clause at testItemId=2; inner steps start at testItemId=3
+
 **Input**
 
-| Parameter         | Type                                    | Required | Description                                         |
-| ----------------- | --------------------------------------- | -------- | --------------------------------------------------- |
-| `test_case_name`  | string                                  | yes      | Human-readable test case name                       |
-| `test_case_id`    | string                                  | no       | Custom test case ID (auto-generated if omitted)     |
-| `steps`           | array of `{ api_id, name, arguments? }` | no       | Step definitions                                    |
-| `output_path`     | string                                  | no       | File path to write (must be within `allowed-paths`) |
-| `overwrite`       | boolean                                 | no       | Overwrite existing file (default: `false`)          |
-| `dry_run`         | boolean                                 | no       | Return XML without writing to disk                  |
-| `idempotency_key` | string                                  | no       | Prevents duplicate generation for the same key      |
+| Parameter             | Type                                     | Required | Description                                                                                                               |
+| --------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                             |
+| `test_case_id`        | string                                   | no       | Custom test case ID (auto-generated if omitted)                                                                           |
+| `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                          |
+| `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
+| `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                       |
+| `overwrite`           | boolean                                  | no       | Overwrite existing file (default: `false`)                                                                                |
+| `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                        |
+| `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
+| `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                            |
 
-**Output** — `{ content: string, file_path?: string, written: boolean }`
+**Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
+
+`validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
+
+**Error codes**
+
+| Code               | Meaning                                                               |
+| ------------------ | --------------------------------------------------------------------- |
+| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`) |
+| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                    |
 
 ---
 
@@ -1036,14 +1097,16 @@ Displays information about the currently connected Quality Hub org. Invokes `sf 
 
 Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Returns the test run ID which can be passed to `provar.qualityhub.testrun.report` to poll for results.
 
+> **Wildcard warning:** if any value in `flags` contains `*` or `?`, the tool adds `details.warning` explaining that QH plan-level reporting will be skipped. Execution still proceeds — the warning is non-blocking.
+
 **Input**
 
-| Parameter    | Type     | Required | Description                                                                   |
-| ------------ | -------- | -------- | ----------------------------------------------------------------------------- |
-| `target_org` | string   | yes      | SF CLI org alias or username                                                  |
-| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--configuration-file", "config/run.json"]`) |
+| Parameter    | Type     | Required | Description                                                                                                                                   |
+| ------------ | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_org` | string   | yes      | SF CLI org alias or username                                                                                                                  |
+| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--plan-name", "SmokeTests"]`). Avoid wildcards in `--plan-name` values — they skip QH plan-level reporting. |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr, details?: { warning: string } }`
 
 **Error codes:** `QH_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
