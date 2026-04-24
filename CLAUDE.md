@@ -90,6 +90,7 @@ Every tool description must answer these questions for an AI agent reading it co
 - PRs target `develop`; releases are merged develop → main
 - Version in `package.json` follows `<major>.<minor>.<patch>-beta.<n>` on develop
 - Bump the beta suffix (`beta.N → beta.N+1`) on any PR that triggers a publish
+- **Version sync:** whenever `package.json` version changes, update `server.json` to match — both the top-level `"version"` field and the `"packages"[0].version` field. These must always be identical.
 
 ---
 
