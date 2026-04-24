@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
-import { registerAntGenerate, validateAntXml } from '../../../src/mcp/tools/antTools.js';
+import { registerAntGenerate, validateAntXml, parseJUnitResults } from '../../../src/mcp/tools/antTools.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ function minimalInput(overrides: Record<string, unknown> = {}): Record<string, u
     provar_home: tmpDir,
     project_path: tmpDir,
     results_path: path.join(tmpDir, 'Results'),
-    filesets: [{ dir: '../tests' }],  // filesets.dir is not path-checked at runtime
+    filesets: [{ dir: '../tests' }], // filesets.dir is not path-checked at runtime
     web_browser: 'Chrome',
     web_browser_configuration: 'Full Screen',
     web_browser_provider_name: 'Desktop',
@@ -139,26 +139,17 @@ describe('provar.ant.generate', () => {
 
     it('includes <taskdef> for CompileTask', () => {
       const xml = getXml();
-      assert.ok(
-        xml.includes('com.provar.testrunner.ant.CompileTask'),
-        'Expected CompileTask taskdef'
-      );
+      assert.ok(xml.includes('com.provar.testrunner.ant.CompileTask'), 'Expected CompileTask taskdef');
     });
 
     it('includes <taskdef> for RunnerTask', () => {
       const xml = getXml();
-      assert.ok(
-        xml.includes('com.provar.testrunner.ant.RunnerTask'),
-        'Expected RunnerTask taskdef'
-      );
+      assert.ok(xml.includes('com.provar.testrunner.ant.RunnerTask'), 'Expected RunnerTask taskdef');
     });
 
     it('includes <taskdef> for TestCycleReportTask', () => {
       const xml = getXml();
-      assert.ok(
-        xml.includes('com.provar.testrunner.ant.TestCycleReportTask'),
-        'Expected TestCycleReportTask taskdef'
-      );
+      assert.ok(xml.includes('com.provar.testrunner.ant.TestCycleReportTask'), 'Expected TestCycleReportTask taskdef');
     });
 
     it('includes <Provar-Compile> step', () => {
@@ -184,10 +175,7 @@ describe('provar.ant.generate', () => {
     it('sets the provar.home property to the provided provar_home value', () => {
       const customHome = path.join(tmpDir, 'custom-provar');
       const xml = getXml({ provar_home: customHome });
-      assert.ok(
-        xml.includes(`<property name="provar.home" value="${customHome}"/>`),
-        'Expected provar.home property'
-      );
+      assert.ok(xml.includes(`<property name="provar.home" value="${customHome}"/>`), 'Expected provar.home property');
     });
 
     it('renders webBrowser attribute', () => {
@@ -433,10 +421,7 @@ describe('provar.ant.generate', () => {
 
       assert.equal(isError(result), true);
       const code = parseText(result)['error_code'] as string;
-      assert.ok(
-        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
-        `Unexpected error code: ${code}`
-      );
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
     });
 
     it('output_path is not checked in dry_run=true mode', () => {
@@ -464,20 +449,14 @@ describe('provar.ant.generate', () => {
 
       assert.equal(isError(result), true);
       const code = parseText(result)['error_code'] as string;
-      assert.ok(
-        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
-        `Unexpected error code: ${code}`
-      );
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
     });
 
     it('rejects project_path containing ".." (PATH_TRAVERSAL)', () => {
       const strictServer = new MockMcpServer();
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call(
-        'provar.ant.generate',
-        strictInput({ project_path: '../evil', dry_run: true })
-      );
+      const result = strictServer.call('provar.ant.generate', strictInput({ project_path: '../evil', dry_run: true }));
 
       assert.equal(isError(result), true);
       assert.equal(parseText(result)['error_code'], 'PATH_TRAVERSAL');
@@ -494,10 +473,7 @@ describe('provar.ant.generate', () => {
 
       assert.equal(isError(result), true);
       const code = parseText(result)['error_code'] as string;
-      assert.ok(
-        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
-        `Unexpected error code: ${code}`
-      );
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
     });
 
     it('rejects optional license_path outside allowedPaths when provided', () => {
@@ -511,10 +487,7 @@ describe('provar.ant.generate', () => {
 
       assert.equal(isError(result), true);
       const code = parseText(result)['error_code'] as string;
-      assert.ok(
-        code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL',
-        `Unexpected error code: ${code}`
-      );
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
     });
   });
 });
@@ -545,20 +518,29 @@ describe('validateAntXml', () => {
       // No <?xml …?> header — everything else is valid
       const noDecl = VALID_ANT.replace(/^<\?xml[^?]*\?>\n/, '');
       const r = validateAntXml(noDecl);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_001'), 'Expected ANT_001 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_001'),
+        'Expected ANT_001 warning'
+      );
       // Still structurally valid — XML declaration is a warning only
       assert.equal(r.error_count, 0);
     });
 
     it('ANT_002: flags malformed XML', () => {
       const r = validateAntXml('<?xml version="1.0"?><project unclosed');
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_002'), 'Expected ANT_002 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_002'),
+        'Expected ANT_002 error'
+      );
       assert.equal(r.is_valid, false);
     });
 
     it('ANT_003: flags wrong root element', () => {
       const r = validateAntXml('<?xml version="1.0"?><notProject/>');
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_003'), 'Expected ANT_003 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_003'),
+        'Expected ANT_003 error'
+      );
       assert.equal(r.is_valid, false);
     });
   });
@@ -567,7 +549,10 @@ describe('validateAntXml', () => {
     it('ANT_004: flags missing default attribute on <project>', () => {
       const xml = VALID_ANT.replace('default="runtests"', '');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_004'), 'Expected ANT_004 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_004'),
+        'Expected ANT_004 error'
+      );
     });
 
     it('ANT_005: flags missing CompileTask taskdef', () => {
@@ -609,7 +594,10 @@ describe('validateAntXml', () => {
     it('ANT_006: flags default target not found', () => {
       const xml = VALID_ANT.replace('name="runtests"', 'name="something-else"');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_006'), 'Expected ANT_006 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_006'),
+        'Expected ANT_006 error'
+      );
     });
   });
 
@@ -627,17 +615,20 @@ describe('validateAntXml', () => {
   </target>
 </project>`;
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_010'), 'Expected ANT_010 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_010'),
+        'Expected ANT_010 warning'
+      );
     });
 
     it('ANT_020: flags missing <Run-Test-Case>', () => {
       // Replace the Run-Test-Case block with a noop comment
-      const xml = VALID_ANT.replace(
-        /<Run-Test-Case[\s\S]*?<\/Run-Test-Case>/,
-        '<!-- removed -->'
-      );
+      const xml = VALID_ANT.replace(/<Run-Test-Case[\s\S]*?<\/Run-Test-Case>/, '<!-- removed -->');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_020'), 'Expected ANT_020 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_020'),
+        'Expected ANT_020 error'
+      );
     });
   });
 
@@ -656,7 +647,10 @@ describe('validateAntXml', () => {
   </target>
 </project>`;
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_021'), 'Expected ANT_021 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_021'),
+        'Expected ANT_021 error'
+      );
     });
 
     it('ANT_022: flags missing projectPath', () => {
@@ -673,13 +667,19 @@ describe('validateAntXml', () => {
   </target>
 </project>`;
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_022'), 'Expected ANT_022 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_022'),
+        'Expected ANT_022 error'
+      );
     });
 
     it('ANT_023: flags missing resultsPath', () => {
       const xml = VALID_ANT.replace(' resultsPath="../ANT/Results"', '');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_023'), 'Expected ANT_023 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_023'),
+        'Expected ANT_023 error'
+      );
     });
   });
 
@@ -687,34 +687,37 @@ describe('validateAntXml', () => {
     it('ANT_030: warns about unrecognised webBrowser value', () => {
       const xml = VALID_ANT.replace('webBrowser="Chrome"', 'webBrowser="InternetExplorer6"');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_030'), 'Expected ANT_030 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_030'),
+        'Expected ANT_030 warning'
+      );
     });
 
     it('ANT_031: warns about unrecognised salesforceMetadataCache value', () => {
-      const xml = VALID_ANT.replace(
-        '<Run-Test-Case',
-        '<Run-Test-Case salesforceMetadataCache="BadValue"'
-      );
+      const xml = VALID_ANT.replace('<Run-Test-Case', '<Run-Test-Case salesforceMetadataCache="BadValue"');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_031'), 'Expected ANT_031 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_031'),
+        'Expected ANT_031 warning'
+      );
     });
 
     it('ANT_032: warns about unrecognised testOutputlevel value', () => {
-      const xml = VALID_ANT.replace(
-        '<Run-Test-Case',
-        '<Run-Test-Case testOutputlevel="VERBOSE"'
-      );
+      const xml = VALID_ANT.replace('<Run-Test-Case', '<Run-Test-Case testOutputlevel="VERBOSE"');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_032'), 'Expected ANT_032 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_032'),
+        'Expected ANT_032 warning'
+      );
     });
 
     it('ANT_033: warns about unrecognised resultsPathDisposition value', () => {
-      const xml = VALID_ANT.replace(
-        '<Run-Test-Case',
-        '<Run-Test-Case resultsPathDisposition="Overwrite"'
-      );
+      const xml = VALID_ANT.replace('<Run-Test-Case', '<Run-Test-Case resultsPathDisposition="Overwrite"');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_033'), 'Expected ANT_033 warning');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_033'),
+        'Expected ANT_033 warning'
+      );
     });
   });
 
@@ -722,13 +725,19 @@ describe('validateAntXml', () => {
     it('ANT_040: flags Run-Test-Case with no <fileset> children', () => {
       const xml = VALID_ANT.replace('<fileset dir="../tests"/>', '');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_040'), 'Expected ANT_040 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_040'),
+        'Expected ANT_040 error'
+      );
     });
 
     it('ANT_041: flags a fileset missing dir attribute', () => {
       const xml = VALID_ANT.replace('<fileset dir="../tests"/>', '<fileset/>');
       const r = validateAntXml(xml);
-      assert.ok(r.issues.some((i) => i.rule_id === 'ANT_041'), 'Expected ANT_041 error');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'ANT_041'),
+        'Expected ANT_041 error'
+      );
     });
 
     it('reports fileset_count correctly', () => {
@@ -767,5 +776,71 @@ describe('validateAntXml', () => {
       assert.equal(validation.is_valid, true, `Expected valid XML, got issues: ${JSON.stringify(validation.issues)}`);
       assert.equal(validation.error_count, 0);
     });
+  });
+});
+
+// ── parseJUnitResults ─────────────────────────────────────────────────────────
+
+describe('parseJUnitResults', () => {
+  let junitTmpDir: string;
+
+  beforeEach(() => {
+    junitTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-test-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(junitTmpDir, { recursive: true, force: true });
+  });
+
+  it('returns warning when results directory does not exist', () => {
+    const result = parseJUnitResults(path.join(junitTmpDir, 'nonexistent'));
+    assert.deepEqual(result.steps, []);
+    assert.ok(result.warning?.includes('not found'));
+  });
+
+  it('returns warning when directory contains no XML files', () => {
+    const result = parseJUnitResults(junitTmpDir);
+    assert.deepEqual(result.steps, []);
+    assert.ok(result.warning?.includes('No JUnit XML'));
+  });
+
+  it('extracts steps from a bare <testsuite> JUnit file', () => {
+    const xml =
+      '<?xml version="1.0"?><testsuite name="suite"><testcase name="LoginTest"/><testcase name="LogoutTest"><failure message="Element not found"/></testcase></testsuite>';
+    fs.writeFileSync(path.join(junitTmpDir, 'JUnit.xml'), xml);
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps.length, 2);
+    assert.equal(result.steps[0].status, 'pass');
+    assert.equal(result.steps[1].status, 'fail');
+    assert.ok(result.steps[1].errorMessage?.includes('Element not found'));
+    assert.equal(result.warning, undefined);
+  });
+
+  it('extracts steps from a <testsuites> wrapper JUnit file', () => {
+    const xml =
+      '<?xml version="1.0"?><testsuites><testsuite name="s1"><testcase name="TC1"><skipped/></testcase></testsuite></testsuites>';
+    fs.writeFileSync(path.join(junitTmpDir, 'JUnit.xml'), xml);
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps.length, 1);
+    assert.equal(result.steps[0].status, 'skip');
+    assert.equal(result.steps[0].title, 'TC1');
+  });
+
+  it('returns warning when XML parses but contains no testcase elements', () => {
+    const xml = '<?xml version="1.0"?><testsuite name="empty"/>';
+    fs.writeFileSync(path.join(junitTmpDir, 'JUnit.xml'), xml);
+    const result = parseJUnitResults(junitTmpDir);
+    assert.deepEqual(result.steps, []);
+    assert.ok((result.warning?.length ?? 0) > 0);
+  });
+
+  it('combines message attribute and CDATA body in failure text', () => {
+    const xml =
+      '<?xml version="1.0"?><testsuite><testcase name="T1"><failure message="Execution failed"><![CDATA[stack trace here]]></failure></testcase></testsuite>';
+    fs.writeFileSync(path.join(junitTmpDir, 'JUnit.xml'), xml);
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps.length, 1);
+    assert.ok(result.steps[0].errorMessage?.includes('Execution failed'));
+    assert.ok(result.steps[0].errorMessage?.includes('stack trace here'));
   });
 });

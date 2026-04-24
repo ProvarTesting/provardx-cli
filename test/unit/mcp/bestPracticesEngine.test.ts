@@ -8,19 +8,11 @@
 /* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'mocha';
-import {
-  calculateBPScore,
-  runBestPractices,
-  type BPViolation,
-} from '../../../src/mcp/tools/bestPracticesEngine.js';
+import { calculateBPScore, runBestPractices, type BPViolation } from '../../../src/mcp/tools/bestPracticesEngine.js';
 
 // ── Helper: build a minimal violation ────────────────────────────────────────
 
-function makeViolation(
-  severity: BPViolation['severity'],
-  weight: number,
-  count?: number
-): BPViolation {
+function makeViolation(severity: BPViolation['severity'], weight: number, count?: number): BPViolation {
   return {
     rule_id: 'TEST-001',
     name: 'Test Violation',
@@ -37,9 +29,9 @@ function makeViolation(
 
 // ── Valid XML fixture (passes all schema-level rules) ─────────────────────────
 
-const GUID_TC   = '550e8400-e29b-41d4-a716-446655440000';
-const GUID_S1   = '550e8400-e29b-41d4-a716-446655440011';
-const GUID_S2   = '550e8400-e29b-41d4-a716-446655440012';
+const GUID_TC = '550e8400-e29b-41d4-a716-446655440000';
+const GUID_S1 = '550e8400-e29b-41d4-a716-446655440011';
+const GUID_S2 = '550e8400-e29b-41d4-a716-446655440012';
 
 const VALID_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="tc-001" guid="${GUID_TC}" registryId="tc-001" name="Login Test">
@@ -97,10 +89,7 @@ describe('calculateBPScore', () => {
     // critical weight=5: 100 - 5 = 95
     // major   weight=4: 95 - 3 = 92
     // net: 92
-    const score = calculateBPScore([
-      makeViolation('critical', 5),
-      makeViolation('major', 4),
-    ]);
+    const score = calculateBPScore([makeViolation('critical', 5), makeViolation('major', 4)]);
     assert.equal(score, 92);
   });
 
@@ -122,7 +111,7 @@ describe('runBestPractices', () => {
   describe('valid XML test case', () => {
     it('returns a quality_score between 0 and 100', () => {
       const result = runBestPractices(VALID_XML);
-      assert.ok(result.quality_score >= 0,   `score ${result.quality_score} should be >= 0`);
+      assert.ok(result.quality_score >= 0, `score ${result.quality_score} should be >= 0`);
       assert.ok(result.quality_score <= 100, `score ${result.quality_score} should be <= 100`);
     });
 
@@ -164,6 +153,58 @@ describe('runBestPractices', () => {
       const result = runBestPractices(VALID_XML);
       const recalculated = calculateBPScore(result.violations);
       assert.equal(result.quality_score, recalculated);
+    });
+  });
+
+  describe('uiWithScreenTarget validator', () => {
+    const GUID_UWS = '550e8400-e29b-41d4-a716-446655440020';
+    const GUID_TC2 = '550e8400-e29b-41d4-a716-446655440030';
+
+    function buildUwsXml(target: string): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-uwstest" guid="${GUID_TC2}" registryId="tc-uwstest" name="UWS Target Test">
+  <steps>
+    <apiCall guid="${GUID_UWS}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="With page" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="value" valueClass="string">${target}</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    }
+
+    it('passes for a valid SF target URI (sf:ui:target?object=Account&action=view)', () => {
+      const result = runBestPractices(buildUwsXml('sf:ui:target?object=Account&amp;action=view'));
+      const uwsViolation = result.violations.find(
+        (v) => v.rule_id.includes('UI-SCREEN') || v.message.includes('UiWithScreen')
+      );
+      assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
+    });
+
+    it('passes for a valid page object target URI (ui:pageobject:target?pageId=pageobjects.LoginPage)', () => {
+      const result = runBestPractices(buildUwsXml('ui:pageobject:target?pageId=pageobjects.LoginPage'));
+      const uwsViolation = result.violations.find(
+        (v) => v.message.includes('UiWithScreen') || v.message.includes('pageId')
+      );
+      assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
+    });
+
+    it('fires for page object target in colon format (ui:pageobject:target:com.example.Class)', () => {
+      const result = runBestPractices(buildUwsXml('ui:pageobject:target:com.example.LoginPage'));
+      const uwsViolation = result.violations.find(
+        (v) => v.message.includes('colon format') || v.message.includes('UiWithScreen')
+      );
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for colon format URI');
+    });
+
+    it('fires for page object target with pageId missing pageobjects. prefix', () => {
+      const result = runBestPractices(buildUwsXml('ui:pageobject:target?pageId=LoginPage'));
+      const uwsViolation = result.violations.find(
+        (v) => v.message.includes('pageobjects.') || v.message.includes('UiWithScreen')
+      );
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for missing pageobjects. prefix');
     });
   });
 });

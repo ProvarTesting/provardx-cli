@@ -6,7 +6,12 @@ import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { validateTestCase, registerTestCaseValidate } from '../../../src/mcp/tools/testCaseValidate.js';
+import {
+  validateTestCase,
+  registerTestCaseValidate,
+  validateTestCaseXml,
+} from '../../../src/mcp/tools/testCaseValidate.js';
+import type { ServerConfig } from '../../../src/mcp/server.js';
 import {
   qualityHubClient,
   QualityHubAuthError,
@@ -389,5 +394,44 @@ describe('registerTestCaseValidate handler', () => {
     const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
     assert.equal(result['validation_source'], 'local_fallback');
     assert.ok(String(result['validation_warning']).toLowerCase().includes('rate limit'));
+  });
+});
+
+// ── validateTestCaseXml ───────────────────────────────────────────────────────
+
+function makeConfig(allowedPath: string): ServerConfig {
+  return { allowedPaths: [allowedPath] } as unknown as ServerConfig;
+}
+
+describe('validateTestCaseXml', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-xml-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('reads file from disk and returns validation result', () => {
+    const filePath = path.join(tmpDir, 'test.testcase');
+    fs.writeFileSync(filePath, VALID_TC);
+    const result = validateTestCaseXml(filePath, makeConfig(tmpDir));
+    assert.equal(result.is_valid, true);
+    assert.equal(result.error_count, 0);
+  });
+
+  it('throws TESTCASE_FILE_NOT_FOUND when file does not exist', () => {
+    const missing = path.join(tmpDir, 'missing.testcase');
+    assert.throws(
+      () => validateTestCaseXml(missing, makeConfig(tmpDir)),
+      (err: Error & { code?: string }) => err.code === 'TESTCASE_FILE_NOT_FOUND'
+    );
+  });
+
+  it('throws when file path is outside allowed paths', () => {
+    const outside = path.join(os.tmpdir(), 'outside.testcase');
+    assert.throws(() => validateTestCaseXml(outside, makeConfig(tmpDir)));
   });
 });
