@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.provartesting/provar",
+  "name": "io.github.ProvarTesting/provar",
   "title": "Provar MCP Server",
   "description": "Provar MCP: AI-powered Salesforce test automation. Generate, validate, migrate, and run tests.",
   "websiteUrl": "https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md",
