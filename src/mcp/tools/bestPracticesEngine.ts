@@ -83,10 +83,7 @@ let rulesConfig: BPRulesConfig | null = null;
 function getRulesConfig(): BPRulesConfig {
   if (!rulesConfig) {
     try {
-      const raw = readFileSync(
-        join(dirPath, '..', 'rules', 'provar_best_practices_rules.json'),
-        'utf-8'
-      );
+      const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_best_practices_rules.json'), 'utf-8');
       rulesConfig = JSON.parse(raw) as BPRulesConfig;
     } catch {
       rulesConfig = { schemaVersion: '1.0', rules: [], scoring: { defaultMaxScore: 100 } };
@@ -224,9 +221,7 @@ function getAllApiCalls(node: XmlNode): XmlNode[] {
 function getDirectSteps(tc: XmlNode): XmlNode[] {
   const steps = tc['steps'] as XmlNode | undefined;
   if (!steps || typeof steps !== 'object') return [];
-  return toArr(steps['apiCall'] as XmlNode | XmlNode[]).filter(
-    (c) => c && typeof c === 'object'
-  );
+  return toArr(steps['apiCall'] as XmlNode | XmlNode[]).filter((c) => c && typeof c === 'object');
 }
 
 /**
@@ -249,7 +244,7 @@ function getArgValue(call: XmlNode, argId: string): string | undefined {
       const partsNode = (valElem['parts'] as XmlNode | undefined)?.['value'];
       const texts = toArr(partsNode as XmlNode | XmlNode[])
         .filter((p) => p && typeof p === 'object')
-        .map((p) => (p)['#text'] as string | undefined)
+        .map((p) => p['#text'] as string | undefined)
         .filter(Boolean) as string[];
       return texts.join('') || undefined;
     }
@@ -260,9 +255,7 @@ function getArgValue(call: XmlNode, argId: string): string | undefined {
 
 /** Return all <argument> elements from an apiCall. */
 function getArguments(call: XmlNode): XmlNode[] {
-  return toArr(call['argument'] as XmlNode | XmlNode[]).filter(
-    (a) => a && typeof a === 'object'
-  );
+  return toArr(call['argument'] as XmlNode | XmlNode[]).filter((a) => a && typeof a === 'object');
 }
 
 /** Return true if the apiCall has a <tags><string>disabled</string></tags>. */
@@ -276,7 +269,10 @@ function isDisabledCall(call: XmlNode): boolean {
 // ── Scoring formula (exact Lambda match) ─────────────────────────────────────
 
 const SEVERITY_MULT: Record<string, number> = {
-  critical: 1.0, major: 0.75, minor: 0.5, info: 0.25,
+  critical: 1.0,
+  major: 0.75,
+  minor: 0.5,
+  info: 0.25,
 };
 
 export function calculateBPScore(violations: BPViolation[]): number {
@@ -328,9 +324,7 @@ function validateUnknownApiId(tc: XmlNode, rule: BPRule): BPViolation | null {
   if (!unknowns.length) return null;
 
   const MAX = 5;
-  const msgs = unknowns.slice(0, 3).map(
-    (v) => `'${v.apiId}'${v.tid ? ` (testItemId=${v.tid})` : ''}`
-  );
+  const msgs = unknowns.slice(0, 3).map((v) => `'${v.apiId}'${v.tid ? ` (testItemId=${v.tid})` : ''}`);
   let message = `Unknown apiId(s) detected — these APIs do not exist in Provar: ${msgs.join('; ')}`;
   if (unknowns.length > 3) message += ` (+${unknowns.length - 3} more)`;
   return makeViolation(rule, message, Math.min(unknowns.length, MAX));
@@ -339,8 +333,8 @@ function validateUnknownApiId(tc: XmlNode, rule: BPRule): BPViolation | null {
 /** VALID-GUID-001 — test case must have at least one valid identifier. */
 function validateValidIdentifier(tc: XmlNode, rule: BPRule): BPViolation | null {
   const guid = tc['@_guid'] as string | undefined;
-  const id   = tc['@_id']   as string | undefined;
-  const rid  = tc['@_registryId'] as string | undefined;
+  const id = tc['@_id'] as string | undefined;
+  const rid = tc['@_registryId'] as string | undefined;
   if (!guid && !id && !rid) {
     return makeViolation(rule, 'Test case missing valid identifier (guid, id, or registryId)');
   }
@@ -386,11 +380,7 @@ function validateWholeNumberTestItemId(tc: XmlNode, rule: BPRule): BPViolation |
   }
 
   if (!invalid.length) return null;
-  return makeViolation(
-    rule,
-    `Invalid testItemId values: ${invalid.slice(0, 3).join(', ')}`,
-    invalid.length
-  );
+  return makeViolation(rule, `Invalid testItemId values: ${invalid.slice(0, 3).join(', ')}`, invalid.length);
 }
 
 /** VAR-NAMING-001 — variable names must match the identifier pattern. */
@@ -421,7 +411,7 @@ function validateVariableNaming(tc: XmlNode, rule: BPRule): BPViolation | null {
       if (nvContainer && typeof nvContainer === 'object') {
         for (const nv of toArr(nvContainer['namedValue'] as XmlNode | XmlNode[])) {
           if (!nv || typeof nv !== 'object') continue;
-          const name = (nv)['@_name'] as string | undefined;
+          const name = nv['@_name'] as string | undefined;
           if (name && !['valuePath', 'value', 'valueScope'].includes(name)) {
             checkName(name, 'SetValues variable');
           }
@@ -440,7 +430,7 @@ function validateVariableNaming(tc: XmlNode, rule: BPRule): BPViolation | null {
 /** STRUCT-GROUP-001 — direct steps should be wrapped in grouping elements. */
 function validateMustAllBeInGroups(tc: XmlNode, rule: BPRule): BPViolation | null {
   const check = rule.check;
-  const acceptBdd     = (check['acceptBddSteps']      as boolean | undefined) ?? true;
+  const acceptBdd = (check['acceptBddSteps'] as boolean | undefined) ?? true;
   const acceptFinally = (check['acceptFinallyBlocks'] as boolean | undefined) ?? true;
 
   const GROUPING_IDS = new Set<string>(['com.provar.plugins.bundled.apis.control.StepGroup']);
@@ -451,7 +441,8 @@ function validateMustAllBeInGroups(tc: XmlNode, rule: BPRule): BPViolation | nul
       'com.provar.plugins.bundled.apis.bdd.Then',
       'com.provar.plugins.bundled.apis.bdd.And',
       'com.provar.plugins.bundled.apis.bdd.But',
-    ]) GROUPING_IDS.add(id);
+    ])
+      GROUPING_IDS.add(id);
   }
   if (acceptFinally) GROUPING_IDS.add('com.provar.plugins.bundled.apis.control.Finally');
 
@@ -467,8 +458,9 @@ function validateMustAllBeInGroups(tc: XmlNode, rule: BPRule): BPViolation | nul
     if (!GROUPING_IDS.has(apiId)) {
       const title =
         (step['@_title'] as string | undefined) ??
-        (step['@_name']  as string | undefined) ??
-        apiId.split('.').pop() ?? '';
+        (step['@_name'] as string | undefined) ??
+        apiId.split('.').pop() ??
+        '';
       ungrouped.push(title.substring(0, 30));
     }
   }
@@ -477,10 +469,7 @@ function validateMustAllBeInGroups(tc: XmlNode, rule: BPRule): BPViolation | nul
   if (directSteps.length > 0 && apiCallCount / directSteps.length >= 0.8) return null;
 
   if (ungrouped.length > 3) {
-    return makeViolation(
-      rule,
-      `${ungrouped.length} steps not in groups: ${ungrouped.slice(0, 3).join(', ')}...`
-    );
+    return makeViolation(rule, `${ungrouped.length} steps not in groups: ${ungrouped.slice(0, 3).join(', ')}...`);
   }
   return null;
 }
@@ -489,36 +478,82 @@ function validateMustAllBeInGroups(tc: XmlNode, rule: BPRule): BPViolation | nul
 function validateDisabledStep(tc: XmlNode, rule: BPRule): BPViolation | null {
   for (const call of getAllApiCalls(tc)) {
     if (!isDisabledCall(call)) continue;
-    const tid    = call['@_testItemId'] as string | undefined;
-    const apiId  = (call['@_apiId']    as string | undefined) ?? 'unknown';
-    const name   =
-      (call['@_name']  as string | undefined) ??
+    const tid = call['@_testItemId'] as string | undefined;
+    const apiId = (call['@_apiId'] as string | undefined) ?? 'unknown';
+    const name =
+      (call['@_name'] as string | undefined) ??
       (call['@_title'] as string | undefined) ??
-      apiId.split('.').pop() ?? 'unnamed';
-    return makeViolation(
-      rule,
-      `Disabled step found: "${name}"${tid ? ` (testItemId=${tid})` : ''}`
-    );
+      apiId.split('.').pop() ??
+      'unnamed';
+    return makeViolation(rule, `Disabled step found: "${name}"${tid ? ` (testItemId=${tid})` : ''}`);
   }
   return null;
 }
 
 // Arguments that should NOT be checked for duplicate literals
 const LITERAL_EXCLUDE_ARGS = new Set([
-  'uiConnectionName', 'apexConnectionName', 'resultScope', 'resultName',
-  'sfUiTargetResultScope', 'sfUiTargetResultName', 'objectType', 'connectionId',
-  'connectionName', 'comparisonType', 'assertionType', 'httpMethod', 'controlType',
-  'loopType', 'navigate', 'windowSelection', 'windowSize', 'alreadyOpenBehaviour',
-  'captureBefore', 'captureAfter', 'interactionDescription', 'targetDescription', 'title',
+  'uiConnectionName',
+  'apexConnectionName',
+  'resultScope',
+  'resultName',
+  'sfUiTargetResultScope',
+  'sfUiTargetResultName',
+  'objectType',
+  'connectionId',
+  'connectionName',
+  'comparisonType',
+  'assertionType',
+  'httpMethod',
+  'controlType',
+  'loopType',
+  'navigate',
+  'windowSelection',
+  'windowSize',
+  'alreadyOpenBehaviour',
+  'captureBefore',
+  'captureAfter',
+  'interactionDescription',
+  'targetDescription',
+  'title',
 ]);
 const METADATA_FIELDS = new Set([
-  'status', 'stage', 'recordtype', 'recordtypeid', 'type', 'subtype', 'category',
-  'priority', 'source', 'origin', 'reason', 'result', 'state', 'severity',
-  'casestatus', 'leadstatus', 'opportunitystage', 'accounttype', 'industry',
+  'status',
+  'stage',
+  'recordtype',
+  'recordtypeid',
+  'type',
+  'subtype',
+  'category',
+  'priority',
+  'source',
+  'origin',
+  'reason',
+  'result',
+  'state',
+  'severity',
+  'casestatus',
+  'leadstatus',
+  'opportunitystage',
+  'accounttype',
+  'industry',
 ]);
 const DEFAULT_LITERAL_VALUES = new Set([
-  '0', '1', '0.0', '1.0', '', 'N/A', 'n/a', 'NA', 'None', 'Default', 'default',
-  'Test', 'Global', 'Local', 'Folder', 'GroupStep',
+  '0',
+  '1',
+  '0.0',
+  '1.0',
+  '',
+  'N/A',
+  'n/a',
+  'NA',
+  'None',
+  'Default',
+  'default',
+  'Test',
+  'Global',
+  'Local',
+  'Folder',
+  'GroupStep',
 ]);
 
 /** DDT-VAR-001 — detect hardcoded literal values repeated ≥2 times. */
@@ -563,8 +598,8 @@ function validateDetectDuplicatesLiterals(tc: XmlNode, rule: BPRule): BPViolatio
 
 /** NC-FOLDER-001 / NC-PARAM-001 — regex check on target value. */
 function validateRegex(tc: XmlNode, rule: BPRule, metadata: BPMetadata): BPViolation | null {
-  const check   = rule.check;
-  const target  = (check['target']  as string | undefined) ?? '';
+  const check = rule.check;
+  const target = (check['target'] as string | undefined) ?? '';
   const pattern = (check['pattern'] as string | undefined) ?? '';
   if (!pattern) return null;
 
@@ -580,7 +615,10 @@ function validateRegex(tc: XmlNode, rule: BPRule, metadata: BPMetadata): BPViola
     outer: for (const call of getAllApiCalls(tc)) {
       for (const arg of getArguments(call)) {
         const argId = arg['@_id'] as string | undefined;
-        if (argId) { value = argId; break outer; }
+        if (argId) {
+          value = argId;
+          break outer;
+        }
       }
     }
   }
@@ -599,17 +637,33 @@ function validateRegex(tc: XmlNode, rule: BPRule, metadata: BPMetadata): BPViola
 
 // Steps that WRITE to resultName (not just read)
 const RESULT_WRITE_STEPS = new Set([
-  'ApexConnect', 'UiConnect', 'DbConnect', 'WebConnect',
-  'ApexCreateObject', 'ApexUpdateObject', 'ApexReadObject',
-  'ApexSoqlQuery', 'ApexSoqlBuilder',
-  'RestRequest', 'SoapRequest',
-  'SqlQuery', 'DbInsert', 'DbRead', 'DbUpdate',
-  'UiWithScreen', 'UiWithRow',
+  'ApexConnect',
+  'UiConnect',
+  'DbConnect',
+  'WebConnect',
+  'ApexCreateObject',
+  'ApexUpdateObject',
+  'ApexReadObject',
+  'ApexSoqlQuery',
+  'ApexSoqlBuilder',
+  'RestRequest',
+  'SoapRequest',
+  'SqlQuery',
+  'DbInsert',
+  'DbRead',
+  'DbUpdate',
+  'UiWithScreen',
+  'UiWithRow',
 ]);
 // Patterns to exclude from result-name tracking
 const RESULT_EXCLUDE_PATTERNS = [
-  'StepGroup', 'control.If', 'control.While', 'control.ForEach',
-  'control.Try', 'control.Finally', 'control.SetValues',
+  'StepGroup',
+  'control.If',
+  'control.While',
+  'control.ForEach',
+  'control.Try',
+  'control.Finally',
+  'control.SetValues',
 ];
 
 /** APEX-RESULTNAME-001 — detect duplicate resultNames within the same scope. */
@@ -640,9 +694,7 @@ function validateUniqueResultNames(tc: XmlNode, rule: BPRule): BPViolation | nul
   for (const [scope, names] of byScope) {
     for (const [name, steps] of names) {
       if (steps.length > 1) {
-        violations.push(
-          `'${name}' in ${scope} scope: written ${steps.length} times (${steps.slice(0, 2).join(', ')})`
-        );
+        violations.push(`'${name}' in ${scope} scope: written ${steps.length} times (${steps.slice(0, 2).join(', ')})`);
       }
     }
   }
@@ -655,21 +707,87 @@ function validateUniqueResultNames(tc: XmlNode, rule: BPRule): BPViolation | nul
   return makeViolation(rule, msg, Math.min(violations.length, MAX));
 }
 
+// ── UiWithScreen target URI validator ─────────────────────────────────────────
+
+const VALID_SF_UI_PARAMS = new Set([
+  'object',
+  'action',
+  'lightningComponent',
+  'lightningWebComponent',
+  'auraComponent',
+  'application',
+  'lookup',
+  'fieldService',
+  'tab',
+]);
+
+/** Read the "target" argument from a UiWithScreen call via the <arguments> wrapper. */
+function getUiWithScreenTarget(call: XmlNode): string | undefined {
+  const argsNode = call['arguments'] as XmlNode | undefined;
+  if (!argsNode || typeof argsNode !== 'object') return undefined;
+  for (const arg of toArr(argsNode['argument'] as XmlNode | XmlNode[])) {
+    if (!arg || typeof arg !== 'object') continue;
+    if (arg['@_id'] !== 'target') continue;
+    const valElem = arg['value'] as XmlNode | undefined;
+    if (!valElem || typeof valElem !== 'object') return undefined;
+    return (valElem['#text'] as string | undefined) ?? undefined;
+  }
+  return undefined;
+}
+
+/** UI-SCREEN-TARGET — validate UiWithScreen target URIs (SF and page object formats). */
+function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const targetApiId = rule.check['apiId'] as string | undefined;
+  const violations: string[] = [];
+
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId) continue;
+    if (targetApiId && !apiId.includes(targetApiId)) continue;
+
+    const target = getUiWithScreenTarget(call);
+    if (!target) continue;
+
+    if (target.startsWith('sf:')) {
+      const qs = target.includes('?') ? target.split('?')[1] : '';
+      const hasValidParam = [...new URLSearchParams(qs).keys()].some((k) => VALID_SF_UI_PARAMS.has(k));
+      if (!hasValidParam) {
+        violations.push(`UiWithScreen target "${target}" has no recognised SF parameters`);
+      }
+    } else if (target.startsWith('ui:pageobject:target')) {
+      if (!target.includes('?')) {
+        violations.push(`UiWithScreen target "${target}" uses colon format — use ?pageId=pageobjects.<ClassName>`);
+      } else {
+        const pageId = new URLSearchParams(target.split('?')[1]).get('pageId');
+        if (!pageId?.startsWith('pageobjects.')) {
+          violations.push(`UiWithScreen target "${target}" pageId must start with "pageobjects."`);
+        }
+      }
+    }
+  }
+
+  if (!violations.length) return null;
+  let msg = violations.slice(0, 2).join('; ');
+  if (violations.length > 2) msg += ` (and ${violations.length - 2} more)`;
+  return makeViolation(rule, msg, Math.min(violations.length, 3));
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
 
 const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
-  unknownApiId:            validateUnknownApiId,
-  validIdentifier:         validateValidIdentifier,
-  mustExist:               validateMustExist,
-  mustExistAndNotEmpty:    validateMustExistAndNotEmpty,
-  wholeNumberTestItemId:   validateWholeNumberTestItemId,
-  variableNaming:          validateVariableNaming,
-  mustAllBeInGroups:       validateMustAllBeInGroups,
-  disabledStep:            validateDisabledStep,
+  unknownApiId: validateUnknownApiId,
+  validIdentifier: validateValidIdentifier,
+  mustExist: validateMustExist,
+  mustExistAndNotEmpty: validateMustExistAndNotEmpty,
+  wholeNumberTestItemId: validateWholeNumberTestItemId,
+  variableNaming: validateVariableNaming,
+  mustAllBeInGroups: validateMustAllBeInGroups,
+  disabledStep: validateDisabledStep,
   detectDuplicatesLiterals: validateDetectDuplicatesLiterals,
-  uniqueResultNames:       validateUniqueResultNames,
+  uniqueResultNames: validateUniqueResultNames,
+  uiWithScreenTarget: validateUiWithScreenTarget,
   // 'regex' is dispatched separately (needs metadata)
 };
 
@@ -690,10 +808,7 @@ const XML_PARSER = new XMLParser({
  * @param metadata    Optional context (testName used for regex rules).
  * @returns           Quality score (0–100) + list of violations.
  */
-export function runBestPractices(
-  xmlContent: string,
-  metadata: BPMetadata = {}
-): BPEngineResult {
+export function runBestPractices(xmlContent: string, metadata: BPMetadata = {}): BPEngineResult {
   let parsed: XmlNode;
   try {
     parsed = XML_PARSER.parse(xmlContent) as XmlNode;

@@ -18,6 +18,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Available tools](#available-tools)
   - [provardx.ping](#provardxping)
   - [provar.project.inspect](#provarprojectinspect)
+  - [provar.connection.list](#provarconnectionlist)
   - [provar.pageobject.generate](#provarpageobjectgenerate)
   - [provar.pageobject.validate](#provarpageobjectvalidate)
   - [provar.testcase.generate](#provartestcasegenerate)
@@ -45,6 +46,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar.qualityhub.defect.create](#provarqualityhubdefectcreate)
   - [provar.testrun.report.locate](#provartestrunreportlocate)
   - [provar.testrun.rca](#provartestrunrca)
+  - [provar.testcase.step.edit](#provartestcasestepedit)
   - [provar.testplan.add-instance](#provartestplanadinstance)
   - [provar.testplan.create-suite](#provartestplancreatetsuite)
   - [provar.testplan.remove-instance](#provartestplanremoveinstance)
@@ -529,27 +531,71 @@ Provar test plans live in `plans/`. Each plan is a directory containing a `.plan
 
 ---
 
-### `provar.pageobject.generate`
+### `provar.connection.list`
 
-Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePage` annotation and `@FindBy` field stubs.
+Lists all connections and named environments defined in the project's `.testproject` file. Use this **before** generating test cases or page objects to discover the exact connection names to use.
+
+**Prerequisite:** the project must have a `.testproject` file. Run `provar.project.validate` first if unsure of the project root.
+
+**Security:** only connection names, types, and URLs are returned — credential values from `.secrets` are never included in the output.
 
 **Input**
 
-| Parameter                   | Type                                                   | Required | Description                                              |
-| --------------------------- | ------------------------------------------------------ | -------- | -------------------------------------------------------- |
-| `class_name`                | string                                                 | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)    |
-| `package_name`              | string                                                 | yes      | Java package (e.g. `pageobjects.accounts`)               |
-| `page_type`                 | `standard` \| `salesforce`                             | yes      | Generates `@Page` or `@SalesforcePage` annotation        |
-| `title`                     | string                                                 | no       | Page title for the annotation                            |
-| `connection_name`           | string                                                 | no       | Salesforce connection name (for `@SalesforcePage`)       |
-| `salesforce_page_attribute` | string                                                 | no       | Additional Salesforce page attribute                     |
-| `fields`                    | array of `{ name, type, locator_type, locator_value }` | no       | WebElement field definitions                             |
-| `output_path`               | string                                                 | no       | Full file path to write (must be within `allowed-paths`) |
-| `overwrite`                 | boolean                                                | no       | Overwrite existing file (default: `false`)               |
-| `dry_run`                   | boolean                                                | no       | Return content without writing to disk                   |
-| `idempotency_key`           | string                                                 | no       | Prevents duplicate generation for the same key           |
+| Parameter      | Type   | Required | Description                                                       |
+| -------------- | ------ | -------- | ----------------------------------------------------------------- |
+| `project_path` | string | yes      | Absolute path to the Provar project root (within `allowed-paths`) |
 
-**Output** — `{ content: string, file_path?: string, written: boolean }`
+**Output**
+
+```json
+{
+  "connections": [
+    { "name": "MyOrg", "type": "Salesforce", "url": "sfdc://...", "sso_configured": false },
+    { "name": "OktaSso", "type": "SSO", "url": "sso://...", "sso_configured": true }
+  ],
+  "environments": [
+    { "name": "QA", "connection": "MyOrg", "url": "https://qa.example.com" },
+    { "name": "UAT", "connection": "AdminOrg" }
+  ],
+  "summary": { "connection_count": 2, "environment_count": 2 }
+}
+```
+
+Connection `type` values: `Salesforce`, `Web`, `Quality Hub`, `Web Service`, `Database`, `Google`, `Microsoft`, `Zephyr`, `SSO`, or the raw class name for unknown types.
+
+**Error codes**
+
+| Code                        | Meaning                                                                   |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `CONNECTION_FILE_NOT_FOUND` | No `.testproject` at the given path. Run `provar.project.validate` first. |
+| `PATH_NOT_ALLOWED`          | `project_path` is outside the server's `--allowed-paths`                  |
+
+---
+
+### `provar.pageobject.generate`
+
+Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePage` annotation and `@FindBy` field stubs. Optionally generates an `ILoginPage` implementation stub for non-SF SSO connections.
+
+**Input**
+
+| Parameter                   | Type                                                               | Required | Description                                                                                             |
+| --------------------------- | ------------------------------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `class_name`                | string                                                             | yes      | PascalCase Java class name (e.g. `AccountDetailPage`)                                                   |
+| `package_name`              | string                                                             | yes      | Java package (e.g. `pageobjects.accounts`)                                                              |
+| `page_type`                 | `standard` \| `salesforce`                                         | yes      | Generates `@Page` or `@SalesforcePage` annotation                                                       |
+| `title`                     | string                                                             | no       | Page title for the annotation                                                                           |
+| `connection_name`           | string                                                             | no       | Salesforce connection name (for `@SalesforcePage`)                                                      |
+| `salesforce_page_attribute` | string                                                             | no       | Additional Salesforce page attribute                                                                    |
+| `fields`                    | array of `{ name, element_type, locator_strategy, locator_value }` | no       | WebElement field definitions                                                                            |
+| `sso_class`                 | string                                                             | no       | PascalCase class name for an `ILoginPage` stub (non-SF SSO). Written alongside the page object on disk. |
+| `output_path`               | string                                                             | no       | Full file path to write (must be within `allowed-paths`)                                                |
+| `overwrite`                 | boolean                                                            | no       | Overwrite existing file (default: `false`)                                                              |
+| `dry_run`                   | boolean                                                            | no       | Return content without writing to disk                                                                  |
+| `idempotency_key`           | string                                                             | no       | Prevents duplicate generation for the same key                                                          |
+
+**Output** — `{ java_source: string, file_path?: string, written: boolean, sso_stub_source?: string, sso_stub_file_path?: string, sso_stub_written?: boolean }`
+
+When `sso_class` is provided the response includes `sso_stub_source` (the `ILoginPage` implementation), `sso_stub_file_path` (derived from `output_path`'s directory), and `sso_stub_written`.
 
 ---
 
@@ -586,19 +632,35 @@ Validates a Java Page Object source file against 30+ quality rules (structural c
 
 Generates an XML test case skeleton with UUID v4 guids and sequential `testItemId` values.
 
+**URI-aware XML structure:** use `target_uri` to pick the correct XML nesting:
+
+- Omit or use a `sf:` URI → flat Salesforce step structure (existing behaviour)
+- `ui:pageobject:target?pageId=pageobjects.Page` → wraps all steps in a `UiWithScreen` element (testItemId=1); substeps clause at testItemId=2; inner steps start at testItemId=3
+
 **Input**
 
-| Parameter         | Type                                    | Required | Description                                         |
-| ----------------- | --------------------------------------- | -------- | --------------------------------------------------- |
-| `test_case_name`  | string                                  | yes      | Human-readable test case name                       |
-| `test_case_id`    | string                                  | no       | Custom test case ID (auto-generated if omitted)     |
-| `steps`           | array of `{ api_id, name, arguments? }` | no       | Step definitions                                    |
-| `output_path`     | string                                  | no       | File path to write (must be within `allowed-paths`) |
-| `overwrite`       | boolean                                 | no       | Overwrite existing file (default: `false`)          |
-| `dry_run`         | boolean                                 | no       | Return XML without writing to disk                  |
-| `idempotency_key` | string                                  | no       | Prevents duplicate generation for the same key      |
+| Parameter             | Type                                     | Required | Description                                                                                                               |
+| --------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                             |
+| `test_case_id`        | string                                   | no       | Custom test case ID (auto-generated if omitted)                                                                           |
+| `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                          |
+| `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
+| `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                       |
+| `overwrite`           | boolean                                  | no       | Overwrite existing file (default: `false`)                                                                                |
+| `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                        |
+| `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
+| `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                            |
 
-**Output** — `{ content: string, file_path?: string, written: boolean }`
+**Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
+
+`validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
+
+**Error codes**
+
+| Code               | Meaning                                                               |
+| ------------------ | --------------------------------------------------------------------- |
+| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`) |
+| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                    |
 
 ---
 
@@ -807,7 +869,9 @@ Generates a `provardx-properties.json` file from the standard template. Placehol
 
 ### `provar.properties.read`
 
-Reads and parses a `provardx-properties.json` file. Use this to inspect the current configuration before making changes with `provar.properties.set`.
+Reads and parses a `provardx-properties.json` file directly from disk. Use this to inspect the current configuration before making changes with `provar.properties.set`.
+
+If the file you read differs on critical fields (`provarHome`, `projectPath`, `resultsPath`) from the file currently registered via `provar.automation.config.load`, the response will include a `details.warning` listing the divergent keys. This catches the common case where the agent reads one file but test runs use another.
 
 **Input**
 
@@ -815,9 +879,9 @@ Reads and parses a `provardx-properties.json` file. Use this to inspect the curr
 | ----------- | ------ | -------- | ------------------------------------------- |
 | `file_path` | string | yes      | Path to the `provardx-properties.json` file |
 
-**Output** — `{ file_path, content }` where `content` is the parsed JSON object.
+**Output** — `{ requestId, file_path, content[, details.warning] }` where `content` is the parsed JSON object. `details.warning` is present when the file diverges from the active sf config.
 
-**Error codes:** `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
 
 ---
 
@@ -853,7 +917,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 **Output** — `{ file_path, updated_fields, content }`
 
-**Error codes:** `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -877,7 +941,7 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 | `warning_count` | Number of warnings (e.g. unfilled placeholders) |
 | `issues`        | Array of `{ field, severity, message }`         |
 
-**Error codes:** `MISSING_INPUT`, `FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
+**Error codes:** `MISSING_INPUT`, `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
 ---
 
@@ -1034,14 +1098,16 @@ Displays information about the currently connected Quality Hub org. Invokes `sf 
 
 Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Returns the test run ID which can be passed to `provar.qualityhub.testrun.report` to poll for results.
 
+> **Wildcard warning:** if any value in `flags` contains `*` or `?`, the tool adds `details.warning` explaining that QH plan-level reporting will be skipped. Execution still proceeds — the warning is non-blocking.
+
 **Input**
 
-| Parameter    | Type     | Required | Description                                                                   |
-| ------------ | -------- | -------- | ----------------------------------------------------------------------------- |
-| `target_org` | string   | yes      | SF CLI org alias or username                                                  |
-| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--configuration-file", "config/run.json"]`) |
+| Parameter    | Type     | Required | Description                                                                                                                                   |
+| ------------ | -------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_org` | string   | yes      | SF CLI org alias or username                                                                                                                  |
+| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--plan-name", "SmokeTests"]`). Avoid wildcards in `--plan-name` values — they skip QH plan-level reporting. |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr, details?: { warning: string } }`
 
 **Error codes:** `QH_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
@@ -1144,9 +1210,20 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed] }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning] }`
 
-The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count and a note is appended to `stdout`. Use `provar.testrun.rca` to inspect the full raw JUnit output.
+The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
+
+After each run, the tool scans the results directory for JUnit XML files and adds a `steps` array when results are found:
+
+```json
+"steps": [
+  { "testItemId": "1", "title": "TC-Login-001-LoginAndVerify.testcase", "status": "pass" },
+  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "Execution failed: Element not found" }
+]
+```
+
+Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
@@ -1259,12 +1336,15 @@ Uses a 4-step resolution algorithm (explicit path → `~/.sf/config.json` → `p
 
 Analyse a completed test run and return a structured Root Cause Analysis report. Reads `JUnit.xml`, classifies each failure into a root cause category, extracts page object and operation names, and flags pre-existing failures across prior Increment runs.
 
-| Input          | Type    | Required | Description                                               |
-| -------------- | ------- | -------- | --------------------------------------------------------- |
-| `project_path` | string  | yes      | Absolute path to the Provar project root                  |
-| `results_path` | string  | no       | Explicit results directory override                       |
-| `run_index`    | integer | no       | Specific Increment run to analyse (default: latest)       |
-| `locate_only`  | boolean | no       | Skip parsing; return artifact paths only (default: false) |
+| Input          | Type    | Required | Description                                                                                                                              |
+| -------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path` | string  | yes      | Absolute path to the Provar project root                                                                                                 |
+| `results_path` | string  | no       | Explicit results directory override; must be within `--allowed-paths` if provided                                                        |
+| `run_index`    | integer | no       | Specific Increment run to analyse (default: latest)                                                                                      |
+| `locate_only`  | boolean | no       | Skip parsing; return artifact paths only (default: false)                                                                                |
+| `mode`         | string  | no       | `"rca"` (default) — full classification report. `"failures"` — lightweight `[{ testItemId, title, errorMessage }]` array, no RCA fields. |
+
+**mode=rca output fields:**
 
 | Output field            | Description                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------- |
@@ -1276,7 +1356,17 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 | `infrastructure_issues` | Recommendations for infra-category failures (credential, driver, license, etc.) |
 | `recommendations`       | Deduplicated list of all recommended actions                                    |
 
-**`FailureReport` fields:**
+**mode=failures output fields:**
+
+| Output field      | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `results_dir`     | Resolved results directory                                           |
+| `failures`        | `Array<{ testItemId: string, title: string, errorMessage: string }>` |
+| `details.warning` | Set when `JUnit.xml` is absent; `failures` will be empty             |
+
+Use `mode="failures"` when you only need the list of failing test case names without loading the full HTML report. Use `mode="rca"` (default) for root-cause classification and fix recommendations.
+
+**`FailureReport` fields (mode=rca only):**
 
 | Field                 | Description                                              |
 | --------------------- | -------------------------------------------------------- |
@@ -1296,7 +1386,64 @@ Analyse a completed test run and return a structured Root Cause Analysis report.
 
 Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 
-**Error codes:** `RESULTS_NOT_CONFIGURED`
+**Error codes:** `RESULTS_NOT_CONFIGURED`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
+
+---
+
+### `provar.testcase.step.edit`
+
+Atomically add or remove a single step (`<apiCall>`) in a Provar XML test case file. Writes a `.bak` backup before mutating, runs structural validation after the edit, and automatically restores the backup if validation fails.
+
+Prerequisites: the test case file must exist and be valid XML with a `<testCase><steps>` structure.
+
+| Input                 | Type    | Required       | Description                                                                                                             |
+| --------------------- | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `test_case_path`      | string  | yes            | Absolute path to the `.testcase` file; must be within `--allowed-paths`                                                 |
+| `mode`                | string  | yes            | `"remove"` — delete a step; `"add"` — insert a new step                                                                 |
+| `test_item_id`        | string  | yes            | For `remove`: `testItemId` of the step to delete. For `add`: `testItemId` of the anchor step.                           |
+| `position`            | string  | no (add only)  | `"before"` or `"after"` relative to the anchor step (default: `"after"`)                                                |
+| `step_xml`            | string  | yes (add only) | The `<apiCall ...>...</apiCall>` XML fragment for the new step. Must be well-formed and contain an `<apiCall>` element. |
+| `validate_after_edit` | boolean | no             | Run structural validation after the mutation; restores backup on failure (default: `true`)                              |
+
+| Output field   | Description                                                |
+| -------------- | ---------------------------------------------------------- |
+| `success`      | `true` on successful mutation                              |
+| `test_item_id` | The `test_item_id` that was targeted                       |
+| `mode`         | `"remove"` or `"add"`                                      |
+| `validation`   | `TestCaseValidationResult` when `validate_after_edit=true` |
+
+**Error codes:**
+
+| Code                     | Meaning                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `STEP_NOT_FOUND`         | No step with the given `testItemId` found; `details.all_test_item_ids` lists every ID in the file |
+| `INVALID_STEP_XML`       | `step_xml` failed XML parsing or contains no `<apiCall>` element; file is not modified            |
+| `INVALID_XML_AFTER_EDIT` | Post-mutation validation failed; original file has been restored from backup                      |
+| `FILE_NOT_FOUND`         | `test_case_path` does not exist                                                                   |
+| `MISSING_INPUT`          | `step_xml` is required for `mode=add` but was not provided                                        |
+| `PATH_NOT_ALLOWED`       | `test_case_path` or its `.bak` path is outside `--allowed-paths`                                  |
+
+**Example — remove step 3:**
+
+```json
+{
+  "test_case_path": "/projects/myapp/tests/Login.testcase",
+  "mode": "remove",
+  "test_item_id": "3"
+}
+```
+
+**Example — insert a Sleep step after step 2:**
+
+```json
+{
+  "test_case_path": "/projects/myapp/tests/Login.testcase",
+  "mode": "add",
+  "test_item_id": "2",
+  "position": "after",
+  "step_xml": "<apiCall apiId=\"com.provar.plugins.bundled.apis.control.Sleep\" testItemId=\"99\" guid=\"550e8400-e29b-41d4-a716-446655440099\" name=\"Wait 2s\"><arguments><argument apiId=\"sleepTime\" value=\"2000\"/></arguments></apiCall>"
+}
+```
 
 ---
 

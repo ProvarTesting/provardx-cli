@@ -1,14 +1,17 @@
-name: Publish to NPM
+name: Publish to NPM and MCP Registry
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "tag name e.g. beta, latest etc."
+        description: 'tag name e.g. beta, latest etc.'
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,8 +19,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: "https://registry.npmjs.org"
-          scope: "@provartesting"
+          registry-url: 'https://registry.npmjs.org'
+          scope: '@provartesting'
       - name: Install dependencies and build
         run: |
           npm install -g @salesforce/cli
@@ -32,3 +35,15 @@ jobs:
         env:
           TAG: ${{ github.event.inputs.tag || 'latest' }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - name: Sync version into server.json
+        if: github.event_name == 'release'
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
+      - name: Authenticate to MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish to MCP Registry
+        run: ./mcp-publisher publish

@@ -23,9 +23,7 @@ const FilesetSchema = z.object({
   id: z
     .string()
     .optional()
-    .describe(
-      'Fileset id — use "testplan" for plan-based runs, "testcases" for test case runs, omit for default'
-    ),
+    .describe('Fileset id — use "testplan" for plan-based runs, "testcases" for test case runs, omit for default'),
   includes: z
     .array(z.string())
     .optional()
@@ -35,9 +33,7 @@ const FilesetSchema = z.object({
 });
 
 const PlanFeatureSchema = z.object({
-  name: z
-    .enum(['PDF', 'PIECHART', 'EMAIL', 'JUNIT'])
-    .describe('Feature name (PDF, PIECHART, EMAIL, JUNIT)'),
+  name: z.enum(['PDF', 'PIECHART', 'EMAIL', 'JUNIT']).describe('Feature name (PDF, PIECHART, EMAIL, JUNIT)'),
   type: z.enum(['OUTPUT', 'NOTIFICATION']).describe('Feature type'),
   enabled: z.boolean().describe('Whether this feature is enabled'),
 });
@@ -88,9 +84,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
       project_path: z
         .string()
         .default('..')
-        .describe(
-          'Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).'
-        ),
+        .describe('Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).'),
       results_path: z
         .string()
         .default('../ANT/Results')
@@ -98,9 +92,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
       project_cache_path: z
         .string()
         .optional()
-        .describe(
-          'Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.'
-        ),
+        .describe('Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.'),
       license_path: z
         .string()
         .optional()
@@ -130,14 +122,8 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
         .string()
         .default('Full Screen')
         .describe('Browser window configuration (e.g. "Full Screen").'),
-      web_browser_provider_name: z
-        .string()
-        .default('Desktop')
-        .describe('Browser provider name (e.g. "Desktop").'),
-      web_browser_device_name: z
-        .string()
-        .default('Full Screen')
-        .describe('Browser device name (e.g. "Full Screen").'),
+      web_browser_provider_name: z.string().default('Desktop').describe('Browser provider name (e.g. "Desktop").'),
+      web_browser_device_name: z.string().default('Full Screen').describe('Browser device name (e.g. "Full Screen").'),
       test_environment: z
         .string()
         .default('')
@@ -182,10 +168,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
         .describe(
           'When true, the ANT build does not fail even if tests fail. Useful for CI pipelines that collect results separately.'
         ),
-      invoke_test_run_monitor: z
-        .boolean()
-        .default(true)
-        .describe('Enable the Provar test run monitor.'),
+      invoke_test_run_monitor: z.boolean().default(true).describe('Enable the Provar test run monitor.'),
 
       // ── Secrets / security ──────────────────────────────────────────────────
       secrets_password: z
@@ -202,10 +185,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
         ),
 
       // ── Test Cycle ──────────────────────────────────────────────────────────
-      test_cycle_path: z
-        .string()
-        .optional()
-        .describe('Path to a TestCycle folder (used with test cycle reporting).'),
+      test_cycle_path: z.string().optional().describe('Path to a TestCycle folder (used with test cycle reporting).'),
       test_cycle_run_type: z
         .enum(['ALL', 'FAILED', 'NEW'])
         .optional()
@@ -233,14 +213,8 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
         .string()
         .optional()
         .describe('Where to write the build.xml file (returned in response). Required when dry_run=false.'),
-      overwrite: z
-        .boolean()
-        .default(false)
-        .describe('Overwrite output_path if the file already exists.'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('true = return XML only (default); false = write to output_path.'),
+      overwrite: z.boolean().default(false).describe('Overwrite output_path if the file already exists.'),
+      dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path.'),
     },
     (input) => {
       const requestId = makeRequestId();
@@ -296,7 +270,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
         const errResult = makeError(
-          error instanceof PathPolicyError ? error.code : (error.code ?? 'GENERATE_ERROR'),
+          error instanceof PathPolicyError ? error.code : error.code ?? 'GENERATE_ERROR',
           error.message,
           requestId,
           false
@@ -320,14 +294,8 @@ export function registerAntValidate(server: McpServer, config: ServerConfig): vo
       'and at least one <fileset> child. Returns is_valid, issues list, and a validity_score.',
     ].join(' '),
     {
-      content: z
-        .string()
-        .optional()
-        .describe('XML content to validate directly'),
-      file_path: z
-        .string()
-        .optional()
-        .describe('Path to the build.xml file to validate'),
+      content: z.string().optional().describe('XML content to validate directly'),
+      file_path: z.string().optional().describe('Path to the build.xml file to validate'),
     },
     ({ content, file_path }) => {
       const requestId = makeRequestId();
@@ -467,9 +435,7 @@ function buildAntXml(input: AntGenerateInput): string {
       `\t<property name="testenvironment.secretspassword" value="${a(input.test_environment_secrets_password)}"/>`
     );
   } else {
-    lines.push(
-      '\t<property name="testenvironment.secretspassword" value="${env.ProvarSecretsPassword_EnvName}"/>'
-    );
+    lines.push('\t<property name="testenvironment.secretspassword" value="${env.ProvarSecretsPassword_EnvName}"/>');
   }
 
   if (input.test_cycle_path) {
@@ -536,9 +502,7 @@ function buildAntXml(input: AntGenerateInput): string {
   // ── Plan features ─────────────────────────────────────────────────────────────
   if (input.plan_features && input.plan_features.length > 0) {
     for (const pf of input.plan_features) {
-      lines.push(
-        `\t\t\t<planFeature name="${a(pf.name)}" type="${a(pf.type)}" enabled="${pf.enabled}"/>`
-      );
+      lines.push(`\t\t\t<planFeature name="${a(pf.name)}" type="${a(pf.type)}" enabled="${pf.enabled}"/>`);
     }
     lines.push('');
   }
@@ -547,7 +511,11 @@ function buildAntXml(input: AntGenerateInput): string {
   if (input.email_properties) {
     const ep = input.email_properties;
     lines.push(
-      `\t\t\t<emailProperties sendEmail="${ep.send_email}" primaryRecipients="${a(ep.primary_recipients)}" ccRecipients="${a(ep.cc_recipients ?? '')}" bccRecipients="${a(ep.bcc_recipients ?? '')}" emailSubject="${a(ep.email_subject)}" attachExecutionReport="${ep.attach_execution_report}" attachZip="${ep.attach_zip}"/>`
+      `\t\t\t<emailProperties sendEmail="${ep.send_email}" primaryRecipients="${a(
+        ep.primary_recipients
+      )}" ccRecipients="${a(ep.cc_recipients ?? '')}" bccRecipients="${a(ep.bcc_recipients ?? '')}" emailSubject="${a(
+        ep.email_subject
+      )}" attachExecutionReport="${ep.attach_execution_report}" attachZip="${ep.attach_zip}"/>`
     );
   }
 
@@ -589,10 +557,7 @@ export interface AntValidationResult {
   issues: ValidationIssue[];
 }
 
-const REQUIRED_TASKDEF_CLASSNAMES = [
-  'com.provar.testrunner.ant.CompileTask',
-  'com.provar.testrunner.ant.RunnerTask',
-];
+const REQUIRED_TASKDEF_CLASSNAMES = ['com.provar.testrunner.ant.CompileTask', 'com.provar.testrunner.ant.RunnerTask'];
 
 const VALID_BROWSERS = ['Chrome', 'Chrome_Headless', 'Firefox', 'Edge', 'Edge_Legacy', 'Safari', 'IE'];
 const VALID_CACHE = ['Reuse', 'Refresh', 'Reload'];
@@ -667,21 +632,55 @@ function validateProjectStructure(
   return target;
 }
 
-function validateRtcEnumAttrs(rtc: Record<string, unknown>, webBrowser: string | null, issues: ValidationIssue[]): void {
+function validateRtcEnumAttrs(
+  rtc: Record<string, unknown>,
+  webBrowser: string | null,
+  issues: ValidationIssue[]
+): void {
   if (webBrowser && !VALID_BROWSERS.includes(webBrowser)) {
-    issues.push({ rule_id: 'ANT_030', severity: 'WARNING', message: `webBrowser "${webBrowser}" is not a recognised value. Expected one of: ${VALID_BROWSERS.join(', ')}.`, applies_to: 'Run-Test-Case', suggestion: `Use one of the supported browser values: ${VALID_BROWSERS.join(', ')}.` });
+    issues.push({
+      rule_id: 'ANT_030',
+      severity: 'WARNING',
+      message: `webBrowser "${webBrowser}" is not a recognised value. Expected one of: ${VALID_BROWSERS.join(', ')}.`,
+      applies_to: 'Run-Test-Case',
+      suggestion: `Use one of the supported browser values: ${VALID_BROWSERS.join(', ')}.`,
+    });
   }
   const metadataCache = rtc['@_salesforceMetadataCache'] as string | undefined;
   if (metadataCache && !VALID_CACHE.includes(metadataCache)) {
-    issues.push({ rule_id: 'ANT_031', severity: 'WARNING', message: `salesforceMetadataCache "${metadataCache}" is not a recognised value. Expected one of: ${VALID_CACHE.join(', ')}.`, applies_to: 'Run-Test-Case', suggestion: `Use one of: ${VALID_CACHE.join(', ')}.` });
+    issues.push({
+      rule_id: 'ANT_031',
+      severity: 'WARNING',
+      message: `salesforceMetadataCache "${metadataCache}" is not a recognised value. Expected one of: ${VALID_CACHE.join(
+        ', '
+      )}.`,
+      applies_to: 'Run-Test-Case',
+      suggestion: `Use one of: ${VALID_CACHE.join(', ')}.`,
+    });
   }
   const testOutputLevel = rtc['@_testOutputlevel'] as string | undefined;
   if (testOutputLevel && !VALID_OUTPUT_LEVELS.includes(testOutputLevel)) {
-    issues.push({ rule_id: 'ANT_032', severity: 'WARNING', message: `testOutputlevel "${testOutputLevel}" is not a recognised value. Expected one of: ${VALID_OUTPUT_LEVELS.join(', ')}.`, applies_to: 'Run-Test-Case', suggestion: `Use one of: ${VALID_OUTPUT_LEVELS.join(', ')}.` });
+    issues.push({
+      rule_id: 'ANT_032',
+      severity: 'WARNING',
+      message: `testOutputlevel "${testOutputLevel}" is not a recognised value. Expected one of: ${VALID_OUTPUT_LEVELS.join(
+        ', '
+      )}.`,
+      applies_to: 'Run-Test-Case',
+      suggestion: `Use one of: ${VALID_OUTPUT_LEVELS.join(', ')}.`,
+    });
   }
   const disposition = rtc['@_resultsPathDisposition'] as string | undefined;
   if (disposition && !VALID_DISPOSITIONS.includes(disposition)) {
-    issues.push({ rule_id: 'ANT_033', severity: 'WARNING', message: `resultsPathDisposition "${disposition}" is not a recognised value. Expected one of: ${VALID_DISPOSITIONS.join(', ')}.`, applies_to: 'Run-Test-Case', suggestion: `Use one of: ${VALID_DISPOSITIONS.join(', ')}.` });
+    issues.push({
+      rule_id: 'ANT_033',
+      severity: 'WARNING',
+      message: `resultsPathDisposition "${disposition}" is not a recognised value. Expected one of: ${VALID_DISPOSITIONS.join(
+        ', '
+      )}.`,
+      applies_to: 'Run-Test-Case',
+      suggestion: `Use one of: ${VALID_DISPOSITIONS.join(', ')}.`,
+    });
   }
 }
 
@@ -693,22 +692,52 @@ function validateRunTestCase(rtc: Record<string, unknown>, issues: ValidationIss
   const testEnvironment = (rtc['@_testEnvironment'] as string | undefined) ?? null;
 
   if (!provarHome) {
-    issues.push({ rule_id: 'ANT_021', severity: 'ERROR', message: '<Run-Test-Case> missing required "provarHome" attribute.', applies_to: 'Run-Test-Case', suggestion: 'Add provarHome="${provar.home}" to <Run-Test-Case>.' });
+    issues.push({
+      rule_id: 'ANT_021',
+      severity: 'ERROR',
+      message: '<Run-Test-Case> missing required "provarHome" attribute.',
+      applies_to: 'Run-Test-Case',
+      suggestion: 'Add provarHome="${provar.home}" to <Run-Test-Case>.',
+    });
   }
   if (!projectPath) {
-    issues.push({ rule_id: 'ANT_022', severity: 'ERROR', message: '<Run-Test-Case> missing required "projectPath" attribute.', applies_to: 'Run-Test-Case', suggestion: 'Add projectPath="${testproject.home}" to <Run-Test-Case>.' });
+    issues.push({
+      rule_id: 'ANT_022',
+      severity: 'ERROR',
+      message: '<Run-Test-Case> missing required "projectPath" attribute.',
+      applies_to: 'Run-Test-Case',
+      suggestion: 'Add projectPath="${testproject.home}" to <Run-Test-Case>.',
+    });
   }
   if (!resultsPath) {
-    issues.push({ rule_id: 'ANT_023', severity: 'ERROR', message: '<Run-Test-Case> missing required "resultsPath" attribute.', applies_to: 'Run-Test-Case', suggestion: 'Add resultsPath="${testproject.results}" to <Run-Test-Case>.' });
+    issues.push({
+      rule_id: 'ANT_023',
+      severity: 'ERROR',
+      message: '<Run-Test-Case> missing required "resultsPath" attribute.',
+      applies_to: 'Run-Test-Case',
+      suggestion: 'Add resultsPath="${testproject.results}" to <Run-Test-Case>.',
+    });
   }
   validateRtcEnumAttrs(rtc, webBrowser, issues);
   const filesets = (rtc['fileset'] as Array<Record<string, unknown>> | undefined) ?? [];
   if (filesets.length === 0) {
-    issues.push({ rule_id: 'ANT_040', severity: 'ERROR', message: '<Run-Test-Case> has no <fileset> children — no tests will be selected.', applies_to: 'Run-Test-Case', suggestion: 'Add at least one <fileset dir="..."/> pointing to your tests or plans folder.' });
+    issues.push({
+      rule_id: 'ANT_040',
+      severity: 'ERROR',
+      message: '<Run-Test-Case> has no <fileset> children — no tests will be selected.',
+      applies_to: 'Run-Test-Case',
+      suggestion: 'Add at least one <fileset dir="..."/> pointing to your tests or plans folder.',
+    });
   }
   for (const [i, fsEntry] of filesets.entries()) {
     if (!(fsEntry['@_dir'] as string | undefined)) {
-      issues.push({ rule_id: 'ANT_041', severity: 'ERROR', message: `<fileset> at index ${i} is missing required "dir" attribute.`, applies_to: 'fileset', suggestion: 'Add dir="..." to each <fileset> element.' });
+      issues.push({
+        rule_id: 'ANT_041',
+        severity: 'ERROR',
+        message: `<fileset> at index ${i} is missing required "dir" attribute.`,
+        applies_to: 'fileset',
+        suggestion: 'Add dir="..." to each <fileset> element.',
+      });
     }
   }
   return { provarHome, projectPath, resultsPath, webBrowser, testEnvironment, filesetCount: filesets.length };
@@ -734,8 +763,7 @@ export function validateAntXml(xmlContent: string): AntValidationResult {
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
     parseAttributeValue: false,
-    isArray: (tagName) =>
-      ['taskdef', 'target', 'fileset', 'include', 'planFeature'].includes(tagName),
+    isArray: (tagName) => ['taskdef', 'target', 'fileset', 'include', 'planFeature'].includes(tagName),
   });
   let parsed: Record<string, unknown>;
   try {
@@ -797,8 +825,10 @@ export function validateAntXml(xmlContent: string): AntValidationResult {
     return finalizeAnt(issues, null, null, null, null, null, 0);
   }
 
-  const { provarHome, projectPath, resultsPath, webBrowser, testEnvironment, filesetCount } =
-    validateRunTestCase(rtc, issues);
+  const { provarHome, projectPath, resultsPath, webBrowser, testEnvironment, filesetCount } = validateRunTestCase(
+    rtc,
+    issues
+  );
 
   return finalizeAnt(issues, provarHome, projectPath, resultsPath, webBrowser, testEnvironment, filesetCount);
 }
@@ -829,6 +859,156 @@ function finalizeAnt(
     warning_count: warningCount,
     issues,
   };
+}
+
+// ── JUnit XML step parsing ────────────────────────────────────────────────────
+
+export interface JUnitStepResult {
+  testItemId: string;
+  title: string;
+  status: 'pass' | 'fail' | 'skip';
+  errorMessage?: string;
+}
+
+export interface JUnitParseResult {
+  steps: JUnitStepResult[];
+  warning?: string;
+}
+
+function extractFailureText(el: unknown): string | undefined {
+  if (!el) return undefined;
+  if (typeof el === 'string') return el.trim() || undefined;
+  if (typeof el === 'object') {
+    const obj = el as Record<string, unknown>;
+    // Prefer CDATA body ('#text') — it has the specific error. Fall back to 'message' attribute.
+    const body = (obj['#text'] as string | undefined)?.trim();
+    const msg = (obj['message'] as string | undefined)?.trim();
+    if (body && msg && body !== msg) return `${msg}: ${body}`;
+    return body ?? msg;
+  }
+  return undefined;
+}
+
+function extractStepsFromJUnit(parsed: Record<string, unknown>): JUnitStepResult[] {
+  const steps: JUnitStepResult[] = [];
+  let idx = 0;
+
+  // Normalise to array of suites — handles both <testsuites> and bare <testsuite>
+  let suites: Array<Record<string, unknown>> = [];
+  if (parsed['testsuites']) {
+    const inner = (parsed['testsuites'] as Record<string, unknown>)['testsuite'];
+    suites = Array.isArray(inner)
+      ? (inner as Array<Record<string, unknown>>)
+      : inner
+      ? [inner as Record<string, unknown>]
+      : [];
+  } else if (parsed['testsuite']) {
+    const ts = parsed['testsuite'];
+    suites = Array.isArray(ts) ? (ts as Array<Record<string, unknown>>) : [ts as Record<string, unknown>];
+  }
+
+  for (const suite of suites) {
+    const rawTc = suite['testcase'];
+    if (!rawTc) continue;
+    const testcases: Array<Record<string, unknown>> = Array.isArray(rawTc)
+      ? (rawTc as Array<Record<string, unknown>>)
+      : [rawTc as Record<string, unknown>];
+
+    for (const tc of testcases) {
+      idx++;
+      // Provar JUnit: name = test case file name (no attribute prefix since attributeNamePrefix: '')
+      const title = (tc['name'] as string | undefined) ?? `Test ${idx}`;
+      const hasFailure = 'failure' in tc || 'error' in tc;
+      const hasSkipped = 'skipped' in tc;
+
+      let status: 'pass' | 'fail' | 'skip' = 'pass';
+      if (hasFailure) status = 'fail';
+      else if (hasSkipped) status = 'skip';
+
+      const errorMessage = extractFailureText(tc['failure'] ?? tc['error']);
+      const step: JUnitStepResult = { testItemId: String(idx), title, status };
+      if (errorMessage) step.errorMessage = errorMessage;
+      steps.push(step);
+    }
+  }
+
+  return steps;
+}
+
+function findXmlFiles(dir: string): string[] {
+  const results: string[] = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.xml') && !entry.name.startsWith('.')) {
+        results.push(path.join(dir, entry.name));
+      }
+    }
+  } catch {
+    // ignore unreadable dirs
+  }
+  return results;
+}
+
+/**
+ * Scan a Provar results directory for JUnit XML files and return structured step results.
+ * Returns an empty steps array (+ optional warning) when no XML is found or parsing fails.
+ */
+export function parseJUnitResults(resultsDir: string): JUnitParseResult {
+  if (!fs.existsSync(resultsDir)) {
+    return { steps: [], warning: `Results directory not found: ${resultsDir}` };
+  }
+
+  const xmlFiles = findXmlFiles(resultsDir);
+  if (xmlFiles.length === 0) {
+    return {
+      steps: [],
+      warning: 'No JUnit XML files found in results directory — structured step output unavailable.',
+    };
+  }
+
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: '',
+    textNodeName: '#text',
+    allowBooleanAttributes: true,
+    parseAttributeValue: false,
+    isArray: (tagName) => ['testsuite', 'testcase'].includes(tagName),
+  });
+
+  const allSteps: JUnitStepResult[] = [];
+  let parsedAny = false;
+  let parseFailures = 0;
+
+  for (const xmlFile of xmlFiles) {
+    try {
+      const content = fs.readFileSync(xmlFile, 'utf-8');
+      const parsed = parser.parse(content) as Record<string, unknown>;
+      const steps = extractStepsFromJUnit(parsed);
+      allSteps.push(...steps);
+      parsedAny = true;
+    } catch {
+      parseFailures++;
+    }
+  }
+
+  if (!parsedAny) {
+    return {
+      steps: [],
+      warning: 'JUnit XML files found but could not be parsed — structured step output unavailable.',
+    };
+  }
+  if (allSteps.length === 0) {
+    return {
+      steps: [],
+      warning: 'JUnit XML found but no test steps could be extracted — files may not be standard JUnit format.',
+    };
+  }
+
+  const warning =
+    parseFailures > 0
+      ? `${parseFailures} JUnit XML file(s) could not be parsed — step data may be incomplete.`
+      : undefined;
+  return { steps: allSteps, warning };
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────

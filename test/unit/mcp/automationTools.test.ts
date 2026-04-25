@@ -17,6 +17,7 @@ import {
   needsWindowsShell,
   setSfPlatformForTesting,
   filterTestRunOutput,
+  setSfResultsPathForTesting,
 } from '../../../src/mcp/tools/automationTools.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
@@ -155,6 +156,76 @@ describe('automationTools', () => {
       const result = server.call('provar.automation.testrun', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.output_lines_suppressed, undefined, 'output_lines_suppressed should be absent');
+    });
+
+    it('includes structured steps[] when JUnit XML is present in results dir', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-test-'));
+      const junitXml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="MyTest">
+  <testcase name="Login to Salesforce"/>
+  <testcase name="Click Account">
+    <failure message="Element not found">stack trace</failure>
+  </testcase>
+  <testcase name="Verify Name">
+    <skipped/>
+  </testcase>
+</testsuite>`;
+      fs.writeFileSync(path.join(tmpDir, 'results.xml'), junitXml, 'utf-8');
+      setSfResultsPathForTesting(tmpDir);
+
+      try {
+        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        const result = server.call('provar.automation.testrun', { flags: [] });
+        const body = parseBody(result);
+        assert.ok(Array.isArray(body.steps), 'steps should be an array');
+        const steps = body.steps as Array<{ testItemId: string; title: string; status: string; errorMessage?: string }>;
+        assert.equal(steps.length, 3);
+        assert.equal(steps[0].status, 'pass');
+        assert.equal(steps[1].status, 'fail');
+        assert.ok(
+          (steps[1].errorMessage as string).includes('Element not found'),
+          'errorMessage should include the failure message'
+        );
+        assert.equal(steps[2].status, 'skip');
+      } finally {
+        setSfResultsPathForTesting(undefined);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('omits steps[] and adds details.warning when results dir has no XML', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-empty-'));
+      setSfResultsPathForTesting(tmpDir);
+
+      try {
+        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        const result = server.call('provar.automation.testrun', { flags: [] });
+        const body = parseBody(result);
+        assert.equal(body.steps, undefined, 'steps should be absent when no XML found');
+        assert.ok(body.details, 'details should be present');
+        const details = body.details as Record<string, unknown>;
+        assert.ok(typeof details.warning === 'string', 'details.warning should be a string');
+      } finally {
+        setSfResultsPathForTesting(undefined);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    });
+
+    it('omits steps[] and adds details.warning when results dir contains malformed XML', () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-bad-'));
+      fs.writeFileSync(path.join(tmpDir, 'results.xml'), '<not valid xml < >', 'utf-8');
+      setSfResultsPathForTesting(tmpDir);
+
+      try {
+        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        const result = server.call('provar.automation.testrun', { flags: [] });
+        const body = parseBody(result);
+        assert.equal(body.steps, undefined, 'steps should be absent when XML is malformed');
+        assert.ok(body.details, 'details should be present with warning');
+      } finally {
+        setSfResultsPathForTesting(undefined);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
     });
   });
 

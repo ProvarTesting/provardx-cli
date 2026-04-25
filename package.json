@@ -1,8 +1,8 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
-  "version": "1.5.0-beta.9",
-  "mcpName": "io.github.provartesting/provar",
+  "version": "1.5.0-beta.11",
+  "mcpName": "io.github.ProvarTesting/provar",
   "license": "BSD-3-Clause",
   "plugins": [
     "@provartesting/provardx-plugins-automation",
