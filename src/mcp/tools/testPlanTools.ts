@@ -106,6 +106,7 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
         }
 
         const planDir = path.join(projectRoot, 'plans', plan_name);
+        assertPathAllowed(planDir, config.allowedPaths);
         const planItemPath = path.join(planDir, '.planitem');
 
         if (!overwrite && fs.existsSync(planItemPath)) {

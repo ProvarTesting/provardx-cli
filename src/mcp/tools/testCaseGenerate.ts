@@ -266,12 +266,12 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
 // APIs whose 'values' argument must use class="valueList"/<namedValues> (D3).
 const SET_VALUES_APIS = new Set([
-  SHORTHAND_TO_FQID['SetValues'],   // com.provar.plugins.bundled.apis.control.SetValues
-  SHORTHAND_TO_FQID['AssertValues'], // com.provar.plugins.bundled.apis.AssertValues
+  SHORTHAND_TO_FQID['SetValues'] ?? '', // com.provar.plugins.bundled.apis.control.SetValues
 ]);
 
 // Build the <value> element for a single argument (D2/D4 aware).
-function buildArgumentValue(key: string, val: string, indent: string): string {
+// inNamedValues: when true (inside SetValues namedValues), skip uiTarget/uiLocator dispatch.
+function buildArgumentValue(key: string, val: string, indent: string, inNamedValues = false): string {
   // D4: {VarName} or {Obj.Field} → class="variable" with <path> elements.
   const varMatch = /^\{([\w.]+)\}$/.exec(val);
   if (varMatch) {
@@ -281,13 +281,15 @@ function buildArgumentValue(key: string, val: string, indent: string): string {
       .join('\n');
     return `${indent}<value class="variable">\n${pathElements}\n${indent}</value>`;
   }
-  // D2: 'target' argument (UiWithScreen / UiWithRow) → class="uiTarget".
-  if (key === 'target') {
-    return `${indent}<value class="uiTarget" uri="${escapeXmlAttr(val)}"/>`;
-  }
-  // D2: 'locator' argument (UiDoAction / UiAssert) → class="uiLocator".
-  if (key === 'locator') {
-    return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
+  if (!inNamedValues) {
+    // D2: 'target' argument (UiWithScreen / UiWithRow) → class="uiTarget".
+    if (key === 'target') {
+      return `${indent}<value class="uiTarget" uri="${escapeXmlAttr(val)}"/>`;
+    }
+    // D2: 'locator' argument (UiDoAction / UiAssert) → class="uiLocator".
+    if (key === 'locator') {
+      return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
+    }
   }
   return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
 }
@@ -308,14 +310,14 @@ function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '   
   return `\n${baseIndent}<arguments>\n${argLines}\n${baseIndent}</arguments>\n${baseIndent.slice(0, -2)}`;
 }
 
-// D3: SetValues / AssertValues — all attributes become <namedValues> under a single 'values' argument.
+// D3: SetValues — all attributes become <namedValues> under a single 'values' argument.
 function buildSetValuesXml(attributes: Record<string, string>, baseIndent: string): string {
   const entries = Object.entries(attributes);
   if (entries.length === 0) return '';
   const i = (n: number): string => baseIndent + '  '.repeat(n);
   const namedValueLines = entries
     .map(([name, val]) => {
-      const valueXml = buildArgumentValue(name, val, `${i(3)}  `);
+      const valueXml = buildArgumentValue(name, val, `${i(3)}  `, true);
       return `${i(3)}<namedValue name="${escapeXmlAttr(name)}">\n${valueXml}\n${i(3)}</namedValue>`;
     })
     .join('\n');
@@ -328,7 +330,7 @@ function buildSetValuesXml(attributes: Record<string, string>, baseIndent: strin
     `${i(2)}</namedValues>\n` +
     `${i(1)}</value>\n` +
     `${i(0)}</argument>\n` +
-    `${baseIndent.slice(0, -2)}</arguments>\n` +
+    `${i(0)}</arguments>\n` +
     `${baseIndent.slice(0, -2)}`
   );
 }

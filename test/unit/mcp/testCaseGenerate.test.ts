@@ -548,7 +548,7 @@ describe('provar.testcase.generate', () => {
       );
     });
 
-    it('AssertValues also emits valueList/namedValues structure', () => {
+    it('AssertValues uses flat argument structure (not valueList)', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'AssertValues Test',
         steps: [
@@ -564,8 +564,9 @@ describe('provar.testcase.generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('class="valueList"'), 'Expected valueList for AssertValues');
-      assert.ok(xml.includes('<namedValue name="opportunityName">'), 'Expected namedValue for opportunityName');
+      assert.ok(xml.includes('<argument id="opportunityName">'), 'Expected flat argument id for AssertValues');
+      assert.ok(!xml.includes('class="valueList"'), 'AssertValues must NOT emit valueList structure');
+      assert.ok(!xml.includes('<namedValue'), 'AssertValues must NOT emit namedValue elements');
     });
 
     it('non-SetValues steps still use flat argument structure', () => {
