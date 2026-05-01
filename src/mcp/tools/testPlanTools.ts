@@ -105,6 +105,17 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
           };
         }
 
+        if (plan_name.includes('/') || plan_name.includes('\\') || path.isAbsolute(plan_name)) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('INVALID_PLAN_NAME', `plan_name must be a simple directory name without path separators: "${plan_name}"`, requestId)),
+              },
+            ],
+          };
+        }
         const planDir = path.join(projectRoot, 'plans', plan_name);
         assertPathAllowed(planDir, config.allowedPaths);
         const planItemPath = path.join(planDir, '.planitem');

@@ -642,7 +642,7 @@ Generates an XML test case skeleton with UUID v4 guids and sequential `testItemI
 | Argument key / value pattern         | Emitted XML class             | API context                         |
 | ------------------------------------ | ----------------------------- | ----------------------------------- |
 | `target` key                         | `class="uiTarget"`            | UiWithScreen, UiWithRow             |
-| `locator` key                        | `class="uiLocator"`           | UiDoAction, UiAssert                |
+| `locator` key                        | `class="uiLocator"`           | UiDoAction, UiAssert, UiScrollToElement |
 | Value matches `{VarName}` or `{A.B}` | `class="variable"` + `<path>` | Any step                            |
 | SetValues attributes                 | `class="valueList"/<namedValues>` | SetValues only                  |
 | All other values                     | `class="value" valueClass="string"` | Any step                      |
@@ -713,7 +713,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
-- **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
+- **UI-LOCATOR-001** — A UiDoAction, UiAssert, or UiScrollToElement `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
 

@@ -105,12 +105,13 @@ const StepSchema = z.object({
         'Special value conventions (applied automatically by the generator): ' +
         '(1) Variable references: wrap the name in braces, e.g. "{MyVar}" → emitted as class="variable" <path element="MyVar"/>. ' +
         '    Dotted paths are also supported: "{Obj.Field}" → two <path> elements. ' +
-        '(2) SetValues / AssertValues: pass each variable name and its value as a flat key/value pair; ' +
+        '(2) SetValues: pass each variable name and its value as a flat key/value pair; ' +
         '    the generator wraps them in <value class="valueList"><namedValues>...</namedValues></value> automatically. ' +
-        '    Example for SetValues: { "testCaseName": "TC_New", "testType": "Acceptance testing" } ' +
-        '(3) target argument (UiWithScreen / UiWithRow): pass the sf:ui:target or ui:pageobject:target URI; ' +
+        '    Example: { "testCaseName": "TC_New", "testType": "Acceptance testing" } ' +
+        '(3) AssertValues: pass assertion arguments as flat key/value pairs; emitted as flat <argument> elements, NOT wrapped in valueList/namedValues. ' +
+        '(4) target argument (UiWithScreen / UiWithRow): pass the sf:ui:target or ui:pageobject:target URI; ' +
         '    emitted as class="uiTarget" uri="...". ' +
-        '(4) locator argument (UiDoAction / UiAssert): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
+        '(5) locator argument (UiDoAction / UiAssert / UiScrollToElement): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
         'All other string values use class="value" valueClass="string".'
     ),
 });
@@ -130,11 +131,13 @@ const TOOL_DESCRIPTION = [
   'ApexReadObject requires field names in attributes; omitting them produces MALFORMED_QUERY. Prefer ApexSoqlQuery.',
   'AssertValues on SOQL results: index paths like "ResultList[0].Field" are not supported.',
   'Use ForEach to iterate the result list, or SetValues to extract a field into a variable first.',
-  'SetValues / AssertValues: pass named variable values as flat key/value pairs in attributes; ' +
+  'SetValues: pass named variable values as flat key/value pairs in attributes; ' +
     'the generator wraps them in <value class="valueList"><namedValues>...</namedValues></value> automatically.',
+  'AssertValues: pass assertion values as flat key/value argument pairs; emitted as flat arguments, NOT wrapped in namedValues. ' +
+    'If AssertValues uses namedValues-shaped content, validation reports warning ASSERT-001.',
   'Variable references: pass values as "{VarName}" (braces); emitted as class="variable" <path element="VarName"/>.',
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
-  'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
+  'locator argument (UiDoAction/UiAssert/UiScrollToElement): pass the URI value; emitted as class="uiLocator" uri="...".',
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
   'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
@@ -264,14 +267,10 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
 // ── XML builder ───────────────────────────────────────────────────────────────
 
-// APIs whose 'values' argument must use class="valueList"/<namedValues> (D3).
-const SET_VALUES_APIS = new Set([
-  SHORTHAND_TO_FQID['SetValues'] ?? '', // com.provar.plugins.bundled.apis.control.SetValues
-]);
-
 // Build the <value> element for a single argument (D2/D4 aware).
 // inNamedValues: when true (inside SetValues namedValues), skip uiTarget/uiLocator dispatch.
-function buildArgumentValue(key: string, val: string, indent: string, inNamedValues = false): string {
+// apiId: resolved API ID used to restrict key-name dispatch to the correct UI APIs.
+function buildArgumentValue(key: string, val: string, indent: string, inNamedValues = false, apiId = ''): string {
   // D4: {VarName} or {Obj.Field} → class="variable" with <path> elements.
   const varMatch = /^\{([\w.]+)\}$/.exec(val);
   if (varMatch) {
@@ -282,24 +281,27 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
     return `${indent}<value class="variable">\n${pathElements}\n${indent}</value>`;
   }
   if (!inNamedValues) {
-    // D2: 'target' argument (UiWithScreen / UiWithRow) → class="uiTarget".
-    if (key === 'target') {
+    // D2: 'target' argument → class="uiTarget" (only for UiWithScreen / UiWithRow).
+    if (key === 'target' && (apiId.includes('UiWithScreen') || apiId.includes('UiWithRow'))) {
       return `${indent}<value class="uiTarget" uri="${escapeXmlAttr(val)}"/>`;
     }
-    // D2: 'locator' argument (UiDoAction / UiAssert) → class="uiLocator".
-    if (key === 'locator') {
+    // D2: 'locator' argument → class="uiLocator" (only for UiDoAction / UiAssert / UiScrollToElement).
+    if (
+      key === 'locator' &&
+      (apiId.includes('UiDoAction') || apiId.includes('UiAssert') || apiId.includes('UiScrollToElement'))
+    ) {
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
   }
   return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
 }
 
-function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      '): string {
+function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      ', apiId = ''): string {
   const entries = Object.entries(attributes);
   if (entries.length === 0) return '';
   const argLines = entries
     .map(([k, v]) => {
-      const valueXml = buildArgumentValue(k, v, `${baseIndent}  `);
+      const valueXml = buildArgumentValue(k, v, `${baseIndent}  `, false, apiId);
       return (
         `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` +
         valueXml + '\n' +
@@ -343,9 +345,10 @@ function buildFlatStepXml(
   const guid = randomUUID();
   const resolvedApiId = resolveApiId(step.api_id);
   const baseIndent = indent + '  ';
-  const argumentsXml = SET_VALUES_APIS.has(resolvedApiId)
+  // Use SetValues structure for any SetValues API (string-match mirrors the validator).
+  const argumentsXml = resolvedApiId.includes('SetValues')
     ? buildSetValuesXml(step.attributes, baseIndent)
-    : buildArgumentsXml(step.attributes, baseIndent);
+    : buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
   if (argumentsXml) {
     return (
       `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
@@ -406,7 +409,7 @@ function buildUiWithScreenXml(
     '      </clauses>\n    ';
   return (
     `    <apiCall guid="${wrapperGuid}" apiId="${wrapperApiId}"` +
-    ` name="With page" testItemId="1">${buildArgumentsXml({ target: targetUri }).trimEnd()}${clausesXml}</apiCall>`
+    ` name="With page" testItemId="1">${buildArgumentsXml({ target: targetUri }, '      ', wrapperApiId).trimEnd()}${clausesXml}</apiCall>`
   );
 }
 
