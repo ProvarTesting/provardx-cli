@@ -312,7 +312,31 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     validateApiCall(call, issues);
   }
 
+  // VAR-REF-001 (gap in both local and quality-hub-agents backend):
+  // Detect {VarName} or {Obj.Field} literals stored as plain string values.
+  // Provar will pass these as-is to the API rather than resolving them as variable references.
+  const varLiteralRe = /<value[^>]+valueClass="string"[^>]*>\{([\w.]+)\}<\/value>/g;
+  let varMatch: RegExpExecArray | null;
+  while ((varMatch = varLiteralRe.exec(xmlContent)) !== null) {
+    issues.push({
+      rule_id: 'VAR-REF-001',
+      severity: 'WARNING',
+      message: `Argument value "{${varMatch[1]}}" looks like a variable reference but is stored as a plain string — Provar will not resolve it at runtime.`,
+      applies_to: 'argument',
+      suggestion: `Replace with <value class="variable"><path element="${varMatch[1].split('.').join('"/><path element="')}"/></value>. In provar.testcase.generate, use the {VarName} syntax in the attributes object — the generator converts it automatically.`,
+    });
+  }
+
   return finalize(issues, tcId, tcName, apiCalls.length, xmlContent, testName);
+}
+
+/** Normalise fast-xml-parser's single-or-array representation of <argument> children. */
+function getArgList(call: Record<string, unknown>): Array<Record<string, unknown>> {
+  const rawArgs = call['arguments'] as Record<string, unknown> | undefined;
+  if (!rawArgs) return [];
+  const argRaw = rawArgs['argument'];
+  if (!argRaw) return [];
+  return (Array.isArray(argRaw) ? argRaw : [argRaw]) as Array<Record<string, unknown>>;
 }
 
 function validateApiCall(call: Record<string, unknown>, issues: ValidationIssue[]): void {
@@ -376,29 +400,97 @@ function validateApiCall(call: Record<string, unknown>, issues: ValidationIssue[
     });
   }
 
-  // ASSERT-001: AssertValues using UI namedValues format instead of variable format
-  if (apiId?.includes('AssertValues')) {
-    const rawArgs = call['arguments'] as Record<string, unknown> | undefined;
-    if (rawArgs) {
-      const argRaw = rawArgs['argument'];
-      const argList: Array<Record<string, unknown>> = !argRaw
-        ? []
-        : Array.isArray(argRaw)
-        ? (argRaw as Array<Record<string, unknown>>)
-        : [argRaw as Record<string, unknown>];
-      const hasValuesArg = argList.some((a) => (a['@_id'] as string | undefined) === 'values');
-      if (hasValuesArg) {
+  if (apiId) validateApiCallArgs(call, apiId, name, issues);
+}
+
+function checkUiTarget(call: Record<string, unknown>, apiId: string, stepName: string, issues: ValidationIssue[]): void {
+  const targetArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'target');
+  if (!targetArg) return;
+  const valClass = (targetArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
+  if (valClass && valClass !== 'uiTarget') {
+    const apiLabel = apiId.includes('UiWithRow') ? 'UiWithRow' : 'UiWithScreen';
+    issues.push({
+      rule_id: 'UI-TARGET-001',
+      severity: 'ERROR',
+      message: `${apiLabel} step "${stepName}" target argument uses class="${valClass}" — must be class="uiTarget".`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Emit the target as: <value class="uiTarget" uri="sf:ui:target?..."/> or uri="ui:pageobject:target?pageId=...". ' +
+        'In provar.testcase.generate the "target" attribute is converted automatically.',
+    });
+  }
+}
+
+function validateApiCallArgs(
+  call: Record<string, unknown>,
+  apiId: string,
+  name: string | undefined,
+  issues: ValidationIssue[]
+): void {
+  const stepName = name ?? '(unnamed)';
+
+  // UI-TARGET-001 (mirrors quality-hub-agents UI-SCREEN-TARGET-001):
+  // UiWithScreen / UiWithRow target argument must use class="uiTarget", not a plain string.
+  // A plain string causes: "Can not set IUiTargetValue field ... to java.lang.String"
+  if (apiId.includes('UiWithScreen') || apiId.includes('UiWithRow')) {
+    checkUiTarget(call, apiId, stepName, issues);
+  }
+
+  // UI-LOCATOR-001 (local rule, no direct backend equivalent):
+  // UiDoAction / UiAssert / UiScrollToElement locator argument must use class="uiLocator".
+  if (apiId.includes('UiDoAction') || apiId.includes('UiAssert') || apiId.includes('UiScrollToElement')) {
+    const locatorArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'locator');
+    if (locatorArg) {
+      const valClass = (locatorArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
+      if (valClass && valClass !== 'uiLocator') {
         issues.push({
-          rule_id: 'ASSERT-001',
-          severity: 'WARNING',
-          message: `AssertValues step "${
-            name ?? '(unnamed)'
-          }" uses namedValues format (argument id="values") — designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as null=null.`,
+          rule_id: 'UI-LOCATOR-001',
+          severity: 'ERROR',
+          message: `"${stepName}" locator argument uses class="${valClass}" — must be class="uiLocator".`,
           applies_to: 'apiCall',
           suggestion:
-            'Use separate expectedValue, actualValue, and comparisonType arguments for variable or Apex result comparisons.',
+            'Emit the locator as: <value class="uiLocator" uri="sf:ui:locator:..."/>. ' +
+            'In provar.testcase.generate the "locator" attribute is converted automatically.',
         });
       }
+    }
+  }
+
+  // SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):
+  // SetValues values argument must use class="valueList" with <namedValues> children.
+  // A plain string value causes an immediate ClassCastException at runtime.
+  if (apiId.includes('SetValues') && !apiId.includes('AssertValues')) {
+    const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
+    if (valuesArg) {
+      const valClass = (valuesArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
+      if (valClass && valClass !== 'valueList') {
+        issues.push({
+          rule_id: 'SETVALUES-STRUCTURE-001',
+          severity: 'ERROR',
+          message: `SetValues step "${stepName}" values argument uses class="${valClass}" — must use class="valueList" with <namedValues> children.`,
+          applies_to: 'apiCall',
+          suggestion:
+            'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
+            '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
+            '</namedValues></value>. In provar.testcase.generate pass each variable as a flat key/value pair ' +
+            'in attributes — the generator builds the valueList structure automatically.',
+        });
+      }
+    }
+  }
+
+  // ASSERT-001: AssertValues using UI namedValues format instead of variable format
+  if (apiId.includes('AssertValues')) {
+    const hasValuesArg = getArgList(call).some((a) => (a['@_id'] as string | undefined) === 'values');
+    if (hasValuesArg) {
+      issues.push({
+        rule_id: 'ASSERT-001',
+        severity: 'WARNING',
+        message: `AssertValues step "${stepName}" uses namedValues format (argument id="values") — designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as null=null.`,
+        applies_to: 'apiCall',
+        suggestion:
+          'Use separate expectedValue, actualValue, and comparisonType arguments for variable or Apex result comparisons.',
+      });
     }
   }
 }

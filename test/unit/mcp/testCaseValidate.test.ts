@@ -293,6 +293,347 @@ describe('validateTestCase', () => {
       assert.ok(!r.issues.some((i) => i.rule_id === 'ASSERT-001'), 'ASSERT-001 should not fire for SetValues');
     });
   });
+
+  describe('UI-TARGET-001', () => {
+    it('errors when UiWithScreen target argument uses class="value" (plain string)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Open screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="value" valueClass="string">sf:ui:target?object=Account</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'Expected UI-TARGET-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-TARGET-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('uiTarget'), `Message should mention uiTarget: ${issue.message}`);
+    });
+
+    it('does not fire when UiWithScreen target uses class="uiTarget"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Open screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Account"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'UI-TARGET-001 should not fire for correct uiTarget class'
+      );
+    });
+
+    it('does not fire when UiWithScreen has no target argument', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Open screen" testItemId="1">
+      <arguments>
+        <argument id="windowSize"><value class="value" valueClass="string">1280</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'UI-TARGET-001 should not fire when no target argument present'
+      );
+    });
+
+    it('also fires for UiWithRow steps with wrong target class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow" name="Row step" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="value" valueClass="string">sf:ui:target?object=Account</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'Expected UI-TARGET-001 for UiWithRow'
+      );
+    });
+  });
+
+  describe('UI-LOCATOR-001', () => {
+    it('errors when UiDoAction locator argument uses class="value" (plain string)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Save</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-LOCATOR-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('uiLocator'), `Message should mention uiLocator: ${issue.message}`);
+    });
+
+    it('does not fire when UiDoAction locator uses class="uiLocator"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Save"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should not fire for correct uiLocator class'
+      );
+    });
+
+    it('also fires for UiAssert steps with wrong locator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001 for UiAssert'
+      );
+    });
+  });
+
+  describe('SETVALUES-STRUCTURE-001', () => {
+    it('errors when SetValues values argument uses class="value" (plain string)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.SetValues" name="Set vars" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="value" valueClass="string">myVar=hello</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'Expected SETVALUES-STRUCTURE-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'SETVALUES-STRUCTURE-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('valueList'), `Message should mention valueList: ${issue.message}`);
+    });
+
+    it('does not fire when SetValues values argument uses class="valueList"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.SetValues" name="Set vars" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues>
+              <namedValue name="myVar">
+                <value class="value" valueClass="string">hello</value>
+              </namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'SETVALUES-STRUCTURE-001 should not fire for correct valueList structure'
+      );
+    });
+
+    it('does not fire when SetValues has no values argument (self-closing)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.SetValues" name="Set vars" testItemId="1">
+      <arguments/>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'SETVALUES-STRUCTURE-001 should not fire when no values argument present'
+      );
+    });
+
+    it('does not fire for AssertValues (only targets SetValues)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.AssertValues" name="Assert" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="value" valueClass="string">myVar=hello</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'SETVALUES-STRUCTURE-001 should not fire for AssertValues'
+      );
+    });
+  });
+
+  describe('VAR-REF-001', () => {
+    it('warns when a plain string value contains a {VarName} pattern', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Use var" testItemId="1">
+      <arguments>
+        <argument id="accountId">
+          <value class="value" valueClass="string">{AccountId}</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
+        'Expected VAR-REF-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'VAR-REF-001')!;
+      assert.equal(issue.severity, 'WARNING');
+      assert.ok(issue.message.includes('{AccountId}'), `Message should include variable name: ${issue.message}`);
+    });
+
+    it('warns for dotted path {Obj.Field} stored as plain string', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Use obj" testItemId="1">
+      <arguments>
+        <argument id="name">
+          <value class="value" valueClass="string">{Record.Name}</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
+        'Expected VAR-REF-001 for dotted path'
+      );
+      assert.ok(
+        r.issues.find((i) => i.rule_id === 'VAR-REF-001')!.message.includes('{Record.Name}'),
+        'Message should include dotted variable name'
+      );
+    });
+
+    it('does not fire when value uses class="variable" (correct structure)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Use var" testItemId="1">
+      <arguments>
+        <argument id="accountId">
+          <value class="variable">
+            <path element="AccountId"/>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
+        'VAR-REF-001 should not fire for correct class="variable" structure'
+      );
+    });
+
+    it('does not fire for plain string content without curly braces', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Use literal" testItemId="1">
+      <arguments>
+        <argument id="name">
+          <value class="value" valueClass="string">John Smith</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
+        'VAR-REF-001 should not fire for plain string without curly braces'
+      );
+    });
+  });
 });
 
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────
