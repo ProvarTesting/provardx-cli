@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -47,3 +49,81 @@ jobs:
         run: ./mcp-publisher login github-oidc
       - name: Publish to MCP Registry
         run: ./mcp-publisher publish
+
+      - name: Build Slack notification payload
+        if: success()
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${{ github.event.inputs.tag || 'latest' }}"
+
+          # --- Determine change notes source ---
+          if [ -n "$RELEASE_BODY" ]; then
+            # GitHub Release body provided — use it verbatim
+            NOTES="$RELEASE_BODY"
+          else
+            # Auto-extract from git log since the previous tag
+            if [ "${{ github.event_name }}" = "release" ]; then
+              # For a release event HEAD is already the new tag; find the one before it
+              PREV=$(git tag --sort=-creatordate | awk "/^${GITHUB_REF_NAME}$/{found=1;next} found{print;exit}")
+            else
+              # For a manual dispatch use the most recent existing tag
+              PREV=$(git tag --sort=-creatordate | head -1)
+            fi
+
+            RANGE="${PREV:+${PREV}..}HEAD"
+
+            RAW=$(git log --pretty=format:"%s" $RANGE \
+              | sed 's/^[A-Z][A-Z0-9]*-[0-9]*: //' \
+              | grep -Ev "^(Merge |chore)" \
+              | head -20)
+
+            FEATS=$(printf '%s\n' "$RAW" | grep '^feat' | sed 's/^feat[^:]*: /• /' | head -8)
+            FIXES=$(printf '%s\n' "$RAW" | grep '^fix'  | sed 's/^fix[^:]*: /• /'  | head -8)
+
+            NOTES=""
+            [ -n "$FEATS" ] && NOTES="*What's new:*"$'\n'"$FEATS"
+            if [ -n "$FIXES" ]; then
+              [ -n "$NOTES" ] && NOTES="${NOTES}"$'\n'
+              NOTES="${NOTES}*Fixes:*"$'\n'"$FIXES"
+            fi
+            [ -z "$NOTES" ] && NOTES="_No notable changes extracted._"
+          fi
+
+          # --- Build Block Kit JSON payload via jq (handles escaping correctly) ---
+          NPM_URL="https://www.npmjs.com/package/@provartesting/provardx-cli/v/${VERSION}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          jq -n \
+            --arg ver  "$VERSION" \
+            --arg tag  "$TAG" \
+            --arg who  "${{ github.actor }}" \
+            --arg body "$NOTES" \
+            --arg npm  "$NPM_URL" \
+            --arg run  "$RUN_URL" \
+            '{blocks:[
+              {type:"header",
+               text:{type:"plain_text", text:("🚀 Provar MCP v"+$ver+" published"), emoji:true}},
+              {type:"section",
+               fields:[
+                 {type:"mrkdwn", text:("*Tag:* `"+$tag+"`")},
+                 {type:"mrkdwn", text:("*By:* "+$who)}
+               ]},
+              {type:"section",
+               text:{type:"mrkdwn", text:$body}},
+              {type:"divider"},
+              {type:"actions",
+               elements:[
+                 {type:"button", text:{type:"plain_text", text:"📦 npm",       emoji:true}, url:$npm},
+                 {type:"button", text:{type:"plain_text", text:"🔗 GitHub Run", emoji:true}, url:$run}
+               ]}
+            ]}' > /tmp/slack_payload.json
+
+      - name: Notify Slack
+        if: success()
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload-file-path: /tmp/slack_payload.json
