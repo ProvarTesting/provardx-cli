@@ -406,13 +406,15 @@ function validateApiCall(call: Record<string, unknown>, issues: ValidationIssue[
 function checkUiTarget(call: Record<string, unknown>, apiId: string, stepName: string, issues: ValidationIssue[]): void {
   const targetArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'target');
   if (!targetArg) return;
-  const valClass = (targetArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
-  if (valClass && valClass !== 'uiTarget') {
+  const valueNode = targetArg['value'] as Record<string, unknown> | undefined;
+  if (!valueNode) return;
+  const valClass = valueNode['@_class'] as string | undefined;
+  if (valClass !== 'uiTarget') {
     const apiLabel = apiId.includes('UiWithRow') ? 'UiWithRow' : 'UiWithScreen';
     issues.push({
       rule_id: 'UI-TARGET-001',
       severity: 'ERROR',
-      message: `${apiLabel} step "${stepName}" target argument uses class="${valClass}" — must be class="uiTarget".`,
+      message: `${apiLabel} step "${stepName}" target argument uses class="${valClass ?? '(missing)'}" — must be class="uiTarget".`,
       applies_to: 'apiCall',
       suggestion:
         'Emit the target as: <value class="uiTarget" uri="sf:ui:target?..."/> or uri="ui:pageobject:target?pageId=...". ' +
@@ -441,17 +443,20 @@ function validateApiCallArgs(
   if (apiId.includes('UiDoAction') || apiId.includes('UiAssert')) {
     const locatorArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'locator');
     if (locatorArg) {
-      const valClass = (locatorArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
-      if (valClass && valClass !== 'uiLocator') {
-        issues.push({
-          rule_id: 'UI-LOCATOR-001',
-          severity: 'ERROR',
-          message: `"${stepName}" locator argument uses class="${valClass}" — must be class="uiLocator".`,
-          applies_to: 'apiCall',
-          suggestion:
-            'Emit the locator as: <value class="uiLocator" uri="sf:ui:locator:..."/>. ' +
-            'In provar.testcase.generate the "locator" attribute is converted automatically.',
-        });
+      const locatorNode = locatorArg['value'] as Record<string, unknown> | undefined;
+      if (locatorNode) {
+        const valClass = locatorNode['@_class'] as string | undefined;
+        if (valClass !== 'uiLocator') {
+          issues.push({
+            rule_id: 'UI-LOCATOR-001',
+            severity: 'ERROR',
+            message: `"${stepName}" locator argument uses class="${valClass ?? '(missing)'}" — must be class="uiLocator".`,
+            applies_to: 'apiCall',
+            suggestion:
+              'Emit the locator as: <value class="uiLocator" uri="sf:ui:locator:..."/>. ' +
+              'In provar.testcase.generate the "locator" attribute is converted automatically.',
+          });
+        }
       }
     }
   }
@@ -462,19 +467,22 @@ function validateApiCallArgs(
   if (apiId.includes('SetValues') && !apiId.includes('AssertValues')) {
     const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
     if (valuesArg) {
-      const valClass = (valuesArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
-      if (valClass && valClass !== 'valueList') {
-        issues.push({
-          rule_id: 'SETVALUES-STRUCTURE-001',
-          severity: 'ERROR',
-          message: `SetValues step "${stepName}" values argument uses class="${valClass}" — must use class="valueList" with <namedValues> children.`,
-          applies_to: 'apiCall',
-          suggestion:
-            'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
-            '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
-            '</namedValues></value>. In provar.testcase.generate pass each variable as a flat key/value pair ' +
-            'in attributes — the generator builds the valueList structure automatically.',
-        });
+      const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
+      if (valuesNode) {
+        const valClass = valuesNode['@_class'] as string | undefined;
+        if (valClass !== 'valueList') {
+          issues.push({
+            rule_id: 'SETVALUES-STRUCTURE-001',
+            severity: 'ERROR',
+            message: `SetValues step "${stepName}" values argument uses class="${valClass ?? '(missing)'}" — must use class="valueList" with <namedValues> children.`,
+            applies_to: 'apiCall',
+            suggestion:
+              'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
+              '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
+              '</namedValues></value>. In provar.testcase.generate pass each variable as a flat key/value pair ' +
+              'in attributes — the generator builds the valueList structure automatically.',
+          });
+        }
       }
     }
   }
