@@ -111,7 +111,7 @@ const StepSchema = z.object({
         '(3) AssertValues: pass assertion arguments as flat key/value pairs; emitted as flat <argument> elements, NOT wrapped in valueList/namedValues. ' +
         '(4) target argument (UiWithScreen / UiWithRow): pass the sf:ui:target or ui:pageobject:target URI; ' +
         '    emitted as class="uiTarget" uri="...". ' +
-        '(5) locator argument (UiDoAction / UiAssert / UiScrollToElement): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
+        '(5) locator argument (UiDoAction / UiAssert): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
         'All other string values use class="value" valueClass="string".'
     ),
 });
@@ -137,7 +137,7 @@ const TOOL_DESCRIPTION = [
     'If AssertValues uses namedValues-shaped content, validation reports warning ASSERT-001.',
   'Variable references: pass values as "{VarName}" (braces); emitted as class="variable" <path element="VarName"/>.',
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
-  'locator argument (UiDoAction/UiAssert/UiScrollToElement): pass the URI value; emitted as class="uiLocator" uri="...".',
+  'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
   'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
@@ -285,11 +285,8 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
     if (key === 'target' && (apiId.includes('UiWithScreen') || apiId.includes('UiWithRow'))) {
       return `${indent}<value class="uiTarget" uri="${escapeXmlAttr(val)}"/>`;
     }
-    // D2: 'locator' argument → class="uiLocator" (only for UiDoAction / UiAssert / UiScrollToElement).
-    if (
-      key === 'locator' &&
-      (apiId.includes('UiDoAction') || apiId.includes('UiAssert') || apiId.includes('UiScrollToElement'))
-    ) {
+    // D2: 'locator' argument → class="uiLocator" (only for UiDoAction / UiAssert).
+    if (key === 'locator' && (apiId.includes('UiDoAction') || apiId.includes('UiAssert'))) {
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
   }

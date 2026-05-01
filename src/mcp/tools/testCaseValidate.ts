@@ -437,8 +437,8 @@ function validateApiCallArgs(
   }
 
   // UI-LOCATOR-001 (local rule, no direct backend equivalent):
-  // UiDoAction / UiAssert / UiScrollToElement locator argument must use class="uiLocator".
-  if (apiId.includes('UiDoAction') || apiId.includes('UiAssert') || apiId.includes('UiScrollToElement')) {
+  // UiDoAction / UiAssert locator argument must use class="uiLocator".
+  if (apiId.includes('UiDoAction') || apiId.includes('UiAssert')) {
     const locatorArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'locator');
     if (locatorArg) {
       const valClass = (locatorArg['value'] as Record<string, unknown> | undefined)?.['@_class'] as string | undefined;
