@@ -96,6 +96,135 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+// ── provar.testplan.create ────────────────────────────────────────────────────
+
+describe('provar.testplan.create', () => {
+  describe('happy path', () => {
+    it('creates plan directory and .planitem, returns expected fields', () => {
+      makeProject(projectDir);
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'MyNewPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.equal(body['created'], true);
+      assert.equal(body['dry_run'], false);
+      assert.ok(typeof body['guid'] === 'string' && body['guid'].length > 0, 'Expected guid');
+
+      const planDir = path.join(projectDir, 'plans', 'MyNewPlan');
+      assert.ok(fs.existsSync(planDir), 'Plan directory should be created');
+      assert.ok(fs.existsSync(path.join(planDir, '.planitem')), '.planitem should be written');
+
+      const xml = fs.readFileSync(path.join(planDir, '.planitem'), 'utf-8');
+      assert.ok(xml.includes('<testPlan'), 'Expected <testPlan element in .planitem');
+      assert.ok(xml.includes('guid='), 'Expected guid attribute in .planitem');
+    });
+
+    it('response includes next_steps guidance', () => {
+      makeProject(projectDir);
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'GuidedPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      const body = parseText(result);
+      assert.ok(typeof body['next_steps'] === 'string' && body['next_steps'].length > 0, 'Expected next_steps');
+    });
+  });
+
+  describe('dry_run', () => {
+    it('returns created=false and does not write to disk', () => {
+      makeProject(projectDir);
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'DryPlan',
+        overwrite: false,
+        dry_run: true,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.equal(body['created'], false);
+      assert.equal(body['dry_run'], true);
+      assert.ok(typeof body['guid'] === 'string', 'Expected guid even in dry_run');
+
+      const planDir = path.join(projectDir, 'plans', 'DryPlan');
+      assert.equal(fs.existsSync(planDir), false, 'Directory must not be created in dry_run mode');
+    });
+  });
+
+  describe('error cases', () => {
+    it('returns NOT_A_PROJECT when .testproject is missing', () => {
+      fs.mkdirSync(projectDir, { recursive: true });
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'MyPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'NOT_A_PROJECT');
+    });
+
+    it('returns PLAN_EXISTS when .planitem already exists and overwrite=false', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'ExistingPlan');
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'ExistingPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'PLAN_EXISTS');
+    });
+
+    it('overwrites .planitem when overwrite=true and plan already exists', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'ExistingPlan');
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'ExistingPlan',
+        overwrite: true,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(parseText(result)['created'], true);
+    });
+
+    it('returns PATH_NOT_ALLOWED when project_path is outside allowedPaths', () => {
+      const strictServer = new MockMcpServer();
+      registerAllTestPlanTools(strictServer as never, { allowedPaths: [tmpDir] });
+
+      const result = strictServer.call('provar.testplan.create', {
+        project_path: path.join(os.tmpdir(), 'outside-project'),
+        plan_name: 'MyPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      const code = errorCode(result);
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
+    });
+  });
+});
+
 // ── provar.testplan.add-instance ───────────────────────────────────────────────
 
 describe('provar.testplan.add-instance', () => {
@@ -585,14 +714,20 @@ describe('provar.testplan.remove-instance', () => {
 // ── registerAllTestPlanTools ───────────────────────────────────────────────────
 
 describe('registerAllTestPlanTools', () => {
-  it('registers all three tools', () => {
+  it('registers all four tools', () => {
     const freshServer = new MockMcpServer();
     registerAllTestPlanTools(freshServer as never, config);
 
-    // Each tool should be callable without throwing "Tool not registered"
     makeProject(projectDir);
 
-    // Verify each tool is registered by checking it doesn't throw
+    assert.doesNotThrow(() => {
+      freshServer.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'P',
+        overwrite: false,
+        dry_run: true,
+      });
+    });
     assert.doesNotThrow(() => {
       freshServer.call('provar.testplan.add-instance', {
         project_path: projectDir,
