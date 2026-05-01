@@ -248,7 +248,14 @@ async function runTests() {
   // ── 30. provar.testrun.rca ───────────────────────────────────────────────
   await callTool('provar.testrun.rca', { project_path: TMP });
 
-  // ── 31. provar.testplan.add-instance ─────────────────────────────────────
+  // ── 31. provar.testplan.create ────────────────────────────────────────────
+  // TMP is not a Provar project → NOT_A_PROJECT result
+  await callTool('provar.testplan.create', {
+    project_path: TMP,
+    plan_name: 'SmokePlan',
+  });
+
+  // ── 33. provar.testplan.add-instance ─────────────────────────────────────
   // TMP is not a Provar project → NOT_A_PROJECT result
   await callTool('provar.testplan.add-instance', {
     project_path: TMP,
@@ -256,14 +263,14 @@ async function runTests() {
     plan_name: 'SmokePlan',
   });
 
-  // ── 32. provar.testplan.create-suite ─────────────────────────────────────
+  // ── 34. provar.testplan.create-suite ─────────────────────────────────────
   await callTool('provar.testplan.create-suite', {
     project_path: TMP,
     plan_name: 'SmokePlan',
     suite_name: 'SmokeSuite',
   });
 
-  // ── 33. provar.testplan.remove-instance ──────────────────────────────────
+  // ── 35. provar.testplan.remove-instance ──────────────────────────────────
   await callTool('provar.testplan.remove-instance', {
     project_path: TMP,
     instance_path: 'plans/SmokePlan/SmokeSuite/smoke.testinstance',
@@ -377,7 +384,7 @@ async function runTests() {
 server.on('close', () => {
   clearTimeout(overallTimer);
   // initialize + tools/list + 39 tools + prompts/list + 8 prompts/get (setup excluded from default count)
-  const TOTAL_EXPECTED = 50 + (INCLUDE_SETUP ? 1 : 0);
+  const TOTAL_EXPECTED = 51 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 

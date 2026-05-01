@@ -57,6 +57,120 @@ function buildPlanItemXml(guid: string): string {
   ].join('\n');
 }
 
+// ── provar.testplan.create ────────────────────────────────────────────────────
+
+export function registerTestPlanCreate(server: McpServer, config: ServerConfig): void {
+  server.tool(
+    'provar.testplan.create',
+    [
+      'Create a new Provar test plan: makes the plans/{plan_name}/ directory and writes the root .planitem file.',
+      'Use this before provar.testplan.create-suite or provar.testplan.add-instance, which both require the plan to already exist.',
+      'Returns the guid assigned to the new plan, the plan directory path, and the .planitem path written.',
+    ].join(' '),
+    {
+      project_path: z.string().describe('Absolute path to the Provar project root (must contain a .testproject file)'),
+      plan_name: z.string().describe('Name of the new test plan (becomes the directory name under plans/)'),
+      overwrite: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Overwrite the .planitem file if the plan directory already exists (default: false)'),
+      dry_run: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Return what would be created without writing to disk (default: false)'),
+    },
+    ({ project_path, plan_name, overwrite, dry_run }) => {
+      const requestId = makeRequestId();
+      log('info', 'provar.testplan.create', { requestId, project_path, plan_name });
+
+      try {
+        assertPathAllowed(project_path, config.allowedPaths);
+
+        const projectRoot = path.resolve(project_path);
+
+        const testProjectFiles = fs.existsSync(projectRoot)
+          ? fs.readdirSync(projectRoot).filter((f) => f.endsWith('.testproject'))
+          : [];
+        if (testProjectFiles.length === 0) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)),
+              },
+            ],
+          };
+        }
+
+        const planDir = path.join(projectRoot, 'plans', plan_name);
+        const planItemPath = path.join(planDir, '.planitem');
+
+        if (!overwrite && fs.existsSync(planItemPath)) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError(
+                    'PLAN_EXISTS',
+                    `Plan already exists: ${planItemPath}. Set overwrite: true to replace the .planitem file.`,
+                    requestId
+                  )
+                ),
+              },
+            ],
+          };
+        }
+
+        const guid = randomUUID();
+        const xmlContent = buildPlanItemXml(guid);
+
+        if (!dry_run) {
+          fs.mkdirSync(planDir, { recursive: true });
+          fs.writeFileSync(planItemPath, xmlContent, 'utf-8');
+        }
+
+        const response = {
+          requestId,
+          plan_dir: planDir,
+          planitem_path: planItemPath,
+          guid,
+          dry_run: dry_run ?? false,
+          created: !dry_run,
+          next_steps: dry_run
+            ? 'Review the plan structure, then call provar.testplan.create with dry_run=false to write to disk.'
+            : `Plan created at ${planDir}. Use provar.testplan.create-suite to add suites, then provar.testplan.add-instance to wire test cases into the plan.`,
+        };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(response) }],
+          structuredContent: response,
+        };
+      } catch (err: unknown) {
+        const error = err as Error & { code?: string };
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                makeError(
+                  error instanceof PathPolicyError ? error.code : (error.code ?? 'CREATE_PLAN_ERROR'),
+                  error.message,
+                  requestId
+                )
+              ),
+            },
+          ],
+        };
+      }
+    }
+  );
+}
+
 // ── provar.testplan.add-instance ──────────────────────────────────────────────
 
 export function registerTestPlanAddInstance(server: McpServer, config: ServerConfig): void {
@@ -358,6 +472,7 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
 // ── Convenience re-export ─────────────────────────────────────────────────────
 
 export function registerAllTestPlanTools(server: McpServer, config: ServerConfig): void {
+  registerTestPlanCreate(server, config);
   registerTestPlanAddInstance(server, config);
   registerTestPlanCreateSuite(server, config);
   registerTestPlanRemoveInstance(server, config);

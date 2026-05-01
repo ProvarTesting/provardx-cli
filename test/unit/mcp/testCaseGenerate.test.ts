@@ -460,6 +460,249 @@ describe('provar.testcase.generate', () => {
     });
   });
 
+  describe('D2 — uiTarget / uiLocator argument types', () => {
+    it('emits class="uiTarget" uri="..." for the target argument', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'UI Target Test',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'With page',
+            attributes: { target: 'sf:ui:target?pageObject=pageobjects.Account&flexiPage=Account_flexiPage' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="uiTarget"'), 'Expected class="uiTarget"');
+      assert.ok(xml.includes('uri="sf:ui:target?'), 'Expected uri attribute with sf:ui:target value');
+      assert.ok(!xml.includes('valueClass="string">sf:ui:target'), 'Must NOT emit uiTarget URI as a plain string value');
+    });
+
+    it('emits class="uiLocator" uri="..." for the locator argument', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'UI Locator Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Click button',
+            attributes: { locator: 'sf:ui:locator:button?label=Save' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="uiLocator"'), 'Expected class="uiLocator"');
+      assert.ok(xml.includes('uri="sf:ui:locator:'), 'Expected uri attribute with locator value');
+      assert.ok(!xml.includes('valueClass="string">sf:ui:locator'), 'Must NOT emit locator URI as a plain string value');
+    });
+
+    it('uiTarget also applies inside UiWithScreen wrapper when target_uri is non-SF', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Non-SF With Target',
+        steps: [],
+        target_uri: 'ui:pageobject:target?pageId=pageobjects.LoginPage',
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="uiTarget"'), 'Wrapper UiWithScreen target should use uiTarget class');
+      assert.ok(xml.includes('uri="ui:pageobject:target?pageId=pageobjects.LoginPage"'), 'URI should appear as attribute');
+    });
+  });
+
+  describe('D3 — SetValues / AssertValues use valueList/namedValues structure', () => {
+    it('SetValues emits <value class="valueList"> with <namedValues>', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'SetValues Test',
+        steps: [
+          {
+            api_id: 'SetValues',
+            name: 'Set test vars',
+            attributes: { testCaseName: 'TC_New', testType: 'Acceptance testing' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="valueList"'), 'Expected class="valueList"');
+      assert.ok(xml.includes('mutable="Mutable"'), 'Expected mutable="Mutable"');
+      assert.ok(xml.includes('<namedValues>'), 'Expected <namedValues> element');
+      assert.ok(xml.includes('<namedValue name="testCaseName">'), 'Expected namedValue for testCaseName');
+      assert.ok(xml.includes('<namedValue name="testType">'), 'Expected namedValue for testType');
+      assert.ok(xml.includes('<argument id="values">'), 'Expected argument id="values"');
+      assert.ok(
+        !xml.includes('testCaseName|TC_New'),
+        'Must NOT emit pipe-delimited string for SetValues'
+      );
+    });
+
+    it('AssertValues also emits valueList/namedValues structure', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'AssertValues Test',
+        steps: [
+          {
+            api_id: 'AssertValues',
+            name: 'Assert vars',
+            attributes: { opportunityName: 'My Opp' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="valueList"'), 'Expected valueList for AssertValues');
+      assert.ok(xml.includes('<namedValue name="opportunityName">'), 'Expected namedValue for opportunityName');
+    });
+
+    it('non-SetValues steps still use flat argument structure', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Flat Args Test',
+        steps: [
+          { api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Opportunity' } },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<argument id="objectApiName">'), 'Expected flat argument id');
+      assert.ok(!xml.includes('valueList'), 'Must NOT emit valueList for non-SetValues steps');
+    });
+  });
+
+  describe('D4 — Variable references use class="variable" with <path> elements', () => {
+    it('{VarName} emits class="variable" <path element="VarName"/>', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Variable Ref Test',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create record',
+            attributes: { provar__Test_Project__c: '{TestProjectId}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="variable"'), 'Expected class="variable"');
+      assert.ok(xml.includes('<path element="TestProjectId"/>'), 'Expected <path element="TestProjectId"/>');
+      assert.ok(!xml.includes('valueClass="string">{TestProjectId}'), 'Must NOT emit {VarName} as a string literal');
+    });
+
+    it('{Obj.Field} dotted path emits two <path> elements', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Dotted Variable Test',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create with nested var',
+            attributes: { Name: '{Opportunity.Name}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<path element="Opportunity"/>'), 'Expected first path element');
+      assert.ok(xml.includes('<path element="Name"/>'), 'Expected second path element');
+    });
+
+    it('variable reference also works inside SetValues namedValues', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'SetValues With Var',
+        steps: [
+          {
+            api_id: 'SetValues',
+            name: 'Set with variable',
+            attributes: { projectId: '{TestProjectId}', label: 'Static Label' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="variable"'), 'Expected variable reference inside namedValues');
+      assert.ok(xml.includes('<path element="TestProjectId"/>'));
+      assert.ok(xml.includes('valueClass="string">Static Label'), 'Static value should still be a plain string');
+    });
+
+    it('plain string values without braces are not treated as variable references', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'No Var Test',
+        steps: [{ api_id: 'ApexCreateObject', name: 'Create', attributes: { Name: 'Literal Name' } }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('valueClass="string">Literal Name'), 'Plain string should use valueClass="string"');
+      assert.ok(!xml.includes('class="variable"'), 'No variable element expected');
+    });
+  });
+
+  describe('D7 — Cleanup warning for ApexDeleteObject', () => {
+    it('includes cleanup warning when ApexDeleteObject is in the step list', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'Create and Delete',
+        steps: [
+          { api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Account' } },
+          { api_id: 'ApexDeleteObject', name: 'Delete record', attributes: { objectApiName: 'Account' } },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['warnings'] as string[] | undefined;
+      assert.ok(Array.isArray(warnings) && warnings.length > 0, 'Expected at least one warning');
+      assert.ok(
+        warnings.some((w) => w.includes('ApexDeleteObject') && w.includes('cleanup')),
+        'Expected cleanup warning mentioning ApexDeleteObject'
+      );
+    });
+
+    it('does NOT warn when no ApexDeleteObject steps are present', () => {
+      const result = server.call('provar.testcase.generate', {
+        test_case_name: 'No Cleanup',
+        steps: [{ api_id: 'ApexCreateObject', name: 'Create', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['warnings'] as string[] | undefined;
+      const hasCleanupWarning = warnings?.some((w) => w.includes('ApexDeleteObject'));
+      assert.ok(!hasCleanupWarning, 'No cleanup warning expected without ApexDeleteObject');
+    });
+  });
+
   describe('validate_after_edit', () => {
     it('includes validation field when validate_after_edit=true (default)', () => {
       const result = server.call('provar.testcase.generate', {
