@@ -407,7 +407,7 @@ function checkUiTarget(call: Record<string, unknown>, apiId: string, stepName: s
   const targetArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'target');
   if (!targetArg) return;
   const valueNode = targetArg['value'] as Record<string, unknown> | undefined;
-  if (!valueNode) return;
+  if (valueNode == null) return;
   const valClass = valueNode['@_class'] as string | undefined;
   if (valClass !== 'uiTarget') {
     const apiLabel = apiId.includes('UiWithRow') ? 'UiWithRow' : 'UiWithScreen';
@@ -444,7 +444,7 @@ function validateApiCallArgs(
     const locatorArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'locator');
     if (locatorArg) {
       const locatorNode = locatorArg['value'] as Record<string, unknown> | undefined;
-      if (locatorNode) {
+      if (locatorNode != null) {
         const valClass = locatorNode['@_class'] as string | undefined;
         if (valClass !== 'uiLocator') {
           issues.push({
@@ -468,7 +468,7 @@ function validateApiCallArgs(
     const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
     if (valuesArg) {
       const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
-      if (valuesNode) {
+      if (valuesNode != null) {
         const valClass = valuesNode['@_class'] as string | undefined;
         if (valClass !== 'valueList') {
           issues.push({

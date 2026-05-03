@@ -66,7 +66,7 @@ jobs:
             # Auto-extract from git log since the previous tag
             if [ "${{ github.event_name }}" = "release" ]; then
               # For a release event HEAD is already the new tag; find the one before it
-              PREV=$(git tag --sort=-creatordate | awk "/^${GITHUB_REF_NAME}$/{found=1;next} found{print;exit}")
+              PREV=$(git tag --sort=-creatordate | awk -v tag="${GITHUB_REF_NAME}" '$0==tag{found=1;next} found{print;exit}')
             else
               # For a manual dispatch use the most recent existing tag
               PREV=$(git tag --sort=-creatordate | head -1)
