@@ -319,14 +319,23 @@ export function readSuiteDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        if (planIntegrityWarnings && !fs.existsSync(path.join(fullPath, '.planitem'))) {
+        const subHasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (planIntegrityWarnings && !subHasPlanItem) {
           const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
           planIntegrityWarnings.push(
             `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
           );
         }
         testSuites.push(
-          readSuiteDirectory(fullPath, entry.name, projectPath, depth + 1, coveredPaths, idMap, planIntegrityWarnings)
+          readSuiteDirectory(
+            fullPath,
+            entry.name,
+            projectPath,
+            depth + 1,
+            subHasPlanItem ? coveredPaths : undefined,
+            subHasPlanItem ? idMap : undefined,
+            planIntegrityWarnings
+          )
         );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
@@ -358,14 +367,23 @@ export function readPlanDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(planPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        if (planIntegrityWarnings && !fs.existsSync(path.join(fullPath, '.planitem'))) {
+        const suiteHasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (planIntegrityWarnings && !suiteHasPlanItem) {
           const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
           planIntegrityWarnings.push(
             `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
           );
         }
         testSuites.push(
-          readSuiteDirectory(fullPath, entry.name, projectPath, 0, coveredPaths, idMap, planIntegrityWarnings)
+          readSuiteDirectory(
+            fullPath,
+            entry.name,
+            projectPath,
+            0,
+            suiteHasPlanItem ? coveredPaths : undefined,
+            suiteHasPlanItem ? idMap : undefined,
+            planIntegrityWarnings
+          )
         );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
@@ -400,12 +418,22 @@ export function readPlansDir(projectPath: string): {
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
       const planPath = path.join(plansDir, entry.name);
-      if (!fs.existsSync(path.join(planPath, '.planitem'))) {
+      const planHasPlanItem = fs.existsSync(path.join(planPath, '.planitem'));
+      if (!planHasPlanItem) {
         planIntegrityWarnings.push(
           `plans/${entry.name}/ is missing a .planitem file — this plan will not be recognised by the Provar runner.`
         );
       }
-      plans.push(readPlanDirectory(planPath, entry.name, projectPath, coveredPaths, idMap, planIntegrityWarnings));
+      plans.push(
+        readPlanDirectory(
+          planPath,
+          entry.name,
+          projectPath,
+          planHasPlanItem ? coveredPaths : undefined,
+          planHasPlanItem ? idMap : undefined,
+          planIntegrityWarnings
+        )
+      );
     }
   } catch {
     /* skip */
