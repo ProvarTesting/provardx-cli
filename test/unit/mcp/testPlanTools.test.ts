@@ -207,6 +207,34 @@ describe('provar.testplan.create', () => {
       assert.equal(parseText(result)['created'], true);
     });
 
+    it('returns INVALID_PLAN_NAME for dot-segment plan_name (..)', () => {
+      makeProject(projectDir);
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: '..',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'INVALID_PLAN_NAME');
+    });
+
+    it('returns INVALID_PLAN_NAME for plan_name with path separators', () => {
+      makeProject(projectDir);
+
+      const result = server.call('provar.testplan.create', {
+        project_path: projectDir,
+        plan_name: 'sub/plan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'INVALID_PLAN_NAME');
+    });
+
     it('returns PATH_NOT_ALLOWED when project_path is outside allowedPaths', () => {
       const strictServer = new MockMcpServer();
       registerAllTestPlanTools(strictServer as never, { allowedPaths: [tmpDir] });
