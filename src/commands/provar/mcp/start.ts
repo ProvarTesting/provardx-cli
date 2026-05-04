@@ -10,6 +10,7 @@ import { Messages } from '@provartesting/provardx-plugins-utils';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createProvarMcpServer } from '../../../mcp/server.js';
 import { validateLicense, LicenseError } from '../../../mcp/licensing/index.js';
+import { checkForUpdate } from '../../../mcp/update/updateChecker.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.mcp.start');
@@ -36,6 +37,14 @@ export default class SfProvarMcpStart extends SfCommand<void> {
       summary: messages.getMessage('flags.auto-defects.summary'),
       default: false,
     }),
+    'auto-update': Flags.boolean({
+      summary: messages.getMessage('flags.auto-update.summary'),
+      default: false,
+    }),
+    'no-update-check': Flags.boolean({
+      summary: messages.getMessage('flags.no-update-check.summary'),
+      default: false,
+    }),
   };
 
   public async run(): Promise<void> {
@@ -51,9 +60,7 @@ export default class SfProvarMcpStart extends SfCommand<void> {
     try {
       const result = await validateLicense();
       if (result.offlineGrace) {
-        process.stderr.write(
-          '[provar-mcp] Warning: license validated from offline cache (last checked > 2h ago).\n'
-        );
+        process.stderr.write('[provar-mcp] Warning: license validated from offline cache (last checked > 2h ago).\n');
       }
     } catch (err: unknown) {
       if (err instanceof LicenseError) {
@@ -62,7 +69,12 @@ export default class SfProvarMcpStart extends SfCommand<void> {
       throw err;
     }
 
-    const server = createProvarMcpServer({ allowedPaths });
+    const updateResult = await checkForUpdate({
+      noUpdateCheck: flags['no-update-check'],
+      autoUpdate: flags['auto-update'],
+    });
+
+    const server = createProvarMcpServer({ allowedPaths, updateResult });
     const transport = new StdioServerTransport();
 
     // Connect hands stdin/stdout ownership to the SDK.

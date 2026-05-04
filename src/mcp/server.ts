@@ -38,6 +38,11 @@ import { registerAllPrompts } from './prompts/index.js';
 
 export interface ServerConfig {
   allowedPaths: string[];
+  updateResult?: {
+    updateAvailable: boolean;
+    latestVersion: string | null;
+    updateCommand: string | null;
+  };
 }
 
 export function createProvarMcpServer(config: ServerConfig): McpServer {
@@ -56,7 +61,14 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
       message: z.string().optional().default('ping').describe('Optional message to echo back'),
     },
     ({ message }) => {
-      const result = { pong: message, ts: new Date().toISOString(), server: `provar-mcp@${SERVER_VERSION}` };
+      const result = {
+        pong: message,
+        ts: new Date().toISOString(),
+        server: `provar-mcp@${SERVER_VERSION}`,
+        updateAvailable: config.updateResult?.updateAvailable ?? false,
+        latestVersion: config.updateResult?.latestVersion ?? null,
+        updateCommand: config.updateResult?.updateCommand ?? null,
+      };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result) }],
         structuredContent: result,
