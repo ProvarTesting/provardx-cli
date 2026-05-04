@@ -77,6 +77,10 @@ function makeProject(root: string, planName = 'smoke', tcName = 'Login'): void {
   writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
   writeFile(path.join(root, 'tests', `${tcName}.testcase`), makeXml(G.tc1, G.s1));
   writeFile(path.join(root, 'plans', planName, `${tcName}.testinstance`), `testCasePath="tests/${tcName}.testcase"\n`);
+  writeFile(
+    path.join(root, 'plans', planName, '.planitem'),
+    '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+  );
 }
 
 // ── Test setup ─────────────────────────────────────────────────────────────────
@@ -397,6 +401,43 @@ describe('provar.project.validate (from path)', () => {
       assert.ok(
         !('plan_integrity_warnings' in body),
         'No plan_integrity_warnings expected when .planitem files are present'
+      );
+    });
+
+    it('reports plan_integrity_warnings for nested suite dir (depth ≥ 2) missing .planitem', () => {
+      const root = mktemp();
+      writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
+      writeFile(path.join(root, 'tests', 'Login.testcase'), makeXml(G.tc1, G.s1));
+      // Plan and SuiteA have .planitem, but SuiteA/SubSuite does not
+      writeFile(
+        path.join(root, 'plans', 'smoke', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+      );
+      writeFile(
+        path.join(root, 'plans', 'smoke', 'SuiteA', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="def-456"/>'
+      );
+      // SubSuite exists but lacks .planitem — instances here would be invisible to runner
+      writeFile(
+        path.join(root, 'plans', 'smoke', 'SuiteA', 'SubSuite', 'Login.testinstance'),
+        'testCasePath="tests/Login.testcase"\n'
+      );
+
+      const result = server.call('provar.project.validate', {
+        project_path: root,
+        save_results: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['plan_integrity_warnings'] as string[] | undefined;
+      assert.ok(
+        Array.isArray(warnings) && warnings.length > 0,
+        'Expected plan_integrity_warnings for nested suite missing .planitem'
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('SubSuite')),
+        'Warning should name the nested suite directory'
       );
     });
   });

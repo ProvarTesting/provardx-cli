@@ -92,6 +92,11 @@ describe('validateTestCase', () => {
       );
     });
 
+    it('TC_010: does not fire when id="1" (the correct literal)', () => {
+      const r = validateTestCase(VALID_TC);
+      assert.ok(!r.issues.some((i) => i.rule_id === 'TC_010'), 'TC_010 must not fire when id="1"');
+    });
+
     it('TC_011: flags missing guid', () => {
       const r = validateTestCase(
         '<?xml version="1.0" encoding="UTF-8"?><testCase id="x" registryId="r"><steps/></testCase>'

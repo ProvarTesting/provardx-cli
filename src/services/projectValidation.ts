@@ -305,7 +305,8 @@ export function readSuiteDirectory(
   projectPath: string,
   depth = 0,
   coveredPaths?: Set<string>,
-  idMap?: Map<string, string>
+  idMap?: Map<string, string>,
+  planIntegrityWarnings?: string[]
 ): TestSuiteInput {
   const testCases: TestCaseInput[] = [];
   const testSuites: TestSuiteInput[] = [];
@@ -318,7 +319,15 @@ export function readSuiteDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        testSuites.push(readSuiteDirectory(fullPath, entry.name, projectPath, depth + 1, coveredPaths, idMap));
+        if (planIntegrityWarnings && !fs.existsSync(path.join(fullPath, '.planitem'))) {
+          const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
+          planIntegrityWarnings.push(
+            `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
+          );
+        }
+        testSuites.push(
+          readSuiteDirectory(fullPath, entry.name, projectPath, depth + 1, coveredPaths, idMap, planIntegrityWarnings)
+        );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
         if (testCase) testCases.push(testCase);
@@ -355,7 +364,9 @@ export function readPlanDirectory(
             `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
           );
         }
-        testSuites.push(readSuiteDirectory(fullPath, entry.name, projectPath, 0, coveredPaths, idMap));
+        testSuites.push(
+          readSuiteDirectory(fullPath, entry.name, projectPath, 0, coveredPaths, idMap, planIntegrityWarnings)
+        );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
         if (testCase) testCases.push(testCase);
@@ -424,7 +435,7 @@ function buildTestCaseIdMap(projectPath: string): Map<string, string> {
           try {
             const content = fs.readFileSync(fullPath, 'utf-8');
             const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
-            for (const attr of ['registryId', 'id', 'guid'] as const) {
+            for (const attr of ['registryId', 'guid'] as const) {
               const m = content.match(new RegExp(`${attr}=["']([^"']+)["']`));
               if (m?.[1] && !idMap.has(m[1])) idMap.set(m[1], rel);
             }
