@@ -359,6 +359,52 @@ describe('validateTestCase', () => {
       );
     });
 
+    it('fires when UiWithScreen target <value> has no class attribute', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Open screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value>sf:ui:target?object=Account</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'UI-TARGET-001 should fire when <value> has no class attribute'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-TARGET-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
+    it('fires when UiWithScreen target uses self-closing <value/> (empty string from fast-xml-parser)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Open screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-TARGET-001'),
+        'UI-TARGET-001 should fire for self-closing <value/> (no class attribute)'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-TARGET-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
     it('also fires for UiWithRow steps with wrong target class', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
@@ -425,6 +471,52 @@ describe('validateTestCase', () => {
         !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
         'UI-LOCATOR-001 should not fire for correct uiLocator class'
       );
+    });
+
+    it('fires when UiDoAction locator <value> has no class attribute', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value>sf:ui:locator:label?label=Save</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should fire when <value> has no class attribute'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-LOCATOR-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
+    it('fires when UiDoAction locator uses self-closing <value/> (empty string from fast-xml-parser)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should fire for self-closing <value/> (no class attribute)'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-LOCATOR-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
     });
 
     it('also fires for UiAssert steps with wrong locator class', () => {
@@ -499,6 +591,52 @@ describe('validateTestCase', () => {
         !r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
         'SETVALUES-STRUCTURE-001 should not fire for correct valueList structure'
       );
+    });
+
+    it('fires when SetValues values <value> has no class attribute', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.control.SetValues" name="Set vars" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value>someText</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'SETVALUES-STRUCTURE-001 should fire when <value> has no class attribute'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'SETVALUES-STRUCTURE-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
+    it('fires when SetValues values uses self-closing <value/> (empty string from fast-xml-parser)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.SetValues" name="Set vars" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'SETVALUES-STRUCTURE-001'),
+        'SETVALUES-STRUCTURE-001 should fire for self-closing <value/> (no class attribute)'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'SETVALUES-STRUCTURE-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
     });
 
     it('does not fire when SetValues has no values argument (self-closing)', () => {
