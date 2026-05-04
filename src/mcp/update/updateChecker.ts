@@ -216,7 +216,12 @@ export async function checkForUpdate(opts: {
   const channel = deriveChannel(currentVersion);
   const cached = readUpdateCache();
 
-  if (cached != null && Date.now() - cached.checkedAt < UPDATE_TTL_MS) {
+  if (
+    cached != null &&
+    cached.channel === channel &&
+    cached.currentVersion === currentVersion &&
+    Date.now() - cached.checkedAt < UPDATE_TTL_MS
+  ) {
     log('info', 'updateChecker: cache hit', { channel, latestVersion: cached.latestVersion, fromCache: true });
     return resultFromCache(cached, currentVersion);
   }

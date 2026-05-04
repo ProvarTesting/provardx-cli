@@ -94,7 +94,7 @@ When enabled, testrun.report suggestions will prompt defect creation on failures
 
 # flags.auto-update.summary
 
-When enabled, automatically installs the latest version of the plugin and restarts the MCP connection on startup.
+When enabled, automatically installs the latest version at startup and exits. The MCP client must reconnect to load the new version.
 
 # flags.no-update-check.summary
 

@@ -143,11 +143,11 @@ The server communicates over **stdio** (standard input / output). It must be sta
 
 ### Flags
 
-| Flag                | Alias | Default                   | Description                                                                                                                          |
-| ------------------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `--allowed-paths`   | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                    |
-| `--auto-update`     |       | false                     | Automatically installs the latest version at startup and restarts the MCP connection. Skipped if running from a development symlink. |
-| `--no-update-check` |       | false                     | Skip the startup update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable.                                 |
+| Flag                | Alias | Default                   | Description                                                                                                                                                  |
+| ------------------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--allowed-paths`   | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                            |
+| `--auto-update`     |       | false                     | Automatically installs the latest version at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
+| `--no-update-check` |       | false                     | Skip the startup update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable.                                                         |
 
 ```sh
 # Allow access to a specific project directory
@@ -489,14 +489,14 @@ A lightweight sanity-check tool. Echoes back the message you send. Useful for ve
 
 **Output**
 
-| Field             | Type    | Description                                               |
-| ----------------- | ------- | --------------------------------------------------------- | --------------------------------------------------- |
-| `pong`            | string  | The echoed message                                        |
-| `ts`              | string  | ISO-8601 timestamp                                        |
-| `server`          | string  | Server name and version (e.g. `provar-mcp@1.5.0-beta.10`) |
-| `updateAvailable` | boolean | Whether a newer version is available in the registry      |
-| `latestVersion`   | string  | null                                                      | Latest version found in the npm registry, or `null` |
-| `updateCommand`   | string  | null                                                      | Command to run to update the plugin, or `null`      |
+| Field             | Type           | Description                                               |
+| ----------------- | -------------- | --------------------------------------------------------- |
+| `pong`            | string         | The echoed message                                        |
+| `ts`              | string         | ISO-8601 timestamp                                        |
+| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.14`) |
+| `updateAvailable` | boolean        | Whether a newer version is available in the registry      |
+| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`       |
+| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`            |
 
 ---
 

@@ -167,11 +167,14 @@ describe('checkForUpdate', () => {
   });
 
   it('returns fromCache=true for fresh cache (<4h)', async () => {
+    // Use the actual running version so the channel + currentVersion guard passes
+    const { currentVersion } = await checkForUpdate({ noUpdateCheck: true, autoUpdate: false });
+    const channel = deriveChannel(currentVersion);
     writeFreshCache({
       checkedAt: Date.now() - 30 * 60 * 1_000, // 30 min ago
-      currentVersion: '1.5.0-beta.10',
-      latestVersion: '1.5.0-beta.10',
-      channel: 'beta',
+      currentVersion,
+      latestVersion: currentVersion,
+      channel,
     });
     let fetchCalled = false;
     globalThis.fetch = (): Promise<Response> => {
