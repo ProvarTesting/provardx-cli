@@ -272,7 +272,8 @@ function resolveTestInstanceFull(instancePath: string, projectPath: string): Tes
       }
     }
 
-    return { testCase: { name: tcName, xml_content }, testCasePath, testCaseId };
+    // Only expose testCasePath when in-bounds — out-of-bounds paths must not affect coverage totals
+    return { testCase: { name: tcName, xml_content }, testCasePath: tcInBounds ? testCasePath : null, testCaseId };
   } catch {
     return { testCase: null, testCasePath: null, testCaseId: null };
   }
