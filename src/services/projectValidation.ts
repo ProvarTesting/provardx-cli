@@ -435,9 +435,10 @@ function buildTestCaseIdMap(projectPath: string): Map<string, string> {
           try {
             const content = fs.readFileSync(fullPath, 'utf-8');
             const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
-            for (const attr of ['registryId', 'guid'] as const) {
+            for (const attr of ['registryId', 'id', 'guid'] as const) {
               const m = content.match(new RegExp(`${attr}=["']([^"']+)["']`));
-              if (m?.[1] && !idMap.has(m[1])) idMap.set(m[1], rel);
+              // Skip id="1" — new generator emits this literal and it is not UUID-unique
+              if (m?.[1] && m[1] !== '1' && !idMap.has(m[1])) idMap.set(m[1], rel);
             }
           } catch {
             /* skip */
