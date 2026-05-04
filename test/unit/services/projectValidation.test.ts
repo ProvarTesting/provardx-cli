@@ -33,8 +33,8 @@ const VALID_TC_XML = (guid: string, stepGuid: string, id: string): string => `<?
 const G = {
   tc1: '550e8400-e29b-41d4-a716-446655440001',
   tc2: '550e8400-e29b-41d4-a716-446655440002',
-  s1:  '550e8400-e29b-41d4-a716-446655440011',
-  s2:  '550e8400-e29b-41d4-a716-446655440012',
+  s1: '550e8400-e29b-41d4-a716-446655440011',
+  s2: '550e8400-e29b-41d4-a716-446655440012',
 };
 
 const TESTPROJECT_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -72,13 +72,23 @@ function makeProject(root: string, planName = 'smoke', tcName = 'Login'): void {
   // plans/<planName>/<tcName>.testinstance
   const instancePath = path.join(root, 'plans', planName, `${tcName}.testinstance`);
   writeFile(instancePath, `testCasePath="tests/${tcName}.testcase"\n`);
+
+  // plans/<planName>/.planitem — required for runner to recognise this plan
+  writeFile(
+    path.join(root, 'plans', planName, '.planitem'),
+    '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="smoke-plan-001"/>'
+  );
 }
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
-    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* skip */ }
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* skip */
+    }
   }
 });
 
@@ -158,7 +168,11 @@ describe('readProjectContext', () => {
     } catch {
       // If chmod doesn't work (Windows), skip the test body — graceful skip
     } finally {
-      try { fs.chmodSync(tpPath, 0o644); } catch { /* skip */ }
+      try {
+        fs.chmodSync(tpPath, 0o644);
+      } catch {
+        /* skip */
+      }
     }
   });
 
@@ -166,11 +180,12 @@ describe('readProjectContext', () => {
     const root = mktemp();
     writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
     // 2 unencrypted values, 1 encrypted, 1 encryptor check line
-    writeFile(path.join(root, '.secrets'),
+    writeFile(
+      path.join(root, '.secrets'),
       'Encryptor.check=ENC1(abc123)\n' +
-      'password=plaintext\n' +
-      'apiKey=ENC1(encrypted)\n' +
-      'token=another_plaintext\n'
+        'password=plaintext\n' +
+        'apiKey=ENC1(encrypted)\n' +
+        'token=another_plaintext\n'
     );
     const { context } = readProjectContext(root);
     assert.equal(context.secretsPasswordSet, true);
@@ -230,19 +245,49 @@ describe('resolveTestInstance', () => {
 // ── toQualityTier + toQualityGrade ────────────────────────────────────────────
 
 describe('toQualityTier', () => {
-  it('returns S for score >= 95', () => { assert.equal(toQualityTier(100), 'S'); assert.equal(toQualityTier(95), 'S'); });
-  it('returns A for score 85-94', () => { assert.equal(toQualityTier(90), 'A'); assert.equal(toQualityTier(85), 'A'); });
-  it('returns B for score 75-84', () => { assert.equal(toQualityTier(80), 'B'); assert.equal(toQualityTier(75), 'B'); });
-  it('returns C for score 65-74', () => { assert.equal(toQualityTier(70), 'C'); assert.equal(toQualityTier(65), 'C'); });
-  it('returns D for score < 65',  () => { assert.equal(toQualityTier(64), 'D'); assert.equal(toQualityTier(0), 'D'); });
+  it('returns S for score >= 95', () => {
+    assert.equal(toQualityTier(100), 'S');
+    assert.equal(toQualityTier(95), 'S');
+  });
+  it('returns A for score 85-94', () => {
+    assert.equal(toQualityTier(90), 'A');
+    assert.equal(toQualityTier(85), 'A');
+  });
+  it('returns B for score 75-84', () => {
+    assert.equal(toQualityTier(80), 'B');
+    assert.equal(toQualityTier(75), 'B');
+  });
+  it('returns C for score 65-74', () => {
+    assert.equal(toQualityTier(70), 'C');
+    assert.equal(toQualityTier(65), 'C');
+  });
+  it('returns D for score < 65', () => {
+    assert.equal(toQualityTier(64), 'D');
+    assert.equal(toQualityTier(0), 'D');
+  });
 });
 
 describe('toQualityGrade', () => {
-  it('returns Excellent for score >= 95', () => { assert.equal(toQualityGrade(100), 'Excellent'); assert.equal(toQualityGrade(95), 'Excellent'); });
-  it('returns Great for score 90-94',     () => { assert.equal(toQualityGrade(90), 'Great'); assert.equal(toQualityGrade(92), 'Great'); });
-  it('returns Good for score 80-89',      () => { assert.equal(toQualityGrade(80), 'Good'); assert.equal(toQualityGrade(85), 'Good'); });
-  it('returns Fair for score 70-79',      () => { assert.equal(toQualityGrade(70), 'Fair'); assert.equal(toQualityGrade(75), 'Fair'); });
-  it('returns Poor for score < 70',       () => { assert.equal(toQualityGrade(69), 'Poor'); assert.equal(toQualityGrade(0), 'Poor'); });
+  it('returns Excellent for score >= 95', () => {
+    assert.equal(toQualityGrade(100), 'Excellent');
+    assert.equal(toQualityGrade(95), 'Excellent');
+  });
+  it('returns Great for score 90-94', () => {
+    assert.equal(toQualityGrade(90), 'Great');
+    assert.equal(toQualityGrade(92), 'Great');
+  });
+  it('returns Good for score 80-89', () => {
+    assert.equal(toQualityGrade(80), 'Good');
+    assert.equal(toQualityGrade(85), 'Good');
+  });
+  it('returns Fair for score 70-79', () => {
+    assert.equal(toQualityGrade(70), 'Fair');
+    assert.equal(toQualityGrade(75), 'Fair');
+  });
+  it('returns Poor for score < 70', () => {
+    assert.equal(toQualityGrade(69), 'Poor');
+    assert.equal(toQualityGrade(0), 'Poor');
+  });
 });
 
 // ── validateProjectFromPath ───────────────────────────────────────────────────
@@ -372,7 +417,10 @@ describe('validateProjectFromPath', () => {
     assert.ok(result.coverage.uncovered_test_cases.some((p) => p.includes('Orphan')));
     assert.equal(result.coverage.total_test_cases_on_disk, 2);
     // covered + uncovered must always sum to total
-    assert.equal(result.coverage.covered_by_plans + result.coverage.uncovered_count, result.coverage.total_test_cases_on_disk);
+    assert.equal(
+      result.coverage.covered_by_plans + result.coverage.uncovered_count,
+      result.coverage.total_test_cases_on_disk
+    );
   });
 
   it('coverage: UUID-based match marks test as covered when testCasePath is absent but testCaseId matches registryId', () => {
@@ -390,7 +438,11 @@ describe('validateProjectFromPath', () => {
     // We simulate a mismatch by omitting testCasePath and relying solely on testCaseId
     writeFile(
       path.join(root, 'plans', 'smoke', 'UuidTest.testinstance'),
-      `testCaseId="${callableRegId}"\n`  // no testCasePath — UUID fallback must cover it
+      `testCaseId="${callableRegId}"\n` // no testCasePath — UUID fallback must cover it
+    );
+    writeFile(
+      path.join(root, 'plans', 'smoke', '.planitem'),
+      '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="uuid-plan-001"/>'
     );
     const result = validateProjectFromPath({ project_path: root, save_results: false });
     assert.equal(result.coverage.covered_by_plans, 1, 'UUID-based match should count UuidTest as covered');
@@ -436,9 +488,7 @@ describe('buildQhReport', () => {
     // The saved report has the QH structure — verify by re-running with save_results: true
     const withSave = validateProjectFromPath({ project_path: root, save_results: true });
     assert.ok(withSave.saved_to !== null);
-    const report = JSON.parse(
-      fs.readFileSync(path.join(root, withSave.saved_to), 'utf-8')
-    ) as Record<string, unknown>;
+    const report = JSON.parse(fs.readFileSync(path.join(root, withSave.saved_to), 'utf-8')) as Record<string, unknown>;
     assert.ok(report.reportInfo, 'missing reportInfo');
     assert.ok(report.summary, 'missing summary');
     assert.ok(report.context, 'missing context');

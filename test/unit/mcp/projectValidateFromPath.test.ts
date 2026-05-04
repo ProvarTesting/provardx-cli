@@ -52,9 +52,10 @@ const TESTPROJECT_XML = `<?xml version="1.0" encoding="UTF-8"?>
   <secureStoragePath>.secrets</secureStoragePath>
 </testProject>`;
 
-function makeXml(tcGuid: string, stepGuid: string, id: string): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<testCase id="${id}" guid="${tcGuid}" registryId="${id}" name="${id}">
+function makeXml(tcGuid: string, stepGuid: string): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<testCase guid="${tcGuid}" id="1" registryId="${tcGuid}">
+  <summary/>
   <steps>
     <apiCall guid="${stepGuid}" apiId="UiConnect" name="Connect" testItemId="1"/>
   </steps>
@@ -68,16 +69,18 @@ function writeFile(p: string, content: string): void {
 
 const G = {
   tc1: '550e8400-e29b-41d4-a716-446655440001',
-  s1:  '550e8400-e29b-41d4-a716-446655440011',
+  s1: '550e8400-e29b-41d4-a716-446655440011',
 };
 
 /** Build a minimal valid Provar project in the given directory */
 function makeProject(root: string, planName = 'smoke', tcName = 'Login'): void {
   writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
-  writeFile(path.join(root, 'tests', `${tcName}.testcase`),
-    makeXml(G.tc1, G.s1, `tc-${tcName.toLowerCase()}`));
-  writeFile(path.join(root, 'plans', planName, `${tcName}.testinstance`),
-    `testCasePath="tests/${tcName}.testcase"\n`);
+  writeFile(path.join(root, 'tests', `${tcName}.testcase`), makeXml(G.tc1, G.s1));
+  writeFile(path.join(root, 'plans', planName, `${tcName}.testinstance`), `testCasePath="tests/${tcName}.testcase"\n`);
+  writeFile(
+    path.join(root, 'plans', planName, '.planitem'),
+    '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+  );
 }
 
 // ── Test setup ─────────────────────────────────────────────────────────────────
@@ -211,8 +214,7 @@ describe('provar.project.validate (from path)', () => {
       });
 
       const defaultResultsDir = path.join(tmpDir, 'provardx', 'validation');
-      const exists = fs.existsSync(defaultResultsDir) &&
-        fs.readdirSync(defaultResultsDir).length > 0;
+      const exists = fs.existsSync(defaultResultsDir) && fs.readdirSync(defaultResultsDir).length > 0;
       assert.equal(exists, false, 'No results file should be written when save_results=false');
     });
 
@@ -306,7 +308,7 @@ describe('provar.project.validate (from path)', () => {
       const root = mktemp();
       writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
       for (const name of ['Login', 'Logout', 'Search']) {
-        writeFile(path.join(root, 'tests', `${name}.testcase`), makeXml(G.tc1, G.s1, `tc-${name.toLowerCase()}`));
+        writeFile(path.join(root, 'tests', `${name}.testcase`), makeXml(G.tc1, G.s1));
       }
       writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
 
@@ -320,6 +322,123 @@ describe('provar.project.validate (from path)', () => {
       const uncovered = coverage['uncovered_test_cases'] as string[];
       assert.ok(uncovered.length <= 1, 'Should be truncated to max_uncovered=1');
       assert.equal(coverage['uncovered_truncated'], true);
+    });
+  });
+
+  describe('plan integrity warnings (E2)', () => {
+    it('reports plan_integrity_warnings when a plan dir is missing .planitem', () => {
+      const root = mktemp();
+      writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
+      writeFile(path.join(root, 'tests', 'Login.testcase'), makeXml(G.tc1, G.s1));
+      // Plan dir exists but has no .planitem file
+      writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
+
+      const result = server.call('provar.project.validate', {
+        project_path: root,
+        save_results: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['plan_integrity_warnings'] as string[] | undefined;
+      assert.ok(
+        Array.isArray(warnings) && warnings.length > 0,
+        'Expected plan_integrity_warnings for missing .planitem'
+      );
+      assert.ok(warnings[0].includes('smoke'), 'Warning should name the plan');
+      assert.ok(warnings[0].includes('.planitem'), 'Warning should mention .planitem');
+    });
+
+    it('reports plan_integrity_warnings when a suite dir is missing .planitem', () => {
+      const root = mktemp();
+      writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
+      writeFile(path.join(root, 'tests', 'Login.testcase'), makeXml(G.tc1, G.s1));
+      // Plan has .planitem but a suite subdir does not
+      writeFile(
+        path.join(root, 'plans', 'smoke', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+      );
+      writeFile(
+        path.join(root, 'plans', 'smoke', 'SuiteA', 'Login.testinstance'),
+        'testCasePath="tests/Login.testcase"\n'
+      );
+
+      const result = server.call('provar.project.validate', {
+        project_path: root,
+        save_results: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['plan_integrity_warnings'] as string[] | undefined;
+      assert.ok(
+        Array.isArray(warnings) && warnings.length > 0,
+        'Expected plan_integrity_warnings for suite missing .planitem'
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('SuiteA')),
+        'Warning should name the suite directory'
+      );
+    });
+
+    it('does NOT include plan_integrity_warnings when all .planitem files are present', () => {
+      const root = mktemp();
+      writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
+      writeFile(path.join(root, 'tests', 'Login.testcase'), makeXml(G.tc1, G.s1));
+      writeFile(
+        path.join(root, 'plans', 'smoke', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+      );
+      writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
+
+      const result = server.call('provar.project.validate', {
+        project_path: root,
+        save_results: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(
+        !('plan_integrity_warnings' in body),
+        'No plan_integrity_warnings expected when .planitem files are present'
+      );
+    });
+
+    it('reports plan_integrity_warnings for nested suite dir (depth ≥ 2) missing .planitem', () => {
+      const root = mktemp();
+      writeFile(path.join(root, '.testproject'), TESTPROJECT_XML);
+      writeFile(path.join(root, 'tests', 'Login.testcase'), makeXml(G.tc1, G.s1));
+      // Plan and SuiteA have .planitem, but SuiteA/SubSuite does not
+      writeFile(
+        path.join(root, 'plans', 'smoke', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="abc-123"/>'
+      );
+      writeFile(
+        path.join(root, 'plans', 'smoke', 'SuiteA', '.planitem'),
+        '<?xml version="1.0" encoding="UTF-8"?><testPlan guid="def-456"/>'
+      );
+      // SubSuite exists but lacks .planitem — instances here would be invisible to runner
+      writeFile(
+        path.join(root, 'plans', 'smoke', 'SuiteA', 'SubSuite', 'Login.testinstance'),
+        'testCasePath="tests/Login.testcase"\n'
+      );
+
+      const result = server.call('provar.project.validate', {
+        project_path: root,
+        save_results: false,
+      });
+
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const warnings = body['plan_integrity_warnings'] as string[] | undefined;
+      assert.ok(
+        Array.isArray(warnings) && warnings.length > 0,
+        'Expected plan_integrity_warnings for nested suite missing .planitem'
+      );
+      assert.ok(
+        warnings.some((w) => w.includes('SubSuite')),
+        'Warning should name the nested suite directory'
+      );
     });
   });
 });
