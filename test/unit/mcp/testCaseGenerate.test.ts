@@ -99,7 +99,7 @@ describe('provar.testcase.generate', () => {
   });
 
   describe('generated XML content', () => {
-    it('contains <testCase> root element with name attribute', () => {
+    it('generates correct <testCase> element structure per Provar requirements', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Create Account',
         steps: [],
@@ -108,8 +108,11 @@ describe('provar.testcase.generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('standalone="no"'), 'Expected standalone="no" in XML declaration');
       assert.ok(xml.includes('<testCase'), 'Expected <testCase element');
-      assert.ok(xml.includes('name="Create Account"'), 'Expected name attribute');
+      assert.ok(xml.includes('id="1"'), 'Expected id="1" (Provar integer literal)');
+      assert.ok(!xml.includes('name="Create Account"'), 'testCase must NOT have a name attribute');
+      assert.ok(xml.includes('<summary/>'), 'Expected <summary/> as first child of testCase');
     });
 
     it('contains <steps> element', () => {
@@ -138,18 +141,19 @@ describe('provar.testcase.generate', () => {
       assert.ok(UUID_RE.test(guidMatch[1]), `Expected UUID v4, got: ${guidMatch[1]}`);
     });
 
-    it('uses explicit test_case_id when provided', () => {
-      const myId = 'my-explicit-id-123';
+    it('always emits id="1" regardless of test_case_name (Provar integer literal requirement)', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Explicit ID Test',
-        test_case_id: myId,
         steps: [],
         dry_run: true,
         overwrite: false,
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes(`id="${myId}"`), 'Expected explicit id in XML');
+      assert.ok(xml.includes('id="1"'), 'Expected id="1" literal in testCase element');
+      // Ensure the testCase id attr specifically is "1", not a UUID.
+      // Use word-boundary regex to avoid matching registryId="<uuid>" or guid="<uuid>".
+      assert.ok(!xml.match(/\btestCase\b[^>]*?\bid="[0-9a-f]{8}-/), 'testCase id must not be a UUID');
     });
 
     it('includes steps with correct apiId and sequential testItemId', () => {
@@ -220,7 +224,7 @@ describe('provar.testcase.generate', () => {
       assert.ok(xml.includes('TODO'), 'Expected TODO placeholder for empty steps');
     });
 
-    it('escapes XML special characters in test_case_name', () => {
+    it('does not embed test_case_name in XML (name attr removed per Provar spec)', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Test & "Escape" <this>',
         steps: [],
@@ -229,10 +233,9 @@ describe('provar.testcase.generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('&amp;'), 'Expected & escaped to &amp;');
-      assert.ok(xml.includes('&quot;'), 'Expected " escaped to &quot;');
-      assert.ok(xml.includes('&lt;'), 'Expected < escaped to &lt;');
-      assert.ok(xml.includes('&gt;'), 'Expected > escaped to &gt;');
+      // Provar derives test name from the file name — the name attr is not written to testCase
+      assert.ok(!xml.includes('name="Test'), 'testCase must NOT have a name attribute');
+      assert.ok(!xml.includes('Test &amp;'), 'escaped name must not appear in XML');
     });
 
     it('escapes XML special characters in step api_id and name', () => {
@@ -479,7 +482,10 @@ describe('provar.testcase.generate', () => {
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('class="uiTarget"'), 'Expected class="uiTarget"');
       assert.ok(xml.includes('uri="sf:ui:target?'), 'Expected uri attribute with sf:ui:target value');
-      assert.ok(!xml.includes('valueClass="string">sf:ui:target'), 'Must NOT emit uiTarget URI as a plain string value');
+      assert.ok(
+        !xml.includes('valueClass="string">sf:ui:target'),
+        'Must NOT emit uiTarget URI as a plain string value'
+      );
     });
 
     it('emits class="uiLocator" uri="..." for the locator argument', () => {
@@ -500,7 +506,10 @@ describe('provar.testcase.generate', () => {
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('class="uiLocator"'), 'Expected class="uiLocator"');
       assert.ok(xml.includes('uri="sf:ui:locator:'), 'Expected uri attribute with locator value');
-      assert.ok(!xml.includes('valueClass="string">sf:ui:locator'), 'Must NOT emit locator URI as a plain string value');
+      assert.ok(
+        !xml.includes('valueClass="string">sf:ui:locator'),
+        'Must NOT emit locator URI as a plain string value'
+      );
     });
 
     it('uiTarget also applies inside UiWithScreen wrapper when target_uri is non-SF', () => {
@@ -515,7 +524,10 @@ describe('provar.testcase.generate', () => {
 
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('class="uiTarget"'), 'Wrapper UiWithScreen target should use uiTarget class');
-      assert.ok(xml.includes('uri="ui:pageobject:target?pageId=pageobjects.LoginPage"'), 'URI should appear as attribute');
+      assert.ok(
+        xml.includes('uri="ui:pageobject:target?pageId=pageobjects.LoginPage"'),
+        'URI should appear as attribute'
+      );
     });
   });
 
@@ -542,10 +554,7 @@ describe('provar.testcase.generate', () => {
       assert.ok(xml.includes('<namedValue name="testCaseName">'), 'Expected namedValue for testCaseName');
       assert.ok(xml.includes('<namedValue name="testType">'), 'Expected namedValue for testType');
       assert.ok(xml.includes('<argument id="values">'), 'Expected argument id="values"');
-      assert.ok(
-        !xml.includes('testCaseName|TC_New'),
-        'Must NOT emit pipe-delimited string for SetValues'
-      );
+      assert.ok(!xml.includes('testCaseName|TC_New'), 'Must NOT emit pipe-delimited string for SetValues');
     });
 
     it('AssertValues uses flat argument structure (not valueList)', () => {
@@ -572,9 +581,7 @@ describe('provar.testcase.generate', () => {
     it('non-SetValues steps still use flat argument structure', () => {
       const result = server.call('provar.testcase.generate', {
         test_case_name: 'Flat Args Test',
-        steps: [
-          { api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Opportunity' } },
-        ],
+        steps: [{ api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Opportunity' } }],
         dry_run: true,
         overwrite: false,
         validate_after_edit: false,

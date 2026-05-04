@@ -119,12 +119,14 @@ const StepSchema = z.object({
 const TOOL_DESCRIPTION = [
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
+  'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="1" registryId="..."> (id is always the integer literal "1" as required by the Provar runtime), a <summary/> child, then <steps>.',
   'URI-aware generation: use target_uri to control the XML nesting structure.',
   '  - sf:ui:target (or omit target_uri) → flat Salesforce XML structure (existing behaviour).',
   '  - ui:pageobject:target?pageId=pageobjects.PageClass → wraps all steps in a UiWithScreen element targeting that non-SF page object.',
   'API IDs: shorthand forms (e.g. UiConnect, ApexSoqlQuery) are automatically expanded to fully-qualified IDs required by the Provar runtime.',
   'Step arguments: attributes are emitted as <arguments><argument id="..."><value .../></argument></arguments> — the only format the Provar runtime processes.',
   'Shorthand XML attributes on <apiCall> are silently ignored at runtime; always supply arguments via the attributes map.',
+  'ApexSoqlQuery argument IDs: soqlQuery (the SOQL SELECT statement), resultListName (binds result list to a variable), apexConnectionName (named connection), resultScope (optional).',
   'Data-driven note: <dataTable> only iterates rows when the test case runs via a test plan instance (.testinstance).',
   'Running directly via the provardx testCase property resolves all data table variables as null.',
   'Use provar.testplan.add-instance to wire into a plan for data-driven execution.',
@@ -138,6 +140,13 @@ const TOOL_DESCRIPTION = [
   'Variable references: pass values as "{VarName}" (braces); emitted as class="variable" <path element="VarName"/>.',
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
   'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
+  'Edit page objects: action=Edit targets require a compiled page object for the SF object. ' +
+    'If none exists in the project page-objects directory, the locator binding will fail at runtime. ' +
+    'For objects without a compiled Edit page object, use inline edit instead: sfIleActivate to activate the field, ' +
+    'set the value, then SaveEdit binding on the Record view screen.',
+  'Provar IDE warning: opening a generated test case in Provar IDE injects empty <argument id="..."/> elements for known parameter IDs. ' +
+    'If the empty element appears after a populated one, the empty version wins at runtime. ' +
+    'Always check for and remove duplicate empty arguments after any IDE open/save cycle before re-running.',
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
   'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
@@ -149,7 +158,6 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
     TOOL_DESCRIPTION,
     {
       test_case_name: z.string().describe('Test case name (human-readable label)'),
-      test_case_id: z.string().optional().describe('Explicit test case id; auto-generated UUID v4 if omitted'),
       steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
       target_uri: z
         .string()
@@ -299,11 +307,7 @@ function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '   
   const argLines = entries
     .map(([k, v]) => {
       const valueXml = buildArgumentValue(k, v, `${baseIndent}  `, false, apiId);
-      return (
-        `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` +
-        valueXml + '\n' +
-        `${baseIndent}</argument>`
-      );
+      return `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` + valueXml + '\n' + `${baseIndent}</argument>`;
     })
     .join('\n');
   return `\n${baseIndent}<arguments>\n${argLines}\n${baseIndent}</arguments>\n${baseIndent.slice(0, -2)}`;
@@ -325,7 +329,8 @@ function buildSetValuesXml(attributes: Record<string, string>, baseIndent: strin
     `${i(0)}<argument id="values">\n` +
     `${i(1)}<value class="valueList" mutable="Mutable">\n` +
     `${i(2)}<namedValues>\n` +
-    namedValueLines + '\n' +
+    namedValueLines +
+    '\n' +
     `${i(2)}</namedValues>\n` +
     `${i(1)}</value>\n` +
     `${i(0)}</argument>\n` +
@@ -360,11 +365,9 @@ function buildFlatStepXml(
 
 function buildTestCaseXml(input: {
   test_case_name: string;
-  test_case_id?: string;
   steps: Array<{ api_id: string; name: string; attributes: Record<string, string> }>;
   target_uri?: string;
 }): string {
-  const testCaseId = input.test_case_id ?? randomUUID();
   const testCaseGuid = randomUUID();
   const registryId = randomUUID();
 
@@ -378,10 +381,11 @@ function buildTestCaseXml(input: {
     stepLines = lines || '    <!-- TODO: Add test steps here -->';
   }
 
+  // Provar requires: standalone="no", id="1" (integer literal), no name attr, <summary/> before <steps>.
   return (
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    `<testCase id="${testCaseId}" guid="${testCaseGuid}" registryId="${registryId}"` +
-    ` name="${escapeXmlAttr(input.test_case_name)}">\n` +
+    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
+    `<testCase guid="${testCaseGuid}" id="1" registryId="${registryId}">\n` +
+    '  <summary/>\n' +
     '  <steps>\n' +
     stepLines +
     '\n  </steps>\n' +
@@ -406,7 +410,11 @@ function buildUiWithScreenXml(
     '      </clauses>\n    ';
   return (
     `    <apiCall guid="${wrapperGuid}" apiId="${wrapperApiId}"` +
-    ` name="With page" testItemId="1">${buildArgumentsXml({ target: targetUri }, '      ', wrapperApiId).trimEnd()}${clausesXml}</apiCall>`
+    ` name="With page" testItemId="1">${buildArgumentsXml(
+      { target: targetUri },
+      '      ',
+      wrapperApiId
+    ).trimEnd()}${clausesXml}</apiCall>`
   );
 }
 

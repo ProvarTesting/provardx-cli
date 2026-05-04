@@ -23,8 +23,9 @@ const GUID_TC = '550e8400-e29b-41d4-a716-446655440000';
 const GUID_S1 = '6ba7b810-9dad-4000-8000-00c04fd430c8';
 const GUID_S2 = '6ba7b811-9dad-4001-9001-00c04fd430c8';
 
-const VALID_TC = `<?xml version="1.0" encoding="UTF-8"?>
-<testCase id="test-001" guid="${GUID_TC}" registryId="abc123" name="My Test">
+const VALID_TC = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<testCase guid="${GUID_TC}" id="1" registryId="abc123">
+  <summary/>
   <steps>
     <apiCall guid="${GUID_S1}" apiId="UiConnect" name="Connect to browser" testItemId="1"/>
     <apiCall guid="${GUID_S2}" apiId="UiNavigate" name="Navigate to login" testItemId="2"/>
@@ -38,8 +39,8 @@ describe('validateTestCase', () => {
       assert.equal(r.is_valid, true);
       assert.equal(r.error_count, 0);
       assert.equal(r.step_count, 2);
-      assert.equal(r.test_case_id, 'test-001');
-      assert.equal(r.test_case_name, 'My Test');
+      assert.equal(r.test_case_id, '1');
+      assert.equal(r.test_case_name, null); // name attr is absent per Provar spec
     });
   });
 
@@ -78,6 +79,16 @@ describe('validateTestCase', () => {
       assert.ok(
         r.issues.some((i) => i.rule_id === 'TC_010'),
         'Expected TC_010'
+      );
+    });
+
+    it('TC_010: flags non-"1" id (e.g. UUID used as id)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?><testCase id="${GUID_TC}" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'TC_010'),
+        'Expected TC_010 for UUID used as id'
       );
     });
 
@@ -841,8 +852,8 @@ describe('registerTestCaseValidate handler', () => {
     assert.equal(result['is_valid'], true);
     assert.equal(result['quality_score'], 90);
     // Metadata extracted from XML locally and merged into the API response
-    assert.equal(result['test_case_id'], 'test-001');
-    assert.equal(result['test_case_name'], 'My Test');
+    assert.equal(result['test_case_id'], '1'); // id="1" per Provar spec
+    assert.equal(result['test_case_name'], null); // name attr absent per Provar spec
     assert.equal(result['step_count'], 2);
   });
 
