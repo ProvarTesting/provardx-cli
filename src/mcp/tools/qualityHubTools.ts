@@ -33,16 +33,20 @@ function handleSpawnError(
 // ── Tool: provar_qualityhub_connect ───────────────────────────────────────────
 
 export function registerQualityHubConnect(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_connect',
-    'Connect to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` with the supplied flags.',
     {
-      target_org: z.string().describe('SF org alias or username to connect as'),
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
+      title: 'Connect to Quality Hub',
+      description:
+        'Connect to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` with the supplied flags.',
+      inputSchema: {
+        target_org: z.string().describe('SF org alias or username to connect as'),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
+      },
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
@@ -75,12 +79,15 @@ export function registerQualityHubConnect(server: McpServer): void {
 // ── Tool: provar_qualityhub_display ──────────────────────────────────────────
 
 export function registerQualityHubDisplay(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_display',
-    'Display connected Quality Hub org info. Invokes `sf provar quality-hub display`.',
     {
-      target_org: z.string().optional().describe('SF org alias or username (uses default if omitted)'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags to forward'),
+      title: 'Display Quality Hub Info',
+      description: 'Display connected Quality Hub org info. Invokes `sf provar quality-hub display`.',
+      inputSchema: {
+        target_org: z.string().optional().describe('SF org alias or username (uses default if omitted)'),
+        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags to forward'),
+      },
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
@@ -132,19 +139,23 @@ function detectWildcardFlags(flags: string[]): string | undefined {
 }
 
 export function registerQualityHubTestRun(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_testrun',
-    'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`. ' +
-      'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
     {
-      target_org: z.string().describe('SF org alias or username'),
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe(
-          'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.'
-        ),
+      title: 'Trigger Quality Hub Test Run',
+      description:
+        'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`. ' +
+        'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
+      inputSchema: {
+        target_org: z.string().describe('SF org alias or username'),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(
+            'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.'
+          ),
+      },
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
@@ -187,13 +198,16 @@ export function registerQualityHubTestRun(server: McpServer): void {
 // ── Tool: provar_qualityhub_testrun_report ────────────────────────────────────
 
 export function registerQualityHubTestRunReport(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_testrun_report',
-    'Poll the status of a Quality Hub test run. Invokes `sf provar quality-hub test run report`.',
     {
-      target_org: z.string().describe('SF org alias or username'),
-      run_id: z.string().describe('Test run ID returned by provar_qualityhub_testrun'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+      title: 'Poll Quality Hub Test Run',
+      description: 'Poll the status of a Quality Hub test run. Invokes `sf provar quality-hub test run report`.',
+      inputSchema: {
+        target_org: z.string().describe('SF org alias or username'),
+        run_id: z.string().describe('Test run ID returned by provar_qualityhub_testrun'),
+        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+      },
     },
     ({ target_org, run_id, flags }) => {
       const requestId = makeRequestId();
@@ -256,13 +270,16 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
 // ── Tool: provar_qualityhub_testrun_abort ─────────────────────────────────────
 
 export function registerQualityHubTestRunAbort(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_testrun_abort',
-    'Abort an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.',
     {
-      target_org: z.string().describe('SF org alias or username'),
-      run_id: z.string().describe('Test run ID to abort'),
-      flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+      title: 'Abort Quality Hub Test Run',
+      description: 'Abort an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.',
+      inputSchema: {
+        target_org: z.string().describe('SF org alias or username'),
+        run_id: z.string().describe('Test run ID to abort'),
+        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+      },
     },
     ({ target_org, run_id, flags }) => {
       const requestId = makeRequestId();
@@ -306,16 +323,20 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
 // ── Tool: provar_qualityhub_testcase_retrieve ─────────────────────────────────
 
 export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_testcase_retrieve',
-    'Retrieve Quality Hub test cases by user story or component. Invokes `sf provar quality-hub testcase retrieve`.',
     {
-      target_org: z.string().describe('SF org alias or username'),
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
+      title: 'Retrieve Quality Hub Test Cases',
+      description:
+        'Retrieve Quality Hub test cases by user story or component. Invokes `sf provar quality-hub testcase retrieve`.',
+      inputSchema: {
+        target_org: z.string().describe('SF org alias or username'),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
+      },
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();

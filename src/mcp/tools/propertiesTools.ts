@@ -159,25 +159,28 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
 // ── provar_properties_generate ────────────────────────────────────────────────
 
 export function registerPropertiesGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_properties_generate',
-    [
-      'Generate a provardx-properties.json file from the standard template.',
-      'Optionally pre-fills projectPath and provarHome if provided.',
-      'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
-      'Use provar_properties_set afterwards to update specific fields.',
-    ].join(' '),
     {
-      output_path: z.string().describe('Where to write the file (e.g. /path/to/project/provardx-properties.json)'),
-      project_path: z.string().optional().describe('Pre-fill the projectPath field with this value'),
-      provar_home: z.string().optional().describe('Pre-fill the provarHome field with this value'),
-      results_path: z.string().optional().describe('Pre-fill the resultsPath field with this value'),
-      overwrite: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Overwrite the file if it already exists (default: false)'),
-      dry_run: z.boolean().optional().default(false).describe('Return the content without writing (default: false)'),
+      title: 'Generate ProvarDX Properties File',
+      description: [
+        'Generate a provardx-properties.json file from the standard template.',
+        'Optionally pre-fills projectPath and provarHome if provided.',
+        'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
+        'Use provar_properties_set afterwards to update specific fields.',
+      ].join(' '),
+      inputSchema: {
+        output_path: z.string().describe('Where to write the file (e.g. /path/to/project/provardx-properties.json)'),
+        project_path: z.string().optional().describe('Pre-fill the projectPath field with this value'),
+        provar_home: z.string().optional().describe('Pre-fill the provarHome field with this value'),
+        results_path: z.string().optional().describe('Pre-fill the resultsPath field with this value'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Overwrite the file if it already exists (default: false)'),
+        dry_run: z.boolean().optional().default(false).describe('Return the content without writing (default: false)'),
+      },
     },
     ({ output_path, project_path, provar_home, results_path, overwrite, dry_run }) => {
       const requestId = makeRequestId();
@@ -319,11 +322,15 @@ function buildDivergenceWarning(
 // ── provar_properties_read ────────────────────────────────────────────────────
 
 export function registerPropertiesRead(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_properties_read',
-    'Read and parse a provardx-properties.json file. Returns the parsed content so you can inspect current settings before making changes with provar_properties_set.',
     {
-      file_path: z.string().describe('Path to the provardx-properties.json file'),
+      title: 'Read Properties File',
+      description:
+        'Read and parse a provardx-properties.json file. Returns the parsed content so you can inspect current settings before making changes with provar_properties_set.',
+      inputSchema: {
+        file_path: z.string().describe('Path to the provardx-properties.json file'),
+      },
     },
     ({ file_path }) => {
       const requestId = makeRequestId();
@@ -472,18 +479,21 @@ const updatesSchema = z
   .describe('Fields to update in the properties file — only provided fields are changed');
 
 export function registerPropertiesSet(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_properties_set',
-    [
-      'Update one or more fields in a provardx-properties.json file.',
-      'Only the provided fields are changed — all other fields are preserved.',
-      'Object fields (environment, metadata) are deep-merged.',
-      'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
-      'Use provar_properties_read first to inspect the current state.',
-    ].join(' '),
     {
-      file_path: z.string().describe('Path to the provardx-properties.json file to update'),
-      updates: updatesSchema,
+      title: 'Set Property Value',
+      description: [
+        'Update one or more fields in a provardx-properties.json file.',
+        'Only the provided fields are changed — all other fields are preserved.',
+        'Object fields (environment, metadata) are deep-merged.',
+        'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
+        'Use provar_properties_read first to inspect the current state.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().describe('Path to the provardx-properties.json file to update'),
+        updates: updatesSchema,
+      },
     },
     ({ file_path, updates }) => {
       const requestId = makeRequestId();
@@ -562,16 +572,19 @@ export function registerPropertiesSet(server: McpServer, config: ServerConfig): 
 // ── provar_properties_validate ────────────────────────────────────────────────
 
 export function registerPropertiesValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_properties_validate',
-    [
-      'Validate a provardx-properties.json file against the ProvarDX schema.',
-      'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
-      'Accepts either a file path or inline JSON content.',
-    ].join(' '),
     {
-      file_path: z.string().optional().describe('Path to the provardx-properties.json file to validate'),
-      content: z.string().optional().describe('Inline JSON string to validate (alternative to file_path)'),
+      title: 'Validate ProvarDX Properties File',
+      description: [
+        'Validate a provardx-properties.json file against the ProvarDX schema.',
+        'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
+        'Accepts either a file path or inline JSON content.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().optional().describe('Path to the provardx-properties.json file to validate'),
+        content: z.string().optional().describe('Inline JSON string to validate (alternative to file_path)'),
+      },
     },
     ({ file_path, content }) => {
       const requestId = makeRequestId();

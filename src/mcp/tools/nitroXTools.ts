@@ -426,22 +426,34 @@ function applyMergePatch(target: JsonObj, patch: JsonObj): JsonObj {
 // ── Tool Registrations ────────────────────────────────────────────────────────
 
 export function registerNitroXDiscover(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_nitrox_discover',
-    [
-      'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
-      'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
-      "NitroX is Provar's Hybrid Model for locators — component-based page objects for LWC,",
-      'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
-      'Results provide file paths and package info for use with provar_nitrox_read, validate, and generate.',
-    ].join(' '),
     {
-      search_roots: z
-        .array(z.string())
-        .optional()
-        .describe('Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)'),
-      max_depth: z.number().int().min(1).max(20).default(6).describe('Maximum directory depth for .testproject search'),
-      include_packages: z.boolean().default(true).describe('Include nitroXPackages/ package.json metadata in results'),
+      title: 'Discover NitroX Components',
+      description: [
+        'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
+        'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
+        "NitroX is Provar's Hybrid Model for locators — component-based page objects for LWC,",
+        'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
+        'Results provide file paths and package info for use with provar_nitrox_read, validate, and generate.',
+      ].join(' '),
+      inputSchema: {
+        search_roots: z
+          .array(z.string())
+          .optional()
+          .describe('Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)'),
+        max_depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .default(6)
+          .describe('Maximum directory depth for .testproject search'),
+        include_packages: z
+          .boolean()
+          .default(true)
+          .describe('Include nitroXPackages/ package.json metadata in results'),
+      },
     },
     ({ search_roots, max_depth, include_packages }) => {
       const requestId = makeRequestId();
@@ -516,26 +528,29 @@ export function registerNitroXDiscover(server: McpServer): void {
 }
 
 export function registerNitroXRead(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_nitrox_read',
-    [
-      'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
-      'Use this to load examples before generating or validating.',
-      "Provide file_paths for specific files, or project_path to read all .po.json files from a project's nitroX/ directory.",
-    ].join(' '),
     {
-      file_paths: z.array(z.string()).optional().describe('Specific .po.json file paths to read'),
-      project_path: z
-        .string()
-        .optional()
-        .describe('Provar project path — reads all .po.json files from nitroX/ directory'),
-      max_files: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .default(20)
-        .describe('Maximum number of files to return (prevents context overflow)'),
+      title: 'Read NitroX Files',
+      description: [
+        'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
+        'Use this to load examples before generating or validating.',
+        "Provide file_paths for specific files, or project_path to read all .po.json files from a project's nitroX/ directory.",
+      ].join(' '),
+      inputSchema: {
+        file_paths: z.array(z.string()).optional().describe('Specific .po.json file paths to read'),
+        project_path: z
+          .string()
+          .optional()
+          .describe('Provar project path — reads all .po.json files from nitroX/ directory'),
+        max_files: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(20)
+          .describe('Maximum number of files to return (prevents context overflow)'),
+      },
     },
     ({ file_paths, project_path, max_files }) => {
       const requestId = makeRequestId();
@@ -614,17 +629,20 @@ export function registerNitroXRead(server: McpServer, config: ServerConfig): voi
 }
 
 export function registerNitroXValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_nitrox_validate',
-    [
-      'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
-      'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-      'Returns a quality score (0–100) and a list of issues with rule IDs (NX001–NX010), severity, and suggestions.',
-      'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
-    ].join(' '),
     {
-      content: z.string().optional().describe('JSON string of the .po.json content to validate'),
-      file_path: z.string().optional().describe('Path to a .po.json file to validate'),
+      title: 'Validate NitroX Component',
+      description: [
+        'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
+        'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+        'Returns a quality score (0–100) and a list of issues with rule IDs (NX001–NX010), severity, and suggestions.',
+        'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
+      ].join(' '),
+      inputSchema: {
+        content: z.string().optional().describe('JSON string of the .po.json content to validate'),
+        file_path: z.string().optional().describe('Path to a .po.json file to validate'),
+      },
     },
     ({ content, file_path }) => {
       const requestId = makeRequestId();
@@ -698,26 +716,29 @@ const ElementInputSchema = z.object({
 });
 
 export function registerNitroXGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_nitrox_generate',
-    [
-      'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
-      "Applicable to any component type supported by Provar's Hybrid Model:",
-      'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-      'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
-      'writes to disk only when dry_run=false.',
-    ].join(' '),
     {
-      name: z.string().describe('Path-like component name, e.g. /com/force/myapp/ButtonComponent'),
-      tag_name: z.string().describe('LWC or HTML tag name, e.g. lightning-button or c-my-component'),
-      type: z.enum(['Block', 'Page']).default('Block').describe('Component type'),
-      page_structure_element: z.boolean().default(true).describe('Whether this is a page structure element'),
-      field_details_element: z.boolean().default(false).describe('Whether this is a field details element'),
-      parameters: z.array(ParameterInputSchema).optional().describe('Component parameters/qualifiers'),
-      elements: z.array(ElementInputSchema).optional().describe('Child elements'),
-      output_path: z.string().optional().describe('File path to write (requires dry_run=false)'),
-      overwrite: z.boolean().default(false).describe('Overwrite if output_path already exists'),
-      dry_run: z.boolean().default(true).describe('Return JSON without writing to disk (default)'),
+      title: 'Generate NitroX Components',
+      description: [
+        'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
+        "Applicable to any component type supported by Provar's Hybrid Model:",
+        'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+        'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
+        'writes to disk only when dry_run=false.',
+      ].join(' '),
+      inputSchema: {
+        name: z.string().describe('Path-like component name, e.g. /com/force/myapp/ButtonComponent'),
+        tag_name: z.string().describe('LWC or HTML tag name, e.g. lightning-button or c-my-component'),
+        type: z.enum(['Block', 'Page']).default('Block').describe('Component type'),
+        page_structure_element: z.boolean().default(true).describe('Whether this is a page structure element'),
+        field_details_element: z.boolean().default(false).describe('Whether this is a field details element'),
+        parameters: z.array(ParameterInputSchema).optional().describe('Component parameters/qualifiers'),
+        elements: z.array(ElementInputSchema).optional().describe('Child elements'),
+        output_path: z.string().optional().describe('File path to write (requires dry_run=false)'),
+        overwrite: z.boolean().default(false).describe('Overwrite if output_path already exists'),
+        dry_run: z.boolean().default(true).describe('Return JSON without writing to disk (default)'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
@@ -775,24 +796,27 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
 }
 
 export function registerNitroXPatch(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_nitrox_patch',
-    [
-      'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
-      'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
-      'optionally validates the merged result, and writes back.',
-      'Use dry_run=true (default) to preview the merged output without writing.',
-    ].join(' '),
     {
-      file_path: z.string().describe('Path to the existing .po.json file to patch'),
-      patch: z
-        .record(z.unknown())
-        .describe('JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)'),
-      dry_run: z.boolean().default(true).describe('Return merged result without writing to disk (default)'),
-      validate_after: z
-        .boolean()
-        .default(true)
-        .describe('Run NX validation on merged result; blocks write if errors found'),
+      title: 'Patch NitroX Component',
+      description: [
+        'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
+        'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
+        'optionally validates the merged result, and writes back.',
+        'Use dry_run=true (default) to preview the merged output without writing.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().describe('Path to the existing .po.json file to patch'),
+        patch: z
+          .record(z.unknown())
+          .describe('JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)'),
+        dry_run: z.boolean().default(true).describe('Return merged result without writing to disk (default)'),
+        validate_after: z
+          .boolean()
+          .default(true)
+          .describe('Run NX validation on merged result; blocks write if errors found'),
+      },
     },
     ({ file_path, patch, dry_run, validate_after }) => {
       const requestId = makeRequestId();

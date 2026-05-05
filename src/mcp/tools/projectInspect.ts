@@ -16,22 +16,25 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 
 export function registerProjectInspect(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_project_inspect',
-    [
-      'Inspect a Provar project folder and return a structured inventory.',
-      'Returns: provardx-properties.json config files (for ProvarDX CLI runs),',
-      'ANT build files (build.xml etc in ANT/ dirs, for CLI/pipeline runs),',
-      'source page object directories with Java file counts (src/pageobjects — compiled bin/ dirs excluded),',
-      '.testcase files found recursively under tests/,',
-      'count of custom test step files in src/customapis/,',
-      'count of data source files (CSV/XLSX/JSON) in data/ and templates/ dirs,',
-      'test plan coverage showing which test cases are covered vs uncovered,',
-      'and connection + environment overview parsed from the .testproject file',
-      '(Salesforce, UI Testing, Web Services, Quality Hub, Database, and other connection types).',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute or relative path to the Provar project root directory'),
+      title: 'Inspect Project',
+      description: [
+        'Inspect a Provar project folder and return a structured inventory.',
+        'Returns: provardx-properties.json config files (for ProvarDX CLI runs),',
+        'ANT build files (build.xml etc in ANT/ dirs, for CLI/pipeline runs),',
+        'source page object directories with Java file counts (src/pageobjects — compiled bin/ dirs excluded),',
+        '.testcase files found recursively under tests/,',
+        'count of custom test step files in src/customapis/,',
+        'count of data source files (CSV/XLSX/JSON) in data/ and templates/ dirs,',
+        'test plan coverage showing which test cases are covered vs uncovered,',
+        'and connection + environment overview parsed from the .testproject file',
+        '(Salesforce, UI Testing, Web Services, Quality Hub, Database, and other connection types).',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute or relative path to the Provar project root directory'),
+      },
     },
     ({ project_path }) => {
       const requestId = makeRequestId();

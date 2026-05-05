@@ -23,6 +23,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);

@@ -391,26 +391,29 @@ function resolveResultsLocation(
 // ── provar_testrun_report_locate tool ─────────────────────────────────────────
 
 export function registerTestRunLocate(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_testrun_report_locate',
-    [
-      'Resolve exactly where Provar test run artifacts were written, without parsing them.',
-      'Returns the results directory, paths to JUnit.xml and Index.html if they exist,',
-      'paths to per-test HTML reports, and any validation JSON files.',
-      'Supports explicit results_path override or auto-detection from sf config, provardx properties file, or ANT build.xml.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root'),
-      results_path: z
-        .string()
-        .optional()
-        .describe('Explicit override for the results base directory; if provided, skip auto-detection'),
-      run_index: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe('Which Increment run to target (default: latest); must be a positive integer'),
+      title: 'Locate Test Report',
+      description: [
+        'Resolve exactly where Provar test run artifacts were written, without parsing them.',
+        'Returns the results directory, paths to JUnit.xml and Index.html if they exist,',
+        'paths to per-test HTML reports, and any validation JSON files.',
+        'Supports explicit results_path override or auto-detection from sf config, provardx properties file, or ANT build.xml.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute path to the Provar project root'),
+        results_path: z
+          .string()
+          .optional()
+          .describe('Explicit override for the results base directory; if provided, skip auto-detection'),
+        run_index: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Which Increment run to target (default: latest); must be a positive integer'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
@@ -668,41 +671,44 @@ function buildFailureReports(
 // ── provar_testrun_rca tool ───────────────────────────────────────────────────
 
 export function registerTestRunRca(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testrun_rca',
-    [
-      'Parse a completed Provar test run and produce a structured Root Cause Analysis (RCA) report.',
-      'Resolves the results directory, parses JUnit.xml, classifies each failure by category,',
-      'and produces recommendations. Use locate_only=true to skip parsing and just resolve artifact locations.',
-      'Use mode="failures" to get a lightweight array of failed test cases',
-      '([{ testItemId, title, errorMessage }]) without the full RCA classification — useful when you',
-      'need failure names quickly without loading the HTML report.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root'),
-      results_path: z
-        .string()
-        .optional()
-        .describe('Explicit override for the results base directory; must be within --allowed-paths if provided'),
-      run_index: z
-        .number()
-        .int()
-        .positive()
-        .optional()
-        .describe('Which Increment run to target (default: latest); must be a positive integer'),
-      locate_only: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('If true, skip parsing and return just artifact locations'),
-      mode: z
-        .enum(['rca', 'failures'])
-        .optional()
-        .default('rca')
-        .describe(
-          '"rca" (default): full root-cause analysis with classification and recommendations. ' +
-            '"failures": lightweight array of failed test cases [{ testItemId, title, errorMessage }].'
-        ),
+      title: 'Root Cause Analysis',
+      description: [
+        'Parse a completed Provar test run and produce a structured Root Cause Analysis (RCA) report.',
+        'Resolves the results directory, parses JUnit.xml, classifies each failure by category,',
+        'and produces recommendations. Use locate_only=true to skip parsing and just resolve artifact locations.',
+        'Use mode="failures" to get a lightweight array of failed test cases',
+        '([{ testItemId, title, errorMessage }]) without the full RCA classification — useful when you',
+        'need failure names quickly without loading the HTML report.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute path to the Provar project root'),
+        results_path: z
+          .string()
+          .optional()
+          .describe('Explicit override for the results base directory; must be within --allowed-paths if provided'),
+        run_index: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Which Increment run to target (default: latest); must be a positive integer'),
+        locate_only: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('If true, skip parsing and return just artifact locations'),
+        mode: z
+          .enum(['rca', 'failures'])
+          .optional()
+          .default('rca')
+          .describe(
+            '"rca" (default): full root-cause analysis with classification and recommendations. ' +
+              '"failures": lightweight array of failed test cases [{ testItemId, title, errorMessage }].'
+          ),
+      },
     },
     (input) => {
       const requestId = makeRequestId();

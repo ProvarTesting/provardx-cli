@@ -144,34 +144,37 @@ const TOOL_DESCRIPTION = [
 ].join(' ');
 
 export function registerTestCaseGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testcase_generate',
-    TOOL_DESCRIPTION,
     {
-      test_case_name: z.string().describe('Test case name (human-readable label)'),
-      test_case_id: z.string().optional().describe('Explicit test case id; auto-generated UUID v4 if omitted'),
-      steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
-      target_uri: z
-        .string()
-        .optional()
-        .describe(
-          'Page object URI that determines the XML nesting structure. ' +
-            'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
-            'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
-            'steps are wrapped in a UiWithScreen element targeting that class.'
-        ),
-      output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
-      overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
-      dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
-      validate_after_edit: z
-        .boolean()
-        .default(true)
-        .describe(
-          'Run structural validation after generation (default: true). ' +
-            'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
-            'Set false to skip validation and omit the validation field from the response.'
-        ),
-      idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      title: 'Generate Test Case',
+      description: TOOL_DESCRIPTION,
+      inputSchema: {
+        test_case_name: z.string().describe('Test case name (human-readable label)'),
+        test_case_id: z.string().optional().describe('Explicit test case id; auto-generated UUID v4 if omitted'),
+        steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
+        target_uri: z
+          .string()
+          .optional()
+          .describe(
+            'Page object URI that determines the XML nesting structure. ' +
+              'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
+              'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
+              'steps are wrapped in a UiWithScreen element targeting that class.'
+          ),
+        output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
+        overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
+        dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
+        validate_after_edit: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Run structural validation after generation (default: true). ' +
+              'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
+              'Set false to skip validation and omit the validation field from the response.'
+          ),
+        idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();

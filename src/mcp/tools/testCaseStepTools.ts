@@ -82,43 +82,46 @@ function parseNewStep(stepXml: string): { step: ApiCallNode } | { error: string 
 // ── Tool registration ─────────────────────────────────────────────────────────
 
 export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testcase_step_edit',
-    [
-      'Add or remove a single step (apiCall) in a Provar XML test case file.',
-      'Uses write-to-temp-then-rename to minimise partial-write risk.',
-      'Prerequisites: the test case must exist and be valid XML.',
-      'For mode=remove: supply test_item_id of the step to remove.',
-      'For mode=add: supply test_item_id of the anchor step, position (before|after, default after),',
-      'and step_xml (the <apiCall ...>...</apiCall> XML fragment for the new step; must contain exactly one <apiCall>).',
-      'A backup is written to <test_case_path>.bak before any mutation and restored automatically if',
-      'the post-edit validation fails.',
-      'Returns STEP_NOT_FOUND (with all_test_item_ids list) when the target step is absent.',
-      'Returns INVALID_STEP_XML when step_xml cannot be parsed or contains ≠1 <apiCall> elements.',
-      'Returns INVALID_XML_AFTER_EDIT (backup restored) when the mutated file fails validation.',
-    ].join(' '),
     {
-      test_case_path: z.string().describe('Absolute path to the .testcase XML file; must be within --allowed-paths'),
-      mode: z.enum(['remove', 'add']).describe('"remove" to delete a step; "add" to insert a new step'),
-      test_item_id: z
-        .string()
-        .describe('For mode=remove: testItemId of the step to delete. For mode=add: testItemId of the anchor step.'),
-      position: z
-        .enum(['before', 'after'])
-        .optional()
-        .default('after')
-        .describe('Where to insert relative to the anchor step (mode=add only; default: after)'),
-      step_xml: z
-        .string()
-        .optional()
-        .describe(
-          'The <apiCall ...>...</apiCall> XML fragment for the new step (mode=add only). Must be well-formed XML.'
-        ),
-      validate_after_edit: z
-        .boolean()
-        .optional()
-        .default(true)
-        .describe('Run provar_testcase_validate after the mutation; restores backup on failure (default: true)'),
+      title: 'Edit Test Case Step',
+      description: [
+        'Add or remove a single step (apiCall) in a Provar XML test case file.',
+        'Uses write-to-temp-then-rename to minimise partial-write risk.',
+        'Prerequisites: the test case must exist and be valid XML.',
+        'For mode=remove: supply test_item_id of the step to remove.',
+        'For mode=add: supply test_item_id of the anchor step, position (before|after, default after),',
+        'and step_xml (the <apiCall ...>...</apiCall> XML fragment for the new step; must contain exactly one <apiCall>).',
+        'A backup is written to <test_case_path>.bak before any mutation and restored automatically if',
+        'the post-edit validation fails.',
+        'Returns STEP_NOT_FOUND (with all_test_item_ids list) when the target step is absent.',
+        'Returns INVALID_STEP_XML when step_xml cannot be parsed or contains ≠1 <apiCall> elements.',
+        'Returns INVALID_XML_AFTER_EDIT (backup restored) when the mutated file fails validation.',
+      ].join(' '),
+      inputSchema: {
+        test_case_path: z.string().describe('Absolute path to the .testcase XML file; must be within --allowed-paths'),
+        mode: z.enum(['remove', 'add']).describe('"remove" to delete a step; "add" to insert a new step'),
+        test_item_id: z
+          .string()
+          .describe('For mode=remove: testItemId of the step to delete. For mode=add: testItemId of the anchor step.'),
+        position: z
+          .enum(['before', 'after'])
+          .optional()
+          .default('after')
+          .describe('Where to insert relative to the anchor step (mode=add only; default: after)'),
+        step_xml: z
+          .string()
+          .optional()
+          .describe(
+            'The <apiCall ...>...</apiCall> XML fragment for the new step (mode=add only). Must be well-formed XML.'
+          ),
+        validate_after_edit: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Run provar_testcase_validate after the mutation; restores backup on failure (default: true)'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();

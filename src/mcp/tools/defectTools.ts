@@ -261,24 +261,27 @@ export function createDefectsForRun(
 // ── Tool registration ──────────────────────────────────────────────────────────
 
 export function registerQualityHubDefectCreate(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_qualityhub_defect_create',
-    [
-      'Create Defect__c records in Quality Hub for failed test executions in a given run.',
-      'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
-      'Defect__c per failure (with description, step, browser, environment, tester), and links',
-      'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
-      'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
-    ].join(' '),
     {
-      run_id: z.string().describe('Test run Tracking_Id__c value returned by provar_qualityhub_testrun'),
-      target_org: z.string().describe('SF org alias or username for the Quality Hub org'),
-      failed_tests: z
-        .array(z.string())
-        .optional()
-        .describe(
-          'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
-        ),
+      title: 'Create Defects',
+      description: [
+        'Create Defect__c records in Quality Hub for failed test executions in a given run.',
+        'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
+        'Defect__c per failure (with description, step, browser, environment, tester), and links',
+        'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
+        'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
+      ].join(' '),
+      inputSchema: {
+        run_id: z.string().describe('Test run Tracking_Id__c value returned by provar_qualityhub_testrun'),
+        target_org: z.string().describe('SF org alias or username for the Quality Hub org'),
+        failed_tests: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
+          ),
+      },
     },
     ({ run_id, target_org, failed_tests }) => {
       const requestId = makeRequestId();

@@ -49,11 +49,15 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   });
 
   // ── Sanity-check tool ────────────────────────────────────────────────────────
-  server.tool(
+  server.registerTool(
     'provardx_ping',
-    'Sanity-check tool. Echoes back a message with a timestamp. Use this to verify the MCP server is reachable before calling other tools.',
     {
-      message: z.string().optional().default('ping').describe('Optional message to echo back'),
+      title: 'Ping MCP Server',
+      description:
+        'Sanity-check tool. Echoes back a message with a timestamp. Use this to verify the MCP server is reachable before calling other tools.',
+      inputSchema: {
+        message: z.string().optional().default('ping').describe('Optional message to echo back'),
+      },
     },
     ({ message }) => {
       const result = { pong: message, ts: new Date().toISOString(), server: `provar-mcp@${SERVER_VERSION}` };

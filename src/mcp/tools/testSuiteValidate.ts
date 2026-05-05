@@ -43,28 +43,32 @@ const childSuiteSchema = z.object({
 });
 
 export function registerTestSuiteValidate(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_testsuite_validate',
-    'Validate a Provar test suite: checks for empty suites, duplicate names, oversized suites (>75 tests), and naming convention consistency. Recursively validates child suites and individual test case XML. Returns quality score, suite-level violations, and per-test-case results.',
     {
-      suite_name: z.string().describe('Name of the test suite'),
-      test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this suite'),
-      child_suites: z
-        .array(childSuiteSchema)
-        .optional()
-        .describe('Child test suites (supports up to 2 levels of nesting)'),
-      test_case_count: z
-        .number()
-        .int()
-        .min(0)
-        .optional()
-        .describe('Explicit total test case count for size check (overrides counting test_cases)'),
-      quality_threshold: z
-        .number()
-        .min(0)
-        .max(100)
-        .optional()
-        .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+      title: 'Validate Test Suite',
+      description:
+        'Validate a Provar test suite: checks for empty suites, duplicate names, oversized suites (>75 tests), and naming convention consistency. Recursively validates child suites and individual test case XML. Returns quality score, suite-level violations, and per-test-case results.',
+      inputSchema: {
+        suite_name: z.string().describe('Name of the test suite'),
+        test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this suite'),
+        child_suites: z
+          .array(childSuiteSchema)
+          .optional()
+          .describe('Child test suites (supports up to 2 levels of nesting)'),
+        test_case_count: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Explicit total test case count for size check (overrides counting test_cases)'),
+        quality_threshold: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+      },
     },
     ({ suite_name, test_cases, child_suites, test_case_count, quality_threshold }) => {
       const requestId = makeRequestId();

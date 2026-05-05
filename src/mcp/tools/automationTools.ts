@@ -219,22 +219,25 @@ function handleSpawnError(
 // ── Tool: provar_automation_config_load ──────────────────────────────────────
 
 export function registerAutomationConfigLoad(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_automation_config_load',
-    [
-      'Register a provardx-properties.json file as the active Provar configuration.',
-      'Invokes `sf provar automation config load --properties-file <path>`, writing the path to ~/.sf/config.json.',
-      'REQUIRED before provar_automation_compile or provar_automation_testrun — without this step those commands fail with MISSING_FILE.',
-      'Typical workflow: provar_automation_config_load → provar_automation_compile → provar_automation_testrun.',
-    ].join(' '),
     {
-      properties_path: z
-        .string()
-        .describe('Absolute path to the provardx-properties.json file to register as active configuration'),
-      sf_path: z
-        .string()
-        .optional()
-        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      title: 'Load Automation Config',
+      description: [
+        'Register a provardx-properties.json file as the active Provar configuration.',
+        'Invokes `sf provar automation config load --properties-file <path>`, writing the path to ~/.sf/config.json.',
+        'REQUIRED before provar_automation_compile or provar_automation_testrun — without this step those commands fail with MISSING_FILE.',
+        'Typical workflow: provar_automation_config_load → provar_automation_compile → provar_automation_testrun.',
+      ].join(' '),
+      inputSchema: {
+        properties_path: z
+          .string()
+          .describe('Absolute path to the provardx-properties.json file to register as active configuration'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      },
     },
     ({ properties_path, sf_path }) => {
       const requestId = makeRequestId();
@@ -387,26 +390,29 @@ function readResultsPathFromSfConfig(config: ServerConfig): string | null {
 // ── Tool: provar_automation_testrun ───────────────────────────────────────────
 
 export function registerAutomationTestRun(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_automation_testrun',
-    [
-      'Trigger a LOCAL Provar automation test run using installed Provar binaries. Invokes `sf provar automation test run`.',
-      'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
-      'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
-      'Use provar_automation_setup first if Provar is not yet installed.',
-      'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
-      'Typical local AI loop: config.load → compile → testrun → inspect results.',
-    ].join(' '),
     {
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z
-        .string()
-        .optional()
-        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      title: 'Run Tests',
+      description: [
+        'Trigger a LOCAL Provar automation test run using installed Provar binaries. Invokes `sf provar automation test run`.',
+        'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
+        'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
+        'Use provar_automation_setup first if Provar is not yet installed.',
+        'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
+        'Typical local AI loop: config.load → compile → testrun → inspect results.',
+      ].join(' '),
+      inputSchema: {
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      },
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -461,23 +467,26 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
 // ── Tool: provar_automation_compile ───────────────────────────────────────────
 
 export function registerAutomationCompile(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_automation_compile',
-    [
-      'Compile a Provar automation project. Invokes `sf provar automation project compile`.',
-      'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
-      'Run this before triggering a test run after modifying test cases.',
-    ].join(' '),
     {
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
-      sf_path: z
-        .string()
-        .optional()
-        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      title: 'Compile Test Assets',
+      description: [
+        'Compile a Provar automation project. Invokes `sf provar automation project compile`.',
+        'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
+        'Run this before triggering a test run after modifying test cases.',
+      ].join(' '),
+      inputSchema: {
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe('Raw CLI flags to forward (e.g. ["--project-path", "/path/to/project"])'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      },
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -517,29 +526,32 @@ const DOWNLOAD_ERROR_SUGGESTION =
   '(4) if testprojectSecrets is set in provardx-properties.json, it must be the encryption key string used to decrypt .secrets — not a file path.';
 
 export function registerAutomationMetadataDownload(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_automation_metadata_download',
-    [
-      'Download Salesforce metadata for one or more connections into a Provar project.',
-      'Invokes `sf provar automation metadata download`.',
-      'PREREQUISITE: Call provar_automation_config_load first — without it the command fails with MISSING_FILE.',
-      'Use the -c flag to specify connections: flags: ["-c", "ConnectionName1,ConnectionName2"].',
-      'Connection names are case-sensitive and must match the names defined in the Provar project.',
-      'If the download fails with [DOWNLOAD_ERROR], this is almost always a Salesforce authentication issue —',
-      'check that the credentials in the project .secrets file are current and that any referenced scratch orgs have not expired.',
-    ].join(' '),
     {
-      flags: z
-        .array(z.string())
-        .optional()
-        .default([])
-        .describe(
-          'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
-        ),
-      sf_path: z
-        .string()
-        .optional()
-        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      title: 'Download Salesforce Metadata',
+      description: [
+        'Download Salesforce metadata for one or more connections into a Provar project.',
+        'Invokes `sf provar automation metadata download`.',
+        'PREREQUISITE: Call provar_automation_config_load first — without it the command fails with MISSING_FILE.',
+        'Use the -c flag to specify connections: flags: ["-c", "ConnectionName1,ConnectionName2"].',
+        'Connection names are case-sensitive and must match the names defined in the Provar project.',
+        'If the download fails with [DOWNLOAD_ERROR], this is almost always a Salesforce authentication issue —',
+        'check that the credentials in the project .secrets file are current and that any referenced scratch orgs have not expired.',
+      ].join(' '),
+      inputSchema: {
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(
+            'Raw CLI flags to forward. Use ["-c", "Name1,Name2"] (or the equivalent --connections form) to target specific connections. Example: ["-c", "MyOrg,SandboxOrg"]'
+          ),
+        sf_path: z
+          .string()
+          .optional()
+          .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      },
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
@@ -662,32 +674,37 @@ function findExistingInstallations(): ProvarInstall[] {
 }
 
 export function registerAutomationSetup(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_automation_setup',
-    [
-      'Download and install Provar Automation binaries locally. Invokes `sf provar automation setup`.',
-      'Before downloading, checks for existing Provar installations in:',
-      '  • PROVAR_HOME environment variable',
-      '  • ./ProvarHome (default CLI install location)',
-      '  • C:\\Program Files\\Provar* (Windows system installs)',
-      '  • /Applications/Provar* (macOS app installs)',
-      'If an existing installation is found, returns its path so you can set provarHome in the properties file — skipping the download unless force is true.',
-      'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar_properties_set.',
-    ].join(' '),
     {
-      version: z
-        .string()
-        .optional()
-        .describe('Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'),
-      force: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Force a fresh download even if an existing installation is already detected (default: false).'),
-      sf_path: z
-        .string()
-        .optional()
-        .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      title: 'Install Provar Automation',
+      description: [
+        'Download and install Provar Automation binaries locally. Invokes `sf provar automation setup`.',
+        'Before downloading, checks for existing Provar installations in:',
+        '  • PROVAR_HOME environment variable',
+        '  • ./ProvarHome (default CLI install location)',
+        '  • C:\\Program Files\\Provar* (Windows system installs)',
+        '  • /Applications/Provar* (macOS app installs)',
+        'If an existing installation is found, returns its path so you can set provarHome in the properties file — skipping the download unless force is true.',
+        'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar_properties_set.',
+      ].join(' '),
+      inputSchema: {
+        version: z
+          .string()
+          .optional()
+          .describe(
+            'Specific Provar Automation version to install, e.g. "2.12.0". Omit to install the latest release.'
+          ),
+        force: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Force a fresh download even if an existing installation is already detected (default: false).'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe('Path to the sf CLI executable when not in PATH (e.g. "~/.nvm/versions/node/v22.0.0/bin/sf")'),
+      },
     },
     ({ version, force, sf_path }) => {
       const requestId = makeRequestId();

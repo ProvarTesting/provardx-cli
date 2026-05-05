@@ -17,16 +17,20 @@ import { makeError, makeRequestId, type ValidationIssue } from '../schemas/commo
 import { log } from '../logging/logger.js';
 
 export function registerPageObjectValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_pageobject_validate',
-    'Validate a Provar Java Page Object against naming conventions, locator best practices, and structural requirements. Returns quality score (0–100) and list of issues.',
     {
-      content: z.string().optional().describe('Java source code to validate directly'),
-      file_path: z.string().optional().describe('Path to .java Page Object file'),
-      expected_class_name: z
-        .string()
-        .optional()
-        .describe('Expected class name for PO_006 check; inferred from file_path when omitted'),
+      title: 'Validate Page Object',
+      description:
+        'Validate a Provar Java Page Object against naming conventions, locator best practices, and structural requirements. Returns quality score (0–100) and list of issues.',
+      inputSchema: {
+        content: z.string().optional().describe('Java source code to validate directly'),
+        file_path: z.string().optional().describe('Path to .java Page Object file'),
+        expected_class_name: z
+          .string()
+          .optional()
+          .describe('Expected class name for PO_006 check; inferred from file_path when omitted'),
+      },
     },
     ({ content, file_path, expected_class_name }) => {
       const requestId = makeRequestId();

@@ -60,26 +60,31 @@ function buildPlanItemXml(guid: string): string {
 // ── provar_testplan_create ────────────────────────────────────────────────────
 
 export function registerTestPlanCreate(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testplan_create',
-    [
-      'Create a new Provar test plan: makes the plans/{plan_name}/ directory and writes the root .planitem file.',
-      'Use this before provar_testplan_create-suite or provar_testplan_add-instance, which both require the plan to already exist.',
-      'Returns the guid assigned to the new plan, the plan directory path, and the .planitem path written.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root (must contain a .testproject file)'),
-      plan_name: z.string().describe('Name of the new test plan (becomes the directory name under plans/)'),
-      overwrite: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Overwrite the .planitem file if the plan directory already exists (default: false)'),
-      dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Return what would be created without writing to disk (default: false)'),
+      title: 'Create Test Plan',
+      description: [
+        'Create a new Provar test plan: makes the plans/{plan_name}/ directory and writes the root .planitem file.',
+        'Use this before provar_testplan_create-suite or provar_testplan_add-instance, which both require the plan to already exist.',
+        'Returns the guid assigned to the new plan, the plan directory path, and the .planitem path written.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z
+          .string()
+          .describe('Absolute path to the Provar project root (must contain a .testproject file)'),
+        plan_name: z.string().describe('Name of the new test plan (becomes the directory name under plans/)'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Overwrite the .planitem file if the plan directory already exists (default: false)'),
+        dry_run: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Return what would be created without writing to disk (default: false)'),
+      },
     },
     ({ project_path, plan_name, overwrite, dry_run }) => {
       const requestId = makeRequestId();
@@ -194,35 +199,38 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
 // ── provar_testplan_add-instance ──────────────────────────────────────────────
 
 export function registerTestPlanAddInstance(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testplan_add-instance',
-    [
-      'Add a .testinstance file to an existing Provar test plan suite directory.',
-      'The plan directory and suite directory must already exist.',
-      'test_case_path is relative to the project root (e.g. "tests/MyTest.testcase").',
-      'suite_path is the path within the plan (e.g. "MySuite" or "MySuite/SubSuite").',
-      'Returns the guid assigned to the new instance and the path where it was written.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root'),
-      test_case_path: z
-        .string()
-        .describe('Path to the .testcase file, relative to project root (e.g. "tests/MyTest.testcase")'),
-      plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
-      suite_path: z
-        .string()
-        .optional()
-        .describe('Path within the plan to place the instance (e.g. "MySuite" or "MySuite/SubSuite")'),
-      overwrite: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Overwrite the .testinstance file if it already exists (default: false)'),
-      dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Return what would be written without writing to disk (default: false)'),
+      title: 'Add Test Plan Instance',
+      description: [
+        'Add a .testinstance file to an existing Provar test plan suite directory.',
+        'The plan directory and suite directory must already exist.',
+        'test_case_path is relative to the project root (e.g. "tests/MyTest.testcase").',
+        'suite_path is the path within the plan (e.g. "MySuite" or "MySuite/SubSuite").',
+        'Returns the guid assigned to the new instance and the path where it was written.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute path to the Provar project root'),
+        test_case_path: z
+          .string()
+          .describe('Path to the .testcase file, relative to project root (e.g. "tests/MyTest.testcase")'),
+        plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
+        suite_path: z
+          .string()
+          .optional()
+          .describe('Path within the plan to place the instance (e.g. "MySuite" or "MySuite/SubSuite")'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Overwrite the .testinstance file if it already exists (default: false)'),
+        dry_run: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Return what would be written without writing to disk (default: false)'),
+      },
     },
     ({ project_path, test_case_path, plan_name, suite_path, overwrite, dry_run }) => {
       const requestId = makeRequestId();
@@ -391,27 +399,30 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
 // ── provar_testplan_create-suite ──────────────────────────────────────────────
 
 export function registerTestPlanCreateSuite(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testplan_create-suite',
-    [
-      'Create a new suite directory inside a Provar test plan.',
-      'The plan directory must already exist with a .planitem file at its root.',
-      'Writes a new .planitem file into the created suite directory.',
-      'Returns the guid assigned to the new suite.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root'),
-      plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
-      suite_name: z.string().describe('Name of the new suite directory to create'),
-      parent_suite_path: z
-        .string()
-        .optional()
-        .describe('Path of the parent suite within the plan (e.g. "MySuite"). Omit to create at plan root.'),
-      dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Return what would be created without writing to disk (default: false)'),
+      title: 'Create Test Plan Suite',
+      description: [
+        'Create a new suite directory inside a Provar test plan.',
+        'The plan directory must already exist with a .planitem file at its root.',
+        'Writes a new .planitem file into the created suite directory.',
+        'Returns the guid assigned to the new suite.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute path to the Provar project root'),
+        plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
+        suite_name: z.string().describe('Name of the new suite directory to create'),
+        parent_suite_path: z
+          .string()
+          .optional()
+          .describe('Path of the parent suite within the plan (e.g. "MySuite"). Omit to create at plan root.'),
+        dry_run: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Return what would be created without writing to disk (default: false)'),
+      },
     },
     ({ project_path, plan_name, suite_name, parent_suite_path, dry_run }) => {
       const requestId = makeRequestId();
@@ -536,21 +547,24 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
 // ── provar_testplan_remove-instance ──────────────────────────────────────────
 
 export function registerTestPlanRemoveInstance(server: McpServer, config: ServerConfig): void {
-  server.tool(
+  server.registerTool(
     'provar_testplan_remove-instance',
-    [
-      'Remove a .testinstance file from a Provar test plan.',
-      'instance_path is relative to the project root.',
-      'Returns the path of the removed file.',
-    ].join(' '),
     {
-      project_path: z.string().describe('Absolute path to the Provar project root'),
-      instance_path: z.string().describe('Path to the .testinstance file, relative to project root'),
-      dry_run: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Return what would be removed without deleting (default: false)'),
+      title: 'Remove Test Plan Instance',
+      description: [
+        'Remove a .testinstance file from a Provar test plan.',
+        'instance_path is relative to the project root.',
+        'Returns the path of the removed file.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z.string().describe('Absolute path to the Provar project root'),
+        instance_path: z.string().describe('Path to the .testinstance file, relative to project root'),
+        dry_run: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Return what would be removed without deleting (default: false)'),
+      },
     },
     ({ project_path, instance_path, dry_run }) => {
       const requestId = makeRequestId();

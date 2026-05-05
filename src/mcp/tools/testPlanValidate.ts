@@ -71,26 +71,30 @@ const metadataSchema = z
   );
 
 export function registerTestPlanValidate(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'provar_testplan_validate',
-    'Validate a Provar test plan: checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan completeness (objectives, scope, methodology, environments, acceptance criteria, test data strategy, risk assessment), and naming consistency. Recursively validates child suites and test cases. Returns quality score, plan-level violations, and full hierarchy results.',
     {
-      plan_name: z.string().describe('Name of the test plan'),
-      test_suites: z.array(suiteSchema).optional().describe('Test suites belonging to this plan'),
-      test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this plan (not in a suite)'),
-      test_suite_count: z
-        .number()
-        .int()
-        .min(0)
-        .optional()
-        .describe('Explicit suite count for size check (overrides counting test_suites)'),
-      metadata: metadataSchema,
-      quality_threshold: z
-        .number()
-        .min(0)
-        .max(100)
-        .optional()
-        .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+      title: 'Validate Test Plan',
+      description:
+        'Validate a Provar test plan: checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan completeness (objectives, scope, methodology, environments, acceptance criteria, test data strategy, risk assessment), and naming consistency. Recursively validates child suites and test cases. Returns quality score, plan-level violations, and full hierarchy results.',
+      inputSchema: {
+        plan_name: z.string().describe('Name of the test plan'),
+        test_suites: z.array(suiteSchema).optional().describe('Test suites belonging to this plan'),
+        test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this plan (not in a suite)'),
+        test_suite_count: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe('Explicit suite count for size check (overrides counting test_suites)'),
+        metadata: metadataSchema,
+        quality_threshold: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+      },
     },
     ({ plan_name, test_suites, test_cases, test_suite_count, metadata, quality_threshold }) => {
       const requestId = makeRequestId();
