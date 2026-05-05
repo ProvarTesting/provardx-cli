@@ -59,9 +59,12 @@ function formatSfCommandError(action: string, exitCode: number, stderr: string, 
 
 function runQuery(soql: string, targetOrg: string): SfQueryResponse {
   const { stdout, stderr, exitCode } = runSfArgs([
-    'data', 'query',
-    '--query', soql,
-    '--target-org', targetOrg,
+    'data',
+    'query',
+    '--query',
+    soql,
+    '--target-org',
+    targetOrg,
     '--json',
   ]);
   if (exitCode !== 0) {
@@ -72,10 +75,15 @@ function runQuery(soql: string, targetOrg: string): SfQueryResponse {
 
 function createRecord(sobject: string, values: string, targetOrg: string): string {
   const { stdout, stderr, exitCode } = runSfArgs([
-    'data', 'create', 'record',
-    '--sobject', sobject,
-    '--values', values,
-    '--target-org', targetOrg,
+    'data',
+    'create',
+    'record',
+    '--sobject',
+    sobject,
+    '--values',
+    values,
+    '--target-org',
+    targetOrg,
     '--json',
   ]);
   if (exitCode !== 0) {
@@ -91,10 +99,7 @@ function createRecord(sobject: string, values: string, targetOrg: string): strin
 /** Strip characters unsafe for sf --values double-quoted strings and truncate. */
 function safeText(value: unknown, maxLen = 200): string {
   if (value === null || value === undefined) return '';
-  return String(value)
-    .replace(/"/g, "'")
-    .replace(/\n|\r/g, ' ')
-    .substring(0, maxLen);
+  return String(value).replace(/"/g, "'").replace(/\n|\r/g, ' ').substring(0, maxLen);
 }
 
 // ── Core defect creation logic (exported for auto-defects use) ─────────────────
@@ -159,7 +164,9 @@ export function createDefectsForRun(
   // if needed; here we filter by TC record ID substring for flexibility)
   if (failedTestFilter && failedTestFilter.length > 0) {
     executions = executions.filter((e) =>
-      failedTestFilter.some((f) => String(e['provar__Test_Case__c']).includes(f) || f.includes(String(e['provar__Test_Case__c'])))
+      failedTestFilter.some(
+        (f) => String(e['provar__Test_Case__c']).includes(f) || f.includes(String(e['provar__Test_Case__c']))
+      )
     );
   }
 
@@ -236,19 +243,14 @@ export function createDefectsForRun(
       `provar__Test_Execution__c="${executionId}"` +
       (stepExecutionId ? ` provar__Test_Step_Execution__c="${stepExecutionId}"` : '');
 
-    const execDefectId = createRecord(
-      'provar__Test_Execution_Defect__c',
-      execDefectValues,
-      targetOrg
-    );
+    const execDefectId = createRecord('provar__Test_Execution_Defect__c', execDefectValues, targetOrg);
 
     log('info', 'defect created', { defectId, tcDefectId, execDefectId, executionId });
 
     created.push({ defectId, tcDefectId, execDefectId, executionId, testCaseId });
   }
 
-  const syncNote =
-    'If Jira or ADO sync is enabled in your Quality Hub org, these defects will sync automatically.';
+  const syncNote = 'If Jira or ADO sync is enabled in your Quality Hub org, these defects will sync automatically.';
   return {
     created,
     skipped: execQuery.result.totalSize - created.length,
@@ -259,30 +261,31 @@ export function createDefectsForRun(
 // ── Tool registration ──────────────────────────────────────────────────────────
 
 export function registerQualityHubDefectCreate(server: McpServer): void {
-  server.tool(
-    'provar.qualityhub.defect.create',
-    [
-      'Create Defect__c records in Quality Hub for failed test executions in a given run.',
-      'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
-      'Defect__c per failure (with description, step, browser, environment, tester), and links',
-      'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
-      'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
-    ].join(' '),
+  server.registerTool(
+    'provar_qualityhub_defect_create',
     {
-      run_id: z
-        .string()
-        .describe('Test run Tracking_Id__c value returned by provar.qualityhub.testrun'),
-      target_org: z.string().describe('SF org alias or username for the Quality Hub org'),
-      failed_tests: z
-        .array(z.string())
-        .optional()
-        .describe(
-          'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
-        ),
+      title: 'Create Defects',
+      description: [
+        'Create Defect__c records in Quality Hub for failed test executions in a given run.',
+        'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
+        'Defect__c per failure (with description, step, browser, environment, tester), and links',
+        'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
+        'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
+      ].join(' '),
+      inputSchema: {
+        run_id: z.string().describe('Test run Tracking_Id__c value returned by provar_qualityhub_testrun'),
+        target_org: z.string().describe('SF org alias or username for the Quality Hub org'),
+        failed_tests: z
+          .array(z.string())
+          .optional()
+          .describe(
+            'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
+          ),
+      },
     },
     ({ run_id, target_org, failed_tests }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.defect.create', { requestId, run_id, target_org });
+      log('info', 'provar_qualityhub_defect_create', { requestId, run_id, target_org });
 
       try {
         const result = createDefectsForRun(run_id, target_org, failed_tests);
@@ -293,7 +296,7 @@ export function registerQualityHubDefectCreate(server: McpServer): void {
         };
       } catch (err) {
         const error = err as Error & { code?: string };
-        log('error', 'provar.qualityhub.defect.create failed', {
+        log('error', 'provar_qualityhub_defect_create failed', {
           requestId,
           error: error.message,
         });
@@ -302,9 +305,7 @@ export function registerQualityHubDefectCreate(server: McpServer): void {
           content: [
             {
               type: 'text' as const,
-              text: JSON.stringify(
-                makeError(error.code ?? 'DEFECT_CREATE_FAILED', error.message, requestId, false)
-              ),
+              text: JSON.stringify(makeError(error.code ?? 'DEFECT_CREATE_FAILED', error.message, requestId, false)),
             },
           ],
         };

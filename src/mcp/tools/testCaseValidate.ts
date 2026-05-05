@@ -42,17 +42,21 @@ const UNREACHABLE_WARNING =
   'For CI/CD: set PROVAR_QUALITY_HUB_URL and PROVAR_API_KEY environment variables.';
 
 export function registerTestCaseValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.testcase.validate',
-    'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied.',
+  server.registerTool(
+    'provar_testcase_validate',
     {
-      content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
-      xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),
-      file_path: z.string().optional().describe('Path to .xml test case file'),
+      title: 'Validate Test Case',
+      description:
+        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied.',
+      inputSchema: {
+        content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
+        xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),
+        file_path: z.string().optional().describe('Path to .xml test case file'),
+      },
     },
     async ({ content, xml, file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testcase.validate', { requestId, has_content: !!(content ?? xml), file_path });
+      log('info', 'provar_testcase_validate', { requestId, has_content: !!(content ?? xml), file_path });
 
       try {
         // Resolve xml alias: the batch validation API uses "xml", MCP originally used "content"
@@ -90,7 +94,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
               test_case_name: localMeta.test_case_name,
               validation_source: 'quality_hub' as const,
             };
-            log('info', 'provar.testcase.validate: quality_hub', { requestId });
+            log('info', 'provar_testcase_validate: quality_hub', { requestId });
             return {
               content: [{ type: 'text' as const, text: JSON.stringify(result) }],
               structuredContent: result,
@@ -100,13 +104,13 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
             let warning: string;
             if (apiErr instanceof QualityHubAuthError) {
               warning = AUTH_WARNING;
-              log('warn', 'provar.testcase.validate: auth error, falling back', { requestId });
+              log('warn', 'provar_testcase_validate: auth error, falling back', { requestId });
             } else if (apiErr instanceof QualityHubRateLimitError) {
               warning = RATE_LIMIT_WARNING;
-              log('warn', 'provar.testcase.validate: rate limited, falling back', { requestId });
+              log('warn', 'provar_testcase_validate: rate limited, falling back', { requestId });
             } else {
               warning = UNREACHABLE_WARNING;
-              log('warn', 'provar.testcase.validate: api unreachable, falling back', { requestId });
+              log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
             }
             const localResult = {
               requestId,
@@ -140,7 +144,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           requestId,
           false
         );
-        log('error', 'provar.testcase.validate failed', { requestId, error: error.message });
+        log('error', 'provar_testcase_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -340,7 +344,7 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
         .split('.')
         .join(
           '"/><path element="'
-        )}"/></value>. In provar.testcase.generate, use the {VarName} syntax in the attributes object — the generator converts it automatically.`,
+        )}"/></value>. In provar_testcase_generate, use the {VarName} syntax in the attributes object — the generator converts it automatically.`,
     });
   }
 
@@ -442,7 +446,7 @@ function checkUiTarget(
       applies_to: 'apiCall',
       suggestion:
         'Emit the target as: <value class="uiTarget" uri="sf:ui:target?..."/> or uri="ui:pageobject:target?pageId=...". ' +
-        'In provar.testcase.generate the "target" attribute is converted automatically.',
+        'In provar_testcase_generate the "target" attribute is converted automatically.',
     });
   }
 }
@@ -480,7 +484,7 @@ function validateApiCallArgs(
             applies_to: 'apiCall',
             suggestion:
               'Emit the locator as: <value class="uiLocator" uri="sf:ui:locator:..."/>. ' +
-              'In provar.testcase.generate the "locator" attribute is converted automatically.',
+              'In provar_testcase_generate the "locator" attribute is converted automatically.',
           });
         }
       }
@@ -507,7 +511,7 @@ function validateApiCallArgs(
             suggestion:
               'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
               '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
-              '</namedValues></value>. In provar.testcase.generate pass each variable as a flat key/value pair ' +
+              '</namedValues></value>. In provar_testcase_generate pass each variable as a flat key/value pair ' +
               'in attributes — the generator builds the valueList structure automatically.',
           });
         }

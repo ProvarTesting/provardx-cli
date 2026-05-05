@@ -16,48 +16,48 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [Other MCP-compatible clients](#other-mcp-compatible-clients)
 - [Path security](#path-security)
 - [Available tools](#available-tools)
-  - [provardx.ping](#provardxping)
-  - [provar.project.inspect](#provarprojectinspect)
-  - [provar.connection.list](#provarconnectionlist)
-  - [provar.pageobject.generate](#provarpageobjectgenerate)
-  - [provar.pageobject.validate](#provarpageobjectvalidate)
-  - [provar.testcase.generate](#provartestcasegenerate)
-  - [provar.testcase.validate](#provartestcasevalidate)
-  - [provar.testsuite.validate](#provartestsuitevalidate)
-  - [provar.testplan.validate](#provartestplanvalidate)
-  - [provar.project.validate](#provarprojectvalidate)
-  - [provar.properties.generate](#provarpropertiesgenerate)
-  - [provar.properties.read](#provarpropertiesread)
-  - [provar.properties.set](#provarpropertiesset)
-  - [provar.properties.validate](#provarpropertiesvalidate)
-  - [provar.ant.generate](#provarantgenerate)
-  - [provar.ant.validate](#provarantvalidate)
-  - [provar.qualityhub.connect](#provarqualityhubconnect)
-  - [provar.qualityhub.display](#provarqualityhubdisplay)
-  - [provar.qualityhub.testrun](#provarqualityhubtestrun)
-  - [provar.qualityhub.testrun.report](#provarqualityhubtestrunreport)
-  - [provar.qualityhub.testrun.abort](#provarqualityhubtestrunabort)
-  - [provar.qualityhub.testcase.retrieve](#provarqualityhubtestcaseretrieve)
-  - [provar.automation.setup](#provarautomationsetup)
-  - [provar.automation.testrun](#provarautomationtestrun)
-  - [provar.automation.compile](#provarautomationcompile)
-  - [provar.automation.config.load](#provarautomationconfigload)
-  - [provar.automation.metadata.download](#provarautomationmetadatadownload)
-  - [provar.qualityhub.defect.create](#provarqualityhubdefectcreate)
-  - [provar.testrun.report.locate](#provartestrunreportlocate)
-  - [provar.testrun.rca](#provartestrunrca)
-  - [provar.testcase.step.edit](#provartestcasestepedit)
-  - [provar.testplan.add-instance](#provartestplanadinstance)
-  - [provar.testplan.create-suite](#provartestplancreatetsuite)
-  - [provar.testplan.remove-instance](#provartestplanremoveinstance)
+  - [provardx_ping](#provardx_ping)
+  - [provar_project_inspect](#provar_project_inspect)
+  - [provar_connection_list](#provar_connection_list)
+  - [provar_pageobject_generate](#provar_pageobject_generate)
+  - [provar_pageobject_validate](#provar_pageobject_validate)
+  - [provar_testcase_generate](#provar_testcase_generate)
+  - [provar_testcase_validate](#provar_testcase_validate)
+  - [provar_testsuite_validate](#provar_testsuite_validate)
+  - [provar_testplan_validate](#provar_testplan_validate)
+  - [provar_project_validate](#provar_project_validate)
+  - [provar_properties_generate](#provar_properties_generate)
+  - [provar_properties_read](#provar_properties_read)
+  - [provar_properties_set](#provar_properties_set)
+  - [provar_properties_validate](#provar_properties_validate)
+  - [provar_ant_generate](#provar_ant_generate)
+  - [provar_ant_validate](#provar_ant_validate)
+  - [provar_qualityhub_connect](#provar_qualityhub_connect)
+  - [provar_qualityhub_display](#provar_qualityhub_display)
+  - [provar_qualityhub_testrun](#provar_qualityhub_testrun)
+  - [provar_qualityhub_testrun_report](#provar_qualityhub_testrun_report)
+  - [provar_qualityhub_testrun_abort](#provar_qualityhub_testrun_abort)
+  - [provar_qualityhub_testcase_retrieve](#provar_qualityhub_testcase_retrieve)
+  - [provar_automation_setup](#provar_automation_setup)
+  - [provar_automation_testrun](#provar_automation_testrun)
+  - [provar_automation_compile](#provar_automation_compile)
+  - [provar_automation_config_load](#provar_automation_config_load)
+  - [provar_automation_metadata_download](#provar_automation_metadata_download)
+  - [provar_qualityhub_defect_create](#provar_qualityhub_defect_create)
+  - [provar_testrun_report_locate](#provar_testrun_report_locate)
+  - [provar_testrun_rca](#provar_testrun_rca)
+  - [provar_testcase_step_edit](#provar_testcase_step_edit)
+  - [provar_testplan_add-instance](#provar_testplan_add-instance)
+  - [provar_testplan_create-suite](#provar_testplan_create-suite)
+  - [provar_testplan_remove-instance](#provar_testplan_remove-instance)
   - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
-    - [provar.nitrox.discover](#provarnitroxdiscover)
-    - [provar.nitrox.read](#provarnitroxread)
-    - [provar.nitrox.validate](#provarnitroxvalidate)
-    - [provar.nitrox.generate](#provarnitroxgenerate)
-    - [provar.nitrox.patch](#provarnitroxpatch)
+    - [provar_nitrox_discover](#provar_nitrox_discover)
+    - [provar_nitrox_read](#provar_nitrox_read)
+    - [provar_nitrox_validate](#provar_nitrox_validate)
+    - [provar_nitrox_generate](#provar_nitrox_generate)
+    - [provar_nitrox_patch](#provar_nitrox_patch)
   - [Quality Hub API tools](#quality-hub-api-tools)
-    - [provar.qualityhub.examples.retrieve](#provarqualityhubexamplesretrieve)
+    - [provar_qualityhub_examples_retrieve](#provar_qualityhub_examples_retrieve)
   - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [MCP Prompts](#mcp-prompts)
   - [Migration prompts](#migration-prompts)
@@ -121,7 +121,7 @@ claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/yo
 
 > **Windows (Claude Desktop):** If `sf` is not found, use `sf.cmd` as the command instead.
 
-**Verify it's working** — ask your AI assistant: _"Call provardx.ping with message hello"_. You should get `{ "message": "hello" }` back.
+**Verify it's working** — ask your AI assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
 
 ---
 
@@ -402,14 +402,14 @@ Replace `/path/to/your/provar/project` with the actual root of your Provar Autom
 
 ## Authentication — Quality Hub API
 
-The `provar.testcase.validate` tool can run in two modes depending on whether an API key is configured.
+The `provar_testcase_validate` tool can run in two modes depending on whether an API key is configured.
 
 | Mode                | When               | What you get                                        |
 | ------------------- | ------------------ | --------------------------------------------------- |
 | **Quality Hub API** | API key configured | 170+ rules, quality score, tier-specific thresholds |
 | **Local only**      | No key             | Structural/schema rules only                        |
 
-The `validation_source` field in every `provar.testcase.validate` response tells you which mode fired:
+The `validation_source` field in every `provar_testcase_validate` response tells you which mode fired:
 
 | Value            | Meaning                                                                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
@@ -471,13 +471,13 @@ sf provar auth clear
 
 All file-system operations (read, write, generate) are restricted to the paths supplied via `--allowed-paths`. Any attempt to access a path outside those roots is rejected with a `PATH_NOT_ALLOWED` error. Path traversal sequences (`../`) are blocked with a `PATH_TRAVERSAL` error.
 
-Symlinks are resolved via `fs.realpathSync` before the containment check, so a symlink inside an allowed directory that points outside it cannot bypass the restriction. For tools that accept multiple path inputs (such as `provar.ant.generate`'s `provar_home`, `project_path`, and `results_path`), all path fields are validated before any file operation occurs — not just the output path.
+Symlinks are resolved via `fs.realpathSync` before the containment check, so a symlink inside an allowed directory that points outside it cannot bypass the restriction. For tools that accept multiple path inputs (such as `provar_ant_generate`'s `provar_home`, `project_path`, and `results_path`), all path fields are validated before any file operation occurs — not just the output path.
 
 ---
 
 ## Available tools
 
-### `provardx.ping`
+### `provardx_ping`
 
 A lightweight sanity-check tool. Echoes back the message you send. Useful for verifying the server is running and the client is connected.
 
@@ -493,14 +493,14 @@ A lightweight sanity-check tool. Echoes back the message you send. Useful for ve
 | ----------------- | -------------- | --------------------------------------------------------- |
 | `pong`            | string         | The echoed message                                        |
 | `ts`              | string         | ISO-8601 timestamp                                        |
-| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.14`) |
+| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.15`) |
 | `updateAvailable` | boolean        | Whether a newer version is available in the registry      |
 | `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`       |
 | `updateCommand`   | string \| null | Command to run to update the plugin, or `null`            |
 
 ---
 
-### `provar.project.inspect`
+### `provar_project_inspect`
 
 Inspects a Provar project folder and returns a structured inventory of all key project artefacts. Compiled `bin/` directories are automatically excluded.
 
@@ -542,11 +542,11 @@ Provar test plans live in `plans/`. Each plan is a directory containing a `.plan
 
 ---
 
-### `provar.connection.list`
+### `provar_connection_list`
 
 Lists all connections and named environments defined in the project's `.testproject` file. Use this **before** generating test cases or page objects to discover the exact connection names to use.
 
-**Prerequisite:** the project must have a `.testproject` file. Run `provar.project.validate` first if unsure of the project root.
+**Prerequisite:** the project must have a `.testproject` file. Run `provar_project_validate` first if unsure of the project root.
 
 **Security:** only connection names, types, and URLs are returned — credential values from `.secrets` are never included in the output.
 
@@ -578,12 +578,12 @@ Connection `type` values: `Salesforce`, `Web`, `Quality Hub`, `Web Service`, `Da
 
 | Code                        | Meaning                                                                   |
 | --------------------------- | ------------------------------------------------------------------------- |
-| `CONNECTION_FILE_NOT_FOUND` | No `.testproject` at the given path. Run `provar.project.validate` first. |
+| `CONNECTION_FILE_NOT_FOUND` | No `.testproject` at the given path. Run `provar_project_validate` first. |
 | `PATH_NOT_ALLOWED`          | `project_path` is outside the server's `--allowed-paths`                  |
 
 ---
 
-### `provar.pageobject.generate`
+### `provar_pageobject_generate`
 
 Generates a Java Page Object skeleton with the correct `@Page` or `@SalesforcePage` annotation and `@FindBy` field stubs. Optionally generates an `ILoginPage` implementation stub for non-SF SSO connections.
 
@@ -610,7 +610,7 @@ When `sso_class` is provided the response includes `sso_stub_source` (the `ILogi
 
 ---
 
-### `provar.pageobject.validate`
+### `provar_pageobject_validate`
 
 Validates a Java Page Object source file against 30+ quality rules (structural correctness, annotation completeness, locator best practices).
 
@@ -639,7 +639,7 @@ Validates a Java Page Object source file against 30+ quality rules (structural c
 
 ---
 
-### `provar.testcase.generate`
+### `provar_testcase_generate`
 
 Generates an XML test case skeleton with UUID v4 guids and sequential `testItemId` values.
 
@@ -710,7 +710,7 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 
 ---
 
-### `provar.testcase.validate`
+### `provar_testcase_validate`
 
 Validates an XML test case for schema correctness (validity score) and best practices (quality score). The quality score uses the exact same weighted-deduction formula as the Provar Quality Hub Lambda service, guaranteeing score parity between the MCP and API surfaces.
 
@@ -753,7 +753,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 ---
 
-### `provar.testsuite.validate`
+### `provar_testsuite_validate`
 
 Validates a Provar test suite — checks for empty suites, duplicate names (within the suite), oversized suites (>75 test cases), and naming convention consistency. Recursively validates child suites and individual test case XML.
 
@@ -773,7 +773,7 @@ Validates a Provar test suite — checks for empty suites, duplicate names (with
 
 ---
 
-### `provar.testplan.validate`
+### `provar_testplan_validate`
 
 Validates a Provar test plan — checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan-completeness metadata, and naming consistency. Recursively validates suites and test cases.
 
@@ -807,7 +807,7 @@ Validates a Provar test plan — checks for empty plans, duplicate suite names, 
 
 ---
 
-### `provar.project.validate`
+### `provar_project_validate`
 
 Validates a Provar project directly from its directory on disk. Reads the plan/suite/testinstance hierarchy from `plans/`, resolves test case XML from `tests/`, extracts project context (connections, environments, secrets password) from the `.testproject` file, and runs the full cross-cutting rule set.
 
@@ -895,11 +895,11 @@ Test case tools accept either field name for XML content:
 | `xml_content` | Provar MCP (original) | Full XML content of the test case                             |
 | `xml`         | Quality Hub batch API | API-compatible alias; takes precedence when both are supplied |
 
-Both names are accepted in all four validation tools (`provar.testcase.validate`, `provar.testsuite.validate`, `provar.testplan.validate`, `provar.project.validate`). This makes it straightforward to share request payloads between the REST API and the MCP surface without conversion.
+Both names are accepted in all four validation tools (`provar_testcase_validate`, `provar_testsuite_validate`, `provar_testplan_validate`, `provar_project_validate`). This makes it straightforward to share request payloads between the REST API and the MCP surface without conversion.
 
 ---
 
-### `provar.properties.generate`
+### `provar_properties_generate`
 
 Generates a `provardx-properties.json` file from the standard template. Placeholder values (`${...}`) are pre-filled where optional overrides are not provided.
 
@@ -920,11 +920,11 @@ Generates a `provardx-properties.json` file from the standard template. Placehol
 
 ---
 
-### `provar.properties.read`
+### `provar_properties_read`
 
-Reads and parses a `provardx-properties.json` file directly from disk. Use this to inspect the current configuration before making changes with `provar.properties.set`.
+Reads and parses a `provardx-properties.json` file directly from disk. Use this to inspect the current configuration before making changes with `provar_properties_set`.
 
-If the file you read differs on critical fields (`provarHome`, `projectPath`, `resultsPath`) from the file currently registered via `provar.automation.config.load`, the response will include a `details.warning` listing the divergent keys. This catches the common case where the agent reads one file but test runs use another.
+If the file you read differs on critical fields (`provarHome`, `projectPath`, `resultsPath`) from the file currently registered via `provar_automation_config_load`, the response will include a `details.warning` listing the divergent keys. This catches the common case where the agent reads one file but test runs use another.
 
 **Input**
 
@@ -938,7 +938,7 @@ If the file you read differs on critical fields (`provarHome`, `projectPath`, `r
 
 ---
 
-### `provar.properties.set`
+### `provar_properties_set`
 
 Updates one or more fields in a `provardx-properties.json` file. Only the supplied fields are changed. Object fields (`environment`, `metadata`) are deep-merged; array fields (`testCase`, `testPlan`, `connectionOverride`) replace the existing value entirely.
 
@@ -974,7 +974,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 ---
 
-### `provar.properties.validate`
+### `provar_properties_validate`
 
 Validates a `provardx-properties.json` file against the ProvarDX schema. Checks required fields, valid enum values, and warns about unfilled `${PLACEHOLDER}` values. Accepts either a file path or inline JSON content.
 
@@ -998,7 +998,7 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 
 ---
 
-### `provar.ant.generate`
+### `provar_ant_generate`
 
 Generates a Provar ANT `build.xml` file from structured inputs. Produces the standard `<project>` skeleton with `<taskdef>` declarations, `<Provar-Compile>`, and `<Run-Test-Case>`. Supports targeting tests by folder, test plan, or individual `.testcase` files.
 
@@ -1059,7 +1059,7 @@ Examples:
 
 ---
 
-### `provar.ant.validate`
+### `provar_ant_validate`
 
 Validates a Provar ANT `build.xml` for structural correctness. Accepts either a file path or inline XML content.
 
@@ -1113,7 +1113,7 @@ Validates a Provar ANT `build.xml` for structural correctness. Accepts either a 
 
 ---
 
-### `provar.qualityhub.connect`
+### `provar_qualityhub_connect`
 
 Connects to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` via the Salesforce CLI.
 
@@ -1132,7 +1132,7 @@ Connects to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` vi
 
 ---
 
-### `provar.qualityhub.display`
+### `provar_qualityhub_display`
 
 Displays information about the currently connected Quality Hub org. Invokes `sf provar quality-hub display`.
 
@@ -1147,9 +1147,9 @@ Displays information about the currently connected Quality Hub org. Invokes `sf 
 
 ---
 
-### `provar.qualityhub.testrun`
+### `provar_qualityhub_testrun`
 
-Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Returns the test run ID which can be passed to `provar.qualityhub.testrun.report` to poll for results.
+Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Returns the test run ID which can be passed to `provar_qualityhub_testrun_report` to poll for results.
 
 > **Wildcard warning:** if any value in `flags` contains `*` or `?`, the tool adds `details.warning` explaining that QH plan-level reporting will be skipped. Execution still proceeds — the warning is non-blocking.
 
@@ -1166,7 +1166,7 @@ Triggers a Quality Hub test run. Invokes `sf provar quality-hub test run`. Retur
 
 ---
 
-### `provar.qualityhub.testrun.report`
+### `provar_qualityhub_testrun_report`
 
 Polls the status of an in-progress or completed Quality Hub test run. Invokes `sf provar quality-hub test run report`.
 
@@ -1175,7 +1175,7 @@ Polls the status of an in-progress or completed Quality Hub test run. Invokes `s
 | Parameter    | Type     | Required | Description                                                   |
 | ------------ | -------- | -------- | ------------------------------------------------------------- |
 | `target_org` | string   | yes      | SF CLI org alias or username                                  |
-| `run_id`     | string   | yes      | Test run ID returned by `provar.qualityhub.testrun`           |
+| `run_id`     | string   | yes      | Test run ID returned by `provar_qualityhub_testrun`           |
 | `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--result-format", "json"]`) |
 
 **Output** — `{ requestId, exitCode, stdout, stderr }`
@@ -1184,7 +1184,7 @@ Polls the status of an in-progress or completed Quality Hub test run. Invokes `s
 
 ---
 
-### `provar.qualityhub.testrun.abort`
+### `provar_qualityhub_testrun_abort`
 
 Aborts an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.
 
@@ -1202,7 +1202,7 @@ Aborts an in-progress Quality Hub test run. Invokes `sf provar quality-hub test 
 
 ---
 
-### `provar.qualityhub.testcase.retrieve`
+### `provar_qualityhub_testcase_retrieve`
 
 Retrieves test cases from Quality Hub by user story or metadata component. Invokes `sf provar quality-hub testcase retrieve`.
 
@@ -1219,7 +1219,7 @@ Retrieves test cases from Quality Hub by user story or metadata component. Invok
 
 ---
 
-### `provar.automation.setup`
+### `provar_automation_setup`
 
 Detects existing Provar Automation installations on the machine. If found, returns the install path so you can set `provarHome` in your properties file — without downloading anything. If no installation is found, invokes `sf provar automation setup` to download and install the binaries.
 
@@ -1247,15 +1247,15 @@ Checks in this order:
 | `version`           | string \| null | Detected or installed version                                    |
 | `message`           | string         | Human-readable summary                                           |
 
-After a successful setup, update `provarHome` in your `provardx-properties.json` using `provar.properties.set`.
+After a successful setup, update `provarHome` in your `provardx-properties.json` using `provar_properties_set`.
 
 **Error codes:** `AUTOMATION_SETUP_FAILED`, `SF_NOT_FOUND`
 
 ---
 
-### `provar.automation.testrun`
+### `provar_automation_testrun`
 
-Triggers a Provar Automation test run using the currently loaded properties file. Invokes `sf provar automation test run`. This is the **LOCAL Execute** step of the AI loop — for grid-managed runs use `provar.qualityhub.testrun`.
+Triggers a Provar Automation test run using the currently loaded properties file. Invokes `sf provar automation test run`. This is the **LOCAL Execute** step of the AI loop — for grid-managed runs use `provar_qualityhub_testrun`.
 
 **Input**
 
@@ -1282,7 +1282,7 @@ Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`
 
 ---
 
-### `provar.automation.compile`
+### `provar_automation_compile`
 
 Compiles PageObject and PageControl Java source files. Invokes `sf provar automation project compile`. Run this after generating or modifying Page Objects, before triggering a test run.
 
@@ -1298,7 +1298,7 @@ Compiles PageObject and PageControl Java source files. Invokes `sf provar automa
 
 ---
 
-### `provar.automation.metadata.download`
+### `provar_automation_metadata_download`
 
 Downloads Salesforce metadata into the Provar project cache. Invokes `sf provar automation metadata download`. Run this when you need up-to-date org metadata for Page Object generation or test execution.
 
@@ -1314,7 +1314,7 @@ Downloads Salesforce metadata into the Provar project cache. Invokes `sf provar 
 
 ---
 
-### `provar.qualityhub.defect.create`
+### `provar_qualityhub_defect_create`
 
 Creates `Defect__c` records in Quality Hub for every failed test execution in a given test run. For each failure, creates a `Defect__c` (with description, step, browser, environment, and tester populated), then links it via `Test_Case_Defect__c` and `Test_Execution_Defect__c` junction records. If Jira or ADO sync is configured in the Quality Hub org, defects automatically sync to those systems.
 
@@ -1322,7 +1322,7 @@ Creates `Defect__c` records in Quality Hub for every failed test execution in a 
 
 | Parameter      | Type     | Required | Description                                                                                             |
 | -------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `run_id`       | string   | yes      | Test run `Tracking_Id__c` returned by `provar.qualityhub.testrun`                                       |
+| `run_id`       | string   | yes      | Test run `Tracking_Id__c` returned by `provar_qualityhub_testrun`                                       |
 | `target_org`   | string   | yes      | SF CLI org alias or username for the Quality Hub org                                                    |
 | `failed_tests` | string[] | no       | Optional filter — list of `Test_Case__c` ID substrings to restrict defect creation to specific failures |
 
@@ -1338,9 +1338,9 @@ Creates `Defect__c` records in Quality Hub for every failed test execution in a 
 
 ---
 
-### `provar.automation.config.load`
+### `provar_automation_config_load`
 
-Register a `provardx-properties.json` file as the active Provar configuration. **Required before `provar.automation.compile` or `provar.automation.testrun`** — without this step those commands fail with `MISSING_FILE`.
+Register a `provardx-properties.json` file as the active Provar configuration. **Required before `provar_automation_compile` or `provar_automation_testrun`** — without this step those commands fail with `MISSING_FILE`.
 
 Invokes `sf provar automation config load --properties-file <path>`, writing the path to `~/.sf/config.json` under `PROVARDX_PROPERTIES_FILE_PATH`.
 
@@ -1358,7 +1358,7 @@ Invokes `sf provar automation config load --properties-file <path>`, writing the
 
 ---
 
-### `provar.testrun.report.locate`
+### `provar_testrun_report_locate`
 
 Resolve artifact paths for a completed test run without parsing them. Returns the absolute paths to `JUnit.xml`, `Index.html`, per-test HTML reports, and validation JSONs.
 
@@ -1385,7 +1385,7 @@ Uses a 4-step resolution algorithm (explicit path → `~/.sf/config.json` → `p
 
 ---
 
-### `provar.testrun.rca`
+### `provar_testrun_rca`
 
 Analyse a completed test run and return a structured Root Cause Analysis report. Reads `JUnit.xml`, classifies each failure into a root cause category, extracts page object and operation names, and flags pre-existing failures across prior Increment runs.
 
@@ -1443,7 +1443,7 @@ Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures �
 
 ---
 
-### `provar.testcase.step.edit`
+### `provar_testcase_step_edit`
 
 Atomically add or remove a single step (`<apiCall>`) in a Provar XML test case file. Writes a `.bak` backup before mutating, runs structural validation after the edit, and automatically restores the backup if validation fails.
 
@@ -1500,7 +1500,7 @@ Prerequisites: the test case file must exist and be valid XML with a `<testCase>
 
 ---
 
-### `provar.testplan.add-instance`
+### `provar_testplan_add-instance`
 
 Wire a test case into a plan suite by writing a `.testinstance` file. Handles UUID generation, `testCaseId` extraction from the testcase file's `registryId`/`id`/`guid` attribute, and path normalisation (always forward slashes).
 
@@ -1524,7 +1524,7 @@ Wire a test case into a plan suite by writing a `.testinstance` file. Handles UU
 
 ---
 
-### `provar.testplan.create-suite`
+### `provar_testplan_create-suite`
 
 Create a new test suite directory with a `.planitem` file inside an existing plan. The plan directory and its `.planitem` must already exist.
 
@@ -1547,7 +1547,7 @@ Create a new test suite directory with a `.planitem` file inside an existing pla
 
 ---
 
-### `provar.testplan.remove-instance`
+### `provar_testplan_remove-instance`
 
 Remove a `.testinstance` file from a plan suite. Path is validated to stay within the project root.
 
@@ -1572,13 +1572,13 @@ Remove a `.testinstance` file from a plan suite. Path is validated to stay withi
 
 NitroX is Provar's **Hybrid Model** for locators. Instead of hand-written Java Page Objects it uses component-based `.po.json` files that map UI elements for any Salesforce component type: LWC, Screen Flow, Industry / OmniStudio, Experience Cloud, and standard HTML5. These files live in `nitroX/` directories inside your Provar project.
 
-The five `provar.nitrox.*` tools let an AI agent discover existing NitroX page objects, read them as training context, validate new ones against the schema, generate fresh components from a description, and apply surgical edits via JSON merge-patch.
+The five `provar_nitrox_*` tools let an AI agent discover existing NitroX page objects, read them as training context, validate new ones against the schema, generate fresh components from a description, and apply surgical edits via JSON merge-patch.
 
 > **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
 
 ---
 
-### `provar.nitrox.discover`
+### `provar_nitrox_discover`
 
 Scan a set of directories for Provar projects (identified by a `.testproject` marker file) and inventory each project's `nitroX/` and `nitroXPackages/` directories. Useful as a first step before reading or generating files.
 
@@ -1610,7 +1610,7 @@ Directories named `node_modules`, `.git`, or any hidden directory (`.`-prefixed)
 
 ---
 
-### `provar.nitrox.read`
+### `provar_nitrox_read`
 
 Read one or more NitroX `.po.json` files and return their parsed content for context or training. Provide specific `file_paths` or a `project_path` to read all files from a project's `nitroX/` directory.
 
@@ -1632,7 +1632,7 @@ Path policy is enforced per-file. A missing or unparseable file returns an `erro
 
 ---
 
-### `provar.nitrox.validate`
+### `provar_nitrox_validate`
 
 Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a list of issues.
 
@@ -1670,7 +1670,7 @@ Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, mi
 
 ---
 
-### `provar.nitrox.generate`
+### `provar_nitrox_generate`
 
 Generate a new NitroX `.po.json` from a component description. All `componentId` fields are assigned fresh UUIDs. Returns the JSON content; writes to disk only when `dry_run=false`.
 
@@ -1704,7 +1704,7 @@ Applicable to any component type: LWC, Screen Flow, Industry Components, Experie
 
 ---
 
-### `provar.nitrox.patch`
+### `provar_nitrox_patch`
 
 Apply a [JSON merge-patch (RFC 7396)](https://www.rfc-editor.org/rfc/rfc7396) to an existing `.po.json` file. Reads the file, merges the patch, optionally validates the result, and writes back. Use `dry_run=true` (default) to preview changes before committing.
 
@@ -1735,9 +1735,9 @@ When `validate_after=true` and the merged content has errors, the write is block
 
 These tools call the Quality Hub HTTP API directly (no `sf` subprocess). They require a Provar API key set via `sf provar auth login`.
 
-### `provar.qualityhub.examples.retrieve`
+### `provar_qualityhub_examples_retrieve`
 
-Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar.testcase.generate` to provide few-shot grounding examples.
+Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar_testcase_generate` to provide few-shot grounding examples.
 
 If retrieval fails for any reason (no key, invalid key, rate limit, network error), the tool returns `{ examples: [], count: 0, warning: "..." }` with `isError: false` so the generation workflow can continue without grounding. It **never** hard-errors on API failure.
 
@@ -1774,7 +1774,7 @@ Each element in `examples`:
 
 ### Org metadata via Salesforce Hosted MCP
 
-Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar.qualityhub.examples.retrieve` query.
+Provar MCP does not include a built-in org introspection tool. Instead, connect the **Salesforce Hosted MCP Server** (`platform/sobject-reads`) alongside Provar MCP and call `getObjectSchema` to retrieve sObject field metadata. Pass the result as additional context in your `provar_qualityhub_examples_retrieve` query.
 
 | Endpoint   | URL                                                                         |
 | ---------- | --------------------------------------------------------------------------- |
@@ -1783,7 +1783,7 @@ Provar MCP does not include a built-in org introspection tool. Instead, connect 
 
 The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sharing rules automatically, and is maintained by Salesforce. See [Salesforce Hosted MCP Server docs](https://developer.salesforce.com/docs/platform/hosted-mcp-servers/guide/sobject-reads.html) for setup.
 
-**Fallback (no SF MCP configured):** append key field API names directly to your `provar.qualityhub.examples.retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
+**Fallback (no SF MCP configured):** append key field API names directly to your `provar_qualityhub_examples_retrieve` query. Example: `"... [Opportunity: CloseDate (Date), Amount (Currency), StageName (Picklist), CustomField__c (Text)]"`
 
 ---
 
@@ -1797,10 +1797,10 @@ The Provar MCP server registers **7 MCP prompts** that pre-wire the tool chain i
 
 These prompts convert tests from other frameworks into Provar XML. Each prompt:
 
-1. Calls `provar.qualityhub.examples.retrieve` with keywords from the source test to load few-shot grounding examples.
+1. Calls `provar_qualityhub_examples_retrieve` with keywords from the source test to load few-shot grounding examples.
 2. Generates a Provar XML test case using those examples as structural context.
 3. Writes the file to the target project.
-4. Calls `provar.testcase.validate` and iterates until the output is clean.
+4. Calls `provar_testcase_validate` and iterates until the output is clean.
 
 ---
 
@@ -1876,7 +1876,7 @@ Fix a failing Provar test case using RCA output. Reads the current XML, interpre
 | Parameter      | Type   | Required | Description                                                            |
 | -------------- | ------ | -------- | ---------------------------------------------------------------------- |
 | `testcasePath` | string | yes      | Absolute path to the `.testcase` file to fix.                          |
-| `rcaOutput`    | string | yes      | The failure message or RCA output from `provar.testrun.rca`.           |
+| `rcaOutput`    | string | yes      | The failure message or RCA output from `provar_testrun_rca`.           |
 | `projectPath`  | string | no       | Absolute path to the Provar project root (used for context if needed). |
 
 ---
@@ -1904,7 +1904,7 @@ Analyse coverage gaps for a Salesforce object or feature area. Inspects the proj
 | ------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `objectName`  | string | yes      | Primary Salesforce object to check coverage for (e.g. `"Opportunity"`, `"Lead"`).                                                                                                          |
 | `projectPath` | string | yes      | Absolute path to the Provar project root.                                                                                                                                                  |
-| `targetOrg`   | string | no       | Salesforce org alias or username. When provided, existing Quality Hub test cases for this object are retrieved via `provar.qualityhub.testcase.retrieve` before the coverage gap analysis. |
+| `targetOrg`   | string | no       | Salesforce org alias or username. When provided, existing Quality Hub test cases for this object are retrieved via `provar_qualityhub_testcase_retrieve` before the coverage gap analysis. |
 
 ---
 
@@ -1952,40 +1952,40 @@ The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this
 The automation tools are designed to support an **AI-driven fix loop**: an agent can iteratively improve test quality without leaving the chat session.
 
 ```
-provar.project.inspect             → understand what's in the project, find uncovered tests
+provar_project_inspect             → understand what's in the project, find uncovered tests
 [SF MCP] getObjectSchema           → retrieve org field metadata (Salesforce Hosted MCP — optional but recommended)
-provar.qualityhub.examples.retrieve → fetch few-shot grounding examples from the corpus
-provar.testcase.validate           → find quality issues in a test case
-provar.testcase.generate           → regenerate or fix the test case XML
-provar.testplan.add-instance       → wire a new/fixed test case into a plan suite
-provar.testplan.create-suite       → create a suite to organise new tests
-provar.ant.generate                → generate (or regenerate) the ANT build.xml for CI
-provar.ant.validate                → validate an existing build.xml before committing
-provar.automation.config.load      → register the properties file (required before compile/testrun)
-provar.automation.compile          → compile Page Objects after changes
-provar.automation.testrun          → execute tests locally against the real org
-provar.testrun.rca                 → diagnose failures: classify root cause, extract page objects
-provar.project.validate            → re-score the full project
+provar_qualityhub_examples_retrieve → fetch few-shot grounding examples from the corpus
+provar_testcase_validate           → find quality issues in a test case
+provar_testcase_generate           → regenerate or fix the test case XML
+provar_testplan_add-instance       → wire a new/fixed test case into a plan suite
+provar_testplan_create-suite       → create a suite to organise new tests
+provar_ant_generate                → generate (or regenerate) the ANT build.xml for CI
+provar_ant_validate                → validate an existing build.xml before committing
+provar_automation_config_load      → register the properties file (required before compile/testrun)
+provar_automation_compile          → compile Page Objects after changes
+provar_automation_testrun          → execute tests locally against the real org
+provar_testrun_rca                 → diagnose failures: classify root cause, extract page objects
+provar_project_validate            → re-score the full project
 ```
 
 Combined with Quality Hub (grid-managed runs):
 
 ```
-provar.qualityhub.connect           → authenticate
-provar.qualityhub.testrun           → start a Quality Hub-managed grid run
-provar.qualityhub.testrun.report    → poll until complete
-provar.qualityhub.testcase.retrieve → pull test cases scoped to a user story
-provar.qualityhub.defect.create     → file defects for failures automatically
+provar_qualityhub_connect           → authenticate
+provar_qualityhub_testrun           → start a Quality Hub-managed grid run
+provar_qualityhub_testrun_report    → poll until complete
+provar_qualityhub_testcase_retrieve → pull test cases scoped to a user story
+provar_qualityhub_defect_create     → file defects for failures automatically
 ```
 
 NitroX (Hybrid Model) component page object loop:
 
 ```
-provar.nitrox.discover   → find all NitroX projects and .po.json files on the machine
-provar.nitrox.read       → load existing page objects as AI training context
-provar.nitrox.validate   → check a generated or edited .po.json for schema issues
-provar.nitrox.generate   → create a new .po.json from a component description
-provar.nitrox.patch      → apply targeted edits to an existing .po.json (RFC 7396)
+provar_nitrox_discover   → find all NitroX projects and .po.json files on the machine
+provar_nitrox_read       → load existing page objects as AI training context
+provar_nitrox_validate   → check a generated or edited .po.json for schema issues
+provar_nitrox_generate   → create a new .po.json from a component description
+provar_nitrox_patch      → apply targeted edits to an existing .po.json (RFC 7396)
 ```
 
-> **Note:** `provar.automation.*` and `provar.qualityhub.*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
+> **Note:** `provar_automation_*` and `provar_qualityhub_*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.

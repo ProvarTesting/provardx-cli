@@ -187,7 +187,7 @@ Restart Cursor after saving. The Provar tools will appear under **Settings → M
 
 Once your AI client is configured, ask it:
 
-> "Call provardx.ping with message 'hello'"
+> "Call provardx_ping with message 'hello'"
 
 Expected response:
 
@@ -207,7 +207,7 @@ Get an instant inventory of your Provar project — file counts, coverage gaps, 
 
 **Prompt:**
 
-> "Use provar.project.inspect on my project at `/workspace/MyProvarProject` and tell me what you find — how many test cases are there, and which ones aren't covered by any test plan?"
+> "Use provar_project_inspect on my project at `/workspace/MyProvarProject` and tell me what you find — how many test cases are there, and which ones aren't covered by any test plan?"
 
 **What you get back:**
 
@@ -299,10 +299,10 @@ Ask the AI to run your local Provar Automation test suite and report results.
 
 **The AI will chain:**
 
-1. `provar.automation.config.load` — registers the properties file
-2. `provar.automation.compile` — compiles Page Objects
-3. `provar.automation.testrun` — executes the test run
-4. `provar.testrun.report.locate` — finds the JUnit/HTML report paths
+1. `provar_automation_config_load` — registers the properties file
+2. `provar_automation_compile` — compiles Page Objects
+3. `provar_automation_testrun` — executes the test run
+4. `provar_testrun_report_locate` — finds the JUnit/HTML report paths
 
 ---
 
@@ -323,9 +323,9 @@ sf provar quality-hub connect -o MyQHOrg
 
 **The AI will chain:**
 
-1. `provar.qualityhub.connect` — connects to the org
-2. `provar.qualityhub.testrun` — triggers the run
-3. `provar.qualityhub.testrun.report` — polls status in a loop
+1. `provar_qualityhub_connect` — connects to the org
+2. `provar_qualityhub_testrun` — triggers the run
+3. `provar_qualityhub_testrun_report` — polls status in a loop
 4. Reports final pass/fail status and a summary of results
 
 ---
@@ -360,38 +360,47 @@ Turn a failed test execution directly into a Quality Hub defect, without leaving
 
 | Tool                                  | What it does                                                     |
 | ------------------------------------- | ---------------------------------------------------------------- |
-| `provardx.ping`                       | Sanity check — verifies the server is running                    |
-| `provar.project.inspect`              | Inventory project artefacts and surface coverage gaps            |
-| `provar.project.validate`             | Full project quality validation from disk                        |
-| `provar.pageobject.generate`          | Generate a Java Page Object skeleton                             |
-| `provar.pageobject.validate`          | Validate Page Object quality (30+ rules)                         |
-| `provar.testcase.generate`            | Generate an XML test case skeleton                               |
-| `provar.testcase.validate`            | Validate test case XML (schema + best-practices scores)          |
-| `provar.testsuite.validate`           | Validate a test suite hierarchy                                  |
-| `provar.testplan.validate`            | Validate a test plan with metadata completeness checks           |
-| `provar.testplan.add-instance`        | Wire a test case into a plan suite                               |
-| `provar.testplan.create-suite`        | Create a new test suite inside a plan                            |
-| `provar.testplan.remove-instance`     | Remove a test instance from a plan suite                         |
-| `provar.properties.generate`          | Generate a `provardx-properties.json` from the standard template |
-| `provar.properties.read`              | Read and parse a `provardx-properties.json`                      |
-| `provar.properties.set`               | Update fields in a `provardx-properties.json`                    |
-| `provar.properties.validate`          | Validate a `provardx-properties.json` against the schema         |
-| `provar.ant.generate`                 | Generate an ANT `build.xml` for CI/CD pipeline execution         |
-| `provar.ant.validate`                 | Validate an ANT `build.xml`                                      |
-| `provar.automation.setup`             | Detect or download/install Provar Automation binaries            |
-| `provar.automation.config.load`       | Register a properties file as the active config                  |
-| `provar.automation.compile`           | Compile Page Objects after changes                               |
-| `provar.automation.metadata.download` | Download Salesforce metadata into the project                    |
-| `provar.automation.testrun`           | Trigger a local Provar Automation test run                       |
-| `provar.qualityhub.connect`           | Connect to a Quality Hub org                                     |
-| `provar.qualityhub.display`           | Display connected Quality Hub org info                           |
-| `provar.qualityhub.testrun`           | Trigger a Quality Hub managed test run                           |
-| `provar.qualityhub.testrun.report`    | Poll test run status                                             |
-| `provar.qualityhub.testrun.abort`     | Abort an in-progress test run                                    |
-| `provar.qualityhub.testcase.retrieve` | Retrieve test cases by user story or component                   |
-| `provar.qualityhub.defect.create`     | Create Quality Hub defects from failed executions                |
-| `provar.testrun.report.locate`        | Resolve JUnit/HTML report paths after a run                      |
-| `provar.testrun.rca`                  | Classify failures and detect regressions                         |
+| `provardx_ping`                       | Sanity check — verifies the server is running                    |
+| `provar_project_inspect`              | Inventory project artefacts and surface coverage gaps            |
+| `provar_project_validate`             | Full project quality validation from disk                        |
+| `provar_connection_list`              | List connections and named environments from the project         |
+| `provar_pageobject_generate`          | Generate a Java Page Object skeleton                             |
+| `provar_pageobject_validate`          | Validate Page Object quality (30+ rules)                         |
+| `provar_testcase_generate`            | Generate an XML test case skeleton                               |
+| `provar_testcase_validate`            | Validate test case XML (schema + best-practices scores)          |
+| `provar_testcase_step_edit`           | Atomically add or remove a single step in a test case            |
+| `provar_testsuite_validate`           | Validate a test suite hierarchy                                  |
+| `provar_testplan_validate`            | Validate a test plan with metadata completeness checks           |
+| `provar_testplan_create`              | Create a new test plan                                           |
+| `provar_testplan_add-instance`        | Wire a test case into a plan suite                               |
+| `provar_testplan_create-suite`        | Create a new test suite inside a plan                            |
+| `provar_testplan_remove-instance`     | Remove a test instance from a plan suite                         |
+| `provar_properties_generate`          | Generate a `provardx-properties.json` from the standard template |
+| `provar_properties_read`              | Read and parse a `provardx-properties.json`                      |
+| `provar_properties_set`               | Update fields in a `provardx-properties.json`                    |
+| `provar_properties_validate`          | Validate a `provardx-properties.json` against the schema         |
+| `provar_ant_generate`                 | Generate an ANT `build.xml` for CI/CD pipeline execution         |
+| `provar_ant_validate`                 | Validate an ANT `build.xml`                                      |
+| `provar_automation_setup`             | Detect or download/install Provar Automation binaries            |
+| `provar_automation_config_load`       | Register a properties file as the active config                  |
+| `provar_automation_compile`           | Compile Page Objects after changes                               |
+| `provar_automation_metadata_download` | Download Salesforce metadata into the project                    |
+| `provar_automation_testrun`           | Trigger a local Provar Automation test run                       |
+| `provar_qualityhub_connect`           | Connect to a Quality Hub org                                     |
+| `provar_qualityhub_display`           | Display connected Quality Hub org info                           |
+| `provar_qualityhub_testrun`           | Trigger a Quality Hub managed test run                           |
+| `provar_qualityhub_testrun_report`    | Poll test run status                                             |
+| `provar_qualityhub_testrun_abort`     | Abort an in-progress test run                                    |
+| `provar_qualityhub_testcase_retrieve` | Retrieve test cases by user story or component                   |
+| `provar_qualityhub_defect_create`     | Create Quality Hub defects from failed executions                |
+| `provar_qualityhub_examples_retrieve` | Retrieve corpus examples to ground test generation               |
+| `provar_testrun_report_locate`        | Resolve JUnit/HTML report paths after a run                      |
+| `provar_testrun_rca`                  | Classify failures and detect regressions                         |
+| `provar_nitrox_discover`              | Discover NitroX component metadata                               |
+| `provar_nitrox_generate`              | Generate a NitroX component                                      |
+| `provar_nitrox_patch`                 | Patch a NitroX component definition                              |
+| `provar_nitrox_read`                  | Read a NitroX component definition                               |
+| `provar_nitrox_validate`              | Validate a NitroX component                                      |
 
 ---
 

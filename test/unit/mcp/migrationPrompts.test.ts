@@ -99,8 +99,8 @@ describe('migrationPrompts — provar.migrate.crt', () => {
   it('includes workflow steps in message', () => {
     const result = server.call('provar.migrate.crt', { source: 'any source' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'message should reference corpus retrieval tool');
-    assert.ok(text.includes('provar.testcase.validate'), 'message should reference validator tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'message should reference corpus retrieval tool');
+    assert.ok(text.includes('provar_testcase_validate'), 'message should reference validator tool');
   });
 
   it('uses provided testName when present', () => {
@@ -144,7 +144,7 @@ describe('migrationPrompts — provar.migrate.selenium', () => {
   it('includes workflow steps', () => {
     const result = server.call('provar.migrate.selenium', { source: 'any' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should reference corpus tool');
   });
 });
 

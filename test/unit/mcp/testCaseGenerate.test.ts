@@ -27,6 +27,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -65,12 +69,12 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.testcase.generate ───────────────────────────────────────────────────
+// ── provar_testcase_generate ───────────────────────────────────────────────────
 
-describe('provar.testcase.generate', () => {
+describe('provar_testcase_generate', () => {
   describe('dry_run', () => {
     it('returns xml_content without writing to disk', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Login Test',
         steps: [],
         dry_run: true,
@@ -86,7 +90,7 @@ describe('provar.testcase.generate', () => {
 
     it('does NOT write a file even when output_path is provided', () => {
       const outPath = path.join(tmpDir, 'LoginTest.testcase');
-      server.call('provar.testcase.generate', {
+      server.call('provar_testcase_generate', {
         test_case_name: 'Login Test',
         steps: [],
         output_path: outPath,
@@ -100,7 +104,7 @@ describe('provar.testcase.generate', () => {
 
   describe('generated XML content', () => {
     it('generates correct <testCase> element structure per Provar requirements', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Create Account',
         steps: [],
         dry_run: true,
@@ -116,7 +120,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('contains <steps> element', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'My Test',
         steps: [],
         dry_run: true,
@@ -128,7 +132,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('generates UUID v4 guids for testCase guid attribute', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'UUID Test',
         steps: [],
         dry_run: true,
@@ -142,7 +146,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('always emits id="1" regardless of test_case_name (Provar integer literal requirement)', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Explicit ID Test',
         steps: [],
         dry_run: true,
@@ -157,7 +161,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('includes steps with correct apiId and sequential testItemId', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Multi Step',
         steps: [
           { api_id: 'UiConnect', name: 'Connect', attributes: {} },
@@ -178,7 +182,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('reports step_count matching the number of steps', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Count Test',
         steps: [
           { api_id: 'UiConnect', name: 'Step 1', attributes: {} },
@@ -192,7 +196,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('includes validation field with is_valid and scores', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Validated Test',
         steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
         dry_run: true,
@@ -213,7 +217,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('emits a TODO comment when no steps are provided', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'No Steps',
         steps: [],
         dry_run: true,
@@ -225,7 +229,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('does not embed test_case_name in XML (name attr removed per Provar spec)', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Test & "Escape" <this>',
         steps: [],
         dry_run: true,
@@ -239,7 +243,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('escapes XML special characters in step api_id and name', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Escape Step Test',
         steps: [{ api_id: 'Api<Id>', name: 'Step & "Name"', attributes: {} }],
         dry_run: true,
@@ -255,7 +259,7 @@ describe('provar.testcase.generate', () => {
   describe('writing to disk', () => {
     it('writes file when dry_run=false and output_path provided', () => {
       const outPath = path.join(tmpDir, 'Login.testcase');
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Login',
         steps: [],
         output_path: outPath,
@@ -269,7 +273,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('does NOT write when dry_run=false but no output_path', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'No Path Test',
         steps: [],
         dry_run: false,
@@ -284,7 +288,7 @@ describe('provar.testcase.generate', () => {
       const outPath = path.join(tmpDir, 'Existing.testcase');
       fs.writeFileSync(outPath, '<old/>', 'utf-8');
 
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
         steps: [],
         output_path: outPath,
@@ -300,7 +304,7 @@ describe('provar.testcase.generate', () => {
       const outPath = path.join(tmpDir, 'Existing.testcase');
       fs.writeFileSync(outPath, '<old/>', 'utf-8');
 
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
         steps: [],
         output_path: outPath,
@@ -315,7 +319,7 @@ describe('provar.testcase.generate', () => {
 
     it('creates parent directories as needed', () => {
       const outPath = path.join(tmpDir, 'tests', 'suite', 'Login.testcase');
-      server.call('provar.testcase.generate', {
+      server.call('provar_testcase_generate', {
         test_case_name: 'Login',
         steps: [],
         output_path: outPath,
@@ -332,7 +336,7 @@ describe('provar.testcase.generate', () => {
       const strictServer = new MockMcpServer();
       registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.testcase.generate', {
+      const result = strictServer.call('provar_testcase_generate', {
         test_case_name: 'Evil',
         steps: [],
         output_path: path.join(os.tmpdir(), 'evil.testcase'),
@@ -349,7 +353,7 @@ describe('provar.testcase.generate', () => {
       const strictServer = new MockMcpServer();
       registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.testcase.generate', {
+      const result = strictServer.call('provar_testcase_generate', {
         test_case_name: 'Safe',
         steps: [],
         output_path: '/etc/evil.testcase',
@@ -363,7 +367,7 @@ describe('provar.testcase.generate', () => {
 
   describe('idempotency_key', () => {
     it('echoes back the provided idempotency_key', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Idempotent',
         steps: [],
         idempotency_key: 'dedup-key-abc',
@@ -377,7 +381,7 @@ describe('provar.testcase.generate', () => {
 
   describe('XML argument valueClass casing', () => {
     it('emits lowercase valueClass="string" not uppercase "String"', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'ValueClass Test',
         steps: [
           {
@@ -398,7 +402,7 @@ describe('provar.testcase.generate', () => {
 
   describe('target_uri — non-SF page object (ui:) nesting', () => {
     it('wraps steps in UiWithScreen when target_uri uses ?pageId= format', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Non-SF Login',
         steps: [{ api_id: 'UiDoAction', name: 'Enter username', attributes: { field: 'username' } }],
         target_uri: 'ui:pageobject:target?pageId=pageobjects.LoginPage',
@@ -416,7 +420,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('substeps clause uses testItemId=2, inner steps start at testItemId=3', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Non-SF Multi',
         steps: [
           { api_id: 'UiDoAction', name: 'Step A', attributes: {} },
@@ -435,7 +439,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('uses flat structure when target_uri starts with sf:', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'SF Target',
         steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
         target_uri: 'sf:ui:target:Salesforce__Standard__Account',
@@ -450,7 +454,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('uses flat structure when target_uri is omitted', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'No URI',
         steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
         dry_run: true,
@@ -465,7 +469,7 @@ describe('provar.testcase.generate', () => {
 
   describe('D2 — uiTarget / uiLocator argument types', () => {
     it('emits class="uiTarget" uri="..." for the target argument', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'UI Target Test',
         steps: [
           {
@@ -489,7 +493,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('emits class="uiLocator" uri="..." for the locator argument', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'UI Locator Test',
         steps: [
           {
@@ -513,7 +517,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('uiTarget also applies inside UiWithScreen wrapper when target_uri is non-SF', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Non-SF With Target',
         steps: [],
         target_uri: 'ui:pageobject:target?pageId=pageobjects.LoginPage',
@@ -533,7 +537,7 @@ describe('provar.testcase.generate', () => {
 
   describe('D3 — SetValues / AssertValues use valueList/namedValues structure', () => {
     it('SetValues emits <value class="valueList"> with <namedValues>', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'SetValues Test',
         steps: [
           {
@@ -558,7 +562,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('AssertValues uses flat argument structure (not valueList)', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'AssertValues Test',
         steps: [
           {
@@ -579,7 +583,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('non-SetValues steps still use flat argument structure', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Flat Args Test',
         steps: [{ api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Opportunity' } }],
         dry_run: true,
@@ -595,7 +599,7 @@ describe('provar.testcase.generate', () => {
 
   describe('D4 — Variable references use class="variable" with <path> elements', () => {
     it('{VarName} emits class="variable" <path element="VarName"/>', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Variable Ref Test',
         steps: [
           {
@@ -616,7 +620,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('{Obj.Field} dotted path emits two <path> elements', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Dotted Variable Test',
         steps: [
           {
@@ -636,7 +640,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('variable reference also works inside SetValues namedValues', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'SetValues With Var',
         steps: [
           {
@@ -657,7 +661,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('plain string values without braces are not treated as variable references', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'No Var Test',
         steps: [{ api_id: 'ApexCreateObject', name: 'Create', attributes: { Name: 'Literal Name' } }],
         dry_run: true,
@@ -673,7 +677,7 @@ describe('provar.testcase.generate', () => {
 
   describe('D7 — Cleanup warning for ApexDeleteObject', () => {
     it('includes cleanup warning when ApexDeleteObject is in the step list', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Create and Delete',
         steps: [
           { api_id: 'ApexCreateObject', name: 'Create record', attributes: { objectApiName: 'Account' } },
@@ -695,7 +699,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('does NOT warn when no ApexDeleteObject steps are present', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'No Cleanup',
         steps: [{ api_id: 'ApexCreateObject', name: 'Create', attributes: {} }],
         dry_run: true,
@@ -713,7 +717,7 @@ describe('provar.testcase.generate', () => {
 
   describe('validate_after_edit', () => {
     it('includes validation field when validate_after_edit=true (default)', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Validated',
         steps: [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }],
         dry_run: true,
@@ -727,7 +731,7 @@ describe('provar.testcase.generate', () => {
     });
 
     it('omits validation field when validate_after_edit=false', () => {
-      const result = server.call('provar.testcase.generate', {
+      const result = server.call('provar_testcase_generate', {
         test_case_name: 'Skip Validation',
         steps: [],
         dry_run: true,

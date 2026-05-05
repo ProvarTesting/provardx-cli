@@ -21,7 +21,7 @@ function projectHint(projectPath: string | undefined): string {
 export function registerLoopGeneratePrompt(server: McpServer): void {
   server.prompt(
     'provar.loop.generate',
-    'Generate a Provar XML test case from a user story or acceptance criteria. Retrieves corpus examples for grounding, generates the test, writes it to the project, then validates it with provar.testcase.validate.',
+    'Generate a Provar XML test case from a user story or acceptance criteria. Retrieves corpus examples for grounding, generates the test, writes it to the project, then validates it with provar_testcase_validate.',
     {
       story: z
         .string()
@@ -62,7 +62,7 @@ Follow these steps in order:
 1. **Extract keywords** — identify the Salesforce object, the action (create/update/close/delete/view), and key
    scenario details from the story. Use these as the query for step 2.
 
-2. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with the keywords you extracted
+2. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with the keywords you extracted
    (e.g. "close opportunity" or "create lead"). Use the returned XML examples as the sole reference for
    Provar step structure and argument patterns. Do not invent XML structure from prior knowledge.
    If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured),
@@ -85,7 +85,7 @@ Follow these steps in order:
    ${projectHint(projectPath)}
    ${testName ? `Target file name: ${testName}.testcase` : 'Infer the file name from the story (snake_case).'}
 
-6. **Validate** — call \`provar.testcase.validate\` on the saved file. If it reports errors, fix them
+6. **Validate** — call \`provar_testcase_validate\` on the saved file. If it reports errors, fix them
    and re-validate until the file passes clean.
 
 7. **Report** — summarise:
@@ -99,7 +99,7 @@ ${story}
 
 ${objectName ? `Primary object: ${objectName}` : ''}
 
-Begin with step 1: extract keywords, then call provar.qualityhub.examples.retrieve.`,
+Begin with step 1: extract keywords, then call provar_qualityhub_examples_retrieve.`,
           },
         },
       ],
@@ -112,7 +112,7 @@ Begin with step 1: extract keywords, then call provar.qualityhub.examples.retrie
 export function registerLoopFixPrompt(server: McpServer): void {
   server.prompt(
     'provar.loop.fix',
-    'Fix a failing Provar test case using the output from provar.testrun.rca. Reads the current XML, retrieves corpus examples for the failing step type, applies targeted fixes, then re-validates.',
+    'Fix a failing Provar test case using the output from provar_testrun_rca. Reads the current XML, retrieves corpus examples for the failing step type, applies targeted fixes, then re-validates.',
     {
       testcasePath: z
         .string()
@@ -122,7 +122,7 @@ export function registerLoopFixPrompt(server: McpServer): void {
       rcaOutput: z
         .string()
         .describe(
-          'The RCA report text from provar.testrun.rca, or a raw failure message from a test run. Include the full error text — step name, error type, and message. The more detail, the better the fix.'
+          'The RCA report text from provar_testrun_rca, or a raw failure message from a test run. Include the full error text — step name, error type, and message. The more detail, the better the fix.'
         ),
       projectPath: z
         .string()
@@ -160,7 +160,7 @@ Follow these steps in order:
    - The failure category (e.g. element not found, assertion mismatch, connection error, XML structure error)
    - The specific error message
 
-3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with keywords describing the
+3. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with keywords describing the
    failing step's scenario (e.g. "close opportunity UiDoAction" or "assert field value UiAssert").
    Use the returned examples to verify the correct structure for the failing step type.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
@@ -179,7 +179,7 @@ Follow these steps in order:
 5. **Apply the fix** — rewrite only the failing step(s). Preserve all other steps unchanged. Write the
    updated XML back to the same file path.
 
-6. **Validate** — call \`provar.testcase.validate\` on the updated file. If new errors appear, fix them
+6. **Validate** — call \`provar_testcase_validate\` on the updated file. If new errors appear, fix them
    and re-validate until the file passes clean.
 
 7. **Report** — summarise:
@@ -226,13 +226,13 @@ ${projectPath ? `Provar project root: ${projectPath}` : ''}
 
 Follow these steps in order:
 
-1. **Validate** — call \`provar.testcase.validate\` on the file. Note all errors and warnings. Do not stop
+1. **Validate** — call \`provar_testcase_validate\` on the file. Note all errors and warnings. Do not stop
    here even if the file is valid — continue the review.
 
 2. **Read the file** — read the XML to understand the test structure: what object is being tested, what
    actions are performed, and what is being asserted.
 
-3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with keywords describing the
+3. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with keywords describing the
    test scenario (e.g. "create opportunity", "close opportunity"). Use the returned examples as a
    quality baseline. If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read
    the \`provar://docs/step-reference\` MCP resource for step type schemas, then continue the review
@@ -276,7 +276,7 @@ Follow these steps in order:
    ### Suggested improvements
    Any non-blocking suggestions (e.g. parameterising a hardcoded value that appears more than once).
 
-Begin with step 1: call provar.testcase.validate on the file at: ${testcasePath}`,
+Begin with step 1: call provar_testcase_validate on the file at: ${testcasePath}`,
           },
         },
       ],
@@ -305,7 +305,7 @@ export function registerLoopCoveragePrompt(server: McpServer): void {
         .string()
         .optional()
         .describe(
-          'SF org alias or username. If provided, also queries provar.qualityhub.testcase.retrieve to include Quality Hub tests in the coverage analysis.'
+          'SF org alias or username. If provided, also queries provar_qualityhub_testcase_retrieve to include Quality Hub tests in the coverage analysis.'
         ),
     },
     ({ objectName, projectPath, targetOrg }) => ({
@@ -335,15 +335,15 @@ Follow these steps in order:
 
 ${
   targetOrg
-    ? `2. **Query Quality Hub** — call \`provar.qualityhub.testcase.retrieve\` with target_org="${targetOrg}"
+    ? `2. **Query Quality Hub** — call \`provar_qualityhub_testcase_retrieve\` with target_org="${targetOrg}"
    to retrieve test cases linked to the "${objectName}" object from Quality Hub. Add these to the
    coverage inventory.
 
-3. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with "${objectName.toLowerCase()}"
+3. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with "${objectName.toLowerCase()}"
    as the query to understand what test patterns exist in the corpus for this object.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
    \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
-    : `2. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with "${objectName.toLowerCase()}"
+    : `2. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with "${objectName.toLowerCase()}"
    as the query to understand what test patterns exist in the corpus for this object.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
    \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
@@ -436,7 +436,7 @@ This is a **database test**, NOT a Salesforce UI or Apex test. Do not use UiConn
 
 Follow these steps in order:
 
-1. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with a query that includes "database DbConnect SqlQuery" plus keywords from the story (e.g. "database SQL Server verify record count"). Use the returned XML examples as the reference for correct step structure.
+1. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with a query that includes "database DbConnect SqlQuery" plus keywords from the story (e.g. "database SQL Server verify record count"). Use the returned XML examples as the reference for correct step structure.
    If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured), fall back: read the \`provar://docs/step-reference\` MCP resource — specifically the Database Steps section — for the correct attribute schema, then continue.
 
 2. **Generate the test case** — produce valid Provar XML. Apply these database-specific rules:
@@ -480,7 +480,7 @@ Follow these steps in order:
    ${projectHint(projectPath)}
    ${testName ? `Target file name: ${testName}.testcase` : 'Infer the file name from the story (snake_case).'}
 
-4. **Validate** — call \`provar.testcase.validate\` on the saved file. If it reports errors, fix them and re-validate until the file passes clean.
+4. **Validate** — call \`provar_testcase_validate\` on the saved file. If it reports errors, fix them and re-validate until the file passes clean.
 
 5. **Report** — summarise:
    - Which query/assertion was implemented
@@ -492,7 +492,7 @@ Follow these steps in order:
 
 ${story}
 
-Begin with step 1: call provar.qualityhub.examples.retrieve with "database DbConnect SqlQuery" plus keywords from the story above.`,
+Begin with step 1: call provar_qualityhub_examples_retrieve with "database DbConnect SqlQuery" plus keywords from the story above.`,
           },
         },
       ],

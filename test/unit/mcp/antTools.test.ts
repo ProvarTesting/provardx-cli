@@ -26,6 +26,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -104,12 +108,12 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.ant.generate ────────────────────────────────────────────────────────
+// ── provar_ant_generate ────────────────────────────────────────────────────────
 
-describe('provar.ant.generate', () => {
+describe('provar_ant_generate', () => {
   describe('dry_run', () => {
     it('returns xml_content without writing to disk', () => {
-      const result = server.call('provar.ant.generate', minimalInput());
+      const result = server.call('provar_ant_generate', minimalInput());
 
       assert.equal(isError(result), false);
       const body = parseText(result);
@@ -120,7 +124,7 @@ describe('provar.ant.generate', () => {
 
     it('does NOT write a file even when output_path is provided', () => {
       const outPath = path.join(tmpDir, 'build.xml');
-      server.call('provar.ant.generate', minimalInput({ output_path: outPath, dry_run: true }));
+      server.call('provar_ant_generate', minimalInput({ output_path: outPath, dry_run: true }));
 
       assert.equal(fs.existsSync(outPath), false, 'file must not be written in dry_run mode');
     });
@@ -128,7 +132,7 @@ describe('provar.ant.generate', () => {
 
   describe('generated XML structure', () => {
     function getXml(overrides: Record<string, unknown> = {}): string {
-      const result = server.call('provar.ant.generate', minimalInput(overrides));
+      const result = server.call('provar_ant_generate', minimalInput(overrides));
       return parseText(result)['xml_content'] as string;
     }
 
@@ -337,7 +341,7 @@ describe('provar.ant.generate', () => {
   describe('writing to disk', () => {
     it('writes file when dry_run=false and output_path provided', () => {
       const outPath = path.join(tmpDir, 'build.xml');
-      const result = server.call('provar.ant.generate', minimalInput({ output_path: outPath, dry_run: false }));
+      const result = server.call('provar_ant_generate', minimalInput({ output_path: outPath, dry_run: false }));
 
       assert.equal(isError(result), false);
       assert.equal(fs.existsSync(outPath), true, 'file should be written');
@@ -346,14 +350,14 @@ describe('provar.ant.generate', () => {
 
     it('written file contains valid XML with <project> root', () => {
       const outPath = path.join(tmpDir, 'build.xml');
-      server.call('provar.ant.generate', minimalInput({ output_path: outPath, dry_run: false }));
+      server.call('provar_ant_generate', minimalInput({ output_path: outPath, dry_run: false }));
 
       const content = fs.readFileSync(outPath, 'utf-8');
       assert.ok(content.includes('<project'), 'Written file must contain <project>');
     });
 
     it('does NOT write when dry_run=false but no output_path', () => {
-      const result = server.call('provar.ant.generate', minimalInput({ dry_run: false, output_path: undefined }));
+      const result = server.call('provar_ant_generate', minimalInput({ dry_run: false, output_path: undefined }));
 
       assert.equal(isError(result), false);
       assert.equal(parseText(result)['written'], false);
@@ -364,7 +368,7 @@ describe('provar.ant.generate', () => {
       fs.writeFileSync(outPath, '<old/>', 'utf-8');
 
       const result = server.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         minimalInput({ output_path: outPath, dry_run: false, overwrite: false })
       );
 
@@ -377,7 +381,7 @@ describe('provar.ant.generate', () => {
       fs.writeFileSync(outPath, '<old/>', 'utf-8');
 
       const result = server.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         minimalInput({ output_path: outPath, dry_run: false, overwrite: true })
       );
 
@@ -388,7 +392,7 @@ describe('provar.ant.generate', () => {
 
     it('creates parent directories as needed', () => {
       const outPath = path.join(tmpDir, 'ANT', 'build.xml');
-      server.call('provar.ant.generate', minimalInput({ output_path: outPath, dry_run: false }));
+      server.call('provar_ant_generate', minimalInput({ output_path: outPath, dry_run: false }));
 
       assert.equal(fs.existsSync(outPath), true, 'nested directory should be created');
     });
@@ -411,7 +415,7 @@ describe('provar.ant.generate', () => {
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         strictInput({
           output_path: path.join(os.tmpdir(), 'evil-build.xml'),
           dry_run: false,
@@ -431,7 +435,7 @@ describe('provar.ant.generate', () => {
       // Input paths are within tmpDir; only the output_path is outside — but dry_run
       // skips the write so the output_path should not be validated.
       const result = strictServer.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         strictInput({ output_path: '/etc/evil-build.xml', dry_run: true })
       );
 
@@ -443,7 +447,7 @@ describe('provar.ant.generate', () => {
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         strictInput({ provar_home: path.join(os.tmpdir(), 'evil-provar'), dry_run: true })
       );
 
@@ -456,7 +460,7 @@ describe('provar.ant.generate', () => {
       const strictServer = new MockMcpServer();
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.ant.generate', strictInput({ project_path: '../evil', dry_run: true }));
+      const result = strictServer.call('provar_ant_generate', strictInput({ project_path: '../evil', dry_run: true }));
 
       assert.equal(isError(result), true);
       assert.equal(parseText(result)['error_code'], 'PATH_TRAVERSAL');
@@ -467,7 +471,7 @@ describe('provar.ant.generate', () => {
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         strictInput({ results_path: path.join(os.tmpdir(), 'evil-results'), dry_run: true })
       );
 
@@ -481,7 +485,7 @@ describe('provar.ant.generate', () => {
       registerAntGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call(
-        'provar.ant.generate',
+        'provar_ant_generate',
         strictInput({ license_path: path.join(os.tmpdir(), 'evil-licenses'), dry_run: true })
       );
 
@@ -769,7 +773,7 @@ describe('validateAntXml', () => {
   describe('round-trip: generate then validate', () => {
     it('XML produced by the generator passes validation', () => {
       // Use the mock server to generate, then validate the output
-      const result = server.call('provar.ant.generate', minimalInput());
+      const result = server.call('provar_ant_generate', minimalInput());
       const xml = parseText(result)['xml_content'] as string;
       const validation = validateAntXml(xml);
 

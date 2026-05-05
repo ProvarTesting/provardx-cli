@@ -129,7 +129,7 @@ const TOOL_DESCRIPTION = [
   'ApexSoqlQuery argument IDs: soqlQuery (the SOQL SELECT statement), resultListName (binds result list to a variable), apexConnectionName (named connection), resultScope (optional).',
   'Data-driven note: <dataTable> only iterates rows when the test case runs via a test plan instance (.testinstance).',
   'Running directly via the provardx testCase property resolves all data table variables as null.',
-  'Use provar.testplan.add-instance to wire into a plan for data-driven execution.',
+  'Use provar_testplan_add-instance to wire into a plan for data-driven execution.',
   'ApexReadObject requires field names in attributes; omitting them produces MALFORMED_QUERY. Prefer ApexSoqlQuery.',
   'AssertValues on SOQL results: index paths like "ResultList[0].Field" are not supported.',
   'Use ForEach to iterate the result list, or SetValues to extract a field into a variable first.',
@@ -149,41 +149,44 @@ const TOOL_DESCRIPTION = [
     'Always check for and remove duplicate empty arguments after any IDE open/save cycle before re-running.',
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
-  'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
+  'Grounding: call provar_qualityhub_examples_retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
 ].join(' ');
 
 export function registerTestCaseGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.testcase.generate',
-    TOOL_DESCRIPTION,
+  server.registerTool(
+    'provar_testcase_generate',
     {
-      test_case_name: z.string().describe('Test case name (human-readable label)'),
-      steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
-      target_uri: z
-        .string()
-        .optional()
-        .describe(
-          'Page object URI that determines the XML nesting structure. ' +
-            'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
-            'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
-            'steps are wrapped in a UiWithScreen element targeting that class.'
-        ),
-      output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
-      overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
-      dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
-      validate_after_edit: z
-        .boolean()
-        .default(true)
-        .describe(
-          'Run structural validation after generation (default: true). ' +
-            'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
-            'Set false to skip validation and omit the validation field from the response.'
-        ),
-      idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      title: 'Generate Test Case',
+      description: TOOL_DESCRIPTION,
+      inputSchema: {
+        test_case_name: z.string().describe('Test case name (human-readable label)'),
+        steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
+        target_uri: z
+          .string()
+          .optional()
+          .describe(
+            'Page object URI that determines the XML nesting structure. ' +
+              'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
+              'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
+              'steps are wrapped in a UiWithScreen element targeting that class.'
+          ),
+        output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
+        overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
+        dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
+        validate_after_edit: z
+          .boolean()
+          .default(true)
+          .describe(
+            'Run structural validation after generation (default: true). ' +
+              'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
+              'Set false to skip validation and omit the validation field from the response.'
+          ),
+        idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testcase.generate', {
+      log('info', 'provar_testcase_generate', {
         requestId,
         test_case_name: input.test_case_name,
         dry_run: input.dry_run,
@@ -210,7 +213,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar.testcase.generate: wrote file', { requestId, filePath });
+          log('info', 'provar_testcase_generate: wrote file', { requestId, filePath });
         }
 
         const warnings = buildStepWarnings(input.steps);
@@ -244,7 +247,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
               false,
               { validation: validationSlim }
             );
-            log('warn', 'provar.testcase.generate: TESTCASE_INVALID', { requestId });
+            log('warn', 'provar_testcase_generate: TESTCASE_INVALID', { requestId });
             return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
           }
           const result = { ...baseResult, validation: validationSlim };
@@ -266,7 +269,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           requestId,
           false
         );
-        log('error', 'provar.testcase.generate failed', { requestId, error: error.message });
+        log('error', 'provar_testcase_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

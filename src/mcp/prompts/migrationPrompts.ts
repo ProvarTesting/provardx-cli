@@ -10,8 +10,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // Source-framework context injected into each migration prompt.
 // Lightweight: just enough to interpret the source. Format knowledge lives
-// in the corpus (provar.qualityhub.examples.retrieve) and the validator
-// (provar.testcase.validate) — not hardcoded here.
+// in the corpus (provar_qualityhub_examples_retrieve) and the validator
+// (provar_testcase_validate) — not hardcoded here.
 
 const CRT_CONTEXT = `
 CRT (Copado Robotic Testing) is a keyword-driven framework built on Robot Framework.
@@ -65,7 +65,7 @@ function migrationOrchestration(projectPath: string | undefined): string {
 
 Follow these steps in order:
 
-1. **Get corpus examples** — call \`provar.qualityhub.examples.retrieve\` with keywords that
+1. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with keywords that
    describe the source test's main scenario (e.g. "create opportunity", "close case", "convert lead").
    Use the returned examples as few-shot grounding for the Provar XML format and step patterns.
    If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured),
@@ -80,7 +80,7 @@ Follow these steps in order:
 3. **Write the file** — save the generated XML to the appropriate \`tests/\` subdirectory
    inside the Provar project. ${projectHint}
 
-4. **Validate** — call \`provar.testcase.validate\` on the saved file. If it reports errors,
+4. **Validate** — call \`provar_testcase_validate\` on the saved file. If it reports errors,
    fix them and re-validate until the file passes clean.
 
 5. **Report** — summarise what was migrated, any steps that could not be mapped (add them
@@ -93,7 +93,7 @@ Follow these steps in order:
 export function registerCrtMigrationPrompt(server: McpServer): void {
   server.prompt(
     'provar.migrate.crt',
-    'Convert a Copado Robotic Testing (CRT) test — either a QWord step sequence or a Robot Framework .robot file — into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar.testcase.validate.',
+    'Convert a Copado Robotic Testing (CRT) test — either a QWord step sequence or a Robot Framework .robot file — into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar_testcase_validate.',
     {
       source: z
         .string()
@@ -133,7 +133,7 @@ ${source}
 
 ${testName ? `Target test case name: ${testName}` : 'Infer the test case name from the source content.'}
 
-Begin with step 1: call provar.qualityhub.examples.retrieve.`,
+Begin with step 1: call provar_qualityhub_examples_retrieve.`,
           },
         },
       ],
@@ -146,7 +146,7 @@ Begin with step 1: call provar.qualityhub.examples.retrieve.`,
 export function registerSeleniumMigrationPrompt(server: McpServer): void {
   server.prompt(
     'provar.migrate.selenium',
-    'Convert a Selenium WebDriver test (Java, Python, or JavaScript) that tests a Salesforce org into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar.testcase.validate.',
+    'Convert a Selenium WebDriver test (Java, Python, or JavaScript) that tests a Salesforce org into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar_testcase_validate.',
     {
       source: z
         .string()
@@ -188,7 +188,7 @@ ${source}
 
 ${testName ? `Target test case name: ${testName}` : 'Infer the test case name from the class and method name.'}
 
-Begin with step 1: call provar.qualityhub.examples.retrieve.`,
+Begin with step 1: call provar_qualityhub_examples_retrieve.`,
           },
         },
       ],
@@ -201,7 +201,7 @@ Begin with step 1: call provar.qualityhub.examples.retrieve.`,
 export function registerPlaywrightMigrationPrompt(server: McpServer): void {
   server.prompt(
     'provar.migrate.playwright',
-    'Convert a Playwright test (TypeScript or JavaScript) that tests a Salesforce org into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar.testcase.validate.',
+    'Convert a Playwright test (TypeScript or JavaScript) that tests a Salesforce org into a Provar XML test case. Retrieves corpus examples for grounding, generates the test case, then validates it with provar_testcase_validate.',
     {
       source: z
         .string()
@@ -243,7 +243,7 @@ ${source}
 
 ${testName ? `Target test case name: ${testName}` : 'Infer the test case name from the test() block description.'}
 
-Begin with step 1: call provar.qualityhub.examples.retrieve.`,
+Begin with step 1: call provar_qualityhub_examples_retrieve.`,
           },
         },
       ],
