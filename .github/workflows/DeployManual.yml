@@ -65,11 +65,12 @@ jobs:
           else
             # Auto-extract from git log since the previous tag
             if [ "${{ github.event_name }}" = "release" ]; then
-              # For a release event HEAD is already the new tag; find the one before it
-              PREV=$(git tag --sort=-creatordate | awk -v tag="${GITHUB_REF_NAME}" '$0==tag{found=1;next} found{print;exit}')
+              # Release event: HEAD is the new tag — find the nearest ancestor tag before it
+              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git tag --sort=-version:refname | tail -1)
             else
-              # For a manual dispatch use the most recent existing tag
-              PREV=$(git tag --sort=-creatordate | head -1)
+              # Manual dispatch: find the nearest ancestor tag from HEAD
+              # (git describe respects branch ancestry; avoids pulling in commits from sibling branches)
+              PREV=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || "")
             fi
 
             RANGE="${PREV:+${PREV}..}HEAD"
