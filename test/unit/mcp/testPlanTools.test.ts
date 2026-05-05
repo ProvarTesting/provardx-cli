@@ -96,14 +96,14 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.testplan.create ────────────────────────────────────────────────────
+// ── provar_testplan_create ────────────────────────────────────────────────────
 
-describe('provar.testplan.create', () => {
+describe('provar_testplan_create', () => {
   describe('happy path', () => {
     it('creates plan directory and .planitem, returns expected fields', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'MyNewPlan',
         overwrite: false,
@@ -128,7 +128,7 @@ describe('provar.testplan.create', () => {
     it('response includes next_steps guidance', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'GuidedPlan',
         overwrite: false,
@@ -144,7 +144,7 @@ describe('provar.testplan.create', () => {
     it('returns created=false and does not write to disk', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'DryPlan',
         overwrite: false,
@@ -166,7 +166,7 @@ describe('provar.testplan.create', () => {
     it('returns NOT_A_PROJECT when .testproject is missing', () => {
       fs.mkdirSync(projectDir, { recursive: true });
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         overwrite: false,
@@ -181,7 +181,7 @@ describe('provar.testplan.create', () => {
       makeProject(projectDir);
       makePlan(projectDir, 'ExistingPlan');
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'ExistingPlan',
         overwrite: false,
@@ -196,7 +196,7 @@ describe('provar.testplan.create', () => {
       makeProject(projectDir);
       makePlan(projectDir, 'ExistingPlan');
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'ExistingPlan',
         overwrite: true,
@@ -210,7 +210,7 @@ describe('provar.testplan.create', () => {
     it('returns INVALID_PLAN_NAME for dot-segment plan_name (..)', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: '..',
         overwrite: false,
@@ -224,7 +224,7 @@ describe('provar.testplan.create', () => {
     it('returns INVALID_PLAN_NAME for plan_name with path separators', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.create', {
+      const result = server.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'sub/plan',
         overwrite: false,
@@ -239,7 +239,7 @@ describe('provar.testplan.create', () => {
       const strictServer = new MockMcpServer();
       registerAllTestPlanTools(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.testplan.create', {
+      const result = strictServer.call('provar_testplan_create', {
         project_path: path.join(os.tmpdir(), 'outside-project'),
         plan_name: 'MyPlan',
         overwrite: false,
@@ -253,9 +253,9 @@ describe('provar.testplan.create', () => {
   });
 });
 
-// ── provar.testplan.add-instance ───────────────────────────────────────────────
+// ── provar_testplan_add-instance ───────────────────────────────────────────────
 
-describe('provar.testplan.add-instance', () => {
+describe('provar_testplan_add-instance', () => {
   describe('happy path', () => {
     it('writes a .testinstance file and returns expected fields', () => {
       makeProject(projectDir);
@@ -267,7 +267,7 @@ describe('provar.testplan.add-instance', () => {
       // Create .planitem in suite dir too (not strictly required by the tool, but realistic)
       fs.writeFileSync(path.join(suiteDir, '.planitem'), '<testPlan guid="suite-guid"/>', 'utf-8');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -293,7 +293,7 @@ describe('provar.testplan.add-instance', () => {
       makeTestCase(path.join(projectDir, 'tests', 'Root.testcase'));
       makePlan(projectDir, 'MyPlan');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/Root.testcase',
         plan_name: 'MyPlan',
@@ -313,7 +313,7 @@ describe('provar.testplan.add-instance', () => {
       makeTestCase(path.join(projectDir, 'tests', 'MyTest.testcase'));
       makePlan(projectDir, 'MyPlan');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -336,7 +336,7 @@ describe('provar.testplan.add-instance', () => {
       fs.mkdirSync(projectDir, { recursive: true });
       // No .testproject written
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -353,7 +353,7 @@ describe('provar.testplan.add-instance', () => {
       makePlan(projectDir, 'MyPlan');
       // No testcase file created
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/Missing.testcase',
         plan_name: 'MyPlan',
@@ -371,7 +371,7 @@ describe('provar.testplan.add-instance', () => {
       fs.mkdirSync(path.join(projectDir, 'tests'), { recursive: true });
       fs.writeFileSync(path.join(projectDir, 'tests', 'MyTest.txt'), 'content', 'utf-8');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.txt',
         plan_name: 'MyPlan',
@@ -389,7 +389,7 @@ describe('provar.testplan.add-instance', () => {
       makePlan(projectDir, 'MyPlan');
       // Do NOT create the suite dir
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -409,7 +409,7 @@ describe('provar.testplan.add-instance', () => {
       // Pre-create the instance file
       fs.writeFileSync(path.join(projectDir, 'plans', 'MyPlan', 'MyTest.testinstance'), 'old', 'utf-8');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -427,7 +427,7 @@ describe('provar.testplan.add-instance', () => {
       makePlan(projectDir, 'MyPlan');
       fs.writeFileSync(path.join(projectDir, 'plans', 'MyPlan', 'MyTest.testinstance'), 'old', 'utf-8');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/MyTest.testcase',
         plan_name: 'MyPlan',
@@ -446,7 +446,7 @@ describe('provar.testplan.add-instance', () => {
       makeTestCase(path.join(projectDir, 'tests', 'TC.testcase'), 'my-registry-id');
       makePlan(projectDir, 'P');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/TC.testcase',
         plan_name: 'P',
@@ -468,7 +468,7 @@ describe('provar.testplan.add-instance', () => {
       );
       makePlan(projectDir, 'P');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/TC.testcase',
         plan_name: 'P',
@@ -490,7 +490,7 @@ describe('provar.testplan.add-instance', () => {
       );
       makePlan(projectDir, 'P');
 
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/TC.testcase',
         plan_name: 'P',
@@ -516,7 +516,7 @@ describe('provar.testplan.add-instance', () => {
       makePlan(projectDir, 'P');
 
       // Pass path with backslashes (Windows-style)
-      const result = server.call('provar.testplan.add-instance', {
+      const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests\\SubFolder\\TC.testcase',
         plan_name: 'P',
@@ -531,15 +531,15 @@ describe('provar.testplan.add-instance', () => {
   });
 });
 
-// ── provar.testplan.create-suite ───────────────────────────────────────────────
+// ── provar_testplan_create-suite ───────────────────────────────────────────────
 
-describe('provar.testplan.create-suite', () => {
+describe('provar_testplan_create-suite', () => {
   describe('happy path', () => {
     it('creates suite directory and .planitem, returns expected fields', () => {
       makeProject(projectDir);
       makePlan(projectDir, 'MyPlan');
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'MySuite',
@@ -564,7 +564,7 @@ describe('provar.testplan.create-suite', () => {
       const parentDir = path.join(projectDir, 'plans', 'MyPlan', 'Parent');
       fs.mkdirSync(parentDir, { recursive: true });
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'Child',
@@ -583,7 +583,7 @@ describe('provar.testplan.create-suite', () => {
       makeProject(projectDir);
       makePlan(projectDir, 'MyPlan');
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'DryRunSuite',
@@ -604,7 +604,7 @@ describe('provar.testplan.create-suite', () => {
     it('returns NOT_A_PROJECT when .testproject is missing', () => {
       fs.mkdirSync(projectDir, { recursive: true });
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'MySuite',
@@ -619,7 +619,7 @@ describe('provar.testplan.create-suite', () => {
       makeProject(projectDir);
       // No plan created
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'NonExistentPlan',
         suite_name: 'MySuite',
@@ -635,7 +635,7 @@ describe('provar.testplan.create-suite', () => {
       // Create plan dir but no .planitem
       fs.mkdirSync(path.join(projectDir, 'plans', 'MyPlan'), { recursive: true });
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'MySuite',
@@ -652,7 +652,7 @@ describe('provar.testplan.create-suite', () => {
       // Pre-create the suite dir
       fs.mkdirSync(path.join(projectDir, 'plans', 'MyPlan', 'AlreadyExists'), { recursive: true });
 
-      const result = server.call('provar.testplan.create-suite', {
+      const result = server.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'MyPlan',
         suite_name: 'AlreadyExists',
@@ -665,9 +665,9 @@ describe('provar.testplan.create-suite', () => {
   });
 });
 
-// ── provar.testplan.remove-instance ───────────────────────────────────────────
+// ── provar_testplan_remove-instance ───────────────────────────────────────────
 
-describe('provar.testplan.remove-instance', () => {
+describe('provar_testplan_remove-instance', () => {
   describe('happy path', () => {
     it('removes the .testinstance file and returns expected fields', () => {
       makeProject(projectDir);
@@ -675,7 +675,7 @@ describe('provar.testplan.remove-instance', () => {
       const instancePath = path.join(projectDir, 'plans', 'MyPlan', 'MyTest.testinstance');
       fs.writeFileSync(instancePath, '<testPlanInstance guid="x"/>', 'utf-8');
 
-      const result = server.call('provar.testplan.remove-instance', {
+      const result = server.call('provar_testplan_remove-instance', {
         project_path: projectDir,
         instance_path: 'plans/MyPlan/MyTest.testinstance',
         dry_run: false,
@@ -696,7 +696,7 @@ describe('provar.testplan.remove-instance', () => {
       const instancePath = path.join(projectDir, 'plans', 'MyPlan', 'MyTest.testinstance');
       fs.writeFileSync(instancePath, '<testPlanInstance guid="x"/>', 'utf-8');
 
-      const result = server.call('provar.testplan.remove-instance', {
+      const result = server.call('provar_testplan_remove-instance', {
         project_path: projectDir,
         instance_path: 'plans/MyPlan/MyTest.testinstance',
         dry_run: true,
@@ -714,7 +714,7 @@ describe('provar.testplan.remove-instance', () => {
     it('returns INVALID_PATH when instance_path does not end with .testinstance', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.remove-instance', {
+      const result = server.call('provar_testplan_remove-instance', {
         project_path: projectDir,
         instance_path: 'plans/MyPlan/MyTest.testcase',
         dry_run: false,
@@ -727,7 +727,7 @@ describe('provar.testplan.remove-instance', () => {
     it('returns FILE_NOT_FOUND when instance file does not exist', () => {
       makeProject(projectDir);
 
-      const result = server.call('provar.testplan.remove-instance', {
+      const result = server.call('provar_testplan_remove-instance', {
         project_path: projectDir,
         instance_path: 'plans/MyPlan/Missing.testinstance',
         dry_run: false,
@@ -749,7 +749,7 @@ describe('registerAllTestPlanTools', () => {
     makeProject(projectDir);
 
     assert.doesNotThrow(() => {
-      freshServer.call('provar.testplan.create', {
+      freshServer.call('provar_testplan_create', {
         project_path: projectDir,
         plan_name: 'P',
         overwrite: false,
@@ -757,7 +757,7 @@ describe('registerAllTestPlanTools', () => {
       });
     });
     assert.doesNotThrow(() => {
-      freshServer.call('provar.testplan.add-instance', {
+      freshServer.call('provar_testplan_add-instance', {
         project_path: projectDir,
         test_case_path: 'tests/X.testcase',
         plan_name: 'P',
@@ -766,7 +766,7 @@ describe('registerAllTestPlanTools', () => {
       });
     });
     assert.doesNotThrow(() => {
-      freshServer.call('provar.testplan.create-suite', {
+      freshServer.call('provar_testplan_create-suite', {
         project_path: projectDir,
         plan_name: 'P',
         suite_name: 'S',
@@ -774,7 +774,7 @@ describe('registerAllTestPlanTools', () => {
       });
     });
     assert.doesNotThrow(() => {
-      freshServer.call('provar.testplan.remove-instance', {
+      freshServer.call('provar_testplan_remove-instance', {
         project_path: projectDir,
         instance_path: 'plans/P/X.testinstance',
         dry_run: true,

@@ -32,7 +32,15 @@ class MockMcpServer {
 
 // ── Spawn result builders ─────────────────────────────────────────────────────
 
-type SpawnResult = { stdout: string; stderr: string; status: number | null; error: Error | undefined; pid: number | undefined; output: Array<Buffer | string | null>; signal: NodeJS.Signals | null };
+type SpawnResult = {
+  stdout: string;
+  stderr: string;
+  status: number | null;
+  error: Error | undefined;
+  pid: number | undefined;
+  output: Array<Buffer | string | null>;
+  signal: NodeJS.Signals | null;
+};
 
 function makeSpawnResult(stdout: string, status = 0): SpawnResult {
   return { stdout, stderr: '', status, error: undefined, pid: 1, output: [null, stdout, ''], signal: null };
@@ -84,26 +92,44 @@ function makeHappyPathStub(stub: sinon.SinonStub): void {
   // Call 0: job query
   stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
   // Call 1: cycle query
-  stub.onCall(1).returns(makeSpawnResult(queryResult([{
-    Id: CYCLE_ID,
-    provar__Web_Browser__c: 'Chrome',
-    provar__Browser_Version__c: '120',
-    provar__Environment_Text__c: 'Production',
-  }])));
+  stub.onCall(1).returns(
+    makeSpawnResult(
+      queryResult([
+        {
+          Id: CYCLE_ID,
+          provar__Web_Browser__c: 'Chrome',
+          provar__Browser_Version__c: '120',
+          provar__Environment_Text__c: 'Production',
+        },
+      ])
+    )
+  );
   // Call 2: failed executions query
-  stub.onCall(2).returns(makeSpawnResult(queryResult([{
-    Id: EXEC_ID,
-    provar__Test_Case__c: TC_ID,
-    provar__Tester__c: 'tester@example.com',
-  }])));
+  stub.onCall(2).returns(
+    makeSpawnResult(
+      queryResult([
+        {
+          Id: EXEC_ID,
+          provar__Test_Case__c: TC_ID,
+          provar__Tester__c: 'tester@example.com',
+        },
+      ])
+    )
+  );
   // Call 3: failed step query
-  stub.onCall(3).returns(makeSpawnResult(queryResult([{
-    Id: STEP_EXEC_ID,
-    provar__Test_Step__c: STEP_ID,
-    provar__ActionObs__c: 'Click Login button',
-    provar__Actual_Result__c: 'Element not found',
-    provar__Sequence_No__c: 3,
-  }])));
+  stub.onCall(3).returns(
+    makeSpawnResult(
+      queryResult([
+        {
+          Id: STEP_EXEC_ID,
+          provar__Test_Step__c: STEP_ID,
+          provar__ActionObs__c: 'Click Login button',
+          provar__Actual_Result__c: 'Element not found',
+          provar__Sequence_No__c: 3,
+        },
+      ])
+    )
+  );
   // Call 4: create Defect__c
   stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
   // Call 5: create Test_Case_Defect__c
@@ -149,12 +175,18 @@ describe('createDefectsForRun', () => {
 
   it('returns empty result when no failed executions exist', () => {
     stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(makeSpawnResult(queryResult([{
-      Id: CYCLE_ID,
-      provar__Web_Browser__c: 'Firefox',
-      provar__Browser_Version__c: '121',
-      provar__Environment_Text__c: 'Staging',
-    }])));
+    stub.onCall(1).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: CYCLE_ID,
+            provar__Web_Browser__c: 'Firefox',
+            provar__Browser_Version__c: '121',
+            provar__Environment_Text__c: 'Staging',
+          },
+        ])
+      )
+    );
     stub.onCall(2).returns(makeSpawnResult(queryResult([], 0)));
 
     const result = createDefectsForRun(RUN_ID, ORG);
@@ -186,24 +218,40 @@ describe('createDefectsForRun', () => {
     // Two failed executions; filter keeps only the one matching TC_ID
     const OTHER_TC = 'a0t000000000OTH';
     stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(makeSpawnResult(queryResult([{
-      Id: CYCLE_ID,
-      provar__Web_Browser__c: 'Chrome',
-      provar__Browser_Version__c: '120',
-      provar__Environment_Text__c: 'Production',
-    }])));
-    stub.onCall(2).returns(makeSpawnResult(queryResult([
-      { Id: EXEC_ID, provar__Test_Case__c: TC_ID, provar__Tester__c: 'tester@example.com' },
-      { Id: 'a0s000000000EX2', provar__Test_Case__c: OTHER_TC, provar__Tester__c: 'tester@example.com' },
-    ])));
+    stub.onCall(1).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: CYCLE_ID,
+            provar__Web_Browser__c: 'Chrome',
+            provar__Browser_Version__c: '120',
+            provar__Environment_Text__c: 'Production',
+          },
+        ])
+      )
+    );
+    stub.onCall(2).returns(
+      makeSpawnResult(
+        queryResult([
+          { Id: EXEC_ID, provar__Test_Case__c: TC_ID, provar__Tester__c: 'tester@example.com' },
+          { Id: 'a0s000000000EX2', provar__Test_Case__c: OTHER_TC, provar__Tester__c: 'tester@example.com' },
+        ])
+      )
+    );
     // step query for the one kept execution
-    stub.onCall(3).returns(makeSpawnResult(queryResult([{
-      Id: STEP_EXEC_ID,
-      provar__Test_Step__c: STEP_ID,
-      provar__ActionObs__c: 'Click',
-      provar__Actual_Result__c: 'Failed',
-      provar__Sequence_No__c: 1,
-    }])));
+    stub.onCall(3).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: STEP_EXEC_ID,
+            provar__Test_Step__c: STEP_ID,
+            provar__ActionObs__c: 'Click',
+            provar__Actual_Result__c: 'Failed',
+            provar__Sequence_No__c: 1,
+          },
+        ])
+      )
+    );
     stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
     stub.onCall(5).returns(makeSpawnResult(createResult(TC_DEFECT_ID)));
     stub.onCall(6).returns(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
@@ -216,17 +264,29 @@ describe('createDefectsForRun', () => {
 
   it('handles missing step gracefully (no step found for execution)', () => {
     stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(makeSpawnResult(queryResult([{
-      Id: CYCLE_ID,
-      provar__Web_Browser__c: 'Safari',
-      provar__Browser_Version__c: '17',
-      provar__Environment_Text__c: 'UAT',
-    }])));
-    stub.onCall(2).returns(makeSpawnResult(queryResult([{
-      Id: EXEC_ID,
-      provar__Test_Case__c: TC_ID,
-      provar__Tester__c: '',
-    }])));
+    stub.onCall(1).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: CYCLE_ID,
+            provar__Web_Browser__c: 'Safari',
+            provar__Browser_Version__c: '17',
+            provar__Environment_Text__c: 'UAT',
+          },
+        ])
+      )
+    );
+    stub.onCall(2).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: EXEC_ID,
+            provar__Test_Case__c: TC_ID,
+            provar__Tester__c: '',
+          },
+        ])
+      )
+    );
     stub.onCall(3).returns(makeSpawnResult(queryResult([], 0))); // no steps
     stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
     stub.onCall(5).returns(makeSpawnResult(createResult(TC_DEFECT_ID)));
@@ -259,7 +319,7 @@ describe('createDefectsForRun', () => {
 
 // ── Tests: MCP tool registration ──────────────────────────────────────────────
 
-describe('provar.qualityhub.defect.create (MCP tool)', () => {
+describe('provar_qualityhub_defect_create (MCP tool)', () => {
   let server: MockMcpServer;
   let stub: sinon.SinonStub;
 
@@ -276,7 +336,7 @@ describe('provar.qualityhub.defect.create (MCP tool)', () => {
 
   it('returns structured content with created defects on success', () => {
     makeHappyPathStub(stub);
-    const result = server.call('provar.qualityhub.defect.create', {
+    const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
     });
@@ -289,7 +349,7 @@ describe('provar.qualityhub.defect.create (MCP tool)', () => {
 
   it('returns isError with DEFECT_CREATE_FAILED on job-not-found error', () => {
     stub.onCall(0).returns(makeSpawnResult(queryResult([], 0)));
-    const result = server.call('provar.qualityhub.defect.create', {
+    const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
     });
@@ -300,7 +360,7 @@ describe('provar.qualityhub.defect.create (MCP tool)', () => {
 
   it('returns isError with SF_NOT_FOUND when sf CLI is missing', () => {
     stub.returns(makeEnoentResult());
-    const result = server.call('provar.qualityhub.defect.create', {
+    const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
     });
@@ -312,19 +372,31 @@ describe('provar.qualityhub.defect.create (MCP tool)', () => {
   it('passes failed_tests filter through to createDefectsForRun', () => {
     // Return empty executions - filtered out
     stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(makeSpawnResult(queryResult([{
-      Id: CYCLE_ID,
-      provar__Web_Browser__c: 'Edge',
-      provar__Browser_Version__c: '120',
-      provar__Environment_Text__c: 'Dev',
-    }])));
-    stub.onCall(2).returns(makeSpawnResult(queryResult([{
-      Id: EXEC_ID,
-      provar__Test_Case__c: TC_ID,
-      provar__Tester__c: 'qa@example.com',
-    }])));
+    stub.onCall(1).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: CYCLE_ID,
+            provar__Web_Browser__c: 'Edge',
+            provar__Browser_Version__c: '120',
+            provar__Environment_Text__c: 'Dev',
+          },
+        ])
+      )
+    );
+    stub.onCall(2).returns(
+      makeSpawnResult(
+        queryResult([
+          {
+            Id: EXEC_ID,
+            provar__Test_Case__c: TC_ID,
+            provar__Tester__c: 'qa@example.com',
+          },
+        ])
+      )
+    );
 
-    const result = server.call('provar.qualityhub.defect.create', {
+    const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
       failed_tests: ['no-match'],

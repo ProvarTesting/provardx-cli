@@ -1,8 +1,8 @@
 # Provar Test Step Reference
 
 > **Source of truth** for AI-assisted test generation in the provardx-cli / Quality Hub MCP toolchain.
-> All examples are sourced from the SalesCloud corpus. The `provar.qualityhub.examples.retrieve` tool returns real
-> examples for additional grounding; `provar.testcase.validate` enforces all rules documented here.
+> All examples are sourced from the SalesCloud corpus. The `provar_qualityhub_examples_retrieve` tool returns real
+> examples for additional grounding; `provar_testcase_validate` enforces all rules documented here.
 
 ---
 

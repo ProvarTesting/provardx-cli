@@ -57,14 +57,14 @@ function buildPlanItemXml(guid: string): string {
   ].join('\n');
 }
 
-// ── provar.testplan.create ────────────────────────────────────────────────────
+// ── provar_testplan_create ────────────────────────────────────────────────────
 
 export function registerTestPlanCreate(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testplan.create',
+    'provar_testplan_create',
     [
       'Create a new Provar test plan: makes the plans/{plan_name}/ directory and writes the root .planitem file.',
-      'Use this before provar.testplan.create-suite or provar.testplan.add-instance, which both require the plan to already exist.',
+      'Use this before provar_testplan_create-suite or provar_testplan_add-instance, which both require the plan to already exist.',
       'Returns the guid assigned to the new plan, the plan directory path, and the .planitem path written.',
     ].join(' '),
     {
@@ -83,7 +83,7 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
     },
     ({ project_path, plan_name, overwrite, dry_run }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testplan.create', { requestId, project_path, plan_name });
+      log('info', 'provar_testplan_create', { requestId, project_path, plan_name });
 
       try {
         assertPathAllowed(project_path, config.allowedPaths);
@@ -99,7 +99,9 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
             content: [
               {
                 type: 'text' as const,
-                text: JSON.stringify(makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)),
+                text: JSON.stringify(
+                  makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)
+                ),
               },
             ],
           };
@@ -111,7 +113,13 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
             content: [
               {
                 type: 'text' as const,
-                text: JSON.stringify(makeError('INVALID_PLAN_NAME', `plan_name must start with a letter or digit and contain only letters, digits, underscores, hyphens, or spaces: "${plan_name}"`, requestId)),
+                text: JSON.stringify(
+                  makeError(
+                    'INVALID_PLAN_NAME',
+                    `plan_name must start with a letter or digit and contain only letters, digits, underscores, hyphens, or spaces: "${plan_name}"`,
+                    requestId
+                  )
+                ),
               },
             ],
           };
@@ -154,8 +162,8 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
           dry_run: dry_run ?? false,
           created: !dry_run,
           next_steps: dry_run
-            ? 'Review the plan structure, then call provar.testplan.create with dry_run=false to write to disk.'
-            : `Plan created at ${planDir}. Use provar.testplan.create-suite to add suites, then provar.testplan.add-instance to wire test cases into the plan.`,
+            ? 'Review the plan structure, then call provar_testplan_create with dry_run=false to write to disk.'
+            : `Plan created at ${planDir}. Use provar_testplan_create-suite to add suites, then provar_testplan_add-instance to wire test cases into the plan.`,
         };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(response) }],
@@ -170,7 +178,7 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
               type: 'text' as const,
               text: JSON.stringify(
                 makeError(
-                  error instanceof PathPolicyError ? error.code : (error.code ?? 'CREATE_PLAN_ERROR'),
+                  error instanceof PathPolicyError ? error.code : error.code ?? 'CREATE_PLAN_ERROR',
                   error.message,
                   requestId
                 )
@@ -183,11 +191,11 @@ export function registerTestPlanCreate(server: McpServer, config: ServerConfig):
   );
 }
 
-// ── provar.testplan.add-instance ──────────────────────────────────────────────
+// ── provar_testplan_add-instance ──────────────────────────────────────────────
 
 export function registerTestPlanAddInstance(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testplan.add-instance',
+    'provar_testplan_add-instance',
     [
       'Add a .testinstance file to an existing Provar test plan suite directory.',
       'The plan directory and suite directory must already exist.',
@@ -197,15 +205,28 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
     ].join(' '),
     {
       project_path: z.string().describe('Absolute path to the Provar project root'),
-      test_case_path: z.string().describe('Path to the .testcase file, relative to project root (e.g. "tests/MyTest.testcase")'),
+      test_case_path: z
+        .string()
+        .describe('Path to the .testcase file, relative to project root (e.g. "tests/MyTest.testcase")'),
       plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
-      suite_path: z.string().optional().describe('Path within the plan to place the instance (e.g. "MySuite" or "MySuite/SubSuite")'),
-      overwrite: z.boolean().optional().default(false).describe('Overwrite the .testinstance file if it already exists (default: false)'),
-      dry_run: z.boolean().optional().default(false).describe('Return what would be written without writing to disk (default: false)'),
+      suite_path: z
+        .string()
+        .optional()
+        .describe('Path within the plan to place the instance (e.g. "MySuite" or "MySuite/SubSuite")'),
+      overwrite: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Overwrite the .testinstance file if it already exists (default: false)'),
+      dry_run: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Return what would be written without writing to disk (default: false)'),
     },
     ({ project_path, test_case_path, plan_name, suite_path, overwrite, dry_run }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testplan.add-instance', { requestId, project_path, test_case_path, plan_name });
+      log('info', 'provar_testplan_add-instance', { requestId, project_path, test_case_path, plan_name });
 
       try {
         assertPathAllowed(project_path, config.allowedPaths);
@@ -219,7 +240,14 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         if (testProjectFiles.length === 0) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -228,13 +256,25 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         if (!fs.existsSync(absoluteTestCasePath)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('FILE_NOT_FOUND', `Test case not found: ${absoluteTestCasePath}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('FILE_NOT_FOUND', `Test case not found: ${absoluteTestCasePath}`, requestId)
+                ),
+              },
+            ],
           };
         }
         if (!test_case_path.endsWith('.testcase')) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('INVALID_PATH', 'test_case_path must end with .testcase', requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('INVALID_PATH', 'test_case_path must end with .testcase', requestId)),
+              },
+            ],
           };
         }
 
@@ -244,7 +284,18 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         if (!testCaseId) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('NO_TEST_CASE_ID', `Cannot extract registryId, id, or guid from ${absoluteTestCasePath}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError(
+                    'NO_TEST_CASE_ID',
+                    `Cannot extract registryId, id, or guid from ${absoluteTestCasePath}`,
+                    requestId
+                  )
+                ),
+              },
+            ],
           };
         }
 
@@ -256,7 +307,18 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         if (!fs.existsSync(instanceDir)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('DIR_NOT_FOUND', `Suite directory does not exist: ${instanceDir}. Create it with provar.testplan.create-suite first.`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError(
+                    'DIR_NOT_FOUND',
+                    `Suite directory does not exist: ${instanceDir}. Create it with provar_testplan_create-suite first.`,
+                    requestId
+                  )
+                ),
+              },
+            ],
           };
         }
 
@@ -267,7 +329,18 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         if (!overwrite && fs.existsSync(instanceFilePath)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('FILE_EXISTS', `Instance file already exists: ${instanceFilePath}. Set overwrite: true to replace it.`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError(
+                    'FILE_EXISTS',
+                    `Instance file already exists: ${instanceFilePath}. Set overwrite: true to replace it.`,
+                    requestId
+                  )
+                ),
+              },
+            ],
           };
         }
 
@@ -297,18 +370,29 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         const error = err as Error & { code?: string };
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: JSON.stringify(makeError(error instanceof PathPolicyError ? error.code : (error.code ?? 'ADD_INSTANCE_ERROR'), error.message, requestId)) }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                makeError(
+                  error instanceof PathPolicyError ? error.code : error.code ?? 'ADD_INSTANCE_ERROR',
+                  error.message,
+                  requestId
+                )
+              ),
+            },
+          ],
         };
       }
     }
   );
 }
 
-// ── provar.testplan.create-suite ──────────────────────────────────────────────
+// ── provar_testplan_create-suite ──────────────────────────────────────────────
 
 export function registerTestPlanCreateSuite(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testplan.create-suite',
+    'provar_testplan_create-suite',
     [
       'Create a new suite directory inside a Provar test plan.',
       'The plan directory must already exist with a .planitem file at its root.',
@@ -319,12 +403,19 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
       project_path: z.string().describe('Absolute path to the Provar project root'),
       plan_name: z.string().describe('Name of the test plan (directory under plans/)'),
       suite_name: z.string().describe('Name of the new suite directory to create'),
-      parent_suite_path: z.string().optional().describe('Path of the parent suite within the plan (e.g. "MySuite"). Omit to create at plan root.'),
-      dry_run: z.boolean().optional().default(false).describe('Return what would be created without writing to disk (default: false)'),
+      parent_suite_path: z
+        .string()
+        .optional()
+        .describe('Path of the parent suite within the plan (e.g. "MySuite"). Omit to create at plan root.'),
+      dry_run: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Return what would be created without writing to disk (default: false)'),
     },
     ({ project_path, plan_name, suite_name, parent_suite_path, dry_run }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testplan.create-suite', { requestId, project_path, plan_name, suite_name });
+      log('info', 'provar_testplan_create-suite', { requestId, project_path, plan_name, suite_name });
 
       try {
         assertPathAllowed(project_path, config.allowedPaths);
@@ -338,7 +429,14 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
         if (testProjectFiles.length === 0) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('NOT_A_PROJECT', `No .testproject file found in ${projectRoot}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -347,7 +445,14 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
         if (!fs.existsSync(planDir)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('DIR_NOT_FOUND', `Plan directory does not exist: ${planDir}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('DIR_NOT_FOUND', `Plan directory does not exist: ${planDir}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -356,7 +461,14 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
         if (!fs.existsSync(planItemPath)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('FILE_NOT_FOUND', `Plan .planitem file does not exist: ${planItemPath}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('FILE_NOT_FOUND', `Plan .planitem file does not exist: ${planItemPath}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -369,7 +481,12 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
         if (fs.existsSync(suiteDir)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('DIR_EXISTS', `Suite directory already exists: ${suiteDir}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('DIR_EXISTS', `Suite directory already exists: ${suiteDir}`, requestId)),
+              },
+            ],
           };
         }
 
@@ -398,18 +515,29 @@ export function registerTestPlanCreateSuite(server: McpServer, config: ServerCon
         const error = err as Error & { code?: string };
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: JSON.stringify(makeError(error instanceof PathPolicyError ? error.code : (error.code ?? 'CREATE_SUITE_ERROR'), error.message, requestId)) }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                makeError(
+                  error instanceof PathPolicyError ? error.code : error.code ?? 'CREATE_SUITE_ERROR',
+                  error.message,
+                  requestId
+                )
+              ),
+            },
+          ],
         };
       }
     }
   );
 }
 
-// ── provar.testplan.remove-instance ──────────────────────────────────────────
+// ── provar_testplan_remove-instance ──────────────────────────────────────────
 
 export function registerTestPlanRemoveInstance(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testplan.remove-instance',
+    'provar_testplan_remove-instance',
     [
       'Remove a .testinstance file from a Provar test plan.',
       'instance_path is relative to the project root.',
@@ -418,11 +546,15 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
     {
       project_path: z.string().describe('Absolute path to the Provar project root'),
       instance_path: z.string().describe('Path to the .testinstance file, relative to project root'),
-      dry_run: z.boolean().optional().default(false).describe('Return what would be removed without deleting (default: false)'),
+      dry_run: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe('Return what would be removed without deleting (default: false)'),
     },
     ({ project_path, instance_path, dry_run }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testplan.remove-instance', { requestId, project_path, instance_path });
+      log('info', 'provar_testplan_remove-instance', { requestId, project_path, instance_path });
 
       try {
         assertPathAllowed(project_path, config.allowedPaths);
@@ -436,7 +568,14 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
         if (!resolvedAbsolute.startsWith(resolvedProjectRoot + path.sep) && resolvedAbsolute !== resolvedProjectRoot) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('PATH_TRAVERSAL', `Path traversal detected: ${instance_path}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('PATH_TRAVERSAL', `Path traversal detected: ${instance_path}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -444,7 +583,12 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
         if (!instance_path.endsWith('.testinstance')) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('INVALID_PATH', 'instance_path must end with .testinstance', requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(makeError('INVALID_PATH', 'instance_path must end with .testinstance', requestId)),
+              },
+            ],
           };
         }
 
@@ -452,7 +596,14 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
         if (!fs.existsSync(absolutePath)) {
           return {
             isError: true,
-            content: [{ type: 'text' as const, text: JSON.stringify(makeError('FILE_NOT_FOUND', `Instance file not found: ${absolutePath}`, requestId)) }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('FILE_NOT_FOUND', `Instance file not found: ${absolutePath}`, requestId)
+                ),
+              },
+            ],
           };
         }
 
@@ -474,7 +625,18 @@ export function registerTestPlanRemoveInstance(server: McpServer, config: Server
         const error = err as Error & { code?: string };
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: JSON.stringify(makeError(error instanceof PathPolicyError ? error.code : (error.code ?? 'REMOVE_INSTANCE_ERROR'), error.message, requestId)) }],
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify(
+                makeError(
+                  error instanceof PathPolicyError ? error.code : error.code ?? 'REMOVE_INSTANCE_ERROR',
+                  error.message,
+                  requestId
+                )
+              ),
+            },
+          ],
         };
       }
     }

@@ -67,7 +67,7 @@ const AttachmentPropertiesSchema = z.object({
 
 export function registerAntGenerate(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.ant.generate',
+    'provar_ant_generate',
     [
       'Generate a Provar ANT build.xml file.',
       'Produces the standard <project> skeleton with Provar-Compile and Run-Test-Case tasks.',
@@ -218,7 +218,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.ant.generate', {
+      log('info', 'provar_ant_generate', {
         requestId,
         output_path: input.output_path,
         dry_run: input.dry_run,
@@ -253,7 +253,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar.ant.generate: wrote file', { requestId, filePath });
+          log('info', 'provar_ant_generate: wrote file', { requestId, filePath });
         }
 
         const result = {
@@ -275,7 +275,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           requestId,
           false
         );
-        log('error', 'provar.ant.generate failed', { requestId, error: error.message });
+        log('error', 'provar_ant_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -286,7 +286,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
 
 export function registerAntValidate(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.ant.validate',
+    'provar_ant_validate',
     [
       'Validate a Provar ANT build.xml for structural correctness.',
       'Checks XML well-formedness, required <taskdef> declarations, <Provar-Compile> step,',
@@ -299,7 +299,7 @@ export function registerAntValidate(server: McpServer, config: ServerConfig): vo
     },
     ({ content, file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.ant.validate', { requestId, has_content: !!content, file_path });
+      log('info', 'provar_ant_validate', { requestId, has_content: !!content, file_path });
 
       try {
         let source = content;
@@ -333,7 +333,7 @@ export function registerAntValidate(server: McpServer, config: ServerConfig): vo
           requestId,
           false
         );
-        log('error', 'provar.ant.validate failed', { requestId, error: error.message });
+        log('error', 'provar_ant_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

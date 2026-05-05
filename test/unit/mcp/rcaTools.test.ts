@@ -108,14 +108,14 @@ function makeIncrementDir(base: string, index: number, junit?: string): string {
   return makeResultsDir(dir, junit);
 }
 
-// ── provar.testrun.report.locate ───────────────────────────────────────────────
+// ── provar_testrun_report_locate ───────────────────────────────────────────────
 
-describe('provar.testrun.report.locate', () => {
+describe('provar_testrun_report_locate', () => {
   // Test 1: explicit results_path → returns correct paths
   it('with explicit results_path returns correct paths', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -135,7 +135,7 @@ describe('provar.testrun.report.locate', () => {
     makeIncrementDir(resultsBase, 2, JUNIT_XML);
     makeIncrementDir(resultsBase, 3, JUNIT_XML);
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: tmpDir,
       results_path: resultsBase,
     });
@@ -153,7 +153,7 @@ describe('provar.testrun.report.locate', () => {
     makeIncrementDir(resultsBase, 2, JUNIT_XML);
     makeIncrementDir(resultsBase, 5, JUNIT_XML);
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: tmpDir,
       results_path: resultsBase,
       run_index: 2,
@@ -180,7 +180,7 @@ describe('provar.testrun.report.locate', () => {
     // To guarantee the properties file path wins, supply it explicitly via results_path
     // so that step 1 (explicit) takes precedence — this tests the locate result structure
     // independently of resolution ordering.
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -203,7 +203,7 @@ describe('provar.testrun.report.locate', () => {
       'utf-8'
     );
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: projectPath,
     });
 
@@ -224,7 +224,7 @@ describe('provar.testrun.report.locate', () => {
     const emptyProject = path.join(tmpDir, 'empty-project');
     fs.mkdirSync(emptyProject, { recursive: true });
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: emptyProject,
     });
 
@@ -249,7 +249,7 @@ describe('provar.testrun.report.locate', () => {
     makeResultsDir(path.join(parent, 'Results(1)'));
     makeResultsDir(path.join(parent, 'Results(18)'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: parent,
       results_path: resultsBase,
     });
@@ -268,7 +268,7 @@ describe('provar.testrun.report.locate', () => {
     makeResultsDir(path.join(parent, 'Results(3)'));
     makeResultsDir(path.join(parent, 'Results(5)'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: parent,
       results_path: resultsBase,
       run_index: 3,
@@ -286,7 +286,7 @@ describe('provar.testrun.report.locate', () => {
     fs.writeFileSync(path.join(resultsDir, 'LoginTest.testcase.html'), '<html/>', 'utf-8');
     fs.writeFileSync(path.join(resultsDir, 'SearchTest.testcase.html'), '<html/>', 'utf-8');
 
-    const result = server.call('provar.testrun.report.locate', {
+    const result = server.call('provar_testrun_report_locate', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -298,14 +298,14 @@ describe('provar.testrun.report.locate', () => {
   });
 });
 
-// ── provar.testrun.rca ─────────────────────────────────────────────────────────
+// ── provar_testrun_rca ─────────────────────────────────────────────────────────
 
-describe('provar.testrun.rca', () => {
+describe('provar_testrun_rca', () => {
   // Test 5: locate_only → returns locate result, skips parsing
   it('with locate_only=true returns locate result and skips parsing', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
       locate_only: true,
@@ -321,7 +321,7 @@ describe('provar.testrun.rca', () => {
   it('when JUnit.xml missing returns run_in_progress: true', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results')); // no JUnit.xml
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -335,7 +335,7 @@ describe('provar.testrun.rca', () => {
   it('parses valid JUnit.xml and returns correct run_summary counts', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -355,7 +355,7 @@ describe('provar.testrun.rca', () => {
   it('classifies LOCATOR_STALE correctly from NoSuchElementException', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -372,7 +372,7 @@ describe('provar.testrun.rca', () => {
   it('classifies DRIVER_VERSION_MISMATCH before LOCATOR_STALE when both patterns could match', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), DRIVER_VERSION_JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -388,7 +388,7 @@ describe('provar.testrun.rca', () => {
   it('extracts page_object from failure message', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -419,7 +419,7 @@ describe('provar.testrun.rca', () => {
     // Current run (index 2) with same failure
     makeIncrementDir(resultsBase, 2, JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsBase,
       run_index: 2,
@@ -450,7 +450,7 @@ describe('provar.testrun.rca', () => {
     // Current run (index 2) with SearchTest failing for the first time
     makeIncrementDir(resultsBase, 2, JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsBase,
       run_index: 2,
@@ -482,7 +482,7 @@ describe('provar.testrun.rca', () => {
 
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), multiFailureJunit);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -498,7 +498,7 @@ describe('provar.testrun.rca', () => {
   it('classifies unrecognised failure text as UNKNOWN', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), UNKNOWN_JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -514,7 +514,7 @@ describe('provar.testrun.rca', () => {
   it('populates infrastructure_issues for DRIVER_VERSION_MISMATCH failures', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), DRIVER_VERSION_JUNIT_XML);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -539,7 +539,7 @@ describe('provar.testrun.rca', () => {
 
     const resultsDir = makeResultsDir(path.join(tmpDir, 'results'), longJunit);
 
-    const result = server.call('provar.testrun.rca', {
+    const result = server.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: resultsDir,
     });
@@ -560,7 +560,7 @@ describe('provar.testrun.rca', () => {
   </testsuite>
 </testsuites>`;
     const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-validation'), junit);
-    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
     const failures = body['failures'] as Array<Record<string, unknown>>;
     assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_VALIDATION');
   });
@@ -575,7 +575,7 @@ describe('provar.testrun.rca', () => {
   </testsuite>
 </testsuites>`;
     const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-picklist'), junit);
-    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
     const failures = body['failures'] as Array<Record<string, unknown>>;
     assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_PICKLIST');
   });
@@ -590,7 +590,7 @@ describe('provar.testrun.rca', () => {
   </testsuite>
 </testsuites>`;
     const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-trigger'), junit);
-    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
     const failures = body['failures'] as Array<Record<string, unknown>>;
     assert.equal(failures[0]['root_cause_category'], 'SALESFORCE_TRIGGER');
   });
@@ -605,7 +605,7 @@ describe('provar.testrun.rca', () => {
   </testsuite>
 </testsuites>`;
     const resultsDir = makeResultsDir(path.join(tmpDir, 'sf-infra-check'), junit);
-    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
     const infra = body['infrastructure_issues'] as string[];
     assert.ok(
       !infra.some((s) => s.includes('SALESFORCE_')),
@@ -615,7 +615,7 @@ describe('provar.testrun.rca', () => {
 
   it('mode=rca is the default and produces existing RCA output shape', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'rca-default'), JUNIT_XML);
-    const body = parseText(server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir }));
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
     // Full RCA shape must be present
     assert.ok('run_summary' in body, 'run_summary should be present for mode=rca');
     assert.ok('failures' in body, 'failures should be present');
@@ -624,13 +624,13 @@ describe('provar.testrun.rca', () => {
   });
 });
 
-// ── provar.testrun.rca mode=failures ──────────────────────────────────────────
+// ── provar_testrun_rca mode=failures ──────────────────────────────────────────
 
-describe('provar.testrun.rca mode=failures', () => {
+describe('provar_testrun_rca mode=failures', () => {
   it('returns lightweight failure array when JUnit.xml is present', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-mode'), JUNIT_XML);
     const body = parseText(
-      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+      server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
     );
 
     assert.ok('failures' in body, 'failures should be present');
@@ -653,7 +653,7 @@ describe('provar.testrun.rca mode=failures', () => {
   it('returns empty array with warning when results dir has no JUnit.xml', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-empty'));
     const body = parseText(
-      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+      server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
     );
 
     const failures = body['failures'] as unknown[];
@@ -666,7 +666,7 @@ describe('provar.testrun.rca mode=failures', () => {
   it('skipped tests are not included in failures list', () => {
     const resultsDir = makeResultsDir(path.join(tmpDir, 'failures-skip'), JUNIT_XML);
     const body = parseText(
-      server.call('provar.testrun.rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
+      server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir, mode: 'failures' })
     );
     const failures = body['failures'] as Array<Record<string, unknown>>;
     const testItemIds = failures.map((f) => f['testItemId']);
@@ -680,7 +680,7 @@ describe('provar.testrun.rca mode=failures', () => {
     registerTestRunRca(restrictedServer as never, { allowedPaths: [allowedDir] });
 
     const outsideDir = makeResultsDir(path.join(tmpDir, 'outside'), JUNIT_XML);
-    const result = restrictedServer.call('provar.testrun.rca', {
+    const result = restrictedServer.call('provar_testrun_rca', {
       project_path: tmpDir,
       results_path: outsideDir,
       mode: 'failures',
@@ -700,7 +700,7 @@ describe('provar.testrun.rca mode=failures', () => {
     fs.mkdirSync(allowedDir, { recursive: true });
     registerTestRunRca(restrictedServer as never, { allowedPaths: [allowedDir] });
 
-    const result = restrictedServer.call('provar.testrun.rca', {
+    const result = restrictedServer.call('provar_testrun_rca', {
       project_path: tmpDir, // tmpDir root is outside allowed subdir
       mode: 'failures',
     });

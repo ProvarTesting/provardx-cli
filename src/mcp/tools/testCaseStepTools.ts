@@ -83,7 +83,7 @@ function parseNewStep(stepXml: string): { step: ApiCallNode } | { error: string 
 
 export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testcase.step.edit',
+    'provar_testcase_step_edit',
     [
       'Add or remove a single step (apiCall) in a Provar XML test case file.',
       'Uses write-to-temp-then-rename to minimise partial-write risk.',
@@ -118,11 +118,11 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
         .boolean()
         .optional()
         .default(true)
-        .describe('Run provar.testcase.validate after the mutation; restores backup on failure (default: true)'),
+        .describe('Run provar_testcase_validate after the mutation; restores backup on failure (default: true)'),
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testcase.step.edit', { requestId, mode: input.mode, test_item_id: input.test_item_id });
+      log('info', 'provar_testcase_step_edit', { requestId, mode: input.mode, test_item_id: input.test_item_id });
 
       try {
         const resolvedPath = path.resolve(input.test_case_path);
@@ -255,7 +255,7 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
           error.message,
           requestId
         );
-        log('error', 'provar.testcase.step.edit failed', { requestId, error: error.message });
+        log('error', 'provar_testcase_step_edit failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

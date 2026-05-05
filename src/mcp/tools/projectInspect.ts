@@ -17,7 +17,7 @@ import { log } from '../logging/logger.js';
 
 export function registerProjectInspect(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.project.inspect',
+    'provar_project_inspect',
     [
       'Inspect a Provar project folder and return a structured inventory.',
       'Returns: provardx-properties.json config files (for ProvarDX CLI runs),',
@@ -31,13 +31,11 @@ export function registerProjectInspect(server: McpServer, config: ServerConfig):
       '(Salesforce, UI Testing, Web Services, Quality Hub, Database, and other connection types).',
     ].join(' '),
     {
-      project_path: z
-        .string()
-        .describe('Absolute or relative path to the Provar project root directory'),
+      project_path: z.string().describe('Absolute or relative path to the Provar project root directory'),
     },
     ({ project_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.project.inspect', { requestId, project_path });
+      log('info', 'provar_project_inspect', { requestId, project_path });
 
       try {
         assertPathAllowed(project_path, config.allowedPaths);
@@ -56,12 +54,12 @@ export function registerProjectInspect(server: McpServer, config: ServerConfig):
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
         const errResult = makeError(
-          error instanceof PathPolicyError ? error.code : (error.code ?? 'INSPECT_ERROR'),
+          error instanceof PathPolicyError ? error.code : error.code ?? 'INSPECT_ERROR',
           error.message,
           requestId,
           false
         );
-        log('error', 'provar.project.inspect failed', { requestId, error: error.message });
+        log('error', 'provar_project_inspect failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -71,19 +69,19 @@ export function registerProjectInspect(server: McpServer, config: ServerConfig):
 // ─── types ────────────────────────────────────────────────────────────────────
 
 interface PageObjectDir {
-  path: string;         // relative path from project root
+  path: string; // relative path from project root
   java_file_count: number;
 }
 
 interface SecretsValidation {
-  secrets_file: string;           // relative path (from secureStoragePath in .testproject)
-  found: boolean;                 // whether the file exists
+  secrets_file: string; // relative path (from secureStoragePath in .testproject)
+  found: boolean; // whether the file exists
   encryptor_check_present: boolean; // Provar Secrets Password has been configured
-  all_values_encrypted: boolean;  // every non-comment entry has an ENC1() value
-  total_entries: number;          // total key=value entries (excluding comments)
-  encrypted_count: number;        // entries with ENC1() values
-  unencrypted_key_count: number;  // entries WITHOUT ENC1() — pass to PROJ-ENC-001
-  unencrypted_keys: string[];     // key names only, never values — e.g. ["uuid.password"]
+  all_values_encrypted: boolean; // every non-comment entry has an ENC1() value
+  total_entries: number; // total key=value entries (excluding comments)
+  encrypted_count: number; // entries with ENC1() values
+  unencrypted_key_count: number; // entries WITHOUT ENC1() — pass to PROJ-ENC-001
+  unencrypted_keys: string[]; // key names only, never values — e.g. ["uuid.password"]
 }
 
 interface SfConnection {
@@ -143,8 +141,8 @@ function buildProjectInventory(projectPath: string, requestId: string): Record<s
   const provardxPropertiesFiles: string[] = [];
   const antBuildFiles: string[] = [];
   const sourcePageObjectDirs: PageObjectDir[] = [];
-  const testCaseFilesDisplay: string[] = [];    // capped at 500 for API display
-  const allTestCasePaths = new Set<string>();   // uncapped — used for coverage
+  const testCaseFilesDisplay: string[] = []; // capped at 500 for API display
+  const allTestCasePaths = new Set<string>(); // uncapped — used for coverage
   let customTestStepFileCount = 0;
   let dataSourceFileCount = 0;
   const dataSourceDirs: string[] = [];
@@ -315,7 +313,9 @@ function validateSecretsFile(projectPath: string, testProject: TestProjectInfo):
       const raw = fs.readFileSync(path.join(projectPath, '.testproject'), 'utf-8');
       const match = raw.match(/<secureStoragePath>([^<]+)<\/secureStoragePath>/);
       if (match?.[1]) secretsRelPath = match[1].trim();
-    } catch { /* use default */ }
+    } catch {
+      /* use default */
+    }
   }
 
   const notFound: SecretsValidation = {
@@ -425,12 +425,12 @@ function parseConnectionClasses(content: string): ConnectionOverview {
   }
 
   // Build summary totals
-  const sfCommunities  = result.salesforce.filter((c) => c.sub_type === 'communities').length;
-  const sfPortal       = result.salesforce.filter((c) => c.sub_type === 'portal').length;
-  const sfLoginAs      = result.salesforce.filter((c) => c.auth_method === 'login-as').length;
-  const sfOAuth        = result.salesforce.filter((c) => c.auth_method === 'oauth').length;
-  const sfBasic        = result.salesforce.filter((c) => c.auth_method === 'basic').length;
-  const sfDirectLogin  = result.salesforce.filter((c) => c.is_direct_login).length;
+  const sfCommunities = result.salesforce.filter((c) => c.sub_type === 'communities').length;
+  const sfPortal = result.salesforce.filter((c) => c.sub_type === 'portal').length;
+  const sfLoginAs = result.salesforce.filter((c) => c.auth_method === 'login-as').length;
+  const sfOAuth = result.salesforce.filter((c) => c.auth_method === 'oauth').length;
+  const sfBasic = result.salesforce.filter((c) => c.auth_method === 'basic').length;
+  const sfDirectLogin = result.salesforce.filter((c) => c.is_direct_login).length;
   result.summary = {
     salesforce: result.salesforce.length,
     salesforce_standard: result.salesforce.length - sfCommunities - sfPortal,
@@ -439,7 +439,7 @@ function parseConnectionClasses(content: string): ConnectionOverview {
     salesforce_auth_login_as: sfLoginAs,
     salesforce_auth_oauth: sfOAuth,
     salesforce_auth_basic: sfBasic,
-    salesforce_direct_login: sfDirectLogin,   // review these — may be admin users
+    salesforce_direct_login: sfDirectLogin, // review these — may be admin users
     ui_testing: result.ui_testing.length,
     quality_hub: result.quality_hub.length,
     web_service_rest: result.web_service_rest.length,
@@ -468,12 +468,7 @@ function parseConnectionClasses(content: string): ConnectionOverview {
 }
 
 // eslint-disable-next-line complexity
-function categoriseConnection(
-  result: ConnectionOverview,
-  className: string,
-  name: string,
-  urls: string[]
-): void {
+function categoriseConnection(result: ConnectionOverview, className: string, name: string, urls: string[]): void {
   // Use the first URL for type inference; env-override URLs share the same class
   const primaryUrl = urls[0] ?? '';
 
@@ -485,8 +480,8 @@ function categoriseConnection(
       const subType: 'standard' | 'communities' | 'portal' = isCommunities
         ? 'communities'
         : isPortal
-          ? 'portal'
-          : 'standard';
+        ? 'portal'
+        : 'standard';
 
       // ── auth method ───────────────────────────────────────────────────────
       const logonAsMatch = primaryUrl.match(/logonAsConnection=([^;]+)/);
@@ -496,19 +491,22 @@ function categoriseConnection(
       const authMethod: SfConnection['auth_method'] = isLogonAs
         ? 'login-as'
         : isOAuth
-          ? 'oauth'
-          : isBasic
-            ? 'basic'
-            : 'unknown';
+        ? 'oauth'
+        : isBasic
+        ? 'basic'
+        : 'unknown';
 
       // ── SF environment (org type) ─────────────────────────────────────────
       const envMatch = primaryUrl.match(/(?:^|;)environment=([^;]+)/);
       const envValue = envMatch?.[1]?.toUpperCase();
       const sfEnvironment: SfConnection['sf_environment'] =
-        envValue === 'SANDBOX'   ? 'sandbox' :
-        envValue === 'PROD_DEV'  ? 'production-developer' :
-        envValue                 ? 'other' :
-                                   null;
+        envValue === 'SANDBOX'
+          ? 'sandbox'
+          : envValue === 'PROD_DEV'
+          ? 'production-developer'
+          : envValue
+          ? 'other'
+          : null;
 
       result.salesforce.push({
         name,
@@ -539,8 +537,8 @@ function categoriseConnection(
     case 'google':
       result.google.push(name);
       break;
-    case 'msexc':        // Microsoft Exchange / Outlook (EWS)
-    case 'microsoft':    // kept as fallback in case variant exists
+    case 'msexc': // Microsoft Exchange / Outlook (EWS)
+    case 'microsoft': // kept as fallback in case variant exists
       result.microsoft.push(name);
       break;
     case 'zephyr':
@@ -591,8 +589,9 @@ function buildProjectTestCaseIdMap(projectPath: string): Map<string, string> {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(fullPath); }
-        else if (entry.name.endsWith('.testcase')) {
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.name.endsWith('.testcase')) {
           try {
             const content = fs.readFileSync(fullPath, 'utf-8');
             const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
@@ -600,10 +599,14 @@ function buildProjectTestCaseIdMap(projectPath: string): Map<string, string> {
               const m = content.match(new RegExp(`${attr}=["']([^"']+)["']`));
               if (m?.[1] && !idMap.has(m[1])) idMap.set(m[1], rel);
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   walk(testsDir);
   return idMap;
@@ -668,7 +671,9 @@ function buildPlanCoverage(projectPath: string, allTestCasePaths: Set<string>): 
           const resolvedPath = testCaseIdMap.get(idMatch[1]);
           if (resolvedPath) referencedPaths.add(resolvedPath);
         }
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
       return true;
     }
 
@@ -687,8 +692,7 @@ function buildPlanCoverage(projectPath: string, allTestCasePaths: Set<string>): 
     test_instance_count: testInstanceCount,
     covered_test_case_paths: coveredPaths,
     uncovered_test_case_paths: uncoveredPaths,
-    coverage_percent:
-      allTestCasePaths.size > 0 ? Math.round((coveredPaths.length / allTestCasePaths.size) * 100) : 0,
+    coverage_percent: allTestCasePaths.size > 0 ? Math.round((coveredPaths.length / allTestCasePaths.size) * 100) : 0,
   };
 }
 
@@ -710,7 +714,9 @@ function detectProvarHome(
       if (typeof props['provarHome'] === 'string') {
         return { provarHome: props['provarHome'], provarHomeSource: `provardx-properties.json (${rel})` };
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   // 3. ANT build.xml — <property name="provarHome" value="..." />
@@ -722,7 +728,9 @@ function detectProvarHome(
         content.match(/name=["']provarHome["'][^/]*value=["']([^"']+)["']/i) ??
         content.match(/value=["']([^"']+)["'][^/]*name=["']provarHome["']/i);
       if (match?.[1]) return { provarHome: match[1], provarHomeSource: `ANT build file (${rel})` };
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   return { provarHome: null, provarHomeSource: null };
@@ -740,7 +748,9 @@ function getTopLevelTestSuites(projectPath: string): string[] {
       for (const entry of entries) {
         if (entry.isDirectory() && !entry.name.startsWith('.')) suites.push(`${candidate}/${entry.name}`);
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
     break;
   }
   return suites;
@@ -769,7 +779,9 @@ function countFilesRecursive(dir: string, filter: (name: string) => boolean): nu
         count++;
       }
     }
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
   return count;
 }
 
@@ -777,11 +789,7 @@ function countFilesRecursive(dir: string, filter: (name: string) => boolean): nu
  * General project walker — skips dot-files and node_modules.
  * Return false from visitor to skip recursion into a directory.
  */
-function walkDir(
-  dir: string,
-  visitor: (filePath: string, isDir: boolean, name: string) => boolean,
-  depth = 0
-): void {
+function walkDir(dir: string, visitor: (filePath: string, isDir: boolean, name: string) => boolean, depth = 0): void {
   if (depth > 10) return;
   let entries: fs.Dirent[];
   try {

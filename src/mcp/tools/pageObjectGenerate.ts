@@ -92,17 +92,17 @@ function preflightAndWrite(
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, javaSource, 'utf-8');
-  log('info', 'provar.pageobject.generate: wrote file', { requestId, filePath });
+  log('info', 'provar_pageobject_generate: wrote file', { requestId, filePath });
   if (ssoSource && ssoFilePath) {
     fs.writeFileSync(ssoFilePath, ssoSource, 'utf-8');
-    log('info', 'provar.pageobject.generate: wrote SSO stub', { requestId, ssoFilePath });
+    log('info', 'provar_pageobject_generate: wrote SSO stub', { requestId, ssoFilePath });
   }
   return null;
 }
 
 export function registerPageObjectGenerate(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.pageobject.generate',
+    'provar_pageobject_generate',
     [
       'Generate a Provar Java Page Object skeleton with @Page/@SalesforcePage annotation, standard imports, and @FindBy WebElement fields.',
       'Returns Java source. Writes to disk only when dry_run=false.',
@@ -145,7 +145,7 @@ export function registerPageObjectGenerate(server: McpServer, config: ServerConf
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.pageobject.generate', {
+      log('info', 'provar_pageobject_generate', {
         requestId,
         class_name: input.class_name,
         dry_run: input.dry_run,
@@ -202,7 +202,7 @@ export function registerPageObjectGenerate(server: McpServer, config: ServerConf
           requestId,
           false
         );
-        log('error', 'provar.pageobject.generate failed', { requestId, error: error.message });
+        log('error', 'provar_pageobject_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

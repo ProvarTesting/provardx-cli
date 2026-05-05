@@ -50,7 +50,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 
   // ── Sanity-check tool ────────────────────────────────────────────────────────
   server.tool(
-    'provardx.ping',
+    'provardx_ping',
     'Sanity-check tool. Echoes back a message with a timestamp. Use this to verify the MCP server is reachable before calling other tools.',
     {
       message: z.string().optional().default('ping').describe('Optional message to echo back'),

@@ -44,8 +44,8 @@ function isError(result: unknown): boolean {
 const G = {
   tc1: '550e8400-e29b-41d4-a716-446655440001',
   tc2: '550e8400-e29b-41d4-a716-446655440002',
-  s1:  '550e8400-e29b-41d4-a716-446655440011',
-  s2:  '550e8400-e29b-41d4-a716-446655440012',
+  s1: '550e8400-e29b-41d4-a716-446655440011',
+  s2: '550e8400-e29b-41d4-a716-446655440012',
 };
 
 function makeXml(tcGuid: string, stepGuid: string, id: string): string {
@@ -59,11 +59,11 @@ function makeXml(tcGuid: string, stepGuid: string, id: string): string {
   ].join('\n');
 }
 
-const TC_LOGIN  = { name: 'LoginTest.testcase',  xml_content: makeXml(G.tc1, G.s1, 'tc-001') };
+const TC_LOGIN = { name: 'LoginTest.testcase', xml_content: makeXml(G.tc1, G.s1, 'tc-001') };
 const TC_LOGOUT = { name: 'LogoutTest.testcase', xml_content: makeXml(G.tc2, G.s2, 'tc-002') };
 
 // Same test cases using the `xml` alias
-const TC_LOGIN_ALIAS  = { name: 'LoginTest.testcase',  xml: makeXml(G.tc1, G.s1, 'tc-001') };
+const TC_LOGIN_ALIAS = { name: 'LoginTest.testcase', xml: makeXml(G.tc1, G.s1, 'tc-001') };
 const TC_LOGOUT_ALIAS = { name: 'LogoutTest.testcase', xml: makeXml(G.tc2, G.s2, 'tc-002') };
 
 // ── Test setup ─────────────────────────────────────────────────────────────────
@@ -75,12 +75,12 @@ beforeEach(() => {
   registerTestSuiteValidate(server as never);
 });
 
-// ── provar.testsuite.validate ─────────────────────────────────────────────────
+// ── provar_testsuite_validate ─────────────────────────────────────────────────
 
-describe('provar.testsuite.validate', () => {
+describe('provar_testsuite_validate', () => {
   describe('happy path', () => {
     it('returns a result (not an error) for a valid non-empty suite', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'AccountSuite',
         test_cases: [TC_LOGIN, TC_LOGOUT],
       });
@@ -92,7 +92,7 @@ describe('provar.testsuite.validate', () => {
     });
 
     it('quality_score is between 0 and 100', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'AccountSuite',
         test_cases: [TC_LOGIN, TC_LOGOUT],
       });
@@ -103,7 +103,7 @@ describe('provar.testsuite.validate', () => {
     });
 
     it('returns requestId in the response', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'MySuite',
         test_cases: [TC_LOGIN],
       });
@@ -113,7 +113,7 @@ describe('provar.testsuite.validate', () => {
     });
 
     it('includes a summary object with totals', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'AccountSuite',
         test_cases: [TC_LOGIN, TC_LOGOUT],
       });
@@ -127,72 +127,81 @@ describe('provar.testsuite.validate', () => {
 
   describe('SUITE-EMPTY-001 — empty suite', () => {
     it('triggers SUITE-EMPTY-001 when suite has no test_cases and no child_suites', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'EmptySuite',
       });
 
       assert.equal(isError(result), false);
       const body = parseText(result);
       const violations = body['violations'] as Array<{ rule_id: string }>;
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'), 'Expected SUITE-EMPTY-001');
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'),
+        'Expected SUITE-EMPTY-001'
+      );
     });
 
     it('triggers SUITE-EMPTY-001 when test_cases is an empty array', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'EmptySuite',
         test_cases: [],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'), 'Expected SUITE-EMPTY-001');
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'),
+        'Expected SUITE-EMPTY-001'
+      );
     });
 
     it('does NOT trigger SUITE-EMPTY-001 when suite has test_cases', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'NonEmptySuite',
         test_cases: [TC_LOGIN],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
       assert.ok(!violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'), 'Did not expect SUITE-EMPTY-001');
     });
 
     it('does NOT trigger SUITE-EMPTY-001 when suite has child_suites', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'ParentSuite',
         child_suites: [{ name: 'ChildSuite', test_cases: [TC_LOGIN] }],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
       assert.ok(!violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'), 'Did not expect SUITE-EMPTY-001');
     });
   });
 
   describe('SUITE-DUP-001 — duplicate test case names', () => {
     it('triggers SUITE-DUP-001 when two test cases share the same name', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'DupSuite',
         test_cases: [TC_LOGIN, { name: 'LoginTest.testcase', xml_content: makeXml(G.tc2, G.s2, 'tc-dup') }],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-DUP-001'), 'Expected SUITE-DUP-001');
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-DUP-001'),
+        'Expected SUITE-DUP-001'
+      );
     });
 
     it('does NOT trigger SUITE-DUP-001 for distinct test case names', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'UniqSuite',
         test_cases: [TC_LOGIN, TC_LOGOUT],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
       assert.ok(!violations.some((v) => v.rule_id === 'SUITE-DUP-001'), 'Did not expect SUITE-DUP-001');
     });
   });
 
   describe('SUITE-DUP-002 — duplicate child suite names', () => {
     it('triggers SUITE-DUP-002 when two child suites share the same name', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'ParentSuite',
         child_suites: [
           { name: 'ChildA', test_cases: [TC_LOGIN] },
@@ -200,31 +209,37 @@ describe('provar.testsuite.validate', () => {
         ],
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-DUP-002'), 'Expected SUITE-DUP-002');
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-DUP-002'),
+        'Expected SUITE-DUP-002'
+      );
     });
   });
 
   describe('SUITE-SIZE-001 — oversized suite (>75 test cases)', () => {
     it('triggers SUITE-SIZE-001 when test_case_count exceeds 75', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'HugeSuite',
         test_cases: [TC_LOGIN],
         test_case_count: 76,
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-SIZE-001'), 'Expected SUITE-SIZE-001');
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-SIZE-001'),
+        'Expected SUITE-SIZE-001'
+      );
     });
 
     it('does NOT trigger SUITE-SIZE-001 when test_case_count is exactly 75', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'BoundarySuite',
         test_cases: [TC_LOGIN],
         test_case_count: 75,
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
       assert.ok(!violations.some((v) => v.rule_id === 'SUITE-SIZE-001'), 'Did not expect SUITE-SIZE-001 at exactly 75');
     });
 
@@ -239,19 +254,22 @@ describe('provar.testsuite.validate', () => {
         ),
       }));
 
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'HugeSuite',
         test_cases: cases,
       });
 
-      const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
-      assert.ok(violations.some((v) => v.rule_id === 'SUITE-SIZE-001'), 'Expected SUITE-SIZE-001 from counted cases');
+      const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
+      assert.ok(
+        violations.some((v) => v.rule_id === 'SUITE-SIZE-001'),
+        'Expected SUITE-SIZE-001 from counted cases'
+      );
     });
   });
 
   describe('xml_content alias — xml field accepted', () => {
     it('accepts xml field as alias for xml_content and validates correctly', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'AliasSuite',
         test_cases: [TC_LOGIN_ALIAS, TC_LOGOUT_ALIAS],
       });
@@ -261,13 +279,16 @@ describe('provar.testsuite.validate', () => {
       assert.ok((body['quality_score'] as number) >= 0);
       // Should have no empty-suite violation since TCs are present
       const violations = body['violations'] as Array<{ rule_id: string }>;
-      assert.ok(!violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'), 'xml alias should be accepted as valid content');
+      assert.ok(
+        !violations.some((v) => v.rule_id === 'SUITE-EMPTY-001'),
+        'xml alias should be accepted as valid content'
+      );
     });
   });
 
   describe('child suites', () => {
     it('validates nested child suites and includes them in test_suites', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'ParentSuite',
         child_suites: [
           { name: 'ChildA', test_cases: [TC_LOGIN] },
@@ -283,25 +304,28 @@ describe('provar.testsuite.validate', () => {
 
     it('quality_score reflects violations in child suites', () => {
       // Parent with a child that is empty → SUITE-EMPTY-001 in child
-      const resultWithEmpty = server.call('provar.testsuite.validate', {
+      const resultWithEmpty = server.call('provar_testsuite_validate', {
         suite_name: 'ParentSuite',
         child_suites: [{ name: 'EmptyChild', test_cases: [] }],
       });
-      const resultHealthy = server.call('provar.testsuite.validate', {
+      const resultHealthy = server.call('provar_testsuite_validate', {
         suite_name: 'ParentSuite',
         child_suites: [{ name: 'HealthyChild', test_cases: [TC_LOGIN] }],
       });
 
-      const emptyScore   = (parseText(resultWithEmpty)  ['quality_score'] as number);
-      const healthyScore = (parseText(resultHealthy)['quality_score'] as number);
-      assert.ok(emptyScore <= healthyScore, `Empty-child score (${emptyScore}) should be <= healthy score (${healthyScore})`);
+      const emptyScore = parseText(resultWithEmpty)['quality_score'] as number;
+      const healthyScore = parseText(resultHealthy)['quality_score'] as number;
+      assert.ok(
+        emptyScore <= healthyScore,
+        `Empty-child score (${emptyScore}) should be <= healthy score (${healthyScore})`
+      );
     });
   });
 
   describe('quality_threshold', () => {
     it('uses default threshold of 80 when not specified', () => {
       // Just verify no error and score is present
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'ThresholdDefault',
         test_cases: [TC_LOGIN],
       });
@@ -310,7 +334,7 @@ describe('provar.testsuite.validate', () => {
     });
 
     it('accepts a custom quality_threshold', () => {
-      const result = server.call('provar.testsuite.validate', {
+      const result = server.call('provar_testsuite_validate', {
         suite_name: 'ThresholdCustom',
         test_cases: [TC_LOGIN],
         quality_threshold: 90,

@@ -189,9 +189,9 @@ Restart Cursor after saving. The Provar tools will appear under **Settings → M
 
 ## Testing the Connection
 
-Before testing with a real project, verify the server is reachable using the `provardx.ping` tool. In your AI client, ask:
+Before testing with a real project, verify the server is reachable using the `provardx_ping` tool. In your AI client, ask:
 
-> "Call provardx.ping with message 'hello'"
+> "Call provardx_ping with message 'hello'"
 
 Expected response:
 
@@ -217,7 +217,7 @@ Work through these in order — they build on each other.
 
 Prompt your AI assistant:
 
-> "Use provar.project.inspect on `/path/to/my/project` and tell me what you find — how many test cases, any coverage gaps?"
+> "Use provar_project_inspect on `/path/to/my/project` and tell me what you find — how many test cases, any coverage gaps?"
 
 **What to look for:**
 
@@ -296,7 +296,7 @@ Pre-requisite: `sf org login web -a MyQHOrg` then `sf provar quality-hub connect
 
 **What to look for:**
 
-- The AI chaining: `provar.qualityhub.connect` → `provar.qualityhub.testrun` → `provar.qualityhub.testrun.report` (looped)
+- The AI chaining: `provar_qualityhub_connect` → `provar_qualityhub_testrun` → `provar_qualityhub_testrun_report` (looped)
 - The run ID extracted from the `testrun` response and passed to `testrun.report`
 - Final result status reported back
 
@@ -304,7 +304,7 @@ Pre-requisite: `sf org login web -a MyQHOrg` then `sf provar quality-hub connect
 
 ### Scenario 8: Quality Hub API Validation
 
-**Goal:** Confirm that `provar.testcase.validate` upgrades from local rules to the full Quality Hub API ruleset when an API key is present.
+**Goal:** Confirm that `provar_testcase_validate` upgrades from local rules to the full Quality Hub API ruleset when an API key is present.
 
 **Setup:** Run `sf provar auth login` and complete the browser login, then confirm with `sf provar auth status`.
 
@@ -330,13 +330,13 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 > "Discover all NitroX page objects in my Provar project at `/path/to/my/project` and tell me how many there are."
 
-**What to look for:** The AI calls `provar.nitrox.discover`, finds the `nitroX/` directory, and reports the file count.
+**What to look for:** The AI calls `provar_nitrox_discover`, finds the `nitroX/` directory, and reports the file count.
 
 **Step 2 — Read examples for context:**
 
 > "Read up to 5 NitroX page objects from my project so you understand the structure."
 
-**What to look for:** The AI calls `provar.nitrox.read` and summarises the patterns it sees (tagName, qualifier, element types, interactions).
+**What to look for:** The AI calls `provar_nitrox_read` and summarises the patterns it sees (tagName, qualifier, element types, interactions).
 
 **Step 3 — Generate a new component:**
 
@@ -344,7 +344,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **What to look for:**
 
-- The AI calls `provar.nitrox.generate` with `dry_run: true` first, then writes after your confirmation
+- The AI calls `provar_nitrox_generate` with `dry_run: true` first, then writes after your confirmation
 - Generated JSON has valid UUIDs for all `componentId` fields
 - `tagName`, `parameters`, and `elements` match your description
 
@@ -354,7 +354,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **What to look for:**
 
-- `provar.nitrox.validate` returns `valid: true` and `score: 100`
+- `provar_nitrox_validate` returns `valid: true` and `score: 100`
 - Any issues are listed with rule IDs (NX001–NX010) and suggestions
 
 **Step 5 — Apply a targeted edit:**
@@ -363,7 +363,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **What to look for:**
 
-- The AI calls `provar.nitrox.patch` with `dry_run: true` to show the change
+- The AI calls `provar_nitrox_patch` with `dry_run: true` to show the change
 - After confirmation, calls again with `dry_run: false`
 - `validate_after: true` (the default) confirms the patch didn't break the schema
 
@@ -383,9 +383,9 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 **What to look for:**
 
 - _(If SF MCP connected)_ `getObjectSchema` called for `Opportunity` — AI uses real field names (e.g. `Amount`, `CloseDate`, `StageName`) in the corpus query
-- `provar.qualityhub.examples.retrieve` called with the enriched user story as query, returning `examples` array with `similarity_score` values and XML content
-- The AI using the retrieved XML as few-shot context when calling `provar.testcase.generate`
-- `provar.testcase.validate` confirming `quality_score >= 70`
+- `provar_qualityhub_examples_retrieve` called with the enriched user story as query, returning `examples` array with `similarity_score` values and XML content
+- The AI using the retrieved XML as few-shot context when calling `provar_testcase_generate`
+- `provar_testcase_validate` confirming `quality_score >= 70`
 - If no API key: tool returns `{ examples: [], warning: "..." }` with `isError: false` and the AI continues without grounding
 
 **To test graceful degrade:** Run `sf provar auth clear` and repeat. Verify `examples: []` with a warning and generation still proceeds.
@@ -394,7 +394,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ### Scenario 10: Corpus Retrieval — No Key / Rate Limit
 
-**Goal:** Confirm `provar.qualityhub.examples.retrieve` never hard-errors on API failure.
+**Goal:** Confirm `provar_qualityhub_examples_retrieve` never hard-errors on API failure.
 
 > "Fetch 3 corpus examples for: Create a Contact in Salesforce."
 
@@ -431,10 +431,10 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **What to look for:**
 
-- The AI calls `provar.qualityhub.examples.retrieve` first to retrieve grounding examples (if an API key is configured)
+- The AI calls `provar_qualityhub_examples_retrieve` first to retrieve grounding examples (if an API key is configured)
 - A valid Provar XML test case is generated, using `<apiCall>` steps that correspond to the source test's actions
 - Salesforce login/navigation is omitted from the generated XML (Provar handles this via Connection Manager)
-- `provar.testcase.validate` is called on the result and returns `is_valid: true`
+- `provar_testcase_validate` is called on the result and returns `is_valid: true`
 - Any steps that could not be mapped are left as `<!-- TODO: manual step -->` comments in the XML
 
 ---
@@ -447,7 +447,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 - Validates all incoming paths against those roots before any file operation
 - Blocks path traversal attempts (`../`) with a `PATH_TRAVERSAL` error
 - Resolves symlinks via `fs.realpathSync` before the containment check — a symlink inside an allowed directory pointing outside it cannot bypass the restriction
-- Validates all path-type input fields (e.g. `provar_home`, `project_path`, `results_path` in `provar.ant.generate`) before any file operation, not just the output path
+- Validates all path-type input fields (e.g. `provar_home`, `project_path`, `results_path` in `provar_ant_generate`) before any file operation, not just the output path
 - Invokes `sf` CLI subprocesses for Quality Hub and Automation tools — these use the SF CLI's existing credential store (`~/.sf/credentials.json`), which the MCP server does not read directly
 
 ### License validation
@@ -489,7 +489,7 @@ The MCP server uses **stdio transport** exclusively. Communication travels over 
 
 **Salesforce org credentials** — the Quality Hub and Automation tools invoke `sf` subprocesses. Salesforce org credentials are managed entirely by the Salesforce CLI and stored in its own credential store (`~/.sf/`). The Provar MCP server never reads, parses, or transmits those credentials.
 
-**Provar API key** — the `provar.testcase.validate` tool optionally reads a `pv_k_` API key to enable Quality Hub API validation. The key is stored at `~/.provar/credentials.json` (written by `sf provar auth login`) or read from the `PROVAR_API_KEY` environment variable. The key is sent to the Provar Quality Hub API only when a validation request is made — it is never logged or written anywhere other than `~/.provar/credentials.json`.
+**Provar API key** — the `provar_testcase_validate` tool optionally reads a `pv_k_` API key to enable Quality Hub API validation. The key is stored at `~/.provar/credentials.json` (written by `sf provar auth login`) or read from the `PROVAR_API_KEY` environment variable. The key is sent to the Provar Quality Hub API only when a validation request is made — it is never logged or written anywhere other than `~/.provar/credentials.json`.
 
 ### Path policy enforcement
 
@@ -507,7 +507,7 @@ This check runs before every file read and write, including all path-type input 
 All tool invocations are logged to **stderr** with a unique `requestId` per call. The log format is structured JSON:
 
 ```
-[INFO] provar.testcase.validate {"requestId":"req-a1b2c3","file_path":"/workspace/..."}
+[INFO] provar_testcase_validate {"requestId":"req-a1b2c3","file_path":"/workspace/..."}
 ```
 
 You can capture stderr from the MCP server process to maintain an audit trail of all AI agent tool calls.
@@ -518,10 +518,10 @@ You can capture stderr from the MCP server process to maintain an audit trail of
 
 | Limitation                                            | Details                                                                                                                                                                                                 |
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No async operations                                   | Quality Hub test run tools use synchronous SF CLI invocations. Long-running runs should use `provar.qualityhub.testrun.report` in a polling loop.                                                       |
-| SF CLI must be in PATH                                | The `provar.qualityhub.*` and `provar.automation.*` tools spawn `sf` as a subprocess. If `sf` is not on `PATH`, you get `SF_NOT_FOUND`.                                                                 |
+| No async operations                                   | Quality Hub test run tools use synchronous SF CLI invocations. Long-running runs should use `provar_qualityhub_testrun_report` in a polling loop.                                                       |
+| SF CLI must be in PATH                                | The `provar_qualityhub_*` and `provar_automation_*` tools spawn `sf` as a subprocess. If `sf` is not on `PATH`, you get `SF_NOT_FOUND`.                                                                 |
 | No Windows native paths in `--allowed-paths` via JSON | Use forward slashes in MCP client config JSON, even on Windows. The server normalises paths internally.                                                                                                 |
-| Page Object validation is static                      | The `provar.pageobject.validate` tool parses Java source statically. It does not compile or resolve imports.                                                                                            |
+| Page Object validation is static                      | The `provar_pageobject_validate` tool parses Java source statically. It does not compile or resolve imports.                                                                                            |
 | Quality scores are local                              | The MCP quality scores are computed locally using the same formula as the Quality Hub Lambda. They are not submitted to or stored by any Provar service unless you call the Quality Hub API separately. |
 
 ---

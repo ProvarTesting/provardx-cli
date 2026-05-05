@@ -30,11 +30,11 @@ function handleSpawnError(
   };
 }
 
-// ── Tool: provar.qualityhub.connect ───────────────────────────────────────────
+// ── Tool: provar_qualityhub_connect ───────────────────────────────────────────
 
 export function registerQualityHubConnect(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.connect',
+    'provar_qualityhub_connect',
     'Connect to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` with the supplied flags.',
     {
       target_org: z.string().describe('SF org alias or username to connect as'),
@@ -46,7 +46,7 @@ export function registerQualityHubConnect(server: McpServer): void {
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.connect', { requestId, target_org });
+      log('info', 'provar_qualityhub_connect', { requestId, target_org });
 
       try {
         const result = runSfCommand(['provar', 'quality-hub', 'connect', '--target-org', target_org, ...flags]);
@@ -66,17 +66,17 @@ export function registerQualityHubConnect(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.connect');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_connect');
       }
     }
   );
 }
 
-// ── Tool: provar.qualityhub.display ──────────────────────────────────────────
+// ── Tool: provar_qualityhub_display ──────────────────────────────────────────
 
 export function registerQualityHubDisplay(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.display',
+    'provar_qualityhub_display',
     'Display connected Quality Hub org info. Invokes `sf provar quality-hub display`.',
     {
       target_org: z.string().optional().describe('SF org alias or username (uses default if omitted)'),
@@ -84,7 +84,7 @@ export function registerQualityHubDisplay(server: McpServer): void {
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.display', { requestId, target_org });
+      log('info', 'provar_qualityhub_display', { requestId, target_org });
 
       try {
         const args = ['provar', 'quality-hub', 'display', ...flags];
@@ -107,13 +107,13 @@ export function registerQualityHubDisplay(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.display');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_display');
       }
     }
   );
 }
 
-// ── Tool: provar.qualityhub.testrun ──────────────────────────────────────────
+// ── Tool: provar_qualityhub_testrun ──────────────────────────────────────────
 
 function detectWildcardFlags(flags: string[]): string | undefined {
   for (let i = 0; i < flags.length - 1; i++) {
@@ -133,7 +133,7 @@ function detectWildcardFlags(flags: string[]): string | undefined {
 
 export function registerQualityHubTestRun(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.testrun',
+    'provar_qualityhub_testrun',
     'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`. ' +
       'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
     {
@@ -148,7 +148,7 @@ export function registerQualityHubTestRun(server: McpServer): void {
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.testrun', { requestId, target_org });
+      log('info', 'provar_qualityhub_testrun', { requestId, target_org });
 
       try {
         const wildcardWarning = detectWildcardFlags(flags);
@@ -178,26 +178,26 @@ export function registerQualityHubTestRun(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.testrun');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_testrun');
       }
     }
   );
 }
 
-// ── Tool: provar.qualityhub.testrun.report ────────────────────────────────────
+// ── Tool: provar_qualityhub_testrun_report ────────────────────────────────────
 
 export function registerQualityHubTestRunReport(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.testrun.report',
+    'provar_qualityhub_testrun_report',
     'Poll the status of a Quality Hub test run. Invokes `sf provar quality-hub test run report`.',
     {
       target_org: z.string().describe('SF org alias or username'),
-      run_id: z.string().describe('Test run ID returned by provar.qualityhub.testrun'),
+      run_id: z.string().describe('Test run ID returned by provar_qualityhub_testrun'),
       flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
     },
     ({ target_org, run_id, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.testrun.report', { requestId, target_org, run_id });
+      log('info', 'provar_qualityhub_testrun_report', { requestId, target_org, run_id });
 
       try {
         const result = runSfCommand([
@@ -238,7 +238,7 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
           hasFailures = normalizedStatus !== undefined && failureStatuses.has(normalizedStatus);
         }
         const suggestion = hasFailures
-          ? 'Failures detected. Use provar.qualityhub.defect.create with run_id and target_org to automatically create Defect__c records for each failure (syncs to Jira/ADO if configured).'
+          ? 'Failures detected. Use provar_qualityhub_defect_create with run_id and target_org to automatically create Defect__c records for each failure (syncs to Jira/ADO if configured).'
           : '';
         const responseWithSuggestion = { ...response, suggestion: suggestion || undefined };
 
@@ -247,17 +247,17 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
           structuredContent: responseWithSuggestion,
         };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.testrun.report');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_testrun_report');
       }
     }
   );
 }
 
-// ── Tool: provar.qualityhub.testrun.abort ─────────────────────────────────────
+// ── Tool: provar_qualityhub_testrun_abort ─────────────────────────────────────
 
 export function registerQualityHubTestRunAbort(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.testrun.abort',
+    'provar_qualityhub_testrun_abort',
     'Abort an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.',
     {
       target_org: z.string().describe('SF org alias or username'),
@@ -266,7 +266,7 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
     },
     ({ target_org, run_id, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.testrun.abort', { requestId, target_org, run_id });
+      log('info', 'provar_qualityhub_testrun_abort', { requestId, target_org, run_id });
 
       try {
         const result = runSfCommand([
@@ -297,17 +297,17 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.testrun.abort');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_testrun_abort');
       }
     }
   );
 }
 
-// ── Tool: provar.qualityhub.testcase.retrieve ─────────────────────────────────
+// ── Tool: provar_qualityhub_testcase_retrieve ─────────────────────────────────
 
 export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.testcase.retrieve',
+    'provar_qualityhub_testcase_retrieve',
     'Retrieve Quality Hub test cases by user story or component. Invokes `sf provar quality-hub testcase retrieve`.',
     {
       target_org: z.string().describe('SF org alias or username'),
@@ -319,7 +319,7 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
     },
     ({ target_org, flags }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.testcase.retrieve', { requestId, target_org });
+      log('info', 'provar_qualityhub_testcase_retrieve', { requestId, target_org });
 
       try {
         const result = runSfCommand([
@@ -347,7 +347,7 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.qualityhub.testcase.retrieve');
+        return handleSpawnError(err, requestId, 'provar_qualityhub_testcase_retrieve');
       }
     }
   );

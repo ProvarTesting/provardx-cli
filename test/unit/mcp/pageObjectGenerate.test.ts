@@ -62,12 +62,12 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.pageobject.generate ─────────────────────────────────────────────────
+// ── provar_pageobject_generate ─────────────────────────────────────────────────
 
-describe('provar.pageobject.generate', () => {
+describe('provar_pageobject_generate', () => {
   describe('dry_run', () => {
     it('returns java_source without writing to disk', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountDetailPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -85,7 +85,7 @@ describe('provar.pageobject.generate', () => {
 
     it('does NOT write a file even when output_path is provided', () => {
       const outPath = path.join(tmpDir, 'AccountDetailPage.java');
-      server.call('provar.pageobject.generate', {
+      server.call('provar_pageobject_generate', {
         class_name: 'AccountDetailPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -101,7 +101,7 @@ describe('provar.pageobject.generate', () => {
 
   describe('generated Java source content', () => {
     it('contains correct class name and package', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountDetailPage',
         package_name: 'pageobjects.accounts',
         page_type: 'standard',
@@ -116,7 +116,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('uses @Page annotation for standard page_type', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -131,7 +131,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('uses @SalesforcePage annotation for salesforce page_type', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountPage',
         package_name: 'pageobjects',
         page_type: 'salesforce',
@@ -147,7 +147,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('includes standard imports', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'MyPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -163,7 +163,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('generates @FindBy field blocks for provided fields', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -193,7 +193,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('emits a TODO comment when no fields are provided', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'EmptyPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -207,7 +207,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('defaults title to class_name when title is omitted', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountDetailPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -224,7 +224,7 @@ describe('provar.pageobject.generate', () => {
   describe('writing to disk', () => {
     it('writes file when dry_run=false and output_path provided', () => {
       const outPath = path.join(tmpDir, 'AccountDetailPage.java');
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountDetailPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -240,7 +240,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('does NOT write when dry_run=false but no output_path', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'NoPathPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -257,7 +257,7 @@ describe('provar.pageobject.generate', () => {
       const outPath = path.join(tmpDir, 'Existing.java');
       fs.writeFileSync(outPath, '// old', 'utf-8');
 
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'Existing',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -275,7 +275,7 @@ describe('provar.pageobject.generate', () => {
       const outPath = path.join(tmpDir, 'Existing.java');
       fs.writeFileSync(outPath, '// old', 'utf-8');
 
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'Existing',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -292,7 +292,7 @@ describe('provar.pageobject.generate', () => {
 
     it('creates parent directories as needed', () => {
       const outPath = path.join(tmpDir, 'src', 'main', 'java', 'MyPage.java');
-      server.call('provar.pageobject.generate', {
+      server.call('provar_pageobject_generate', {
         class_name: 'MyPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -311,7 +311,7 @@ describe('provar.pageobject.generate', () => {
       const strictServer = new MockMcpServer();
       registerPageObjectGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.pageobject.generate', {
+      const result = strictServer.call('provar_pageobject_generate', {
         class_name: 'EvilPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -330,7 +330,7 @@ describe('provar.pageobject.generate', () => {
       const strictServer = new MockMcpServer();
       registerPageObjectGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.pageobject.generate', {
+      const result = strictServer.call('provar_pageobject_generate', {
         class_name: 'SafePage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -346,7 +346,7 @@ describe('provar.pageobject.generate', () => {
 
   describe('idempotency_key', () => {
     it('echoes back the provided idempotency_key', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'IdempotentPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -360,7 +360,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('returns undefined idempotency_key when not provided', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'NoKeyPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -375,7 +375,7 @@ describe('provar.pageobject.generate', () => {
 
   describe('sso_class — ILoginPage stub generation', () => {
     it('returns sso_stub_source when sso_class is provided', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -394,7 +394,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('sso stub includes loginAs and logout method stubs', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -410,7 +410,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('uses the correct package in sso stub', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects.auth',
         page_type: 'standard',
@@ -425,7 +425,7 @@ describe('provar.pageobject.generate', () => {
     });
 
     it('does not include sso fields when sso_class is omitted', () => {
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'AccountPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -440,7 +440,7 @@ describe('provar.pageobject.generate', () => {
 
     it('writes both page object and SSO stub to disk when dry_run=false', () => {
       const poPath = path.join(tmpDir, 'LoginPage.java');
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -461,7 +461,7 @@ describe('provar.pageobject.generate', () => {
       const strictServer = new MockMcpServer();
       registerPageObjectGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.pageobject.generate', {
+      const result = strictServer.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -482,7 +482,7 @@ describe('provar.pageobject.generate', () => {
       const ssoPath = path.join(tmpDir, 'LoginPageSso.java');
       fs.writeFileSync(ssoPath, '// existing stub', 'utf-8');
 
-      const result = server.call('provar.pageobject.generate', {
+      const result = server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',
@@ -502,7 +502,7 @@ describe('provar.pageobject.generate', () => {
       const ssoPath = path.join(tmpDir, 'LoginPageSso.java');
       fs.writeFileSync(ssoPath, '// existing stub', 'utf-8');
 
-      server.call('provar.pageobject.generate', {
+      server.call('provar_pageobject_generate', {
         class_name: 'LoginPage',
         package_name: 'pageobjects',
         page_type: 'standard',

@@ -127,7 +127,7 @@ const TOOL_DESCRIPTION = [
   'Shorthand XML attributes on <apiCall> are silently ignored at runtime; always supply arguments via the attributes map.',
   'Data-driven note: <dataTable> only iterates rows when the test case runs via a test plan instance (.testinstance).',
   'Running directly via the provardx testCase property resolves all data table variables as null.',
-  'Use provar.testplan.add-instance to wire into a plan for data-driven execution.',
+  'Use provar_testplan_add-instance to wire into a plan for data-driven execution.',
   'ApexReadObject requires field names in attributes; omitting them produces MALFORMED_QUERY. Prefer ApexSoqlQuery.',
   'AssertValues on SOQL results: index paths like "ResultList[0].Field" are not supported.',
   'Use ForEach to iterate the result list, or SetValues to extract a field into a variable first.',
@@ -140,12 +140,12 @@ const TOOL_DESCRIPTION = [
   'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
-  'Grounding: call provar.qualityhub.examples.retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
+  'Grounding: call provar_qualityhub_examples_retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
 ].join(' ');
 
 export function registerTestCaseGenerate(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testcase.generate',
+    'provar_testcase_generate',
     TOOL_DESCRIPTION,
     {
       test_case_name: z.string().describe('Test case name (human-readable label)'),
@@ -175,7 +175,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testcase.generate', {
+      log('info', 'provar_testcase_generate', {
         requestId,
         test_case_name: input.test_case_name,
         dry_run: input.dry_run,
@@ -202,7 +202,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar.testcase.generate: wrote file', { requestId, filePath });
+          log('info', 'provar_testcase_generate: wrote file', { requestId, filePath });
         }
 
         const warnings = buildStepWarnings(input.steps);
@@ -236,7 +236,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
               false,
               { validation: validationSlim }
             );
-            log('warn', 'provar.testcase.generate: TESTCASE_INVALID', { requestId });
+            log('warn', 'provar_testcase_generate: TESTCASE_INVALID', { requestId });
             return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
           }
           const result = { ...baseResult, validation: validationSlim };
@@ -258,7 +258,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           requestId,
           false
         );
-        log('error', 'provar.testcase.generate failed', { requestId, error: error.message });
+        log('error', 'provar_testcase_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -299,11 +299,7 @@ function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '   
   const argLines = entries
     .map(([k, v]) => {
       const valueXml = buildArgumentValue(k, v, `${baseIndent}  `, false, apiId);
-      return (
-        `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` +
-        valueXml + '\n' +
-        `${baseIndent}</argument>`
-      );
+      return `${baseIndent}<argument id="${escapeXmlAttr(k)}">\n` + valueXml + '\n' + `${baseIndent}</argument>`;
     })
     .join('\n');
   return `\n${baseIndent}<arguments>\n${argLines}\n${baseIndent}</arguments>\n${baseIndent.slice(0, -2)}`;
@@ -325,7 +321,8 @@ function buildSetValuesXml(attributes: Record<string, string>, baseIndent: strin
     `${i(0)}<argument id="values">\n` +
     `${i(1)}<value class="valueList" mutable="Mutable">\n` +
     `${i(2)}<namedValues>\n` +
-    namedValueLines + '\n' +
+    namedValueLines +
+    '\n' +
     `${i(2)}</namedValues>\n` +
     `${i(1)}</value>\n` +
     `${i(0)}</argument>\n` +
@@ -379,9 +376,10 @@ function buildTestCaseXml(input: {
   }
 
   return (
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
     `<testCase id="${testCaseId}" guid="${testCaseGuid}" registryId="${registryId}"` +
     ` name="${escapeXmlAttr(input.test_case_name)}">\n` +
+    '  <summary/>\n' +
     '  <steps>\n' +
     stepLines +
     '\n  </steps>\n' +
@@ -406,7 +404,11 @@ function buildUiWithScreenXml(
     '      </clauses>\n    ';
   return (
     `    <apiCall guid="${wrapperGuid}" apiId="${wrapperApiId}"` +
-    ` name="With page" testItemId="1">${buildArgumentsXml({ target: targetUri }, '      ', wrapperApiId).trimEnd()}${clausesXml}</apiCall>`
+    ` name="With page" testItemId="1">${buildArgumentsXml(
+      { target: targetUri },
+      '      ',
+      wrapperApiId
+    ).trimEnd()}${clausesXml}</apiCall>`
   );
 }
 

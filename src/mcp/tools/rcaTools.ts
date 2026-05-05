@@ -121,7 +121,7 @@ const RCA_RULES: RcaRule[] = [
     category: 'MISSING_CALLABLE',
     pattern: /caseCall.*cannot.*resolv|callable.*not.*found/i,
     summary: 'caseCall references unresolvable callable',
-    recommendation: 'Use provar.project.validate to diagnose PROJ-CALLABLE violations',
+    recommendation: 'Use provar_project_validate to diagnose PROJ-CALLABLE violations',
   },
   {
     category: 'METADATA_CACHE',
@@ -133,7 +133,7 @@ const RCA_RULES: RcaRule[] = [
     category: 'PAGE_OBJECT_COMPILE',
     pattern: /ClassNotFoundException|CompilationException/i,
     summary: 'Page object class not compiled',
-    recommendation: 'Run provar.automation.compile before testrun',
+    recommendation: 'Run provar_automation_compile before testrun',
   },
   {
     category: 'CONNECTION_REFUSED',
@@ -388,11 +388,11 @@ function resolveResultsLocation(
   };
 }
 
-// ── provar.testrun.report.locate tool ─────────────────────────────────────────
+// ── provar_testrun_report_locate tool ─────────────────────────────────────────
 
 export function registerTestRunLocate(server: McpServer): void {
   server.tool(
-    'provar.testrun.report.locate',
+    'provar_testrun_report_locate',
     [
       'Resolve exactly where Provar test run artifacts were written, without parsing them.',
       'Returns the results directory, paths to JUnit.xml and Index.html if they exist,',
@@ -414,7 +414,7 @@ export function registerTestRunLocate(server: McpServer): void {
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testrun.report.locate', { requestId });
+      log('info', 'provar_testrun_report_locate', { requestId });
 
       try {
         const resolved = resolveResultsLocation(input.project_path, input.results_path, input.run_index);
@@ -472,7 +472,7 @@ export function registerTestRunLocate(server: McpServer): void {
       } catch (err: unknown) {
         const error = err as Error;
         const errResult = makeError('LOCATE_ERROR', error.message, requestId);
-        log('error', 'provar.testrun.report.locate failed', { requestId, error: error.message });
+        log('error', 'provar_testrun_report_locate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -665,11 +665,11 @@ function buildFailureReports(
   return reports;
 }
 
-// ── provar.testrun.rca tool ───────────────────────────────────────────────────
+// ── provar_testrun_rca tool ───────────────────────────────────────────────────
 
 export function registerTestRunRca(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.testrun.rca',
+    'provar_testrun_rca',
     [
       'Parse a completed Provar test run and produce a structured Root Cause Analysis (RCA) report.',
       'Resolves the results directory, parses JUnit.xml, classifies each failure by category,',
@@ -706,7 +706,7 @@ export function registerTestRunRca(server: McpServer, config: ServerConfig): voi
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.testrun.rca', { requestId, locate_only: input.locate_only, mode: input.mode });
+      log('info', 'provar_testrun_rca', { requestId, locate_only: input.locate_only, mode: input.mode });
 
       try {
         // ── Path policy ──────────────────────────────────────────────────────
@@ -853,7 +853,7 @@ export function registerTestRunRca(server: McpServer, config: ServerConfig): voi
       } catch (err: unknown) {
         const error = err as Error;
         const errResult = makeError('RCA_ERROR', error.message, requestId);
-        log('error', 'provar.testrun.rca failed', { requestId, error: error.message });
+        log('error', 'provar_testrun_rca failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

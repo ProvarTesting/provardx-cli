@@ -216,16 +216,16 @@ function handleSpawnError(
   };
 }
 
-// ── Tool: provar.automation.config.load ──────────────────────────────────────
+// ── Tool: provar_automation_config_load ──────────────────────────────────────
 
 export function registerAutomationConfigLoad(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.automation.config.load',
+    'provar_automation_config_load',
     [
       'Register a provardx-properties.json file as the active Provar configuration.',
       'Invokes `sf provar automation config load --properties-file <path>`, writing the path to ~/.sf/config.json.',
-      'REQUIRED before provar.automation.compile or provar.automation.testrun — without this step those commands fail with MISSING_FILE.',
-      'Typical workflow: provar.automation.config.load → provar.automation.compile → provar.automation.testrun.',
+      'REQUIRED before provar_automation_compile or provar_automation_testrun — without this step those commands fail with MISSING_FILE.',
+      'Typical workflow: provar_automation_config_load → provar_automation_compile → provar_automation_testrun.',
     ].join(' '),
     {
       properties_path: z
@@ -238,7 +238,7 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
     },
     ({ properties_path, sf_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.automation.config.load', { requestId, properties_path });
+      log('info', 'provar_automation_config_load', { requestId, properties_path });
 
       try {
         assertPathAllowed(properties_path, config.allowedPaths);
@@ -278,7 +278,7 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
             ],
           };
         }
-        return handleSpawnError(err, requestId, 'provar.automation.config.load');
+        return handleSpawnError(err, requestId, 'provar_automation_config_load');
       }
     }
   );
@@ -317,7 +317,7 @@ export function filterTestRunOutput(raw: string): { filtered: string; suppressed
 
   let filtered = kept.join('\n');
   if (suppressed > 0) {
-    filtered += `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar.testrun.rca for full results]`;
+    filtered += `\n[testrun: ${suppressed} lines suppressed (schema validator / logger noise) — use provar_testrun_rca for full results]`;
   }
   return { filtered, suppressed };
 }
@@ -384,17 +384,17 @@ function readResultsPathFromSfConfig(config: ServerConfig): string | null {
   }
 }
 
-// ── Tool: provar.automation.testrun ───────────────────────────────────────────
+// ── Tool: provar_automation_testrun ───────────────────────────────────────────
 
 export function registerAutomationTestRun(server: McpServer, config: ServerConfig): void {
   server.tool(
-    'provar.automation.testrun',
+    'provar_automation_testrun',
     [
       'Trigger a LOCAL Provar automation test run using installed Provar binaries. Invokes `sf provar automation test run`.',
-      'PREREQUISITE: Run provar.automation.config.load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
+      'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
       'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
-      'Use provar.automation.setup first if Provar is not yet installed.',
-      'For grid/CI execution via Provar Quality Hub instead of running locally, use provar.qualityhub.testrun.',
+      'Use provar_automation_setup first if Provar is not yet installed.',
+      'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
       'Typical local AI loop: config.load → compile → testrun → inspect results.',
     ].join(' '),
     {
@@ -410,7 +410,7 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.automation.testrun', { requestId });
+      log('info', 'provar_automation_testrun', { requestId });
 
       try {
         const result = runSfCommand(['provar', 'automation', 'test', 'run', ...flags], sf_path);
@@ -435,7 +435,7 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
             errBody['details'] = {
               warning:
                 junitWarning ??
-                'Could not locate results directory — step-level output unavailable. Run provar.automation.config.load first.',
+                'Could not locate results directory — step-level output unavailable. Run provar_automation_config_load first.',
             };
           }
           return { isError: true as const, content: [{ type: 'text' as const, text: JSON.stringify(errBody) }] };
@@ -452,20 +452,20 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
         if (junitWarning) response['details'] = { warning: junitWarning };
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.automation.testrun');
+        return handleSpawnError(err, requestId, 'provar_automation_testrun');
       }
     }
   );
 }
 
-// ── Tool: provar.automation.compile ───────────────────────────────────────────
+// ── Tool: provar_automation_compile ───────────────────────────────────────────
 
 export function registerAutomationCompile(server: McpServer): void {
   server.tool(
-    'provar.automation.compile',
+    'provar_automation_compile',
     [
       'Compile a Provar automation project. Invokes `sf provar automation project compile`.',
-      'PREREQUISITE: Run provar.automation.config.load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
+      'PREREQUISITE: Run provar_automation_config_load first to register a provardx-properties.json — without this the command fails with MISSING_FILE.',
       'Run this before triggering a test run after modifying test cases.',
     ].join(' '),
     {
@@ -481,7 +481,7 @@ export function registerAutomationCompile(server: McpServer): void {
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.automation.compile', { requestId });
+      log('info', 'provar_automation_compile', { requestId });
 
       try {
         const result = runSfCommand(['provar', 'automation', 'project', 'compile', ...flags], sf_path);
@@ -501,13 +501,13 @@ export function registerAutomationCompile(server: McpServer): void {
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.automation.compile');
+        return handleSpawnError(err, requestId, 'provar_automation_compile');
       }
     }
   );
 }
 
-// ── Tool: provar.automation.metadata.download ─────────────────────────────────
+// ── Tool: provar_automation_metadata_download ─────────────────────────────────
 
 const DOWNLOAD_ERROR_SUGGESTION =
   'A [DOWNLOAD_ERROR] almost always means a Salesforce authentication failure for the connection being used. ' +
@@ -518,11 +518,11 @@ const DOWNLOAD_ERROR_SUGGESTION =
 
 export function registerAutomationMetadataDownload(server: McpServer): void {
   server.tool(
-    'provar.automation.metadata.download',
+    'provar_automation_metadata_download',
     [
       'Download Salesforce metadata for one or more connections into a Provar project.',
       'Invokes `sf provar automation metadata download`.',
-      'PREREQUISITE: Call provar.automation.config.load first — without it the command fails with MISSING_FILE.',
+      'PREREQUISITE: Call provar_automation_config_load first — without it the command fails with MISSING_FILE.',
       'Use the -c flag to specify connections: flags: ["-c", "ConnectionName1,ConnectionName2"].',
       'Connection names are case-sensitive and must match the names defined in the Provar project.',
       'If the download fails with [DOWNLOAD_ERROR], this is almost always a Salesforce authentication issue —',
@@ -543,7 +543,7 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
     },
     ({ flags, sf_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.automation.metadata.download', { requestId });
+      log('info', 'provar_automation_metadata_download', { requestId });
 
       try {
         const result = runSfCommand(['provar', 'automation', 'metadata', 'download', ...flags], sf_path);
@@ -568,13 +568,13 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.automation.metadata.download');
+        return handleSpawnError(err, requestId, 'provar_automation_metadata_download');
       }
     }
   );
 }
 
-// ── Tool: provar.automation.setup ─────────────────────────────────────────────
+// ── Tool: provar_automation_setup ─────────────────────────────────────────────
 
 /** Known system-level Provar install paths per platform. */
 const SYSTEM_INSTALL_BASES: Record<string, string[]> = {
@@ -663,7 +663,7 @@ function findExistingInstallations(): ProvarInstall[] {
 
 export function registerAutomationSetup(server: McpServer): void {
   server.tool(
-    'provar.automation.setup',
+    'provar_automation_setup',
     [
       'Download and install Provar Automation binaries locally. Invokes `sf provar automation setup`.',
       'Before downloading, checks for existing Provar installations in:',
@@ -672,7 +672,7 @@ export function registerAutomationSetup(server: McpServer): void {
       '  • C:\\Program Files\\Provar* (Windows system installs)',
       '  • /Applications/Provar* (macOS app installs)',
       'If an existing installation is found, returns its path so you can set provarHome in the properties file — skipping the download unless force is true.',
-      'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar.properties.set.',
+      'After a successful install, update the provarHome property in provardx-properties.json to the returned install_path using provar_properties_set.',
     ].join(' '),
     {
       version: z
@@ -691,7 +691,7 @@ export function registerAutomationSetup(server: McpServer): void {
     },
     ({ version, force, sf_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.automation.setup', { requestId, version, force });
+      log('info', 'provar_automation_setup', { requestId, version, force });
 
       try {
         // ── 1. Check for existing installations ──────────────────────────────
@@ -750,7 +750,7 @@ export function registerAutomationSetup(server: McpServer): void {
           version: detectedVersion,
           message: [
             `Provar Automation installed successfully at: ${installPath}.`,
-            'Update provarHome in your provardx-properties.json to this path using provar.properties.set.',
+            'Update provarHome in your provardx-properties.json to this path using provar_properties_set.',
           ].join(' '),
         };
         return {
@@ -758,7 +758,7 @@ export function registerAutomationSetup(server: McpServer): void {
           structuredContent: response,
         };
       } catch (err) {
-        return handleSpawnError(err, requestId, 'provar.automation.setup');
+        return handleSpawnError(err, requestId, 'provar_automation_setup');
       }
     }
   );

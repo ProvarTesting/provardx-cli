@@ -96,13 +96,13 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.connection.list ────────────────────────────────────────────────────
+// ── provar_connection_list ────────────────────────────────────────────────────
 
-describe('provar.connection.list', () => {
+describe('provar_connection_list', () => {
   describe('happy path', () => {
     it('returns connections array with name, type, and url', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
 
       assert.equal(isError(result), false);
       const body = parseText(result);
@@ -113,7 +113,7 @@ describe('provar.connection.list', () => {
 
     it('maps sf class to Salesforce type', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const connections = parseText(result)['connections'] as Array<Record<string, unknown>>;
       const sfConns = connections.filter((c) => c['type'] === 'Salesforce');
       assert.equal(sfConns.length, 2, 'Expected 2 Salesforce connections');
@@ -122,7 +122,7 @@ describe('provar.connection.list', () => {
 
     it('maps ui class to Web type', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const connections = parseText(result)['connections'] as Array<Record<string, unknown>>;
       const webConns = connections.filter((c) => c['type'] === 'Web');
       assert.equal(webConns.length, 1);
@@ -131,7 +131,7 @@ describe('provar.connection.list', () => {
 
     it('marks sso class connections as sso_configured=true', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const connections = parseText(result)['connections'] as Array<Record<string, unknown>>;
       const ssoConn = connections.find((c) => c['name'] === 'OktaSso');
       assert.ok(ssoConn, 'Expected OktaSso connection');
@@ -140,7 +140,7 @@ describe('provar.connection.list', () => {
 
     it('marks non-sso connections as sso_configured=false', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const connections = parseText(result)['connections'] as Array<Record<string, unknown>>;
       const sfConn = connections.find((c) => c['name'] === 'MyOrg');
       assert.ok(sfConn);
@@ -149,7 +149,7 @@ describe('provar.connection.list', () => {
 
     it('returns environments with name, connection, and url', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
       assert.ok(Array.isArray(environments));
       assert.equal(environments.length, 2);
@@ -161,7 +161,7 @@ describe('provar.connection.list', () => {
 
     it('returns environment without url when not present', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
       const uat = environments.find((e) => e['name'] === 'UAT');
       assert.ok(uat);
@@ -170,7 +170,7 @@ describe('provar.connection.list', () => {
 
     it('returns summary with correct counts', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const summary = parseText(result)['summary'] as Record<string, number>;
       assert.equal(summary['connection_count'], 4);
       assert.equal(summary['environment_count'], 2);
@@ -178,7 +178,7 @@ describe('provar.connection.list', () => {
 
     it('returns empty arrays for project with no connections or environments', () => {
       writeTestProject(tmpDir, EMPTY_TEST_PROJECT);
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       assert.equal(isError(result), false);
       const body = parseText(result);
       assert.deepEqual(body['connections'], []);
@@ -188,14 +188,14 @@ describe('provar.connection.list', () => {
 
   describe('error cases', () => {
     it('returns CONNECTION_FILE_NOT_FOUND when .testproject is missing', () => {
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       assert.equal(isError(result), true);
       const body = parseText(result);
       assert.equal(body['error_code'], 'CONNECTION_FILE_NOT_FOUND');
     });
 
     it('CONNECTION_FILE_NOT_FOUND includes a suggestion', () => {
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       const body = parseText(result);
       const details = body['details'] as Record<string, unknown>;
       assert.ok(details?.['suggestion'], 'Expected suggestion in details');
@@ -204,7 +204,7 @@ describe('provar.connection.list', () => {
     it('returns PATH_NOT_ALLOWED when project_path is outside allowed paths', () => {
       const strictServer = new MockMcpServer();
       registerConnectionList(strictServer as never, { allowedPaths: [tmpDir] });
-      const result = strictServer.call('provar.connection.list', {
+      const result = strictServer.call('provar_connection_list', {
         project_path: path.join(os.tmpdir(), 'some-other-project'),
       });
       assert.equal(isError(result), true);
@@ -214,7 +214,7 @@ describe('provar.connection.list', () => {
 
     it('returns CONNECTION_XML_PARSE_ERROR for malformed .testproject XML', () => {
       writeTestProject(tmpDir, '<unclosed');
-      const result = server.call('provar.connection.list', { project_path: tmpDir });
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
       assert.equal(isError(result), true);
       assert.equal(parseText(result)['error_code'], 'CONNECTION_XML_PARSE_ERROR');
     });

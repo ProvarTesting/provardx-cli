@@ -61,7 +61,7 @@ const CORPUS_RESPONSE = {
   query_truncated: false,
 };
 
-// ── Tests: provar.qualityhub.examples.retrieve ────────────────────────────────
+// ── Tests: provar_qualityhub_examples_retrieve ────────────────────────────────
 
 describe('qualityHubApiTools', () => {
   let server: MockMcpServer;
@@ -81,11 +81,11 @@ describe('qualityHubApiTools', () => {
     sinon.restore();
   });
 
-  describe('provar.qualityhub.examples.retrieve', () => {
+  describe('provar_qualityhub_examples_retrieve', () => {
     it('returns examples on happy path', async () => {
       retrieveStub.resolves(CORPUS_RESPONSE);
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'Create an Opportunity', n: 1 });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity', n: 1 });
 
       assert.equal(isError(result), false);
       const body = parseBody(result);
@@ -99,7 +99,7 @@ describe('qualityHubApiTools', () => {
     it('passes n, app_filter, prefer_high_quality to the service', async () => {
       retrieveStub.resolves({ ...CORPUS_RESPONSE, count: 0, examples: [] });
 
-      await server.call('provar.qualityhub.examples.retrieve', {
+      await server.call('provar_qualityhub_examples_retrieve', {
         query: 'test query',
         n: 3,
         app_filter: 'SalesCloud',
@@ -120,7 +120,7 @@ describe('qualityHubApiTools', () => {
     it('returns empty examples with no isError when API key is not configured', async () => {
       resolveKeyStub.returns(null);
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
 
       // CRITICAL: must NOT be isError:true — the LLM workflow must continue
       assert.equal(isError(result), false, 'Must not set isError:true when key missing');
@@ -135,7 +135,7 @@ describe('qualityHubApiTools', () => {
     it('returns empty examples with no isError on 401 auth error', async () => {
       retrieveStub.rejects(new QualityHubAuthError('Key invalid'));
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
 
       // CRITICAL: must NOT be isError:true — graceful degrade
       assert.equal(isError(result), false, 'Must not set isError:true on auth failure');
@@ -147,7 +147,7 @@ describe('qualityHubApiTools', () => {
     it('returns empty examples with no isError on rate limit', async () => {
       retrieveStub.rejects(new QualityHubRateLimitError('Rate limited'));
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
 
       assert.equal(isError(result), false, 'Must not set isError:true on rate limit');
       const body = parseBody(result);
@@ -158,7 +158,7 @@ describe('qualityHubApiTools', () => {
     it('returns empty examples with no isError on network/server error', async () => {
       retrieveStub.rejects(new Error('ECONNRESET'));
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
 
       assert.equal(isError(result), false, 'Must not set isError:true on network error');
       const body = parseBody(result);
@@ -166,7 +166,7 @@ describe('qualityHubApiTools', () => {
     });
 
     it('returns isError:true for empty query', async () => {
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: '' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: '' });
 
       assert.equal(isError(result), true);
       const body = parseBody(result);
@@ -176,7 +176,7 @@ describe('qualityHubApiTools', () => {
     it('surfaces query_truncated:true in response', async () => {
       retrieveStub.resolves({ ...CORPUS_RESPONSE, query_truncated: true });
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'A'.repeat(2100) });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'A'.repeat(2100) });
 
       const body = parseBody(result);
       assert.equal(body.query_truncated, true);
@@ -185,7 +185,7 @@ describe('qualityHubApiTools', () => {
     it('returns empty examples array (not an error) when Bedrock returns 0 results', async () => {
       retrieveStub.resolves({ retrieval_id: 'ret-empty', examples: [], count: 0, query_truncated: false });
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'very unusual query' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'very unusual query' });
 
       assert.equal(isError(result), false);
       const body = parseBody(result);
@@ -197,7 +197,7 @@ describe('qualityHubApiTools', () => {
     it('includes retrieval_id in all successful responses', async () => {
       retrieveStub.resolves(CORPUS_RESPONSE);
 
-      const result = await server.call('provar.qualityhub.examples.retrieve', { query: 'some query' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'some query' });
       const body = parseBody(result);
       assert.ok(body.retrieval_id, 'retrieval_id must be present');
     });

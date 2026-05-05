@@ -107,8 +107,8 @@ describe('loopPrompts — provar.loop.generate', () => {
   it('includes corpus retrieval workflow step', () => {
     const result = server.call('provar.loop.generate', { story: 'any story' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
-    assert.ok(text.includes('provar.testcase.validate'), 'should reference validator tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar_testcase_validate'), 'should reference validator tool');
   });
 
   it('includes objectName in message when provided', () => {
@@ -161,8 +161,8 @@ describe('loopPrompts — provar.loop.fix', () => {
       rcaOutput: 'any failure',
     });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
-    assert.ok(text.includes('provar.testcase.validate'), 'should reference validator tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar_testcase_validate'), 'should reference validator tool');
   });
 
   it('starts workflow by reading the file', () => {
@@ -190,13 +190,13 @@ describe('loopPrompts — provar.loop.review', () => {
     });
     const text = getMessageText(result);
     assert.ok(text.includes('Coverage') || text.includes('UiAssert'), 'message should include quality checklist');
-    assert.ok(text.includes('provar.testcase.validate'), 'should reference validator tool');
+    assert.ok(text.includes('provar_testcase_validate'), 'should reference validator tool');
   });
 
   it('includes corpus retrieval step', () => {
     const result = server.call('provar.loop.review', { testcasePath: '/any/path.testcase' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should reference corpus tool');
   });
 
   it('includes projectPath in message when provided', () => {
@@ -248,7 +248,7 @@ describe('loopPrompts — provar.loop.coverage', () => {
     });
     const text = getMessageText(result);
     assert.ok(
-      text.includes('provar.qualityhub.testcase.retrieve') || text.includes('my-org-alias'),
+      text.includes('provar_qualityhub_testcase_retrieve') || text.includes('my-org-alias'),
       'message should include Quality Hub retrieval when targetOrg provided'
     );
   });
@@ -260,7 +260,7 @@ describe('loopPrompts — provar.loop.coverage', () => {
     });
     const text = getMessageText(result);
     // When no targetOrg, the step 2 should be corpus retrieval, not QH testcase retrieve
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should still include corpus retrieval');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should still include corpus retrieval');
   });
 });
 
@@ -281,8 +281,8 @@ describe('loopPrompts — provar.loop.db', () => {
   it('includes corpus retrieval and validate in workflow', () => {
     const result = server.call('provar.loop.db', { story: 'any db test' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar.qualityhub.examples.retrieve'), 'should reference corpus tool');
-    assert.ok(text.includes('provar.testcase.validate'), 'should reference validator tool');
+    assert.ok(text.includes('provar_qualityhub_examples_retrieve'), 'should reference corpus tool');
+    assert.ok(text.includes('provar_testcase_validate'), 'should reference validator tool');
   });
 
   it('references DbConnect and SqlQuery step types', () => {

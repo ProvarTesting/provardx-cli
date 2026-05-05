@@ -40,8 +40,8 @@ export class ProjectValidationError extends Error {
 export interface ProjectValidationOptions {
   project_path: string;
   quality_threshold?: number; // default 80
-  save_results?: boolean;      // default true (any value !== false means save)
-  results_dir?: string;        // default '{project_path}/provardx/validation'
+  save_results?: boolean; // default true (any value !== false means save)
+  results_dir?: string; // default '{project_path}/provardx/validation'
 }
 
 export interface ValidatedTestCase {
@@ -101,6 +101,8 @@ export interface ProjectValidationResult {
     uncovered_test_cases: string[];
   };
   saved_to: string | null;
+  /** Directories within plans/ that are missing a .planitem file and will be silently ignored by the Provar runner. */
+  plan_integrity_warnings?: string[];
   /** Set when save_results was requested but the write failed (disk full, permissions, etc.). */
   save_error?: string;
 }
@@ -153,7 +155,9 @@ export function resolveProjectRoot(givenPath: string): { root: string; candidate
       const sub = path.join(givenPath, entry.name);
       if (fs.existsSync(path.join(sub, '.testproject'))) candidates.push(sub);
     }
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
 
   if (candidates.length === 1) return { root: candidates[0], candidates: [] };
   return { root: givenPath, candidates }; // caller handles 0 or multiple
@@ -198,7 +202,8 @@ export function readProjectContext(projectPath: string): {
   const secretsFullPath = path.resolve(path.join(projectPath, secretsRelPath));
   const projectPathResolved = path.resolve(projectPath);
   // Bounds check: only read secrets file if it's within the project directory
-  const secretsInBounds = secretsFullPath === projectPathResolved || secretsFullPath.startsWith(projectPathResolved + path.sep);
+  const secretsInBounds =
+    secretsFullPath === projectPathResolved || secretsFullPath.startsWith(projectPathResolved + path.sep);
   if (secretsInBounds && fs.existsSync(secretsFullPath)) {
     try {
       const secretsContent = fs.readFileSync(secretsFullPath, 'utf-8');
@@ -212,7 +217,9 @@ export function readProjectContext(projectPath: string): {
         const value = trimmed.slice(eqIdx + 1).trim();
         if (value && !value.startsWith('ENC1(')) unencryptedSecretCount++;
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
 
   return {
@@ -256,16 +263,17 @@ function resolveTestInstanceFull(instancePath: string, projectPath: string): Tes
     // Bounds check: only read test case files within the project directory
     const tcInBounds = tcFullPath === projResolved || tcFullPath.startsWith(projResolved + path.sep);
     // Derive name from the bounds-checked resolved path to prevent injection via crafted testCasePath
-    const tcName = tcInBounds
-      ? path.basename(tcFullPath, '.testcase')
-      : path.basename(testCasePath, '.testcase');
+    const tcName = tcInBounds ? path.basename(tcFullPath, '.testcase') : path.basename(testCasePath, '.testcase');
     if (tcInBounds && fs.existsSync(tcFullPath)) {
       try {
         xml_content = fs.readFileSync(tcFullPath, 'utf-8');
-      } catch { /* xml_content stays undefined */ }
+      } catch {
+        /* xml_content stays undefined */
+      }
     }
 
-    return { testCase: { name: tcName, xml_content }, testCasePath, testCaseId };
+    // Only expose testCasePath when in-bounds — out-of-bounds paths must not affect coverage totals
+    return { testCase: { name: tcName, xml_content }, testCasePath: tcInBounds ? testCasePath : null, testCaseId };
   } catch {
     return { testCase: null, testCasePath: null, testCaseId: null };
   }
@@ -283,7 +291,7 @@ function accumulateCoveredPath(
   testCasePath: string | null,
   testCaseId: string | null,
   coveredPaths: Set<string>,
-  idMap: Map<string, string>,
+  idMap: Map<string, string>
 ): void {
   if (testCasePath) coveredPaths.add(testCasePath);
   if (testCaseId) {
@@ -299,6 +307,7 @@ export function readSuiteDirectory(
   depth = 0,
   coveredPaths?: Set<string>,
   idMap?: Map<string, string>,
+  planIntegrityWarnings?: string[]
 ): TestSuiteInput {
   const testCases: TestCaseInput[] = [];
   const testSuites: TestSuiteInput[] = [];
@@ -311,14 +320,31 @@ export function readSuiteDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        testSuites.push(readSuiteDirectory(fullPath, entry.name, projectPath, depth + 1, coveredPaths, idMap));
+        const hasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (!hasPlanItem && planIntegrityWarnings) {
+          planIntegrityWarnings.push(path.relative(projectPath, fullPath).replace(/\\/g, '/'));
+        }
+        // Always recurse for display; only forward coverage state when .planitem is present
+        testSuites.push(
+          readSuiteDirectory(
+            fullPath,
+            entry.name,
+            projectPath,
+            depth + 1,
+            hasPlanItem ? coveredPaths : undefined,
+            hasPlanItem ? idMap : undefined,
+            planIntegrityWarnings
+          )
+        );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
         if (testCase) testCases.push(testCase);
         if (coveredPaths && idMap) accumulateCoveredPath(testCasePath, testCaseId, coveredPaths, idMap);
       }
     }
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
 
   return { name, test_cases: testCases, test_suites: testSuites };
 }
@@ -329,6 +355,7 @@ export function readPlanDirectory(
   projectPath: string,
   coveredPaths?: Set<string>,
   idMap?: Map<string, string>,
+  planIntegrityWarnings?: string[]
 ): TestPlanInput {
   const testCases: TestCaseInput[] = [];
   const testSuites: TestSuiteInput[] = [];
@@ -339,22 +366,43 @@ export function readPlanDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(planPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        testSuites.push(readSuiteDirectory(fullPath, entry.name, projectPath, 0, coveredPaths, idMap));
+        const hasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (!hasPlanItem && planIntegrityWarnings) {
+          planIntegrityWarnings.push(path.relative(projectPath, fullPath).replace(/\\/g, '/'));
+        }
+        testSuites.push(
+          readSuiteDirectory(
+            fullPath,
+            entry.name,
+            projectPath,
+            0,
+            hasPlanItem ? coveredPaths : undefined,
+            hasPlanItem ? idMap : undefined,
+            planIntegrityWarnings
+          )
+        );
       } else if (entry.name.endsWith('.testinstance')) {
         const { testCase, testCasePath, testCaseId } = resolveTestInstanceFull(fullPath, projectPath);
         if (testCase) testCases.push(testCase);
         if (coveredPaths && idMap) accumulateCoveredPath(testCasePath, testCaseId, coveredPaths, idMap);
       }
     }
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
 
   return { name, test_cases: testCases, test_suites: testSuites };
 }
 
-export function readPlansDir(projectPath: string): { plans: TestPlanInput[]; coveredPaths: Set<string> } {
+export function readPlansDir(projectPath: string): {
+  plans: TestPlanInput[];
+  coveredPaths: Set<string>;
+  planIntegrityWarnings: string[];
+} {
   const plansDir = path.join(projectPath, 'plans');
   const coveredPaths = new Set<string>();
-  if (!fs.existsSync(plansDir)) return { plans: [], coveredPaths };
+  const planIntegrityWarnings: string[] = [];
+  if (!fs.existsSync(plansDir)) return { plans: [], coveredPaths, planIntegrityWarnings };
 
   // Build UUID→path map once so the plan walk can resolve testCaseId fallbacks
   // without a separate pass over the tests/ directory later.
@@ -366,11 +414,13 @@ export function readPlansDir(projectPath: string): { plans: TestPlanInput[]; cov
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
       const planPath = path.join(plansDir, entry.name);
-      plans.push(readPlanDirectory(planPath, entry.name, projectPath, coveredPaths, idMap));
+      plans.push(readPlanDirectory(planPath, entry.name, projectPath, coveredPaths, idMap, planIntegrityWarnings));
     }
-  } catch { /* skip */ }
+  } catch {
+    /* skip */
+  }
 
-  return { plans, coveredPaths };
+  return { plans, coveredPaths, planIntegrityWarnings };
 }
 
 /**
@@ -388,19 +438,24 @@ function buildTestCaseIdMap(projectPath: string): Map<string, string> {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(fullPath); }
-        else if (entry.name.endsWith('.testcase')) {
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.name.endsWith('.testcase')) {
           try {
             const content = fs.readFileSync(fullPath, 'utf-8');
             const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
             for (const attr of ['registryId', 'id', 'guid'] as const) {
               const m = content.match(new RegExp(`${attr}=["']([^"']+)["']`));
-              if (m?.[1] && !idMap.has(m[1])) idMap.set(m[1], rel);
+              if (m?.[1] && m[1] !== '1' && !idMap.has(m[1])) idMap.set(m[1], rel);
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   walk(testsDir);
   return idMap;
@@ -420,10 +475,13 @@ export function collectAllTestCaseNames(projectPath: string): string[] {
     try {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-        if (entry.isDirectory()) { walk(path.join(dir, entry.name)); }
-        else if (entry.name.endsWith('.testcase')) names.push(path.basename(entry.name, '.testcase'));
+        if (entry.isDirectory()) {
+          walk(path.join(dir, entry.name));
+        } else if (entry.name.endsWith('.testcase')) names.push(path.basename(entry.name, '.testcase'));
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   walk(testsDir);
   return names;
@@ -446,8 +504,9 @@ export function collectCoveredPathsFromDisk(projectPath: string): Set<string> {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(fullPath); }
-        else if (entry.name.endsWith('.testinstance')) {
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.name.endsWith('.testinstance')) {
           try {
             const content = fs.readFileSync(fullPath, 'utf-8');
             // Primary: path-based match
@@ -459,10 +518,14 @@ export function collectCoveredPathsFromDisk(projectPath: string): Set<string> {
               const resolvedPath = idMap.get(idM[1]);
               if (resolvedPath) covered.add(resolvedPath);
             }
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   walk(plansDir);
   return covered;
@@ -478,13 +541,16 @@ export function findUncoveredTestCases(projectPath: string, coveredPaths: Set<st
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) { walk(fullPath); }
-        else if (entry.name.endsWith('.testcase')) {
+        if (entry.isDirectory()) {
+          walk(fullPath);
+        } else if (entry.name.endsWith('.testcase')) {
           const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
           if (!coveredPaths.has(rel)) uncovered.push(rel);
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
   }
   walk(testsDir);
   return uncovered.sort();
@@ -549,7 +615,7 @@ function tcIssuesToQhViolations(tc: TestCaseResult): QhViolation[] {
     });
   }
 
-  for (const bp of (tc.best_practices_violations ?? [])) {
+  for (const bp of tc.best_practices_violations ?? []) {
     violations.push({
       number: num++,
       ruleId: bp.rule_id,
@@ -665,7 +731,13 @@ export function buildQhReport(result: ProjectResult, projectName: string): Recor
   return {
     reportInfo: {
       name: `VR-LOCAL-${now.toISOString().replace(/[:.]/g, '-').slice(0, 19)}`,
-      generatedAt: now.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      generatedAt: now.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       exportedAt: now.toISOString(),
       source: 'provar-mcp-local',
     },
@@ -692,9 +764,7 @@ export function saveResults(
   report: Record<string, unknown>,
   projectName: string
 ): string {
-  const targetDir = resultsDir
-    ? path.resolve(resultsDir)
-    : path.join(projectPath, 'provardx', 'validation');
+  const targetDir = resultsDir ? path.resolve(resultsDir) : path.join(projectPath, 'provardx', 'validation');
 
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -719,9 +789,7 @@ export function saveResults(
  * ambiguous project, not a Provar project directory). Lets unexpected I/O
  * errors propagate as-is.
  */
-export function validateProjectFromPath(
-  options: ProjectValidationOptions
-): ProjectValidationResult {
+export function validateProjectFromPath(options: ProjectValidationOptions): ProjectValidationResult {
   const { project_path, quality_threshold, save_results, results_dir } = options;
   const resolved = path.resolve(project_path);
 
@@ -734,7 +802,9 @@ export function validateProjectFromPath(
   if (candidates.length > 1) {
     throw new ProjectValidationError(
       'AMBIGUOUS_PROJECT',
-      `Multiple Provar projects found under "${resolved}". Specify the exact project directory: ${candidates.map((c) => path.basename(c)).join(', ')}`
+      `Multiple Provar projects found under "${resolved}". Specify the exact project directory: ${candidates
+        .map((c) => path.basename(c))
+        .join(', ')}`
     );
   }
 
@@ -752,7 +822,7 @@ export function validateProjectFromPath(
 
   // 2. Read plan hierarchy from plans/ directory; covered paths are computed
   //    as a byproduct of the walk — no second traversal needed.
-  const { plans: testPlans, coveredPaths } = readPlansDir(projectRoot);
+  const { plans: testPlans, coveredPaths, planIntegrityWarnings } = readPlansDir(projectRoot);
 
   // 3. Validate
   const input: ProjectInput = {
@@ -837,6 +907,7 @@ export function validateProjectFromPath(
       uncovered_test_cases: uncoveredTestCases,
     },
     saved_to: savedTo,
+    ...(planIntegrityWarnings.length > 0 ? { plan_integrity_warnings: planIntegrityWarnings } : {}),
     save_error: saveError,
   };
 }

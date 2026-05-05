@@ -42,14 +42,14 @@ const CORPUS_UNREACHABLE_WARNING =
   'Check your network connection or try again later.\n' +
   CORPUS_FALLBACK_HINT;
 
-// ── Tool: provar.qualityhub.examples.retrieve ─────────────────────────────────
+// ── Tool: provar_qualityhub_examples_retrieve ─────────────────────────────────
 
 export function registerCorpusExamplesRetrieve(server: McpServer): void {
   server.tool(
-    'provar.qualityhub.examples.retrieve',
+    'provar_qualityhub_examples_retrieve',
     [
       'Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests in Bedrock KB).',
-      'Use this BEFORE writing any Provar .testcase XML — whether via provar.testcase.generate, Write, or Edit.',
+      'Use this BEFORE writing any Provar .testcase XML — whether via provar_testcase_generate, Write, or Edit.',
       'Pass a user story, requirement, source test file content, or step type keywords as the query.',
       'Returns up to N example Provar XML test cases ordered by similarity score.',
       'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
@@ -91,7 +91,7 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
     },
     async ({ query, n, app_filter, prefer_high_quality }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.qualityhub.examples.retrieve', { requestId, query_length: query.length, n, app_filter });
+      log('info', 'provar_qualityhub_examples_retrieve', { requestId, query_length: query.length, n, app_filter });
 
       if (!query || query.trim().length === 0) {
         return {
@@ -108,7 +108,7 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
       const apiKey = credentialsService.resolveApiKey();
 
       if (!apiKey) {
-        log('warn', 'provar.qualityhub.examples.retrieve: no api key', { requestId });
+        log('warn', 'provar_qualityhub_examples_retrieve: no api key', { requestId });
         const result = {
           requestId,
           examples: [],
@@ -129,10 +129,10 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
         });
 
         if (response.query_truncated) {
-          log('warn', 'provar.qualityhub.examples.retrieve: query truncated', { requestId });
+          log('warn', 'provar_qualityhub_examples_retrieve: query truncated', { requestId });
         }
 
-        log('info', 'provar.qualityhub.examples.retrieve: success', {
+        log('info', 'provar_qualityhub_examples_retrieve: success', {
           requestId,
           retrieval_id: response.retrieval_id,
           count: response.count,
@@ -145,14 +145,14 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
         let warning: string;
         if (err instanceof QualityHubAuthError) {
           warning = CORPUS_AUTH_WARNING;
-          log('warn', 'provar.qualityhub.examples.retrieve: auth error', { requestId });
+          log('warn', 'provar_qualityhub_examples_retrieve: auth error', { requestId });
         } else if (err instanceof QualityHubRateLimitError) {
           warning = CORPUS_RATE_LIMIT_WARNING;
-          log('warn', 'provar.qualityhub.examples.retrieve: rate limited', { requestId });
+          log('warn', 'provar_qualityhub_examples_retrieve: rate limited', { requestId });
         } else {
           warning = CORPUS_UNREACHABLE_WARNING;
           const errMsg = (err as Error).message.slice(0, 200);
-          log('warn', 'provar.qualityhub.examples.retrieve: api error', { requestId, error: errMsg });
+          log('warn', 'provar_qualityhub_examples_retrieve: api error', { requestId, error: errMsg });
         }
 
         // Degrade gracefully — never isError:true. The LLM continues without grounding.
