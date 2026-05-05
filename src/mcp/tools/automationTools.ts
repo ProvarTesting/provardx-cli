@@ -400,6 +400,8 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
         'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
         'Use provar_automation_setup first if Provar is not yet installed.',
         'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
+        'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
+        'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
         'Typical local AI loop: config.load → compile → testrun → inspect results.',
       ].join(' '),
       inputSchema: {

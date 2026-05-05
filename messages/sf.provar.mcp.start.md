@@ -12,6 +12,7 @@ Available tools:
 
 Project & inspection:
 
+- provardx_ping — ping the MCP server (health check)
 - provar_project_inspect — inspect project folder inventory
 - provar_project_validate — validate full project from disk: coverage, quality scores
 - provar_connection_list — list connections and named environments from the project
@@ -31,6 +32,7 @@ Test Suite / Plan:
 
 - provar_testsuite_validate — validate test suite hierarchy
 - provar_testplan_validate — validate test plan metadata completeness
+- provar_testplan_create — create a new test plan
 - provar_testplan_create-suite — create a test suite under a plan
 - provar_testplan_add-instance — add a test instance to a plan
 - provar_testplan_remove-instance — remove a test instance from a plan
@@ -71,6 +73,14 @@ Test result analysis:
 - provar_testrun_rca — root cause analysis on a test result
 - provar_testrun_report_locate — locate a test result report
 
+NitroX (Provar NitroX component tools):
+
+- provar_nitrox_discover — discover NitroX component metadata
+- provar_nitrox_generate — generate a NitroX component
+- provar_nitrox_patch — patch a NitroX component definition
+- provar_nitrox_read — read a NitroX component definition
+- provar_nitrox_validate — validate a NitroX component
+
 For full tool documentation see docs/mcp.md in this repository.
 
 # flags.allowed-paths.summary
@@ -80,6 +90,14 @@ Allowed base directory paths for file operations. Defaults to current directory.
 # flags.auto-defects.summary
 
 When enabled, testrun.report suggestions will prompt defect creation on failures.
+
+# flags.auto-update.summary
+
+When enabled, automatically installs the latest version at startup and exits. The MCP client must reconnect to load the new version.
+
+# flags.no-update-check.summary
+
+Skip the update check at startup. Also controlled by the PROVAR_NO_UPDATE_CHECK environment variable.
 
 # examples
 

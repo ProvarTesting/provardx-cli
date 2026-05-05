@@ -586,15 +586,16 @@ After completing the workflow, consider:
 
 You have now covered the full Provar MCP feature set:
 
-| Area               | Key tools                                                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Project awareness  | `provar_project_inspect`, `provar_project_validate`                                                               |
-| Quality validation | `provar_testcase_validate`, `provar_pageobject_validate`, `provar_testsuite_validate`, `provar_testplan_validate` |
-| Test authoring     | `provar_pageobject_generate`, `provar_testcase_generate`                                                          |
-| Run configuration  | `provar_properties_generate`, `provar_properties_set`, `provar_automation_config_load`                            |
-| Test execution     | `provar_automation_testrun`, `provar_qualityhub_testrun`, `provar_testrun_report_locate`                          |
-| Failure analysis   | `provar_testrun_rca`, `provar_qualityhub_defect_create`                                                           |
-| Plan management    | `provar_testplan_add-instance`, `provar_testplan_create-suite`, `provar_testplan_remove-instance`                 |
+| Area               | Key tools                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Project awareness  | `provar_project_inspect`, `provar_project_validate`, `provar_connection_list`                                               |
+| Quality validation | `provar_testcase_validate`, `provar_pageobject_validate`, `provar_testsuite_validate`, `provar_testplan_validate`           |
+| Test authoring     | `provar_pageobject_generate`, `provar_testcase_generate`, `provar_testcase_step_edit`                                       |
+| Run configuration  | `provar_properties_generate`, `provar_properties_set`, `provar_automation_config_load`                                      |
+| Test execution     | `provar_automation_testrun`, `provar_qualityhub_testrun`, `provar_testrun_report_locate`                                    |
+| Failure analysis   | `provar_testrun_rca`, `provar_qualityhub_defect_create`, `provar_qualityhub_examples_retrieve`                              |
+| Plan management    | `provar_testplan_create`, `provar_testplan_add-instance`, `provar_testplan_create-suite`, `provar_testplan_remove-instance` |
+| NitroX             | `provar_nitrox_discover`, `provar_nitrox_generate`, `provar_nitrox_patch`, `provar_nitrox_read`, `provar_nitrox_validate`   |
 
 ## Frequently asked questions
 

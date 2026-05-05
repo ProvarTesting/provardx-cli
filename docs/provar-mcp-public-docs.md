@@ -363,12 +363,15 @@ Turn a failed test execution directly into a Quality Hub defect, without leaving
 | `provardx_ping`                       | Sanity check — verifies the server is running                    |
 | `provar_project_inspect`              | Inventory project artefacts and surface coverage gaps            |
 | `provar_project_validate`             | Full project quality validation from disk                        |
+| `provar_connection_list`              | List connections and named environments from the project         |
 | `provar_pageobject_generate`          | Generate a Java Page Object skeleton                             |
 | `provar_pageobject_validate`          | Validate Page Object quality (30+ rules)                         |
 | `provar_testcase_generate`            | Generate an XML test case skeleton                               |
 | `provar_testcase_validate`            | Validate test case XML (schema + best-practices scores)          |
+| `provar_testcase_step_edit`           | Atomically add or remove a single step in a test case            |
 | `provar_testsuite_validate`           | Validate a test suite hierarchy                                  |
 | `provar_testplan_validate`            | Validate a test plan with metadata completeness checks           |
+| `provar_testplan_create`              | Create a new test plan                                           |
 | `provar_testplan_add-instance`        | Wire a test case into a plan suite                               |
 | `provar_testplan_create-suite`        | Create a new test suite inside a plan                            |
 | `provar_testplan_remove-instance`     | Remove a test instance from a plan suite                         |
@@ -390,8 +393,14 @@ Turn a failed test execution directly into a Quality Hub defect, without leaving
 | `provar_qualityhub_testrun_abort`     | Abort an in-progress test run                                    |
 | `provar_qualityhub_testcase_retrieve` | Retrieve test cases by user story or component                   |
 | `provar_qualityhub_defect_create`     | Create Quality Hub defects from failed executions                |
+| `provar_qualityhub_examples_retrieve` | Retrieve corpus examples to ground test generation               |
 | `provar_testrun_report_locate`        | Resolve JUnit/HTML report paths after a run                      |
 | `provar_testrun_rca`                  | Classify failures and detect regressions                         |
+| `provar_nitrox_discover`              | Discover NitroX component metadata                               |
+| `provar_nitrox_generate`              | Generate a NitroX component                                      |
+| `provar_nitrox_patch`                 | Patch a NitroX component definition                              |
+| `provar_nitrox_read`                  | Read a NitroX component definition                               |
+| `provar_nitrox_validate`              | Validate a NitroX component                                      |
 
 ---
 

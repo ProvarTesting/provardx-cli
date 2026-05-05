@@ -143,9 +143,11 @@ The server communicates over **stdio** (standard input / output). It must be sta
 
 ### Flags
 
-| Flag              | Alias | Default                   | Description                                                                                                       |
-| ----------------- | ----- | ------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `--allowed-paths` | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths. |
+| Flag                | Alias | Default                   | Description                                                                                                                                                  |
+| ------------------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--allowed-paths`   | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                            |
+| `--auto-update`     |       | false                     | Automatically installs the latest version at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
+| `--no-update-check` |       | false                     | Skip the startup update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable.                                                         |
 
 ```sh
 # Allow access to a specific project directory
@@ -487,11 +489,14 @@ A lightweight sanity-check tool. Echoes back the message you send. Useful for ve
 
 **Output**
 
-| Field    | Type   | Description                                |
-| -------- | ------ | ------------------------------------------ |
-| `pong`   | string | The echoed message                         |
-| `ts`     | string | ISO-8601 timestamp                         |
-| `server` | string | Server name and version (`provar-mcp@...`) |
+| Field             | Type           | Description                                               |
+| ----------------- | -------------- | --------------------------------------------------------- |
+| `pong`            | string         | The echoed message                                        |
+| `ts`              | string         | ISO-8601 timestamp                                        |
+| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.15`) |
+| `updateAvailable` | boolean        | Whether a newer version is available in the registry      |
+| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`       |
+| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`            |
 
 ---
 
@@ -638,6 +643,21 @@ Validates a Java Page Object source file against 30+ quality rules (structural c
 
 Generates an XML test case skeleton with UUID v4 guids and sequential `testItemId` values.
 
+**Generated `<testCase>` element structure (Provar requirements):**
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<testCase guid="<uuid>" id="1" registryId="<uuid>">
+  <summary/>
+  <steps>...</steps>
+</testCase>
+```
+
+- `id` is always the integer literal `"1"` — Provar ignores any other value
+- No `name` attribute on `<testCase>` — Provar derives the name from the file name
+- `<summary/>` must appear before `<steps>`
+- `standalone="no"` is required in the XML declaration
+
 **URI-aware XML structure:** use `target_uri` to pick the correct XML nesting:
 
 - Omit or use a `sf:` URI → flat Salesforce step structure (existing behaviour)
@@ -660,7 +680,6 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 | Parameter             | Type                                     | Required | Description                                                                                                               |
 | --------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                             |
-| `test_case_id`        | string                                   | no       | Custom test case ID (auto-generated if omitted)                                                                           |
 | `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                          |
 | `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
 | `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                       |
@@ -668,6 +687,15 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 | `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                        |
 | `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
 | `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                            |
+
+**`ApexSoqlQuery` argument IDs** (common source of runtime errors — wrong names are silently accepted but fail at runtime):
+
+| Argument ID          | Purpose                                     |
+| -------------------- | ------------------------------------------- |
+| `soqlQuery`          | The SOQL SELECT statement                   |
+| `resultListName`     | Variable name that receives the result list |
+| `apexConnectionName` | Named Salesforce connection                 |
+| `resultScope`        | Optional scope (Test, Local, Global)        |
 
 **Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
 
@@ -799,16 +827,19 @@ Validates a Provar project directly from its directory on disk. Reads the plan/s
 
 **Output** (slim mode, `include_plan_details: false`)
 
-| Field                  | Description                                           |
-| ---------------------- | ----------------------------------------------------- |
-| `quality_score`        | Project quality score (0–100)                         |
-| `coverage_percent`     | Percentage of test cases covered by at least one plan |
-| `violation_summary`    | Map of `rule_id → count` for all violations found     |
-| `plan_scores`          | Array of `{ name, quality_score }` per plan           |
-| `uncovered_test_cases` | Uncovered test case paths (capped at `max_uncovered`) |
-| `save_error`           | Present only if the results file could not be written |
+| Field                     | Description                                                                                                                                              |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `quality_score`           | Project quality score (0–100)                                                                                                                            |
+| `coverage_percent`        | Percentage of test cases covered by at least one plan                                                                                                    |
+| `violation_summary`       | Map of `rule_id → count` for all violations found                                                                                                        |
+| `plan_scores`             | Array of `{ name, quality_score }` per plan                                                                                                              |
+| `uncovered_test_cases`    | Uncovered test case paths (capped at `max_uncovered`)                                                                                                    |
+| `save_error`              | Present only if the results file could not be written                                                                                                    |
+| `plan_integrity_warnings` | Present when any plan or suite directory is missing a `.planitem` file — test instances in those directories are silently invisible to the Provar runner |
 
 When `include_plan_details: true`, the response additionally includes full `test_plans[]` with nested suite and per-test-case data.
+
+**Plan integrity warnings:** `provar.project.validate` now walks every `plans/` subdirectory and checks that a `.planitem` file is present at both the plan level and each suite subfolder level. If any are missing, the response includes a `plan_integrity_warnings` array. Use `provar.testplan.create-suite` to create missing `.planitem` files without losing any existing test instances.
 
 **Violation rule IDs:** PROJ-EMPTY-001, PROJ-DUP-001, PROJ-DUP-002, PROJ-CALLABLE-001, PROJ-CALLABLE-002, PROJ-CONN-001, PROJ-ENV-001, PROJ-ENV-002, PROJ-SECRET-001
 

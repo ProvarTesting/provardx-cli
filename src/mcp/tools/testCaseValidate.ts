@@ -189,6 +189,45 @@ export function validateTestCaseXml(filePath: string, config: ServerConfig): Tes
   return validateTestCase(fs.readFileSync(resolved, 'utf-8'));
 }
 
+/** TC_010/TC_011: validate testCase id and guid attributes. */
+function checkTestCaseIdAndGuid(tcId: string | null, tcGuid: string | undefined, issues: ValidationIssue[]): void {
+  if (!tcId) {
+    issues.push({
+      rule_id: 'TC_010',
+      severity: 'ERROR',
+      message: 'testCase missing required id attribute.',
+      applies_to: 'testCase',
+      suggestion: 'Add id="1" to testCase element (Provar requires the integer literal "1").',
+    });
+  } else if (tcId !== '1') {
+    issues.push({
+      rule_id: 'TC_010',
+      severity: 'ERROR',
+      message: `testCase id="${tcId}" is invalid — Provar requires id="1" (integer literal).`,
+      applies_to: 'testCase',
+      suggestion: 'Set id="1" on the testCase element. The unique identifier is the guid attribute, not id.',
+    });
+  }
+  if (!tcGuid) {
+    issues.push({
+      rule_id: 'TC_011',
+      severity: 'ERROR',
+      message: 'testCase missing required guid attribute.',
+      applies_to: 'testCase',
+      suggestion: 'Add guid attribute (UUID v4) to testCase element.',
+    });
+  } else if (!UUID_V4_RE.test(tcGuid)) {
+    issues.push({
+      rule_id: 'TC_012',
+      severity: 'ERROR',
+      message: `testCase guid "${tcGuid}" is not a valid UUID v4.`,
+      applies_to: 'testCase',
+      suggestion:
+        'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
+    });
+  }
+}
+
 /** Pure function — exported for unit testing */
 export function validateTestCase(xmlContent: string, testName?: string): TestCaseValidationResult {
   const issues: ValidationIssue[] = [];
@@ -246,33 +285,7 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
   const tcName = (tc['@_name'] as string | undefined) ?? null;
   const tcGuid = tc['@_guid'] as string | undefined;
 
-  if (!tcId) {
-    issues.push({
-      rule_id: 'TC_010',
-      severity: 'ERROR',
-      message: 'testCase missing required id attribute.',
-      applies_to: 'testCase',
-      suggestion: 'Add id attribute to testCase element.',
-    });
-  }
-  if (!tcGuid) {
-    issues.push({
-      rule_id: 'TC_011',
-      severity: 'ERROR',
-      message: 'testCase missing required guid attribute.',
-      applies_to: 'testCase',
-      suggestion: 'Add guid attribute (UUID v4) to testCase element.',
-    });
-  } else if (!UUID_V4_RE.test(tcGuid)) {
-    issues.push({
-      rule_id: 'TC_012',
-      severity: 'ERROR',
-      message: `testCase guid "${tcGuid}" is not a valid UUID v4.`,
-      applies_to: 'testCase',
-      suggestion:
-        'Replace with a valid UUID v4 — e.g. crypto.randomUUID(). The 4th segment must begin with 8, 9, a, or b.',
-    });
-  }
+  checkTestCaseIdAndGuid(tcId, tcGuid, issues);
   // TC_013 (registryId) is intentionally not checked here — registryId is a
   // Salesforce Quality Hub record ID assigned when a test case is registered in
   // the QH org. Local project files will never have this attribute, so checking

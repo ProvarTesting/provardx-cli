@@ -96,6 +96,9 @@ function shapeResponse(
     coverage,
     saved_to: result.saved_to,
     ...(result.save_error ? { save_error: result.save_error } : {}),
+    ...(result.plan_integrity_warnings && result.plan_integrity_warnings.length > 0
+      ? { plan_integrity_warnings: result.plan_integrity_warnings }
+      : {}),
     hint: 'Set include_plan_details:true to get per-suite/test-case violations. project_violations and plan violations are grouped by rule_id in this view.',
   };
 }
@@ -118,6 +121,8 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
         'Pass include_plan_details:true to get full per-suite and per-test-case data.',
         'By default saves a QH-compatible JSON report to',
         '{project_path}/provardx/validation/ (created if absent).',
+        'Plan integrity: if any plan or suite directory is missing a .planitem file, the response includes a plan_integrity_warnings array.',
+        'Test instances in those directories are silently ignored by the Provar runner — fix these before running tests.',
         'IMPORTANT: Use this tool for whole-project validation —',
         'DO NOT read individual test case files and pass XML content inline.',
         'Pass a project_path and let this tool handle all file reading.',

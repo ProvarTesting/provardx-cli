@@ -272,8 +272,12 @@ function resolveTestInstanceFull(instancePath: string, projectPath: string): Tes
       }
     }
 
-    // Only expose testCasePath when in-bounds — out-of-bounds paths must not affect coverage totals
-    return { testCase: { name: tcName, xml_content }, testCasePath: tcInBounds ? testCasePath : null, testCaseId };
+    // Only expose testCasePath/testCaseId when in-bounds — out-of-bounds paths must not affect coverage totals
+    return {
+      testCase: { name: tcName, xml_content },
+      testCasePath: tcInBounds ? testCasePath : null,
+      testCaseId: tcInBounds ? testCaseId : null,
+    };
   } catch {
     return { testCase: null, testCasePath: null, testCaseId: null };
   }
@@ -320,19 +324,22 @@ export function readSuiteDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(dirPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        const hasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
-        if (!hasPlanItem && planIntegrityWarnings) {
-          planIntegrityWarnings.push(path.relative(projectPath, fullPath).replace(/\\/g, '/'));
+        const subHasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (planIntegrityWarnings && !subHasPlanItem) {
+          const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
+          planIntegrityWarnings.push(
+            `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
+          );
+          continue;
         }
-        // Always recurse for display; only forward coverage state when .planitem is present
         testSuites.push(
           readSuiteDirectory(
             fullPath,
             entry.name,
             projectPath,
             depth + 1,
-            hasPlanItem ? coveredPaths : undefined,
-            hasPlanItem ? idMap : undefined,
+            subHasPlanItem ? coveredPaths : undefined,
+            subHasPlanItem ? idMap : undefined,
             planIntegrityWarnings
           )
         );
@@ -366,9 +373,13 @@ export function readPlanDirectory(
       if (entry.name === 'node_modules') continue;
       const fullPath = path.join(planPath, entry.name);
       if (entry.isDirectory() && !entry.name.startsWith('.')) {
-        const hasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
-        if (!hasPlanItem && planIntegrityWarnings) {
-          planIntegrityWarnings.push(path.relative(projectPath, fullPath).replace(/\\/g, '/'));
+        const suiteHasPlanItem = fs.existsSync(path.join(fullPath, '.planitem'));
+        if (planIntegrityWarnings && !suiteHasPlanItem) {
+          const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
+          planIntegrityWarnings.push(
+            `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
+          );
+          continue;
         }
         testSuites.push(
           readSuiteDirectory(
@@ -376,8 +387,8 @@ export function readPlanDirectory(
             entry.name,
             projectPath,
             0,
-            hasPlanItem ? coveredPaths : undefined,
-            hasPlanItem ? idMap : undefined,
+            suiteHasPlanItem ? coveredPaths : undefined,
+            suiteHasPlanItem ? idMap : undefined,
             planIntegrityWarnings
           )
         );
@@ -414,7 +425,22 @@ export function readPlansDir(projectPath: string): {
     for (const entry of entries) {
       if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
       const planPath = path.join(plansDir, entry.name);
-      plans.push(readPlanDirectory(planPath, entry.name, projectPath, coveredPaths, idMap, planIntegrityWarnings));
+      const planHasPlanItem = fs.existsSync(path.join(planPath, '.planitem'));
+      if (!planHasPlanItem) {
+        planIntegrityWarnings.push(
+          `plans/${entry.name}/ is missing a .planitem file — this plan will not be recognised by the Provar runner.`
+        );
+      }
+      plans.push(
+        readPlanDirectory(
+          planPath,
+          entry.name,
+          projectPath,
+          planHasPlanItem ? coveredPaths : undefined,
+          planHasPlanItem ? idMap : undefined,
+          planIntegrityWarnings
+        )
+      );
     }
   } catch {
     /* skip */
@@ -446,6 +472,7 @@ function buildTestCaseIdMap(projectPath: string): Map<string, string> {
             const rel = path.relative(projectPath, fullPath).replace(/\\/g, '/');
             for (const attr of ['registryId', 'id', 'guid'] as const) {
               const m = content.match(new RegExp(`${attr}=["']([^"']+)["']`));
+              // Skip id="1" — new generator emits this literal and it is not UUID-unique
               if (m?.[1] && m[1] !== '1' && !idMap.has(m[1])) idMap.set(m[1], rel);
             }
           } catch {
