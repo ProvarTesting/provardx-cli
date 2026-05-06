@@ -22,7 +22,7 @@ jobs:
   provardx-ci-execution:
     strategy:
       matrix:
-        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest", "macos-latest"]') }}
+        os: ${{ fromJSON(inputs.OS && format('[{0}]', inputs.OS) || '["ubuntu-latest", "macos-latest", "windows-latest"]') }}
         nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
@@ -99,6 +99,8 @@ jobs:
         run: |
           sf plugins link .
           yarn prepack
+      - name: Unit tests
+        run: npx mocha "test/**/*.test.ts" --timeout 30000
       - name: MCP smoke test
         timeout-minutes: 5
         env:

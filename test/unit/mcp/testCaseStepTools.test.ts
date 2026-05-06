@@ -18,14 +18,17 @@ import { registerAllTestCaseStepTools } from '../../../src/mcp/tools/testCaseSte
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
+  public registrations: Array<{ name: string; description: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _desc: string, _schema: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
   }
 
-  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+  public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
+    const desc = (config as Record<string, unknown>)['description'];
+    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -76,6 +79,23 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// ── tool description ──────────────────────────────────────────────────────────
+
+describe('provar_testcase_step_edit description', () => {
+  it('references corpus tool and step-reference fallback', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('provar_qualityhub_examples_retrieve'),
+      'description should reference corpus tool'
+    );
+    assert.ok(
+      reg.description.includes('provar://docs/step-reference'),
+      'description should include step-reference fallback'
+    );
+  });
 });
 
 // ── provar_testcase_step_edit ──────────────────────────────────────────────────

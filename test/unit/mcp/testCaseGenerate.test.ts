@@ -21,14 +21,17 @@ import type { ServerConfig } from '../../../src/mcp/server.js';
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
+  public registrations: Array<{ name: string; description: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _description: string, _schema: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
   }
 
-  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+  public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
+    const desc = (config as Record<string, unknown>)['description'];
+    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -67,6 +70,23 @@ beforeEach(() => {
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+// ── tool description ──────────────────────────────────────────────────────────
+
+describe('provar_testcase_generate description', () => {
+  it('references corpus tool and step-reference fallback', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('provar_qualityhub_examples_retrieve'),
+      'description should reference corpus tool'
+    );
+    assert.ok(
+      reg.description.includes('provar://docs/step-reference'),
+      'description should include step-reference fallback'
+    );
+  });
 });
 
 // ── provar_testcase_generate ───────────────────────────────────────────────────
@@ -672,6 +692,76 @@ describe('provar_testcase_generate', () => {
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('valueClass="string">Literal Name'), 'Plain string should use valueClass="string"');
       assert.ok(!xml.includes('class="variable"'), 'No variable element expected');
+    });
+  });
+
+  describe('F1 — Compound values for {VarName} embedded in surrounding text', () => {
+    it('"Hello {Name}" emits class="compound" with literal and variable parts', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Compound Value Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Enter greeting',
+            attributes: { value: 'Hello {Name}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected class="compound" for mixed value');
+      assert.ok(xml.includes('<parts>'), 'Expected <parts> element');
+      assert.ok(xml.includes('valueClass="string">Hello '), 'Expected literal prefix as string part');
+      assert.ok(xml.includes('<variable>'), 'Expected <variable> element for the token');
+      assert.ok(xml.includes('<path element="Name"/>'), 'Expected <path element="Name"/>');
+      assert.ok(!xml.includes('valueClass="string">Hello {Name}'), 'Must NOT emit raw {Name} as string literal');
+    });
+
+    it('"{A} and {B}" emits compound with two variable parts', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Multi-Var Compound Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Combine two vars',
+            attributes: { value: '{First} and {Last}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected compound for two variables');
+      assert.ok(xml.includes('<path element="First"/>'), 'Expected path for First');
+      assert.ok(xml.includes('<path element="Last"/>'), 'Expected path for Last');
+    });
+
+    it('pure {VarName} alone still uses class="variable" (not compound)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Pure Var Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Pure var',
+            attributes: { value: '{AccountId}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="variable"'), 'Pure token should still use class="variable"');
+      assert.ok(!xml.includes('class="compound"'), 'Should not emit compound for a pure variable token');
     });
   });
 
