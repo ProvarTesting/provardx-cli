@@ -21,6 +21,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -40,7 +44,7 @@ function isError(result: unknown): boolean {
 }
 
 function hasViolation(result: unknown, ruleId: string): boolean {
-  const violations = (parseText(result)['violations'] as Array<{ rule_id: string }>);
+  const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
   return violations.some((v) => v.rule_id === ruleId);
 }
 
@@ -49,8 +53,8 @@ function hasViolation(result: unknown, ruleId: string): boolean {
 const G = {
   tc1: '550e8400-e29b-41d4-a716-446655440001',
   tc2: '550e8400-e29b-41d4-a716-446655440002',
-  s1:  '550e8400-e29b-41d4-a716-446655440011',
-  s2:  '550e8400-e29b-41d4-a716-446655440012',
+  s1: '550e8400-e29b-41d4-a716-446655440011',
+  s2: '550e8400-e29b-41d4-a716-446655440012',
 };
 
 function makeXml(tcGuid: string, stepGuid: string, id: string): string {
@@ -64,7 +68,7 @@ function makeXml(tcGuid: string, stepGuid: string, id: string): string {
   ].join('\n');
 }
 
-const TC_LOGIN  = { name: 'LoginTest.testcase',  xml_content: makeXml(G.tc1, G.s1, 'tc-001') };
+const TC_LOGIN = { name: 'LoginTest.testcase', xml_content: makeXml(G.tc1, G.s1, 'tc-001') };
 const TC_LOGOUT = { name: 'LogoutTest.testcase', xml_content: makeXml(G.tc2, G.s2, 'tc-002') };
 
 // A suite with one test case (avoids SUITE-EMPTY-001 inside plan tests)
@@ -94,12 +98,12 @@ beforeEach(() => {
   registerTestPlanValidate(server as never);
 });
 
-// ── provar.testplan.validate ──────────────────────────────────────────────────
+// ── provar_testplan_validate ──────────────────────────────────────────────────
 
-describe('provar.testplan.validate', () => {
+describe('provar_testplan_validate', () => {
   describe('happy path', () => {
     it('returns a result (not an error) for a valid non-empty plan', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MyPlan',
         test_suites: [SUITE_A, SUITE_B],
         metadata: fullMeta(),
@@ -112,7 +116,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('quality_score is between 0 and 100', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MyPlan',
         test_suites: [SUITE_A],
         metadata: fullMeta(),
@@ -123,7 +127,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('returns requestId in the response', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MyPlan',
         test_suites: [SUITE_A],
       });
@@ -133,7 +137,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('includes a summary with total_test_cases and total_violations', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MyPlan',
         test_suites: [SUITE_A, SUITE_B],
         metadata: fullMeta(),
@@ -147,14 +151,14 @@ describe('provar.testplan.validate', () => {
 
   describe('PLAN-EMPTY-001 — empty plan', () => {
     it('triggers PLAN-EMPTY-001 when plan has no suites and no test_cases', () => {
-      const result = server.call('provar.testplan.validate', { plan_name: 'EmptyPlan' });
+      const result = server.call('provar_testplan_validate', { plan_name: 'EmptyPlan' });
 
       assert.equal(isError(result), false);
       assert.ok(hasViolation(result, 'PLAN-EMPTY-001'), 'Expected PLAN-EMPTY-001');
     });
 
     it('triggers PLAN-EMPTY-001 when test_suites is an empty array', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'EmptyPlan',
         test_suites: [],
       });
@@ -163,7 +167,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('does NOT trigger PLAN-EMPTY-001 when plan has suites', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'NonEmptyPlan',
         test_suites: [SUITE_A],
       });
@@ -174,7 +178,7 @@ describe('provar.testplan.validate', () => {
 
   describe('PLAN-DUP-001 — duplicate suite names', () => {
     it('triggers PLAN-DUP-001 when two suites share the same name', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'DupPlan',
         test_suites: [
           { name: 'AccountSuite', test_cases: [TC_LOGIN] },
@@ -186,7 +190,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('does NOT trigger PLAN-DUP-001 for distinct suite names', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'GoodPlan',
         test_suites: [SUITE_A, SUITE_B],
       });
@@ -197,7 +201,7 @@ describe('provar.testplan.validate', () => {
 
   describe('PLAN-SIZE-001 — oversized plan (>20 suites)', () => {
     it('triggers PLAN-SIZE-001 when test_suite_count exceeds 20', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'HugePlan',
         test_suites: [SUITE_A],
         test_suite_count: 21,
@@ -207,7 +211,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('does NOT trigger PLAN-SIZE-001 when test_suite_count is exactly 20', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'BoundaryPlan',
         test_suites: [SUITE_A],
         test_suite_count: 20,
@@ -222,7 +226,7 @@ describe('provar.testplan.validate', () => {
         test_cases: [TC_LOGIN],
       }));
 
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'HugePlan',
         test_suites: suites,
       });
@@ -236,7 +240,7 @@ describe('provar.testplan.validate', () => {
       const meta = fullMeta();
       delete meta['objectives'];
 
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MetaPlan',
         test_suites: [SUITE_A],
         metadata: meta,
@@ -249,7 +253,7 @@ describe('provar.testplan.validate', () => {
       const meta = fullMeta();
       delete meta['in_scope'];
 
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MetaPlan',
         test_suites: [SUITE_A],
         metadata: meta,
@@ -262,7 +266,7 @@ describe('provar.testplan.validate', () => {
       const meta = fullMeta();
       delete meta['environments'];
 
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'MetaPlan',
         test_suites: [SUITE_A],
         metadata: meta,
@@ -272,7 +276,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('does NOT trigger any PLAN-META-* when all metadata fields are provided', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'FullPlan',
         test_suites: [SUITE_A],
         metadata: fullMeta(),
@@ -280,11 +284,15 @@ describe('provar.testplan.validate', () => {
 
       const violations = parseText(result)['violations'] as Array<{ rule_id: string }>;
       const metaViolations = violations.filter((v) => v.rule_id.startsWith('PLAN-META-'));
-      assert.equal(metaViolations.length, 0, `Unexpected PLAN-META violations: ${metaViolations.map((v) => v.rule_id).join(', ')}`);
+      assert.equal(
+        metaViolations.length,
+        0,
+        `Unexpected PLAN-META violations: ${metaViolations.map((v) => v.rule_id).join(', ')}`
+      );
     });
 
     it('triggers all PLAN-META-* violations when no metadata is provided', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'NoMetaPlan',
         test_suites: [SUITE_A],
       });
@@ -293,20 +301,23 @@ describe('provar.testplan.validate', () => {
       const metaRuleIds = violations.filter((v) => v.rule_id.startsWith('PLAN-META-')).map((v) => v.rule_id);
       // At least objectives, in_scope, testing_methodology, acceptance_criteria, environments,
       // test_data_strategy, risks — 7 rules
-      assert.ok(metaRuleIds.length >= 7, `Expected >=7 PLAN-META violations, got ${metaRuleIds.length}: ${metaRuleIds.join(', ')}`);
+      assert.ok(
+        metaRuleIds.length >= 7,
+        `Expected >=7 PLAN-META violations, got ${metaRuleIds.length}: ${metaRuleIds.join(', ')}`
+      );
     });
   });
 
   describe('xml_content alias — xml field accepted', () => {
     it('accepts xml field as alias for xml_content in test cases', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'AliasPlan',
-        test_suites: [{
-          name: 'AccountSuite',
-          test_cases: [
-            { name: 'LoginTest.testcase', xml: makeXml(G.tc1, G.s1, 'tc-001') },
-          ],
-        }],
+        test_suites: [
+          {
+            name: 'AccountSuite',
+            test_cases: [{ name: 'LoginTest.testcase', xml: makeXml(G.tc1, G.s1, 'tc-001') }],
+          },
+        ],
       });
 
       assert.equal(isError(result), false);
@@ -316,7 +327,7 @@ describe('provar.testplan.validate', () => {
 
   describe('quality_threshold', () => {
     it('uses default threshold of 80 when not provided', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'ThresholdPlan',
         test_suites: [SUITE_A],
       });
@@ -325,7 +336,7 @@ describe('provar.testplan.validate', () => {
     });
 
     it('accepts a custom quality_threshold', () => {
-      const result = server.call('provar.testplan.validate', {
+      const result = server.call('provar_testplan_validate', {
         plan_name: 'ThresholdPlan',
         test_suites: [SUITE_A],
         quality_threshold: 95,

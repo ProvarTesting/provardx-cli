@@ -66,159 +66,169 @@ const AttachmentPropertiesSchema = z.object({
 // ── Generate tool ─────────────────────────────────────────────────────────────
 
 export function registerAntGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.ant.generate',
-    [
-      'Generate a Provar ANT build.xml file.',
-      'Produces the standard <project> skeleton with Provar-Compile and Run-Test-Case tasks.',
-      'Supports targeting tests by project folder, plan folder, or specific .testcase files via filesets.',
-      'Returns XML content. Writes to disk only when dry_run=false.',
-    ].join(' '),
+  server.registerTool(
+    'provar_ant_generate',
     {
-      // ── Core paths ──────────────────────────────────────────────────────────
-      provar_home: z
-        .string()
-        .describe(
-          'Absolute path to the Provar installation directory (e.g. "C:/Program Files/Provar/"). Used for provar.home property and ant taskdef classpaths.'
+      title: 'Generate ANT Build File',
+      description: [
+        'Generate a Provar ANT build.xml file.',
+        'Produces the standard <project> skeleton with Provar-Compile and Run-Test-Case tasks.',
+        'Supports targeting tests by project folder, plan folder, or specific .testcase files via filesets.',
+        'Returns XML content. Writes to disk only when dry_run=false.',
+      ].join(' '),
+      inputSchema: {
+        // ── Core paths ──────────────────────────────────────────────────────────
+        provar_home: z
+          .string()
+          .describe(
+            'Absolute path to the Provar installation directory (e.g. "C:/Program Files/Provar/"). Used for provar.home property and ant taskdef classpaths.'
+          ),
+        project_path: z
+          .string()
+          .default('..')
+          .describe('Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).'),
+        results_path: z
+          .string()
+          .default('../ANT/Results')
+          .describe('Path where test results are written. Defaults to "../ANT/Results".'),
+        project_cache_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.'
+          ),
+        license_path: z
+          .string()
+          .optional()
+          .describe('Path to the Provar .licenses directory (e.g. "${env.PROVAR_HOME}/.licenses").'),
+        smtp_path: z
+          .string()
+          .optional()
+          .describe('Path to the Provar .smtp directory (e.g. "${env.PROVAR_HOME}/.smtp").'),
+
+        // ── Test selection ──────────────────────────────────────────────────────
+        filesets: z
+          .array(FilesetSchema)
+          .min(1)
+          .describe(
+            'One or more filesets defining which tests to run. ' +
+              'To run all tests under a folder: { dir: "../tests" }. ' +
+              'To run a plan: { id: "testplan", dir: "../plans/MyPlan" }. ' +
+              'To run specific test cases: { dir: "../tests/Suite", includes: ["MyTest.testcase"] }.'
+          ),
+
+        // ── Browser / environment ───────────────────────────────────────────────
+        web_browser: z
+          .enum(['Chrome', 'Chrome_Headless', 'Firefox', 'Edge', 'Edge_Legacy', 'Safari', 'IE'])
+          .default('Chrome')
+          .describe('Web browser to use for test execution.'),
+        web_browser_configuration: z
+          .string()
+          .default('Full Screen')
+          .describe('Browser window configuration (e.g. "Full Screen").'),
+        web_browser_provider_name: z.string().default('Desktop').describe('Browser provider name (e.g. "Desktop").'),
+        web_browser_device_name: z
+          .string()
+          .default('Full Screen')
+          .describe('Browser device name (e.g. "Full Screen").'),
+        test_environment: z
+          .string()
+          .default('')
+          .describe(
+            'Named test environment to use (must match a connection in the project). Empty string uses default.'
+          ),
+
+        // ── Cache / metadata ────────────────────────────────────────────────────
+        salesforce_metadata_cache: z
+          .enum(['Reuse', 'Refresh', 'Reload'])
+          .default('Reuse')
+          .describe(
+            'Salesforce metadata cache strategy: Reuse (fastest, uses cached), Refresh (re-downloads), Reload (clears and re-downloads).'
+          ),
+
+        // ── Output / logging ────────────────────────────────────────────────────
+        results_path_disposition: z
+          .enum(['Increment', 'Replace', 'Reuse'])
+          .default('Increment')
+          .describe(
+            'How to handle the results folder when it already exists: Increment (new subfolder), Replace (overwrite), Reuse (append).'
+          ),
+        test_output_level: z
+          .enum(['BASIC', 'WARNING', 'DEBUG'])
+          .default('BASIC')
+          .describe('Verbosity level for test output logs.'),
+        plugin_output_level: z
+          .enum(['BASIC', 'WARNING', 'DEBUG'])
+          .default('WARNING')
+          .describe('Verbosity level for plugin output logs.'),
+
+        // ── Execution behaviour ─────────────────────────────────────────────────
+        stop_test_run_on_error: z
+          .boolean()
+          .default(false)
+          .describe('Abort the entire test run when any test case fails.'),
+        exclude_callable_test_cases: z
+          .boolean()
+          .default(true)
+          .describe('Skip test cases marked as callable (library/helper) when true.'),
+        dont_fail_build: z
+          .boolean()
+          .optional()
+          .describe(
+            'When true, the ANT build does not fail even if tests fail. Useful for CI pipelines that collect results separately.'
+          ),
+        invoke_test_run_monitor: z.boolean().default(true).describe('Enable the Provar test run monitor.'),
+
+        // ── Secrets / security ──────────────────────────────────────────────────
+        secrets_password: z
+          .string()
+          .default('${env.ProvarSecretsPassword}')
+          .describe(
+            'Encryption key used to decrypt the Provar .secrets file (the password string itself, not a file path). Defaults to reading from the ProvarSecretsPassword environment variable.'
+          ),
+        test_environment_secrets_password: z
+          .string()
+          .optional()
+          .describe(
+            'Per-environment secrets password. Defaults to reading from the ProvarSecretsPassword_EnvName environment variable.'
+          ),
+
+        // ── Test Cycle ──────────────────────────────────────────────────────────
+        test_cycle_path: z.string().optional().describe('Path to a TestCycle folder (used with test cycle reporting).'),
+        test_cycle_run_type: z
+          .enum(['ALL', 'FAILED', 'NEW'])
+          .optional()
+          .describe('Which tests in the cycle to run (ALL, FAILED, NEW).'),
+
+        // ── Plan features ───────────────────────────────────────────────────────
+        plan_features: z
+          .array(PlanFeatureSchema)
+          .optional()
+          .describe(
+            'Output and notification features to enable/disable (e.g. PDF, PIECHART, EMAIL). ' +
+              'Only meaningful when running by test plan.'
+          ),
+
+        // ── Email / attachment reporting ────────────────────────────────────────
+        email_properties: EmailPropertiesSchema.optional().describe(
+          'Email notification settings. Omit to exclude <emailProperties> from the XML.'
         ),
-      project_path: z
-        .string()
-        .default('..')
-        .describe('Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).'),
-      results_path: z
-        .string()
-        .default('../ANT/Results')
-        .describe('Path where test results are written. Defaults to "../ANT/Results".'),
-      project_cache_path: z
-        .string()
-        .optional()
-        .describe('Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.'),
-      license_path: z
-        .string()
-        .optional()
-        .describe('Path to the Provar .licenses directory (e.g. "${env.PROVAR_HOME}/.licenses").'),
-      smtp_path: z
-        .string()
-        .optional()
-        .describe('Path to the Provar .smtp directory (e.g. "${env.PROVAR_HOME}/.smtp").'),
-
-      // ── Test selection ──────────────────────────────────────────────────────
-      filesets: z
-        .array(FilesetSchema)
-        .min(1)
-        .describe(
-          'One or more filesets defining which tests to run. ' +
-            'To run all tests under a folder: { dir: "../tests" }. ' +
-            'To run a plan: { id: "testplan", dir: "../plans/MyPlan" }. ' +
-            'To run specific test cases: { dir: "../tests/Suite", includes: ["MyTest.testcase"] }.'
+        attachment_properties: AttachmentPropertiesSchema.optional().describe(
+          'Attachment/report content settings. Omit to exclude <attachmentProperties> from the XML.'
         ),
 
-      // ── Browser / environment ───────────────────────────────────────────────
-      web_browser: z
-        .enum(['Chrome', 'Chrome_Headless', 'Firefox', 'Edge', 'Edge_Legacy', 'Safari', 'IE'])
-        .default('Chrome')
-        .describe('Web browser to use for test execution.'),
-      web_browser_configuration: z
-        .string()
-        .default('Full Screen')
-        .describe('Browser window configuration (e.g. "Full Screen").'),
-      web_browser_provider_name: z.string().default('Desktop').describe('Browser provider name (e.g. "Desktop").'),
-      web_browser_device_name: z.string().default('Full Screen').describe('Browser device name (e.g. "Full Screen").'),
-      test_environment: z
-        .string()
-        .default('')
-        .describe('Named test environment to use (must match a connection in the project). Empty string uses default.'),
-
-      // ── Cache / metadata ────────────────────────────────────────────────────
-      salesforce_metadata_cache: z
-        .enum(['Reuse', 'Refresh', 'Reload'])
-        .default('Reuse')
-        .describe(
-          'Salesforce metadata cache strategy: Reuse (fastest, uses cached), Refresh (re-downloads), Reload (clears and re-downloads).'
-        ),
-
-      // ── Output / logging ────────────────────────────────────────────────────
-      results_path_disposition: z
-        .enum(['Increment', 'Replace', 'Reuse'])
-        .default('Increment')
-        .describe(
-          'How to handle the results folder when it already exists: Increment (new subfolder), Replace (overwrite), Reuse (append).'
-        ),
-      test_output_level: z
-        .enum(['BASIC', 'WARNING', 'DEBUG'])
-        .default('BASIC')
-        .describe('Verbosity level for test output logs.'),
-      plugin_output_level: z
-        .enum(['BASIC', 'WARNING', 'DEBUG'])
-        .default('WARNING')
-        .describe('Verbosity level for plugin output logs.'),
-
-      // ── Execution behaviour ─────────────────────────────────────────────────
-      stop_test_run_on_error: z
-        .boolean()
-        .default(false)
-        .describe('Abort the entire test run when any test case fails.'),
-      exclude_callable_test_cases: z
-        .boolean()
-        .default(true)
-        .describe('Skip test cases marked as callable (library/helper) when true.'),
-      dont_fail_build: z
-        .boolean()
-        .optional()
-        .describe(
-          'When true, the ANT build does not fail even if tests fail. Useful for CI pipelines that collect results separately.'
-        ),
-      invoke_test_run_monitor: z.boolean().default(true).describe('Enable the Provar test run monitor.'),
-
-      // ── Secrets / security ──────────────────────────────────────────────────
-      secrets_password: z
-        .string()
-        .default('${env.ProvarSecretsPassword}')
-        .describe(
-          'Encryption key used to decrypt the Provar .secrets file (the password string itself, not a file path). Defaults to reading from the ProvarSecretsPassword environment variable.'
-        ),
-      test_environment_secrets_password: z
-        .string()
-        .optional()
-        .describe(
-          'Per-environment secrets password. Defaults to reading from the ProvarSecretsPassword_EnvName environment variable.'
-        ),
-
-      // ── Test Cycle ──────────────────────────────────────────────────────────
-      test_cycle_path: z.string().optional().describe('Path to a TestCycle folder (used with test cycle reporting).'),
-      test_cycle_run_type: z
-        .enum(['ALL', 'FAILED', 'NEW'])
-        .optional()
-        .describe('Which tests in the cycle to run (ALL, FAILED, NEW).'),
-
-      // ── Plan features ───────────────────────────────────────────────────────
-      plan_features: z
-        .array(PlanFeatureSchema)
-        .optional()
-        .describe(
-          'Output and notification features to enable/disable (e.g. PDF, PIECHART, EMAIL). ' +
-            'Only meaningful when running by test plan.'
-        ),
-
-      // ── Email / attachment reporting ────────────────────────────────────────
-      email_properties: EmailPropertiesSchema.optional().describe(
-        'Email notification settings. Omit to exclude <emailProperties> from the XML.'
-      ),
-      attachment_properties: AttachmentPropertiesSchema.optional().describe(
-        'Attachment/report content settings. Omit to exclude <attachmentProperties> from the XML.'
-      ),
-
-      // ── File output ─────────────────────────────────────────────────────────
-      output_path: z
-        .string()
-        .optional()
-        .describe('Where to write the build.xml file (returned in response). Required when dry_run=false.'),
-      overwrite: z.boolean().default(false).describe('Overwrite output_path if the file already exists.'),
-      dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path.'),
+        // ── File output ─────────────────────────────────────────────────────────
+        output_path: z
+          .string()
+          .optional()
+          .describe('Where to write the build.xml file (returned in response). Required when dry_run=false.'),
+        overwrite: z.boolean().default(false).describe('Overwrite output_path if the file already exists.'),
+        dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path.'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.ant.generate', {
+      log('info', 'provar_ant_generate', {
         requestId,
         output_path: input.output_path,
         dry_run: input.dry_run,
@@ -253,7 +263,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar.ant.generate: wrote file', { requestId, filePath });
+          log('info', 'provar_ant_generate: wrote file', { requestId, filePath });
         }
 
         const result = {
@@ -275,7 +285,7 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           requestId,
           false
         );
-        log('error', 'provar.ant.generate failed', { requestId, error: error.message });
+        log('error', 'provar_ant_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -285,21 +295,24 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
 // ── Validate tool ─────────────────────────────────────────────────────────────
 
 export function registerAntValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.ant.validate',
-    [
-      'Validate a Provar ANT build.xml for structural correctness.',
-      'Checks XML well-formedness, required <taskdef> declarations, <Provar-Compile> step,',
-      '<Run-Test-Case> with required attributes (provarHome, projectPath, resultsPath),',
-      'and at least one <fileset> child. Returns is_valid, issues list, and a validity_score.',
-    ].join(' '),
+  server.registerTool(
+    'provar_ant_validate',
     {
-      content: z.string().optional().describe('XML content to validate directly'),
-      file_path: z.string().optional().describe('Path to the build.xml file to validate'),
+      title: 'Validate ANT Build File',
+      description: [
+        'Validate a Provar ANT build.xml for structural correctness.',
+        'Checks XML well-formedness, required <taskdef> declarations, <Provar-Compile> step,',
+        '<Run-Test-Case> with required attributes (provarHome, projectPath, resultsPath),',
+        'and at least one <fileset> child. Returns is_valid, issues list, and a validity_score.',
+      ].join(' '),
+      inputSchema: {
+        content: z.string().optional().describe('XML content to validate directly'),
+        file_path: z.string().optional().describe('Path to the build.xml file to validate'),
+      },
     },
     ({ content, file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.ant.validate', { requestId, has_content: !!content, file_path });
+      log('info', 'provar_ant_validate', { requestId, has_content: !!content, file_path });
 
       try {
         let source = content;
@@ -333,7 +346,7 @@ export function registerAntValidate(server: McpServer, config: ServerConfig): vo
           requestId,
           false
         );
-        log('error', 'provar.ant.validate failed', { requestId, error: error.message });
+        log('error', 'provar_ant_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

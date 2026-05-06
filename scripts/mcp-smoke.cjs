@@ -9,7 +9,7 @@
 // Env flags:
 //   SMOKE_REQUEST_TIMEOUT_MS  Per-request timeout in ms (default: 30000)
 //   SMOKE_OVERALL_TIMEOUT_MS  Hard deadline for the whole run in ms (default: 120000)
-//   SMOKE_INCLUDE_SETUP       Set to "1" to include provar.automation.setup (may download
+//   SMOKE_INCLUDE_SETUP       Set to "1" to include provar_automation_setup (may download
 //                             binaries if no Provar install is found — disabled by default)
 
 const { spawn } = require('child_process');
@@ -115,174 +115,174 @@ async function runTests() {
   // ── 1. tools/list ─────────────────────────────────────────────────────────
   await send('tools/list', {});
 
-  // ── 2. provardx.ping ──────────────────────────────────────────────────────
-  await callTool('provardx.ping', { message: 'smoke-test' });
+  // ── 2. provardx_ping ──────────────────────────────────────────────────────
+  await callTool('provardx_ping', { message: 'smoke-test' });
 
-  // ── 3. provar.project.inspect ─────────────────────────────────────────────
+  // ── 3. provar_project_inspect ─────────────────────────────────────────────
   // TMP has no .testproject → structured "not a Provar project" response
-  await callTool('provar.project.inspect', { project_path: TMP });
+  await callTool('provar_project_inspect', { project_path: TMP });
 
-  // ── 4. provar.pageobject.generate (dry_run) ───────────────────────────────
-  await callTool('provar.pageobject.generate', {
+  // ── 4. provar_pageobject_generate (dry_run) ───────────────────────────────
+  await callTool('provar_pageobject_generate', {
     class_name: 'AccountDetailPage',
     package_name: 'pageobjects.accounts',
     page_type: 'standard',
     dry_run: true,
   });
 
-  // ── 5. provar.pageobject.validate ─────────────────────────────────────────
-  await callTool('provar.pageobject.validate', {
+  // ── 5. provar_pageobject_validate ─────────────────────────────────────────
+  await callTool('provar_pageobject_validate', {
     content: 'public class AccountDetailPage {}',
   });
 
-  // ── 6. provar.testcase.generate (dry_run) ─────────────────────────────────
-  await callTool('provar.testcase.generate', {
+  // ── 6. provar_testcase_generate (dry_run) ─────────────────────────────────
+  await callTool('provar_testcase_generate', {
     test_case_name: 'Smoke Test Case',
     dry_run: true,
   });
 
-  // ── 7. provar.testcase.validate ───────────────────────────────────────────
-  await callTool('provar.testcase.validate', { content: '<testCase/>' });
+  // ── 7. provar_testcase_validate ───────────────────────────────────────────
+  await callTool('provar_testcase_validate', { content: '<testCase/>' });
 
-  // ── 8. provar.testsuite.validate ──────────────────────────────────────────
-  await callTool('provar.testsuite.validate', { suite_name: 'SmokeTestSuite' });
+  // ── 8. provar_testsuite_validate ──────────────────────────────────────────
+  await callTool('provar_testsuite_validate', { suite_name: 'SmokeTestSuite' });
 
-  // ── 9. provar.testplan.validate ───────────────────────────────────────────
-  await callTool('provar.testplan.validate', { plan_name: 'SmokeTestPlan' });
+  // ── 9. provar_testplan_validate ───────────────────────────────────────────
+  await callTool('provar_testplan_validate', { plan_name: 'SmokeTestPlan' });
 
-  // ── 10. provar.project.validate ───────────────────────────────────────────
+  // ── 10. provar_project_validate ───────────────────────────────────────────
   // TMP is not a Provar project → PATH_NOT_FOUND or NOT_A_PROJECT result
-  await callTool('provar.project.validate', { project_path: TMP });
+  await callTool('provar_project_validate', { project_path: TMP });
 
-  // ── 11. provar.properties.generate (dry_run) ──────────────────────────────
-  await callTool('provar.properties.generate', {
+  // ── 11. provar_properties_generate (dry_run) ──────────────────────────────
+  await callTool('provar_properties_generate', {
     output_path: path.join(TMP, 'smoke-props.json'),
     dry_run: true,
   });
 
-  // ── 12. provar.properties.read ────────────────────────────────────────────
+  // ── 12. provar_properties_read ────────────────────────────────────────────
   // Non-existent file → FILE_NOT_FOUND result
-  await callTool('provar.properties.read', {
+  await callTool('provar_properties_read', {
     file_path: path.join(TMP, 'nonexistent-props.json'),
   });
 
-  // ── 13. provar.properties.set ─────────────────────────────────────────────
+  // ── 13. provar_properties_set ─────────────────────────────────────────────
   // Non-existent file → FILE_NOT_FOUND result
-  await callTool('provar.properties.set', {
+  await callTool('provar_properties_set', {
     file_path: path.join(TMP, 'nonexistent-props.json'),
     updates: { stopOnError: true },
   });
 
-  // ── 14. provar.properties.validate ───────────────────────────────────────
+  // ── 14. provar_properties_validate ───────────────────────────────────────
   // Empty JSON → validation issues about missing required fields
-  await callTool('provar.properties.validate', { content: '{}' });
+  await callTool('provar_properties_validate', { content: '{}' });
 
-  // ── 15. provar.ant.generate (dry_run) ─────────────────────────────────────
-  await callTool('provar.ant.generate', {
+  // ── 15. provar_ant_generate (dry_run) ─────────────────────────────────────
+  await callTool('provar_ant_generate', {
     provar_home: path.join(TMP, 'provar'),
     filesets: [{ dir: '../tests' }],
     dry_run: true,
   });
 
-  // ── 16. provar.ant.validate ───────────────────────────────────────────────
+  // ── 16. provar_ant_validate ───────────────────────────────────────────────
   // Minimal XML — will have validation issues but not crash
-  await callTool('provar.ant.validate', { content: '<project/>' });
+  await callTool('provar_ant_validate', { content: '<project/>' });
 
-  // ── 17. provar.qualityhub.connect ─────────────────────────────────────────
+  // ── 17. provar_qualityhub_connect ─────────────────────────────────────────
   // No real org → SF_NOT_FOUND or auth error result
-  await callTool('provar.qualityhub.connect', { target_org: 'smoke-test-org' });
+  await callTool('provar_qualityhub_connect', { target_org: 'smoke-test-org' });
 
-  // ── 18. provar.qualityhub.display ─────────────────────────────────────────
-  await callTool('provar.qualityhub.display', {});
+  // ── 18. provar_qualityhub_display ─────────────────────────────────────────
+  await callTool('provar_qualityhub_display', {});
 
-  // ── 19. provar.qualityhub.testrun ─────────────────────────────────────────
-  await callTool('provar.qualityhub.testrun', { target_org: 'smoke-test-org' });
+  // ── 19. provar_qualityhub_testrun ─────────────────────────────────────────
+  await callTool('provar_qualityhub_testrun', { target_org: 'smoke-test-org' });
 
-  // ── 20. provar.qualityhub.testrun.report ──────────────────────────────────
-  await callTool('provar.qualityhub.testrun.report', {
+  // ── 20. provar_qualityhub_testrun_report ──────────────────────────────────
+  await callTool('provar_qualityhub_testrun_report', {
     target_org: 'smoke-test-org',
     run_id: 'fake-run-id-000',
   });
 
-  // ── 21. provar.qualityhub.testrun.abort ───────────────────────────────────
-  await callTool('provar.qualityhub.testrun.abort', {
+  // ── 21. provar_qualityhub_testrun_abort ───────────────────────────────────
+  await callTool('provar_qualityhub_testrun_abort', {
     target_org: 'smoke-test-org',
     run_id: 'fake-run-id-000',
   });
 
-  // ── 22. provar.qualityhub.testcase.retrieve ───────────────────────────────
-  await callTool('provar.qualityhub.testcase.retrieve', { target_org: 'smoke-test-org' });
+  // ── 22. provar_qualityhub_testcase_retrieve ───────────────────────────────
+  await callTool('provar_qualityhub_testcase_retrieve', { target_org: 'smoke-test-org' });
 
-  // ── 23. provar.qualityhub.defect.create ───────────────────────────────────
-  await callTool('provar.qualityhub.defect.create', {
+  // ── 23. provar_qualityhub_defect_create ───────────────────────────────────
+  await callTool('provar_qualityhub_defect_create', {
     run_id: 'fake-run-id-000',
     target_org: 'smoke-test-org',
   });
 
-  // ── 24. provar.automation.setup ───────────────────────────────────────────
+  // ── 24. provar_automation_setup ───────────────────────────────────────────
   // Skipped by default: when no Provar installation is found on the CI runner,
   // this tool downloads the full Provar binary (~200 MB), which is a destructive
   // side effect in a smoke test. Enable with SMOKE_INCLUDE_SETUP=1.
   if (INCLUDE_SETUP) {
-    await callTool('provar.automation.setup', {});
+    await callTool('provar_automation_setup', {});
   }
 
-  // ── 25. provar.automation.metadata.download ───────────────────────────────
-  await callTool('provar.automation.metadata.download', {});
+  // ── 25. provar_automation_metadata_download ───────────────────────────────
+  await callTool('provar_automation_metadata_download', {});
 
-  // ── 26. provar.automation.compile ─────────────────────────────────────────
-  await callTool('provar.automation.compile', {});
+  // ── 26. provar_automation_compile ─────────────────────────────────────────
+  await callTool('provar_automation_compile', {});
 
-  // ── 27. provar.automation.testrun ─────────────────────────────────────────
-  await callTool('provar.automation.testrun', {});
+  // ── 27. provar_automation_testrun ─────────────────────────────────────────
+  await callTool('provar_automation_testrun', {});
 
-  // ── 28. provar.automation.config.load ─────────────────────────────────────
-  await callTool('provar.automation.config.load', {
+  // ── 28. provar_automation_config_load ─────────────────────────────────────
+  await callTool('provar_automation_config_load', {
     properties_path: path.join(TMP, 'nonexistent-props.json'),
   });
 
-  // ── 29. provar.testrun.report.locate ─────────────────────────────────────
+  // ── 29. provar_testrun_report_locate ─────────────────────────────────────
   // TMP is not a Provar project → RESULTS_NOT_CONFIGURED result
-  await callTool('provar.testrun.report.locate', { project_path: TMP });
+  await callTool('provar_testrun_report_locate', { project_path: TMP });
 
-  // ── 30. provar.testrun.rca ───────────────────────────────────────────────
-  await callTool('provar.testrun.rca', { project_path: TMP });
+  // ── 30. provar_testrun_rca ───────────────────────────────────────────────
+  await callTool('provar_testrun_rca', { project_path: TMP });
 
-  // ── 31. provar.testplan.create ────────────────────────────────────────────
+  // ── 31. provar_testplan_create ────────────────────────────────────────────
   // TMP is not a Provar project → NOT_A_PROJECT result
-  await callTool('provar.testplan.create', {
+  await callTool('provar_testplan_create', {
     project_path: TMP,
     plan_name: 'SmokePlan',
   });
 
-  // ── 32. provar.testplan.add-instance ─────────────────────────────────────
+  // ── 32. provar_testplan_add-instance ─────────────────────────────────────
   // TMP is not a Provar project → NOT_A_PROJECT result
-  await callTool('provar.testplan.add-instance', {
+  await callTool('provar_testplan_add-instance', {
     project_path: TMP,
     test_case_path: 'tests/Smoke/SmokeTest.testcase',
     plan_name: 'SmokePlan',
   });
 
-  // ── 33. provar.testplan.create-suite ─────────────────────────────────────
-  await callTool('provar.testplan.create-suite', {
+  // ── 33. provar_testplan_create-suite ─────────────────────────────────────
+  await callTool('provar_testplan_create-suite', {
     project_path: TMP,
     plan_name: 'SmokePlan',
     suite_name: 'SmokeSuite',
   });
 
-  // ── 34. provar.testplan.remove-instance ──────────────────────────────────
-  await callTool('provar.testplan.remove-instance', {
+  // ── 34. provar_testplan_remove-instance ──────────────────────────────────
+  await callTool('provar_testplan_remove-instance', {
     project_path: TMP,
     instance_path: 'plans/SmokePlan/SmokeSuite/smoke.testinstance',
   });
 
-  // ── 35. provar.nitrox.discover ────────────────────────────────────────────
+  // ── 35. provar_nitrox_discover ────────────────────────────────────────────
   // TMP has no .testproject → empty projects list, no crash
-  await callTool('provar.nitrox.discover', { search_roots: [TMP] });
+  await callTool('provar_nitrox_discover', { search_roots: [TMP] });
 
-  // ── 36. provar.nitrox.validate ────────────────────────────────────────────
+  // ── 36. provar_nitrox_validate ────────────────────────────────────────────
   // Minimal valid root component → score 100
-  await callTool('provar.nitrox.validate', {
+  await callTool('provar_nitrox_validate', {
     content: JSON.stringify({
       componentId: '550e8400-e29b-41d4-a716-446655440000',
       name: '/com/smoke/SmokeComponent',
@@ -292,29 +292,29 @@ async function runTests() {
     }),
   });
 
-  // ── 36. provar.nitrox.generate (dry_run) ─────────────────────────────────
-  await callTool('provar.nitrox.generate', {
+  // ── 36. provar_nitrox_generate (dry_run) ─────────────────────────────────
+  await callTool('provar_nitrox_generate', {
     name: '/com/smoke/SmokeComponent',
     tag_name: 'c-smoke',
     dry_run: true,
   });
 
-  // ── 37. provar.nitrox.read ────────────────────────────────────────────────
+  // ── 37. provar_nitrox_read ────────────────────────────────────────────────
   // Non-existent file → FILE_NOT_FOUND result (not a protocol error)
-  await callTool('provar.nitrox.read', {
+  await callTool('provar_nitrox_read', {
     file_paths: [path.join(TMP, 'nonexistent.po.json')],
   });
 
-  // ── 38. provar.nitrox.patch ───────────────────────────────────────────────
+  // ── 38. provar_nitrox_patch ───────────────────────────────────────────────
   // Non-existent file → FILE_NOT_FOUND result (not a protocol error)
-  await callTool('provar.nitrox.patch', {
+  await callTool('provar_nitrox_patch', {
     file_path: path.join(TMP, 'nonexistent.po.json'),
     patch: { name: '/com/smoke/Patched' },
   });
 
-  // ── 39. provar.qualityhub.examples.retrieve ───────────────────────────────
+  // ── 39. provar_qualityhub_examples_retrieve ───────────────────────────────
   // No API key in CI → graceful degrade with warning, empty examples (isError: false)
-  await callTool('provar.qualityhub.examples.retrieve', {
+  await callTool('provar_qualityhub_examples_retrieve', {
     query: 'As a sales rep I want to create an Opportunity in Salesforce',
     n: 3,
   });
@@ -363,13 +363,13 @@ async function runTests() {
     arguments: { story: 'Verify Users table has at least one Active record after Salesforce flow runs' },
   });
 
-  // ── 49. provar.connection.list ────────────────────────────────────────────
+  // ── 49. provar_connection_list ────────────────────────────────────────────
   // TMP has no .testproject → CONNECTION_FILE_NOT_FOUND result (not a protocol error)
-  await callTool('provar.connection.list', { project_path: TMP });
+  await callTool('provar_connection_list', { project_path: TMP });
 
-  // ── 50. provar.testcase.step.edit ─────────────────────────────────────────
+  // ── 50. provar_testcase_step_edit ─────────────────────────────────────────
   // TMP/nonexistent.testcase does not exist → FILE_NOT_FOUND result
-  await callTool('provar.testcase.step.edit', {
+  await callTool('provar_testcase_step_edit', {
     test_case_path: path.join(TMP, 'nonexistent.testcase'),
     mode: 'remove',
     test_item_id: '1',

@@ -131,23 +131,26 @@ function parseEnvironmentList(content: string): EnvironmentEntry[] {
 // ── Tool registration ─────────────────────────────────────────────────────────
 
 export function registerConnectionList(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.connection.list',
-    [
-      'List all connections and named environments defined in the .testproject file.',
-      'Use this before generating test cases or page objects to get the correct connection names.',
-      'Returns connections (name, type, url, sso_configured) and environments (name, connection, url).',
-      'Prerequisite: the project must have a .testproject file — run provar.project.validate first if unsure.',
-      'Security: only connection names, types, and URLs are returned — credential values from .secrets are never included.',
-    ].join(' '),
+  server.registerTool(
+    'provar_connection_list',
     {
-      project_path: z
-        .string()
-        .describe('Absolute or relative path to the Provar project root directory (must be within --allowed-paths)'),
+      title: 'List Connections',
+      description: [
+        'List all connections and named environments defined in the .testproject file.',
+        'Use this before generating test cases or page objects to get the correct connection names.',
+        'Returns connections (name, type, url, sso_configured) and environments (name, connection, url).',
+        'Prerequisite: the project must have a .testproject file — run provar_project_validate first if unsure.',
+        'Security: only connection names, types, and URLs are returned — credential values from .secrets are never included.',
+      ].join(' '),
+      inputSchema: {
+        project_path: z
+          .string()
+          .describe('Absolute or relative path to the Provar project root directory (must be within --allowed-paths)'),
+      },
     },
     ({ project_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.connection.list', { requestId, project_path });
+      log('info', 'provar_connection_list', { requestId, project_path });
 
       try {
         const resolvedPath = path.resolve(project_path);
@@ -157,10 +160,10 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
         if (!fs.existsSync(testProjectPath)) {
           const err = makeError(
             'CONNECTION_FILE_NOT_FOUND',
-            `No .testproject file found at: ${testProjectPath}. Run provar.project.validate first to confirm the project structure.`,
+            `No .testproject file found at: ${testProjectPath}. Run provar_project_validate first to confirm the project structure.`,
             requestId,
             false,
-            { suggestion: 'Run provar.project.validate with the project_path to confirm the project root, then retry.' }
+            { suggestion: 'Run provar_project_validate with the project_path to confirm the project root, then retry.' }
           );
           return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
         }
@@ -205,7 +208,7 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
           requestId,
           false
         );
-        log('error', 'provar.connection.list failed', { requestId, error: error.message });
+        log('error', 'provar_connection_list failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

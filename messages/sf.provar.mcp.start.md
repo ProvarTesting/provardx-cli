@@ -12,75 +12,74 @@ Available tools:
 
 Project & inspection:
 
-- provar.project.inspect — inspect project folder inventory
-- provar.project.validate — validate full project from disk: coverage, quality scores
+- provardx_ping — ping the MCP server (health check)
+- provar_project_inspect — inspect project folder inventory
+- provar_project_validate — validate full project from disk: coverage, quality scores
+- provar_connection_list — list connections and named environments from the project
 
 Page Object:
 
-- provar.pageobject.generate — generate a Java Page Object skeleton
-- provar.pageobject.validate — validate Page Object quality and naming
+- provar_pageobject_generate — generate a Java Page Object skeleton
+- provar_pageobject_validate — validate Page Object quality and naming
 
 Test Case:
 
-- provar.testcase.generate — generate an XML test case skeleton
-- provar.testcase.validate — validate test case XML (validity + best-practices scores)
-- provar.testcase.step.edit — atomically add or remove a single step in a test case
+- provar_testcase_generate — generate an XML test case skeleton
+- provar_testcase_validate — validate test case XML (validity + best-practices scores)
+- provar_testcase_step_edit — atomically add or remove a single step in a test case
 
 Test Suite / Plan:
 
-- provar.testsuite.validate — validate test suite hierarchy
-- provar.testplan.validate — validate test plan metadata completeness
-- provar.testplan.create-suite — create a test suite under a plan
-- provar.testplan.add-instance — add a test instance to a plan
-- provar.testplan.remove-instance — remove a test instance from a plan
+- provar_testsuite_validate — validate test suite hierarchy
+- provar_testplan_validate — validate test plan metadata completeness
+- provar_testplan_create — create a new test plan
+- provar_testplan_create-suite — create a test suite under a plan
+- provar_testplan_add-instance — add a test instance to a plan
+- provar_testplan_remove-instance — remove a test instance from a plan
 
 Properties files:
 
-- provar.properties.read — read a Provar properties file
-- provar.properties.set — set a key in a Provar properties file
-- provar.properties.validate — validate a properties file structure
-- provar.properties.generate — generate a properties file skeleton
+- provar_properties_read — read a Provar properties file
+- provar_properties_set — set a key in a Provar properties file
+- provar_properties_validate — validate a properties file structure
+- provar_properties_generate — generate a properties file skeleton
 
 Quality Hub (sf provar quality-hub wrappers):
 
-- provar.qualityhub.connect — connect to a Quality Hub org
-- provar.qualityhub.display — display connected org info
-- provar.qualityhub.testrun — trigger a Quality Hub test run
-- provar.qualityhub.testrun.report — poll test run status
-- provar.qualityhub.testrun.abort — abort a running test run
-- provar.qualityhub.testcase.retrieve — retrieve test case results
-- provar.qualityhub.defect.create — create defects for failed test executions
-- provar.qualityhub.examples.retrieve — retrieve corpus examples for a given step type
+- provar_qualityhub_connect — connect to a Quality Hub org
+- provar_qualityhub_display — display connected org info
+- provar_qualityhub_testrun — trigger a Quality Hub test run
+- provar_qualityhub_testrun_report — poll test run status
+- provar_qualityhub_testrun_abort — abort a running test run
+- provar_qualityhub_testcase_retrieve — retrieve test case results
+- provar_qualityhub_defect_create — create defects for failed test executions
+- provar_qualityhub_examples_retrieve — retrieve corpus examples for test generation grounding
 
 Automation (sf provar automation wrappers):
 
-- provar.automation.setup — set up the Provar Automation runtime
-- provar.automation.metadata.download — download Salesforce metadata
-- provar.automation.compile — compile Provar test assets
-- provar.automation.testrun — run Provar tests
-- provar.automation.config.load — load a Provar configuration
+- provar_automation_setup — set up the Provar Automation runtime
+- provar_automation_metadata_download — download Salesforce metadata
+- provar_automation_compile — compile Provar test assets
+- provar_automation_testrun — run Provar tests
+- provar_automation_config_load — load a Provar configuration
 
 ANT build:
 
-- provar.ant.generate — generate an ANT build.xml
-- provar.ant.validate — validate an ANT build.xml
+- provar_ant_generate — generate an ANT build.xml
+- provar_ant_validate — validate an ANT build.xml
 
 Test result analysis:
 
-- provar.testrun.rca — root cause analysis on a test result
-- provar.testrun.report.locate — locate a test result report
+- provar_testrun_rca — root cause analysis on a test result
+- provar_testrun_report_locate — locate a test result report
 
 NitroX (Provar NitroX component tools):
 
-- provar.nitrox.discover — discover NitroX component metadata
-- provar.nitrox.generate — generate a NitroX component
-- provar.nitrox.patch — patch a NitroX component definition
-- provar.nitrox.read — read a NitroX component definition
-- provar.nitrox.validate — validate a NitroX component
-
-Connections:
-
-- provar.connection.list — list connections and named environments from .testproject
+- provar_nitrox_discover — discover NitroX component metadata
+- provar_nitrox_generate — generate a NitroX component
+- provar_nitrox_patch — patch a NitroX component definition
+- provar_nitrox_read — read a NitroX component definition
+- provar_nitrox_validate — validate a NitroX component
 
 For full tool documentation see docs/mcp.md in this repository.
 

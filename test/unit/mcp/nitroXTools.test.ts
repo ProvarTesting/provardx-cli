@@ -23,6 +23,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -77,16 +81,16 @@ describe('nitroXTools', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  // ── provar.nitrox.discover ─────────────────────────────────────────────────
+  // ── provar_nitrox_discover ─────────────────────────────────────────────────
 
-  describe('provar.nitrox.discover', () => {
+  describe('provar_nitrox_discover', () => {
     it('finds project when .testproject marker exists', () => {
       fs.writeFileSync(path.join(tmpDir, '.testproject'), '');
       const nitroxDir = path.join(tmpDir, 'nitroX');
       fs.mkdirSync(nitroxDir);
       fs.writeFileSync(path.join(nitroxDir, 'Component.po.json'), JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.discover', { search_roots: [tmpDir] });
+      const result = server.call('provar_nitrox_discover', { search_roots: [tmpDir] });
       const body = parseBody(result);
       const projects = body['projects'] as Array<Record<string, unknown>>;
       assert.ok(Array.isArray(projects));
@@ -96,14 +100,14 @@ describe('nitroXTools', () => {
     });
 
     it('returns empty projects when no .testproject found', () => {
-      const result = server.call('provar.nitrox.discover', { search_roots: [tmpDir] });
+      const result = server.call('provar_nitrox_discover', { search_roots: [tmpDir] });
       const body = parseBody(result);
       const projects = body['projects'] as unknown[];
       assert.deepEqual(projects, []);
     });
 
     it('handles non-existent search root gracefully', () => {
-      const result = server.call('provar.nitrox.discover', {
+      const result = server.call('provar_nitrox_discover', {
         search_roots: [path.join(tmpDir, 'does-not-exist')],
       });
       assert.ok(!isError(result));
@@ -117,7 +121,7 @@ describe('nitroXTools', () => {
       fs.mkdirSync(nmDir, { recursive: true });
       fs.writeFileSync(path.join(nmDir, '.testproject'), '');
 
-      const result = server.call('provar.nitrox.discover', { search_roots: [tmpDir] });
+      const result = server.call('provar_nitrox_discover', { search_roots: [tmpDir] });
       const body = parseBody(result);
       assert.deepEqual(body['projects'], []);
     });
@@ -127,7 +131,7 @@ describe('nitroXTools', () => {
       fs.mkdirSync(hiddenDir);
       fs.writeFileSync(path.join(hiddenDir, '.testproject'), '');
 
-      const result = server.call('provar.nitrox.discover', { search_roots: [tmpDir] });
+      const result = server.call('provar_nitrox_discover', { search_roots: [tmpDir] });
       const body = parseBody(result);
       assert.deepEqual(body['projects'], []);
     });
@@ -136,12 +140,9 @@ describe('nitroXTools', () => {
       fs.writeFileSync(path.join(tmpDir, '.testproject'), '');
       const pkgDir = path.join(tmpDir, 'nitroXPackages', 'my-pkg');
       fs.mkdirSync(pkgDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(pkgDir, 'package.json'),
-        JSON.stringify({ name: 'my-pkg', version: '1.0.0' })
-      );
+      fs.writeFileSync(path.join(pkgDir, 'package.json'), JSON.stringify({ name: 'my-pkg', version: '1.0.0' }));
 
-      const result = server.call('provar.nitrox.discover', {
+      const result = server.call('provar_nitrox_discover', {
         search_roots: [tmpDir],
         include_packages: true,
       });
@@ -154,14 +155,14 @@ describe('nitroXTools', () => {
     });
   });
 
-  // ── provar.nitrox.read ─────────────────────────────────────────────────────
+  // ── provar_nitrox_read ─────────────────────────────────────────────────────
 
-  describe('provar.nitrox.read', () => {
+  describe('provar_nitrox_read', () => {
     it('returns content for a valid .po.json file', () => {
       const filePath = path.join(tmpDir, 'Component.po.json');
       fs.writeFileSync(filePath, JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.read', { file_paths: [filePath] });
+      const result = server.call('provar_nitrox_read', { file_paths: [filePath] });
       assert.ok(!isError(result));
       const body = parseBody(result);
       const files = body['files'] as Array<Record<string, unknown>>;
@@ -172,7 +173,7 @@ describe('nitroXTools', () => {
 
     it('returns FILE_NOT_FOUND error for missing file', () => {
       const missing = path.join(tmpDir, 'missing.po.json');
-      const result = server.call('provar.nitrox.read', { file_paths: [missing] });
+      const result = server.call('provar_nitrox_read', { file_paths: [missing] });
       assert.ok(!isError(result)); // tool-level success, per-file error
       const body = parseBody(result);
       const files = body['files'] as Array<Record<string, unknown>>;
@@ -184,12 +185,8 @@ describe('nitroXTools', () => {
         fs.writeFileSync(path.join(tmpDir, `c${i}.po.json`), JSON.stringify(VALID_ROOT));
       }
 
-      const result = server.call('provar.nitrox.read', {
-        file_paths: [
-          path.join(tmpDir, 'c0.po.json'),
-          path.join(tmpDir, 'c1.po.json'),
-          path.join(tmpDir, 'c2.po.json'),
-        ],
+      const result = server.call('provar_nitrox_read', {
+        file_paths: [path.join(tmpDir, 'c0.po.json'), path.join(tmpDir, 'c1.po.json'), path.join(tmpDir, 'c2.po.json')],
         max_files: 2,
       });
       const body = parseBody(result);
@@ -206,7 +203,7 @@ describe('nitroXTools', () => {
       fs.writeFileSync(path.join(nitroxDir, 'A.po.json'), JSON.stringify(VALID_ROOT));
       fs.writeFileSync(path.join(nitroxDir, 'B.po.json'), JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.read', { project_path: tmpDir });
+      const result = server.call('provar_nitrox_read', { project_path: tmpDir });
       assert.ok(!isError(result));
       const body = parseBody(result);
       assert.equal(body['total_found'], 2);
@@ -218,7 +215,7 @@ describe('nitroXTools', () => {
       // Write a real file so it's not FILE_NOT_FOUND
       fs.writeFileSync(outsidePath, JSON.stringify(VALID_ROOT));
       try {
-        const result = server.call('provar.nitrox.read', { file_paths: [outsidePath] });
+        const result = server.call('provar_nitrox_read', { file_paths: [outsidePath] });
         const body = parseBody(result);
         const files = body['files'] as Array<Record<string, unknown>>;
         // Per-file path policy error
@@ -229,18 +226,18 @@ describe('nitroXTools', () => {
     });
 
     it('returns MISSING_INPUT when neither file_paths nor project_path provided', () => {
-      const result = server.call('provar.nitrox.read', {});
+      const result = server.call('provar_nitrox_read', {});
       assert.ok(isError(result));
       const body = parseBody(result);
       assert.equal(body['error_code'], 'MISSING_INPUT');
     });
   });
 
-  // ── provar.nitrox.validate ─────────────────────────────────────────────────
+  // ── provar_nitrox_validate ─────────────────────────────────────────────────
 
-  describe('provar.nitrox.validate', () => {
+  describe('provar_nitrox_validate', () => {
     it('scores a fully valid root component as 100', () => {
-      const result = server.call('provar.nitrox.validate', {
+      const result = server.call('provar_nitrox_validate', {
         content: JSON.stringify(VALID_ROOT),
       });
       assert.ok(!isError(result));
@@ -252,7 +249,7 @@ describe('nitroXTools', () => {
 
     it('NX001 ERROR: missing componentId', () => {
       const obj = { name: '/com/test/C', type: 'Block', pageStructureElement: true, fieldDetailsElement: false };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX001' && i['severity'] === 'ERROR'));
@@ -260,7 +257,7 @@ describe('nitroXTools', () => {
 
     it('NX001 ERROR: invalid UUID format', () => {
       const obj = { ...VALID_ROOT, componentId: 'not-a-uuid' };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX001' && i['severity'] === 'ERROR'));
@@ -268,7 +265,7 @@ describe('nitroXTools', () => {
 
     it('NX002 ERROR: root missing required fields', () => {
       const obj = { componentId: VALID_UUID }; // no parentId, so root — missing name/type etc
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.filter((i) => i['rule_id'] === 'NX002').length >= 4);
@@ -276,7 +273,7 @@ describe('nitroXTools', () => {
 
     it('NX002 does not fire when parentId is set', () => {
       const obj = { componentId: VALID_UUID, parentId: VALID_UUID }; // child — NX002 should not fire
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(!issues.some((i) => i['rule_id'] === 'NX002'));
@@ -284,7 +281,7 @@ describe('nitroXTools', () => {
 
     it('NX003 ERROR: tagName contains whitespace', () => {
       const obj = { ...VALID_ROOT, tagName: 'my tag' };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX003' && i['severity'] === 'ERROR'));
@@ -293,7 +290,7 @@ describe('nitroXTools', () => {
     it('NX004 ERROR: interaction missing required fields', () => {
       const badInteraction = { name: 'Click' }; // missing required fields
       const obj = { ...VALID_ROOT, interactions: [badInteraction] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX004' && i['severity'] === 'ERROR'));
@@ -302,7 +299,7 @@ describe('nitroXTools', () => {
     it('NX005 ERROR: implementation missing javaScriptSnippet', () => {
       const badInteraction = { ...VALID_INTERACTION, implementations: [{}] };
       const obj = { ...VALID_ROOT, interactions: [badInteraction] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX005' && i['severity'] === 'ERROR'));
@@ -310,7 +307,7 @@ describe('nitroXTools', () => {
 
     it('NX006 ERROR: selector missing xpath', () => {
       const obj = { ...VALID_ROOT, selectors: [{ priority: 1 }] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX006' && i['severity'] === 'ERROR'));
@@ -318,7 +315,7 @@ describe('nitroXTools', () => {
 
     it('NX007 WARNING: element missing type', () => {
       const obj = { ...VALID_ROOT, elements: [{ label: 'My Field' }] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX007' && i['severity'] === 'WARNING'));
@@ -326,7 +323,7 @@ describe('nitroXTools', () => {
 
     it('NX008 WARNING: invalid comparisonType', () => {
       const obj = { ...VALID_ROOT, parameters: [{ name: 'p', value: 'v', comparisonType: 'startsWith' }] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX008' && i['severity'] === 'WARNING'));
@@ -334,7 +331,7 @@ describe('nitroXTools', () => {
 
     it('NX008 accepts "starts-with" (hyphenated)', () => {
       const obj = { ...VALID_ROOT, parameters: [{ name: 'p', value: 'v', comparisonType: 'starts-with' }] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(!issues.some((i) => i['rule_id'] === 'NX008'));
@@ -343,7 +340,7 @@ describe('nitroXTools', () => {
     it('NX009 INFO: interaction name with special characters', () => {
       const specialInteraction = { ...VALID_INTERACTION, name: 'Click! Now' };
       const obj = { ...VALID_ROOT, interactions: [specialInteraction] };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX009' && i['severity'] === 'INFO'));
@@ -351,7 +348,7 @@ describe('nitroXTools', () => {
 
     it('NX010 INFO: bodyTagName contains whitespace', () => {
       const obj = { ...VALID_ROOT, bodyTagName: 'body tag' };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX010' && i['severity'] === 'INFO'));
@@ -360,14 +357,14 @@ describe('nitroXTools', () => {
     it('score formula: 2 errors = score 60', () => {
       // Missing componentId (NX001) + missing root fields (NX002 × 4)
       const obj = { name: '/test' }; // missing componentId + no type/pageStructureElement/fieldDetailsElement
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       assert.equal(body['valid'], false);
       assert.ok((body['score'] as number) < 100);
     });
 
     it('returns FILE_NOT_FOUND when file_path does not exist', () => {
-      const result = server.call('provar.nitrox.validate', {
+      const result = server.call('provar_nitrox_validate', {
         file_path: path.join(tmpDir, 'missing.po.json'),
       });
       assert.ok(isError(result));
@@ -376,14 +373,14 @@ describe('nitroXTools', () => {
     });
 
     it('returns MISSING_INPUT when neither content nor file_path provided', () => {
-      const result = server.call('provar.nitrox.validate', {});
+      const result = server.call('provar_nitrox_validate', {});
       assert.ok(isError(result));
       const body = parseBody(result);
       assert.equal(body['error_code'], 'MISSING_INPUT');
     });
 
     it('returns NX000 for invalid JSON content', () => {
-      const result = server.call('provar.nitrox.validate', { content: 'not json {' });
+      const result = server.call('provar_nitrox_validate', { content: 'not json {' });
       assert.ok(isError(result));
       const body = parseBody(result);
       assert.equal(body['error_code'], 'NX000');
@@ -401,18 +398,18 @@ describe('nitroXTools', () => {
           },
         ],
       };
-      const result = server.call('provar.nitrox.validate', { content: JSON.stringify(obj) });
+      const result = server.call('provar_nitrox_validate', { content: JSON.stringify(obj) });
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX006'));
     });
   });
 
-  // ── provar.nitrox.generate ─────────────────────────────────────────────────
+  // ── provar_nitrox_generate ─────────────────────────────────────────────────
 
-  describe('provar.nitrox.generate', () => {
+  describe('provar_nitrox_generate', () => {
     it('dry_run=true returns JSON without writing', () => {
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/ButtonComponent',
         tag_name: 'lightning-button',
         dry_run: true,
@@ -430,7 +427,7 @@ describe('nitroXTools', () => {
 
     it('writes file when dry_run=false', () => {
       const outPath = path.join(tmpDir, 'Button.po.json');
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/ButtonComponent',
         tag_name: 'lightning-button',
         output_path: outPath,
@@ -446,7 +443,7 @@ describe('nitroXTools', () => {
       const outPath = path.join(tmpDir, 'Exists.po.json');
       fs.writeFileSync(outPath, '{}');
 
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/C',
         tag_name: 'c-test',
         output_path: outPath,
@@ -462,7 +459,7 @@ describe('nitroXTools', () => {
       const outPath = path.join(tmpDir, 'Overwrite.po.json');
       fs.writeFileSync(outPath, '{"old": true}');
 
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/C',
         tag_name: 'c-test',
         output_path: outPath,
@@ -478,7 +475,7 @@ describe('nitroXTools', () => {
 
     it('returns PATH_NOT_ALLOWED when output_path is outside allowed roots', () => {
       const outPath = path.join(os.tmpdir(), 'outside-allowed.po.json');
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/C',
         tag_name: 'c-test',
         output_path: outPath,
@@ -490,7 +487,7 @@ describe('nitroXTools', () => {
     });
 
     it('generates elements with parameters and selectors', () => {
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/FormComponent',
         tag_name: 'c-form',
         elements: [
@@ -518,7 +515,7 @@ describe('nitroXTools', () => {
     });
 
     it('assigns unique UUIDs to root and each element', () => {
-      const result = server.call('provar.nitrox.generate', {
+      const result = server.call('provar_nitrox_generate', {
         name: '/com/test/Multi',
         tag_name: 'c-multi',
         elements: [
@@ -530,21 +527,17 @@ describe('nitroXTools', () => {
       const body = parseBody(result);
       const generated = JSON.parse(body['content'] as string) as Record<string, unknown>;
       const elements = generated['elements'] as Array<Record<string, unknown>>;
-      const ids = [
-        generated['componentId'],
-        elements[0]['componentId'],
-        elements[1]['componentId'],
-      ];
+      const ids = [generated['componentId'], elements[0]['componentId'], elements[1]['componentId']];
       const unique = new Set(ids);
       assert.equal(unique.size, 3);
     });
   });
 
-  // ── provar.nitrox.patch ────────────────────────────────────────────────────
+  // ── provar_nitrox_patch ────────────────────────────────────────────────────
 
-  describe('provar.nitrox.patch', () => {
+  describe('provar_nitrox_patch', () => {
     it('returns FILE_NOT_FOUND for missing file', () => {
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: path.join(tmpDir, 'missing.po.json'),
         patch: { name: '/new' },
       });
@@ -557,7 +550,7 @@ describe('nitroXTools', () => {
       const filePath = path.join(tmpDir, 'Component.po.json');
       fs.writeFileSync(filePath, JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: filePath,
         patch: { name: '/com/test/Updated' },
         dry_run: true,
@@ -576,7 +569,7 @@ describe('nitroXTools', () => {
       const filePath = path.join(tmpDir, 'Component.po.json');
       fs.writeFileSync(filePath, JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: filePath,
         patch: { name: '/com/test/Patched' },
         dry_run: false,
@@ -593,7 +586,7 @@ describe('nitroXTools', () => {
       const filePath = path.join(tmpDir, 'Component.po.json');
       fs.writeFileSync(filePath, JSON.stringify({ ...VALID_ROOT, qualifier: 'some-qualifier' }));
 
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: filePath,
         patch: { qualifier: null },
         dry_run: true,
@@ -609,7 +602,7 @@ describe('nitroXTools', () => {
       fs.writeFileSync(filePath, JSON.stringify(VALID_ROOT));
 
       // Remove componentId via patch — will trigger NX001 error
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: filePath,
         patch: { componentId: null },
         dry_run: false,
@@ -627,7 +620,7 @@ describe('nitroXTools', () => {
       const filePath = path.join(tmpDir, 'Component.po.json');
       fs.writeFileSync(filePath, JSON.stringify(VALID_ROOT));
 
-      const result = server.call('provar.nitrox.patch', {
+      const result = server.call('provar_nitrox_patch', {
         file_path: filePath,
         patch: { name: '/com/test/Updated' },
         dry_run: true,

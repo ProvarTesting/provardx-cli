@@ -156,32 +156,35 @@ function deepMerge(target: Record<string, unknown>, source: Record<string, unkno
   return result;
 }
 
-// ── provar.properties.generate ────────────────────────────────────────────────
+// ── provar_properties_generate ────────────────────────────────────────────────
 
 export function registerPropertiesGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.properties.generate',
-    [
-      'Generate a provardx-properties.json file from the standard template.',
-      'Optionally pre-fills projectPath and provarHome if provided.',
-      'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
-      'Use provar.properties.set afterwards to update specific fields.',
-    ].join(' '),
+  server.registerTool(
+    'provar_properties_generate',
     {
-      output_path: z.string().describe('Where to write the file (e.g. /path/to/project/provardx-properties.json)'),
-      project_path: z.string().optional().describe('Pre-fill the projectPath field with this value'),
-      provar_home: z.string().optional().describe('Pre-fill the provarHome field with this value'),
-      results_path: z.string().optional().describe('Pre-fill the resultsPath field with this value'),
-      overwrite: z
-        .boolean()
-        .optional()
-        .default(false)
-        .describe('Overwrite the file if it already exists (default: false)'),
-      dry_run: z.boolean().optional().default(false).describe('Return the content without writing (default: false)'),
+      title: 'Generate ProvarDX Properties File',
+      description: [
+        'Generate a provardx-properties.json file from the standard template.',
+        'Optionally pre-fills projectPath and provarHome if provided.',
+        'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
+        'Use provar_properties_set afterwards to update specific fields.',
+      ].join(' '),
+      inputSchema: {
+        output_path: z.string().describe('Where to write the file (e.g. /path/to/project/provardx-properties.json)'),
+        project_path: z.string().optional().describe('Pre-fill the projectPath field with this value'),
+        provar_home: z.string().optional().describe('Pre-fill the provarHome field with this value'),
+        results_path: z.string().optional().describe('Pre-fill the resultsPath field with this value'),
+        overwrite: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Overwrite the file if it already exists (default: false)'),
+        dry_run: z.boolean().optional().default(false).describe('Return the content without writing (default: false)'),
+      },
     },
     ({ output_path, project_path, provar_home, results_path, overwrite, dry_run }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.properties.generate', { requestId, output_path });
+      log('info', 'provar_properties_generate', { requestId, output_path });
 
       try {
         assertPathAllowed(output_path, config.allowedPaths);
@@ -231,8 +234,8 @@ export function registerPropertiesGenerate(server: McpServer, config: ServerConf
         }
 
         const nextSteps = dry_run
-          ? 'Review the content, write to disk, then run provar.automation.config.load to register this file before compiling or running tests.'
-          : `Run provar.automation.config.load with properties_path "${resolved}" to register this configuration. Required before provar.automation.compile or provar.automation.testrun will work.`;
+          ? 'Review the content, write to disk, then run provar_automation_config_load to register this file before compiling or running tests.'
+          : `Run provar_automation_config_load with properties_path "${resolved}" to register this configuration. Required before provar_automation_compile or provar_automation_testrun will work.`;
 
         const response = {
           requestId,
@@ -312,22 +315,26 @@ function buildDivergenceWarning(
     .join(', ');
   return (
     `The file you read (${diskPath}) differs from the active sf config (${activePath}) on: ${details}. ` +
-    'Test runs use the active config values — run provar.automation.config.load with the correct file to sync.'
+    'Test runs use the active config values — run provar_automation_config_load with the correct file to sync.'
   );
 }
 
-// ── provar.properties.read ────────────────────────────────────────────────────
+// ── provar_properties_read ────────────────────────────────────────────────────
 
 export function registerPropertiesRead(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.properties.read',
-    'Read and parse a provardx-properties.json file. Returns the parsed content so you can inspect current settings before making changes with provar.properties.set.',
+  server.registerTool(
+    'provar_properties_read',
     {
-      file_path: z.string().describe('Path to the provardx-properties.json file'),
+      title: 'Read Properties File',
+      description:
+        'Read and parse a provardx-properties.json file. Returns the parsed content so you can inspect current settings before making changes with provar_properties_set.',
+      inputSchema: {
+        file_path: z.string().describe('Path to the provardx-properties.json file'),
+      },
     },
     ({ file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.properties.read', { requestId, file_path });
+      log('info', 'provar_properties_read', { requestId, file_path });
 
       try {
         assertPathAllowed(file_path, config.allowedPaths);
@@ -342,7 +349,7 @@ export function registerPropertiesRead(server: McpServer, config: ServerConfig):
                 text: JSON.stringify(
                   makeError(
                     'PROPERTIES_FILE_NOT_FOUND',
-                    `Properties file not found: ${resolved}. Use provar.properties.generate to create it.`,
+                    `Properties file not found: ${resolved}. Use provar_properties_generate to create it.`,
                     requestId
                   )
                 ),
@@ -410,7 +417,7 @@ export function registerPropertiesRead(server: McpServer, config: ServerConfig):
   );
 }
 
-// ── provar.properties.set ─────────────────────────────────────────────────────
+// ── provar_properties_set ─────────────────────────────────────────────────────
 
 const updatesSchema = z
   .object({
@@ -456,7 +463,7 @@ const updatesSchema = z
       .array(z.string())
       .optional()
       .describe(
-        'Specific test case file paths to run (relative to projectPath/tests/). NOTE: <dataTable> data-driven iteration does NOT work in this mode — data table variables resolve as null. To run data-driven tests, add the test case to a plan with provar.testplan.add-instance and run via testPlan instead.'
+        'Specific test case file paths to run (relative to projectPath/tests/). NOTE: <dataTable> data-driven iteration does NOT work in this mode — data table variables resolve as null. To run data-driven tests, add the test case to a plan with provar_testplan_add-instance and run via testPlan instead.'
       ),
     testPlan: z.array(z.string()).optional().describe('Test plan names to run (wildcards permitted)'),
     connectionOverride: z
@@ -472,22 +479,25 @@ const updatesSchema = z
   .describe('Fields to update in the properties file — only provided fields are changed');
 
 export function registerPropertiesSet(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.properties.set',
-    [
-      'Update one or more fields in a provardx-properties.json file.',
-      'Only the provided fields are changed — all other fields are preserved.',
-      'Object fields (environment, metadata) are deep-merged.',
-      'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
-      'Use provar.properties.read first to inspect the current state.',
-    ].join(' '),
+  server.registerTool(
+    'provar_properties_set',
     {
-      file_path: z.string().describe('Path to the provardx-properties.json file to update'),
-      updates: updatesSchema,
+      title: 'Set Property Value',
+      description: [
+        'Update one or more fields in a provardx-properties.json file.',
+        'Only the provided fields are changed — all other fields are preserved.',
+        'Object fields (environment, metadata) are deep-merged.',
+        'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
+        'Use provar_properties_read first to inspect the current state.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().describe('Path to the provardx-properties.json file to update'),
+        updates: updatesSchema,
+      },
     },
     ({ file_path, updates }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.properties.set', { requestId, file_path });
+      log('info', 'provar_properties_set', { requestId, file_path });
 
       try {
         assertPathAllowed(file_path, config.allowedPaths);
@@ -502,7 +512,7 @@ export function registerPropertiesSet(server: McpServer, config: ServerConfig): 
                 text: JSON.stringify(
                   makeError(
                     'PROPERTIES_FILE_NOT_FOUND',
-                    `File not found: ${resolved}. Use provar.properties.generate to create it first.`,
+                    `File not found: ${resolved}. Use provar_properties_generate to create it first.`,
                     requestId
                   )
                 ),
@@ -559,23 +569,26 @@ export function registerPropertiesSet(server: McpServer, config: ServerConfig): 
   );
 }
 
-// ── provar.properties.validate ────────────────────────────────────────────────
+// ── provar_properties_validate ────────────────────────────────────────────────
 
 export function registerPropertiesValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.properties.validate',
-    [
-      'Validate a provardx-properties.json file against the ProvarDX schema.',
-      'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
-      'Accepts either a file path or inline JSON content.',
-    ].join(' '),
+  server.registerTool(
+    'provar_properties_validate',
     {
-      file_path: z.string().optional().describe('Path to the provardx-properties.json file to validate'),
-      content: z.string().optional().describe('Inline JSON string to validate (alternative to file_path)'),
+      title: 'Validate ProvarDX Properties File',
+      description: [
+        'Validate a provardx-properties.json file against the ProvarDX schema.',
+        'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
+        'Accepts either a file path or inline JSON content.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().optional().describe('Path to the provardx-properties.json file to validate'),
+        content: z.string().optional().describe('Inline JSON string to validate (alternative to file_path)'),
+      },
     },
     ({ file_path, content }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.properties.validate', { requestId, file_path });
+      log('info', 'provar_properties_validate', { requestId, file_path });
 
       if (!file_path && !content) {
         return {

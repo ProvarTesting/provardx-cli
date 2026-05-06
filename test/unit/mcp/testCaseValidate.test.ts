@@ -801,6 +801,11 @@ describe('registerTestCaseValidate handler', () => {
     public tool(...args: any[]): void {
       this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public registerTool(...args: any[]): void {
+      this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
+    }
   }
 
   let capServer: CapturingServer;

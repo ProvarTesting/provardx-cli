@@ -110,15 +110,19 @@ function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
   // NX001: componentId must be present and a valid UUID
   if (obj['componentId'] === undefined || obj['componentId'] === null) {
     issues.push({
-      rule_id: 'NX001', severity: 'ERROR',
+      rule_id: 'NX001',
+      severity: 'ERROR',
       message: 'componentId is required.',
-      applies_to: 'root', field: 'componentId',
+      applies_to: 'root',
+      field: 'componentId',
     });
   } else if (typeof obj['componentId'] !== 'string' || !UUID_RE.test(obj['componentId'])) {
     issues.push({
-      rule_id: 'NX001', severity: 'ERROR',
+      rule_id: 'NX001',
+      severity: 'ERROR',
       message: `componentId must be a valid UUID, got: "${String(obj['componentId'])}".`,
-      applies_to: 'root', field: 'componentId',
+      applies_to: 'root',
+      field: 'componentId',
     });
   }
 
@@ -128,9 +132,11 @@ function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
     for (const field of ['name', 'type', 'pageStructureElement', 'fieldDetailsElement'] as const) {
       if (obj[field] === undefined || obj[field] === null) {
         issues.push({
-          rule_id: 'NX002', severity: 'ERROR',
+          rule_id: 'NX002',
+          severity: 'ERROR',
           message: `Root component requires "${field}".`,
-          applies_to: 'root', field,
+          applies_to: 'root',
+          field,
           suggestion: `Add a "${field}" property to the root component object.`,
         });
       }
@@ -140,9 +146,11 @@ function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
   // NX003: tagName must not contain whitespace
   if (typeof obj['tagName'] === 'string' && /\s/.test(obj['tagName'])) {
     issues.push({
-      rule_id: 'NX003', severity: 'ERROR',
+      rule_id: 'NX003',
+      severity: 'ERROR',
       message: 'tagName should not contain spaces.',
-      applies_to: 'root', field: 'tagName',
+      applies_to: 'root',
+      field: 'tagName',
       suggestion: 'Remove whitespace from tagName.',
     });
   }
@@ -150,9 +158,11 @@ function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
   // NX010: bodyTagName (if present) must not contain whitespace
   if (typeof obj['bodyTagName'] === 'string' && /\s/.test(obj['bodyTagName'])) {
     issues.push({
-      rule_id: 'NX010', severity: 'INFO',
+      rule_id: 'NX010',
+      severity: 'INFO',
       message: 'bodyTagName should not contain spaces.',
-      applies_to: 'root', field: 'bodyTagName',
+      applies_to: 'root',
+      field: 'bodyTagName',
       suggestion: 'Remove whitespace from bodyTagName.',
     });
   }
@@ -204,7 +214,8 @@ function validateElement(el: JsonObj, issues: NitroXIssue[]): void {
   // NX007: Element should have type
   if (!el['type']) {
     issues.push({
-      rule_id: 'NX007', severity: 'WARNING',
+      rule_id: 'NX007',
+      severity: 'WARNING',
       message: 'Element is missing required "type".',
       applies_to: 'element',
       suggestion: 'Add a "type" field to the element (e.g. "content" or "component::UUID").',
@@ -238,17 +249,21 @@ function validateInteraction(interaction: JsonObj, context: string, issues: Nitr
   for (const field of ['defaultInteraction', 'interactionType', 'name', 'testStepTitlePattern', 'title'] as const) {
     if (interaction[field] === undefined || interaction[field] === null) {
       issues.push({
-        rule_id: 'NX004', severity: 'ERROR',
+        rule_id: 'NX004',
+        severity: 'ERROR',
         message: `Interaction in ${context} missing required field "${field}".`,
-        applies_to: 'interaction', field,
+        applies_to: 'interaction',
+        field,
       });
     }
   }
   if (!Array.isArray(interaction['implementations']) || interaction['implementations'].length === 0) {
     issues.push({
-      rule_id: 'NX004', severity: 'ERROR',
+      rule_id: 'NX004',
+      severity: 'ERROR',
       message: `Interaction in ${context} must have at least one implementation.`,
-      applies_to: 'interaction', field: 'implementations',
+      applies_to: 'interaction',
+      field: 'implementations',
     });
   } else {
     for (const impl of interaction['implementations']) {
@@ -259,9 +274,11 @@ function validateInteraction(interaction: JsonObj, context: string, issues: Nitr
   // NX009: name should match ^[A-Za-z0-9\s]*$
   if (typeof interaction['name'] === 'string' && !INTERACTION_NAME_RE.test(interaction['name'])) {
     issues.push({
-      rule_id: 'NX009', severity: 'INFO',
+      rule_id: 'NX009',
+      severity: 'INFO',
       message: `Interaction name "${interaction['name']}" should contain only alphanumeric characters and spaces.`,
-      applies_to: 'interaction', field: 'name',
+      applies_to: 'interaction',
+      field: 'name',
       suggestion: 'Remove special characters from the interaction name.',
     });
   }
@@ -271,9 +288,11 @@ function validateImplementation(impl: JsonObj, context: string, issues: NitroXIs
   // NX005: must have javaScriptSnippet
   if (!impl['javaScriptSnippet']) {
     issues.push({
-      rule_id: 'NX005', severity: 'ERROR',
+      rule_id: 'NX005',
+      severity: 'ERROR',
       message: `Implementation in ${context} missing required "javaScriptSnippet".`,
-      applies_to: 'implementation', field: 'javaScriptSnippet',
+      applies_to: 'implementation',
+      field: 'javaScriptSnippet',
     });
   }
 }
@@ -282,9 +301,11 @@ function validateSelector(sel: JsonObj, issues: NitroXIssue[]): void {
   // NX006: must have xpath
   if (!sel['xpath']) {
     issues.push({
-      rule_id: 'NX006', severity: 'ERROR',
+      rule_id: 'NX006',
+      severity: 'ERROR',
       message: 'Selector missing required "xpath".',
-      applies_to: 'selector', field: 'xpath',
+      applies_to: 'selector',
+      field: 'xpath',
       suggestion: 'Add an "xpath" property to the selector.',
     });
   }
@@ -294,9 +315,13 @@ function validateParameter(param: JsonObj, context: string, issues: NitroXIssue[
   // NX008: comparisonType must be one of valid enum values
   if (param['comparisonType'] !== undefined && !VALID_COMPARISON_TYPES.includes(String(param['comparisonType']))) {
     issues.push({
-      rule_id: 'NX008', severity: 'WARNING',
-      message: `Parameter in ${context} has invalid comparisonType "${String(param['comparisonType'])}". Must be one of: ${VALID_COMPARISON_TYPES.join(', ')}.`,
-      applies_to: 'parameter', field: 'comparisonType',
+      rule_id: 'NX008',
+      severity: 'WARNING',
+      message: `Parameter in ${context} has invalid comparisonType "${String(
+        param['comparisonType']
+      )}". Must be one of: ${VALID_COMPARISON_TYPES.join(', ')}.`,
+      applies_to: 'parameter',
+      field: 'comparisonType',
       suggestion: `Use one of: ${VALID_COMPARISON_TYPES.join(', ')}`,
     });
   }
@@ -401,35 +426,38 @@ function applyMergePatch(target: JsonObj, patch: JsonObj): JsonObj {
 // ── Tool Registrations ────────────────────────────────────────────────────────
 
 export function registerNitroXDiscover(server: McpServer): void {
-  server.tool(
-    'provar.nitrox.discover',
-    [
-      'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
-      'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
-      'NitroX is Provar\'s Hybrid Model for locators — component-based page objects for LWC,',
-      'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
-      'Results provide file paths and package info for use with provar.nitrox.read, validate, and generate.',
-    ].join(' '),
+  server.registerTool(
+    'provar_nitrox_discover',
     {
-      search_roots: z
-        .array(z.string())
-        .optional()
-        .describe('Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)'),
-      max_depth: z
-        .number()
-        .int()
-        .min(1)
-        .max(20)
-        .default(6)
-        .describe('Maximum directory depth for .testproject search'),
-      include_packages: z
-        .boolean()
-        .default(true)
-        .describe('Include nitroXPackages/ package.json metadata in results'),
+      title: 'Discover NitroX Components',
+      description: [
+        'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
+        'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
+        "NitroX is Provar's Hybrid Model for locators — component-based page objects for LWC,",
+        'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
+        'Results provide file paths and package info for use with provar_nitrox_read, validate, and generate.',
+      ].join(' '),
+      inputSchema: {
+        search_roots: z
+          .array(z.string())
+          .optional()
+          .describe('Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)'),
+        max_depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .default(6)
+          .describe('Maximum directory depth for .testproject search'),
+        include_packages: z
+          .boolean()
+          .default(true)
+          .describe('Include nitroXPackages/ package.json metadata in results'),
+      },
     },
     ({ search_roots, max_depth, include_packages }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.nitrox.discover', { requestId, search_roots, max_depth });
+      log('info', 'provar_nitrox_discover', { requestId, search_roots, max_depth });
 
       try {
         let roots = search_roots && search_roots.length > 0 ? search_roots : [process.cwd()];
@@ -437,10 +465,7 @@ export function registerNitroXDiscover(server: McpServer): void {
 
         // If no .testproject found in cwd, widen to home-dir defaults
         if (projects.length === 0 && (!search_roots || search_roots.length === 0)) {
-          const fallbackRoots = [
-            path.join(os.homedir(), 'git'),
-            path.join(os.homedir(), 'Provar'),
-          ];
+          const fallbackRoots = [path.join(os.homedir(), 'git'), path.join(os.homedir(), 'Provar')];
           const fallbackProjects = findProvarProjects(fallbackRoots, max_depth);
           if (fallbackProjects.length > 0) {
             projects = fallbackProjects;
@@ -495,7 +520,7 @@ export function registerNitroXDiscover(server: McpServer): void {
       } catch (err: unknown) {
         const error = err as Error;
         const errResult = makeError('DISCOVER_ERROR', error.message, requestId, false);
-        log('error', 'provar.nitrox.discover failed', { requestId, error: error.message });
+        log('error', 'provar_nitrox_discover failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -503,30 +528,33 @@ export function registerNitroXDiscover(server: McpServer): void {
 }
 
 export function registerNitroXRead(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.nitrox.read',
-    [
-      'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
-      'Use this to load examples before generating or validating.',
-      'Provide file_paths for specific files, or project_path to read all .po.json files from a project\'s nitroX/ directory.',
-    ].join(' '),
+  server.registerTool(
+    'provar_nitrox_read',
     {
-      file_paths: z.array(z.string()).optional().describe('Specific .po.json file paths to read'),
-      project_path: z
-        .string()
-        .optional()
-        .describe('Provar project path — reads all .po.json files from nitroX/ directory'),
-      max_files: z
-        .number()
-        .int()
-        .min(1)
-        .max(100)
-        .default(20)
-        .describe('Maximum number of files to return (prevents context overflow)'),
+      title: 'Read NitroX Files',
+      description: [
+        'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
+        'Use this to load examples before generating or validating.',
+        "Provide file_paths for specific files, or project_path to read all .po.json files from a project's nitroX/ directory.",
+      ].join(' '),
+      inputSchema: {
+        file_paths: z.array(z.string()).optional().describe('Specific .po.json file paths to read'),
+        project_path: z
+          .string()
+          .optional()
+          .describe('Provar project path — reads all .po.json files from nitroX/ directory'),
+        max_files: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .default(20)
+          .describe('Maximum number of files to return (prevents context overflow)'),
+      },
     },
     ({ file_paths, project_path, max_files }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.nitrox.read', {
+      log('info', 'provar_nitrox_read', {
         requestId,
         file_count: file_paths?.length,
         project_path,
@@ -551,11 +579,7 @@ export function registerNitroXRead(server: McpServer, config: ServerConfig): voi
           }
           const nitroxDir = path.join(resolved, 'nitroX');
           if (!fs.existsSync(nitroxDir)) {
-            const err = makeError(
-              'FILE_NOT_FOUND',
-              `No nitroX/ directory found in: ${resolved}`,
-              requestId
-            );
+            const err = makeError('FILE_NOT_FOUND', `No nitroX/ directory found in: ${resolved}`, requestId);
             return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
           }
           targets = collectPoJsonFiles(nitroxDir);
@@ -597,7 +621,7 @@ export function registerNitroXRead(server: McpServer, config: ServerConfig): voi
           requestId,
           false
         );
-        log('error', 'provar.nitrox.read failed', { requestId, error: error.message });
+        log('error', 'provar_nitrox_read failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -605,21 +629,24 @@ export function registerNitroXRead(server: McpServer, config: ServerConfig): voi
 }
 
 export function registerNitroXValidate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.nitrox.validate',
-    [
-      'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
-      'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-      'Returns a quality score (0–100) and a list of issues with rule IDs (NX001–NX010), severity, and suggestions.',
-      'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
-    ].join(' '),
+  server.registerTool(
+    'provar_nitrox_validate',
     {
-      content: z.string().optional().describe('JSON string of the .po.json content to validate'),
-      file_path: z.string().optional().describe('Path to a .po.json file to validate'),
+      title: 'Validate NitroX Component',
+      description: [
+        'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
+        'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+        'Returns a quality score (0–100) and a list of issues with rule IDs (NX001–NX010), severity, and suggestions.',
+        'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
+      ].join(' '),
+      inputSchema: {
+        content: z.string().optional().describe('JSON string of the .po.json content to validate'),
+        file_path: z.string().optional().describe('Path to a .po.json file to validate'),
+      },
     },
     ({ content, file_path }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.nitrox.validate', { requestId, has_content: !!content, file_path });
+      log('info', 'provar_nitrox_validate', { requestId, has_content: !!content, file_path });
 
       try {
         let source = content;
@@ -666,7 +693,7 @@ export function registerNitroXValidate(server: McpServer, config: ServerConfig):
           requestId,
           false
         );
-        log('error', 'provar.nitrox.validate failed', { requestId, error: error.message });
+        log('error', 'provar_nitrox_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -682,55 +709,40 @@ const ParameterInputSchema = z.object({
 
 const ElementInputSchema = z.object({
   label: z.string().describe('Human-readable element label'),
-  type_ref: z
-    .string()
-    .describe('Component type reference (e.g. "component::UUID" or "content")'),
+  type_ref: z.string().describe('Component type reference (e.g. "component::UUID" or "content")'),
   tag_name: z.string().optional().describe('Optional HTML/LWC tag name override'),
   parameters: z.array(ParameterInputSchema).optional(),
   selector_xpath: z.string().optional().describe('XPath selector for this element'),
 });
 
 export function registerNitroXGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.nitrox.generate',
-    [
-      'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
-      'Applicable to any component type supported by Provar\'s Hybrid Model:',
-      'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-      'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
-      'writes to disk only when dry_run=false.',
-    ].join(' '),
+  server.registerTool(
+    'provar_nitrox_generate',
     {
-      name: z
-        .string()
-        .describe('Path-like component name, e.g. /com/force/myapp/ButtonComponent'),
-      tag_name: z
-        .string()
-        .describe('LWC or HTML tag name, e.g. lightning-button or c-my-component'),
-      type: z.enum(['Block', 'Page']).default('Block').describe('Component type'),
-      page_structure_element: z
-        .boolean()
-        .default(true)
-        .describe('Whether this is a page structure element'),
-      field_details_element: z
-        .boolean()
-        .default(false)
-        .describe('Whether this is a field details element'),
-      parameters: z.array(ParameterInputSchema).optional().describe('Component parameters/qualifiers'),
-      elements: z.array(ElementInputSchema).optional().describe('Child elements'),
-      output_path: z
-        .string()
-        .optional()
-        .describe('File path to write (requires dry_run=false)'),
-      overwrite: z.boolean().default(false).describe('Overwrite if output_path already exists'),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Return JSON without writing to disk (default)'),
+      title: 'Generate NitroX Components',
+      description: [
+        'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
+        "Applicable to any component type supported by Provar's Hybrid Model:",
+        'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+        'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
+        'writes to disk only when dry_run=false.',
+      ].join(' '),
+      inputSchema: {
+        name: z.string().describe('Path-like component name, e.g. /com/force/myapp/ButtonComponent'),
+        tag_name: z.string().describe('LWC or HTML tag name, e.g. lightning-button or c-my-component'),
+        type: z.enum(['Block', 'Page']).default('Block').describe('Component type'),
+        page_structure_element: z.boolean().default(true).describe('Whether this is a page structure element'),
+        field_details_element: z.boolean().default(false).describe('Whether this is a field details element'),
+        parameters: z.array(ParameterInputSchema).optional().describe('Component parameters/qualifiers'),
+        elements: z.array(ElementInputSchema).optional().describe('Child elements'),
+        output_path: z.string().optional().describe('File path to write (requires dry_run=false)'),
+        overwrite: z.boolean().default(false).describe('Overwrite if output_path already exists'),
+        dry_run: z.boolean().default(true).describe('Return JSON without writing to disk (default)'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.nitrox.generate', { requestId, name: input.name, dry_run: input.dry_run });
+      log('info', 'provar_nitrox_generate', { requestId, name: input.name, dry_run: input.dry_run });
 
       try {
         const generated = buildNitroXJson({
@@ -760,7 +772,7 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, content, 'utf-8');
           written = true;
-          log('info', 'provar.nitrox.generate: wrote file', { requestId, filePath });
+          log('info', 'provar_nitrox_generate: wrote file', { requestId, filePath });
         }
 
         const result = { requestId, content, file_path: filePath, written, dry_run: input.dry_run };
@@ -771,12 +783,12 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
         const errResult = makeError(
-          error instanceof PathPolicyError ? error.code : (error.code ?? 'GENERATE_ERROR'),
+          error instanceof PathPolicyError ? error.code : error.code ?? 'GENERATE_ERROR',
           error.message,
           requestId,
           false
         );
-        log('error', 'provar.nitrox.generate failed', { requestId, error: error.message });
+        log('error', 'provar_nitrox_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }
@@ -784,33 +796,31 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
 }
 
 export function registerNitroXPatch(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.nitrox.patch',
-    [
-      'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
-      'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
-      'optionally validates the merged result, and writes back.',
-      'Use dry_run=true (default) to preview the merged output without writing.',
-    ].join(' '),
+  server.registerTool(
+    'provar_nitrox_patch',
     {
-      file_path: z.string().describe('Path to the existing .po.json file to patch'),
-      patch: z
-        .record(z.unknown())
-        .describe(
-          'JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)'
-        ),
-      dry_run: z
-        .boolean()
-        .default(true)
-        .describe('Return merged result without writing to disk (default)'),
-      validate_after: z
-        .boolean()
-        .default(true)
-        .describe('Run NX validation on merged result; blocks write if errors found'),
+      title: 'Patch NitroX Component',
+      description: [
+        'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
+        'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
+        'optionally validates the merged result, and writes back.',
+        'Use dry_run=true (default) to preview the merged output without writing.',
+      ].join(' '),
+      inputSchema: {
+        file_path: z.string().describe('Path to the existing .po.json file to patch'),
+        patch: z
+          .record(z.unknown())
+          .describe('JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)'),
+        dry_run: z.boolean().default(true).describe('Return merged result without writing to disk (default)'),
+        validate_after: z
+          .boolean()
+          .default(true)
+          .describe('Run NX validation on merged result; blocks write if errors found'),
+      },
     },
     ({ file_path, patch, dry_run, validate_after }) => {
       const requestId = makeRequestId();
-      log('info', 'provar.nitrox.patch', { requestId, file_path, dry_run });
+      log('info', 'provar_nitrox_patch', { requestId, file_path, dry_run });
 
       try {
         assertPathAllowed(file_path, config.allowedPaths);
@@ -857,7 +867,7 @@ export function registerNitroXPatch(server: McpServer, config: ServerConfig): vo
         if (!dry_run) {
           fs.writeFileSync(resolved, content, 'utf-8');
           written = true;
-          log('info', 'provar.nitrox.patch: wrote file', { requestId, filePath: resolved });
+          log('info', 'provar_nitrox_patch: wrote file', { requestId, filePath: resolved });
         }
 
         const result = {
@@ -875,12 +885,12 @@ export function registerNitroXPatch(server: McpServer, config: ServerConfig): vo
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
         const errResult = makeError(
-          error instanceof PathPolicyError ? error.code : (error.code ?? 'PATCH_ERROR'),
+          error instanceof PathPolicyError ? error.code : error.code ?? 'PATCH_ERROR',
           error.message,
           requestId,
           false
         );
-        log('error', 'provar.nitrox.patch failed', { requestId, error: error.message });
+        log('error', 'provar_nitrox_patch failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

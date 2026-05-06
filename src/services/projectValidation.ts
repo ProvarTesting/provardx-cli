@@ -272,8 +272,12 @@ function resolveTestInstanceFull(instancePath: string, projectPath: string): Tes
       }
     }
 
-    // Only expose testCasePath when in-bounds — out-of-bounds paths must not affect coverage totals
-    return { testCase: { name: tcName, xml_content }, testCasePath: tcInBounds ? testCasePath : null, testCaseId };
+    // Only expose testCasePath/testCaseId when in-bounds — out-of-bounds paths must not affect coverage totals
+    return {
+      testCase: { name: tcName, xml_content },
+      testCasePath: tcInBounds ? testCasePath : null,
+      testCaseId: tcInBounds ? testCaseId : null,
+    };
   } catch {
     return { testCase: null, testCasePath: null, testCaseId: null };
   }
@@ -326,6 +330,7 @@ export function readSuiteDirectory(
           planIntegrityWarnings.push(
             `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
           );
+          continue;
         }
         testSuites.push(
           readSuiteDirectory(
@@ -374,6 +379,7 @@ export function readPlanDirectory(
           planIntegrityWarnings.push(
             `${rel}/ is missing a .planitem file — test instances in this suite will be invisible to the runner.`
           );
+          continue;
         }
         testSuites.push(
           readSuiteDirectory(

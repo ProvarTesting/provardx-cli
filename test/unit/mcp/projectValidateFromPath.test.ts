@@ -25,6 +25,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -110,13 +114,13 @@ afterEach(() => {
   }
 });
 
-// ── provar.project.validate ────────────────────────────────────────────────────
+// ── provar_project_validate ────────────────────────────────────────────────────
 
-describe('provar.project.validate (from path)', () => {
+describe('provar_project_validate (from path)', () => {
   describe('happy path', () => {
     it('returns a result (not an error) for a valid project', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -130,7 +134,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('quality_score is between 0 and 100', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -141,7 +145,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('returns requestId in the response', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -154,7 +158,7 @@ describe('provar.project.validate (from path)', () => {
   describe('error cases', () => {
     it('returns NOT_A_PROJECT when .testproject is absent', () => {
       // Empty temp dir — no .testproject
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -165,7 +169,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('returns NOT_A_PROJECT even when plans/ exists but .testproject is absent', () => {
       fs.mkdirSync(path.join(tmpDir, 'plans'), { recursive: true });
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -178,7 +182,7 @@ describe('provar.project.validate (from path)', () => {
       const strictServer = new MockMcpServer();
       registerProjectValidateFromPath(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.project.validate', {
+      const result = strictServer.call('provar_project_validate', {
         project_path: '/etc',
         save_results: false,
       });
@@ -193,7 +197,7 @@ describe('provar.project.validate (from path)', () => {
       const strictServer = new MockMcpServer();
       registerProjectValidateFromPath(strictServer as never, { allowedPaths: [tmpDir] });
 
-      const result = strictServer.call('provar.project.validate', {
+      const result = strictServer.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: true,
         results_dir: '/etc/evil-results',
@@ -208,7 +212,7 @@ describe('provar.project.validate (from path)', () => {
   describe('save_results', () => {
     it('does NOT write a results file when save_results=false', () => {
       makeProject(tmpDir);
-      server.call('provar.project.validate', {
+      server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -220,7 +224,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('writes a results file to default location when save_results=true', () => {
       makeProject(tmpDir);
-      server.call('provar.project.validate', {
+      server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: true,
       });
@@ -235,7 +239,7 @@ describe('provar.project.validate (from path)', () => {
       makeProject(tmpDir);
       const customResultsDir = path.join(tmpDir, 'my-results');
 
-      server.call('provar.project.validate', {
+      server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: true,
         results_dir: customResultsDir,
@@ -250,7 +254,7 @@ describe('provar.project.validate (from path)', () => {
   describe('quality_threshold', () => {
     it('accepts a custom quality_threshold', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         quality_threshold: 90,
         save_results: false,
@@ -263,7 +267,7 @@ describe('provar.project.validate (from path)', () => {
   describe('include_plan_details', () => {
     it('default response uses plans_summary not plans', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
       });
@@ -275,7 +279,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('include_plan_details:true returns full plans array', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: tmpDir,
         save_results: false,
         include_plan_details: true,
@@ -287,7 +291,7 @@ describe('provar.project.validate (from path)', () => {
 
     it('plans_summary entries have name, quality_score, suite_count, test_case_count', () => {
       makeProject(tmpDir);
-      const result = server.call('provar.project.validate', { project_path: tmpDir, save_results: false });
+      const result = server.call('provar_project_validate', { project_path: tmpDir, save_results: false });
       const body = parseText(result);
       const plansSummary = body['plans_summary'] as Array<Record<string, unknown>>;
       assert.ok(Array.isArray(plansSummary));
@@ -312,7 +316,7 @@ describe('provar.project.validate (from path)', () => {
       }
       writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
 
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: root,
         save_results: false,
         max_uncovered: 1,
@@ -333,7 +337,7 @@ describe('provar.project.validate (from path)', () => {
       // Plan dir exists but has no .planitem file
       writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
 
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: root,
         save_results: false,
       });
@@ -363,7 +367,7 @@ describe('provar.project.validate (from path)', () => {
         'testCasePath="tests/Login.testcase"\n'
       );
 
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: root,
         save_results: false,
       });
@@ -391,7 +395,7 @@ describe('provar.project.validate (from path)', () => {
       );
       writeFile(path.join(root, 'plans', 'smoke', 'Login.testinstance'), 'testCasePath="tests/Login.testcase"\n');
 
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: root,
         save_results: false,
       });
@@ -423,7 +427,7 @@ describe('provar.project.validate (from path)', () => {
         'testCasePath="tests/Login.testcase"\n'
       );
 
-      const result = server.call('provar.project.validate', {
+      const result = server.call('provar_project_validate', {
         project_path: root,
         save_results: false,
       });

@@ -92,60 +92,66 @@ function preflightAndWrite(
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, javaSource, 'utf-8');
-  log('info', 'provar.pageobject.generate: wrote file', { requestId, filePath });
+  log('info', 'provar_pageobject_generate: wrote file', { requestId, filePath });
   if (ssoSource && ssoFilePath) {
     fs.writeFileSync(ssoFilePath, ssoSource, 'utf-8');
-    log('info', 'provar.pageobject.generate: wrote SSO stub', { requestId, ssoFilePath });
+    log('info', 'provar_pageobject_generate: wrote SSO stub', { requestId, ssoFilePath });
   }
   return null;
 }
 
 export function registerPageObjectGenerate(server: McpServer, config: ServerConfig): void {
-  server.tool(
-    'provar.pageobject.generate',
-    [
-      'Generate a Provar Java Page Object skeleton with @Page/@SalesforcePage annotation, standard imports, and @FindBy WebElement fields.',
-      'Returns Java source. Writes to disk only when dry_run=false.',
-      'SSO support: set sso_class to also generate an ILoginPage implementation stub for non-SF SSO pages.',
-      'Example: sso_class="LoginPageSso" generates a LoginPageSso.java that implements ILoginPage with loginAs() and logout() stubs.',
-      'The ILoginPage stub is written to the same directory as output_path when dry_run=false.',
-    ].join(' '),
+  server.registerTool(
+    'provar_pageobject_generate',
     {
-      class_name: z.string().describe('PascalCase class name, e.g. AccountDetailPage'),
-      package_name: z
-        .string()
-        .default('pageobjects')
-        .describe('Java package, e.g. pageobjects or pageobjects.accounts'),
-      page_type: z
-        .enum(['standard', 'salesforce'])
-        .default('standard')
-        .describe('@Page (standard) or @SalesforcePage (salesforce)'),
-      title: z.string().optional().describe('Page title attribute; defaults to class_name if omitted'),
-      connection_name: z
-        .string()
-        .optional()
-        .describe('Salesforce connection name (required when page_type=salesforce)'),
-      salesforce_page_attribute: z
-        .enum(['page', 'auraComponent', 'object', 'lightningWebComponent'])
-        .optional()
-        .describe('Page type attribute for @SalesforcePage'),
-      fields: z.array(FieldSchema).default([]).describe('WebElement fields to generate'),
-      sso_class: z
-        .string()
-        .optional()
-        .describe(
-          'PascalCase class name for an ILoginPage implementation stub (non-SF SSO pages). ' +
-            'When provided, an additional Java class implementing ILoginPage is generated alongside the page object. ' +
-            'Example: "LoginPageSso" → LoginPageSso.java with loginAs() and logout() method stubs.'
-        ),
-      output_path: z.string().optional().describe('Suggested file path for the .java file (returned in response)'),
-      overwrite: z.boolean().default(false).describe('Overwrite existing file when dry_run=false'),
-      dry_run: z.boolean().default(true).describe('true = return source only (default); false = write to output_path'),
-      idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      title: 'Generate Page Object',
+      description: [
+        'Generate a Provar Java Page Object skeleton with @Page/@SalesforcePage annotation, standard imports, and @FindBy WebElement fields.',
+        'Returns Java source. Writes to disk only when dry_run=false.',
+        'SSO support: set sso_class to also generate an ILoginPage implementation stub for non-SF SSO pages.',
+        'Example: sso_class="LoginPageSso" generates a LoginPageSso.java that implements ILoginPage with loginAs() and logout() stubs.',
+        'The ILoginPage stub is written to the same directory as output_path when dry_run=false.',
+      ].join(' '),
+      inputSchema: {
+        class_name: z.string().describe('PascalCase class name, e.g. AccountDetailPage'),
+        package_name: z
+          .string()
+          .default('pageobjects')
+          .describe('Java package, e.g. pageobjects or pageobjects.accounts'),
+        page_type: z
+          .enum(['standard', 'salesforce'])
+          .default('standard')
+          .describe('@Page (standard) or @SalesforcePage (salesforce)'),
+        title: z.string().optional().describe('Page title attribute; defaults to class_name if omitted'),
+        connection_name: z
+          .string()
+          .optional()
+          .describe('Salesforce connection name (required when page_type=salesforce)'),
+        salesforce_page_attribute: z
+          .enum(['page', 'auraComponent', 'object', 'lightningWebComponent'])
+          .optional()
+          .describe('Page type attribute for @SalesforcePage'),
+        fields: z.array(FieldSchema).default([]).describe('WebElement fields to generate'),
+        sso_class: z
+          .string()
+          .optional()
+          .describe(
+            'PascalCase class name for an ILoginPage implementation stub (non-SF SSO pages). ' +
+              'When provided, an additional Java class implementing ILoginPage is generated alongside the page object. ' +
+              'Example: "LoginPageSso" → LoginPageSso.java with loginAs() and logout() method stubs.'
+          ),
+        output_path: z.string().optional().describe('Suggested file path for the .java file (returned in response)'),
+        overwrite: z.boolean().default(false).describe('Overwrite existing file when dry_run=false'),
+        dry_run: z
+          .boolean()
+          .default(true)
+          .describe('true = return source only (default); false = write to output_path'),
+        idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+      },
     },
     (input) => {
       const requestId = makeRequestId();
-      log('info', 'provar.pageobject.generate', {
+      log('info', 'provar_pageobject_generate', {
         requestId,
         class_name: input.class_name,
         dry_run: input.dry_run,
@@ -202,7 +208,7 @@ export function registerPageObjectGenerate(server: McpServer, config: ServerConf
           requestId,
           false
         );
-        log('error', 'provar.pageobject.generate failed', { requestId, error: error.message });
+        log('error', 'provar_pageobject_generate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
       }
     }

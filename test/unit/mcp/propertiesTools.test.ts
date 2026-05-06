@@ -32,6 +32,10 @@ class MockMcpServer {
     this.handlers.set(name, handler);
   }
 
+  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+    this.handlers.set(name, handler);
+  }
+
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
     const h = this.handlers.get(name);
     if (!h) throw new Error(`Tool not registered: ${name}`);
@@ -94,12 +98,12 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── provar.properties.generate ────────────────────────────────────────────────
+// ── provar_properties_generate ────────────────────────────────────────────────
 
-describe('provar.properties.generate', () => {
+describe('provar_properties_generate', () => {
   it('dry_run returns content without writing to disk', () => {
     const outPath = path.join(tmpDir, 'dry.json');
-    const result = server.call('provar.properties.generate', { output_path: outPath, dry_run: true });
+    const result = server.call('provar_properties_generate', { output_path: outPath, dry_run: true });
 
     assert.equal(isError(result), false);
     const body = parseText(result);
@@ -111,7 +115,7 @@ describe('provar.properties.generate', () => {
 
   it('writes file to disk when dry_run is false', () => {
     const outPath = path.join(tmpDir, 'props.json');
-    const result = server.call('provar.properties.generate', { output_path: outPath, dry_run: false });
+    const result = server.call('provar_properties_generate', { output_path: outPath, dry_run: false });
 
     assert.equal(isError(result), false);
     assert.equal(fs.existsSync(outPath), true, 'file should be written');
@@ -121,7 +125,7 @@ describe('provar.properties.generate', () => {
 
   it('pre-fills projectPath and provarHome when provided', () => {
     const outPath = path.join(tmpDir, 'pre-filled.json');
-    server.call('provar.properties.generate', {
+    server.call('provar_properties_generate', {
       output_path: outPath,
       project_path: '/my/project',
       provar_home: '/opt/provar',
@@ -137,7 +141,7 @@ describe('provar.properties.generate', () => {
     const outPath = path.join(tmpDir, 'existing.json');
     fs.writeFileSync(outPath, '{}', 'utf-8');
 
-    const result = server.call('provar.properties.generate', { output_path: outPath, overwrite: false });
+    const result = server.call('provar_properties_generate', { output_path: outPath, overwrite: false });
 
     assert.equal(isError(result), true);
     const body = parseText(result);
@@ -148,7 +152,7 @@ describe('provar.properties.generate', () => {
     const outPath = path.join(tmpDir, 'overwrite.json');
     fs.writeFileSync(outPath, '{"old":true}', 'utf-8');
 
-    const result = server.call('provar.properties.generate', { output_path: outPath, overwrite: true });
+    const result = server.call('provar_properties_generate', { output_path: outPath, overwrite: true });
 
     assert.equal(isError(result), false);
     const written = JSON.parse(fs.readFileSync(outPath, 'utf-8')) as Record<string, unknown>;
@@ -157,27 +161,27 @@ describe('provar.properties.generate', () => {
 
   it('includes next_steps hint after writing the file', () => {
     const outPath = path.join(tmpDir, 'props-nextsteps.json');
-    const result = server.call('provar.properties.generate', { output_path: outPath, dry_run: false });
+    const result = server.call('provar_properties_generate', { output_path: outPath, dry_run: false });
 
     assert.equal(isError(result), false);
     const body = parseText(result);
     assert.ok(typeof body['next_steps'] === 'string', 'next_steps should be present');
-    assert.ok(body['next_steps'].includes('provar.automation.config.load'), 'next_steps should mention config.load');
+    assert.ok(body['next_steps'].includes('provar_automation_config_load'), 'next_steps should mention config.load');
   });
 
   it('includes next_steps hint even on dry_run', () => {
     const outPath = path.join(tmpDir, 'props-dry.json');
-    const result = server.call('provar.properties.generate', { output_path: outPath, dry_run: true });
+    const result = server.call('provar_properties_generate', { output_path: outPath, dry_run: true });
 
     assert.equal(isError(result), false);
     const body = parseText(result);
     assert.ok(typeof body['next_steps'] === 'string');
-    assert.ok(body['next_steps'].includes('provar.automation.config.load'));
+    assert.ok(body['next_steps'].includes('provar_automation_config_load'));
   });
 
   it('returns INVALID_PATH when output_path does not end with .json', () => {
     const outPath = path.join(tmpDir, 'props.txt');
-    const result = server.call('provar.properties.generate', { output_path: outPath, dry_run: true });
+    const result = server.call('provar_properties_generate', { output_path: outPath, dry_run: true });
 
     assert.equal(isError(result), true);
     const body = parseText(result);
@@ -192,7 +196,7 @@ describe('provar.properties.generate', () => {
     registerPropertiesGenerate(strictServer as never, strictConfig);
 
     // outPath resolves to os.tmpdir()/escape.json — outside tmpDir
-    const result = strictServer.call('provar.properties.generate', { output_path: outPath, dry_run: true });
+    const result = strictServer.call('provar_properties_generate', { output_path: outPath, dry_run: true });
 
     assert.equal(isError(result), true);
     const body = parseText(result);
@@ -203,15 +207,15 @@ describe('provar.properties.generate', () => {
   });
 });
 
-// ── provar.properties.read ────────────────────────────────────────────────────
+// ── provar_properties_read ────────────────────────────────────────────────────
 
-describe('provar.properties.read', () => {
+describe('provar_properties_read', () => {
   it('returns parsed content for a valid JSON file', () => {
     const filePath = path.join(tmpDir, 'props.json');
     const props = { provarHome: '/opt/provar', projectPath: '/proj' };
     fs.writeFileSync(filePath, JSON.stringify(props), 'utf-8');
 
-    const result = server.call('provar.properties.read', { file_path: filePath });
+    const result = server.call('provar_properties_read', { file_path: filePath });
 
     assert.equal(isError(result), false);
     const body = parseText(result);
@@ -221,14 +225,14 @@ describe('provar.properties.read', () => {
   });
 
   it('returns PROPERTIES_FILE_NOT_FOUND when file does not exist', () => {
-    const result = server.call('provar.properties.read', {
+    const result = server.call('provar_properties_read', {
       file_path: path.join(tmpDir, 'missing.json'),
     });
 
     assert.equal(isError(result), true);
     const body = parseText(result);
     assert.equal(body['error_code'], 'PROPERTIES_FILE_NOT_FOUND');
-    assert.ok((body['message'] as string).includes('provar.properties.generate'), 'suggestion should mention generate');
+    assert.ok((body['message'] as string).includes('provar_properties_generate'), 'suggestion should mention generate');
   });
 
   it('surfaces divergence warning when active sf config points to a different file with different values', () => {
@@ -255,7 +259,7 @@ describe('provar.properties.read', () => {
 
     setSfConfigDirForTesting(sfDir);
     try {
-      const result = server.call('provar.properties.read', { file_path: diskFile });
+      const result = server.call('provar_properties_read', { file_path: diskFile });
 
       assert.equal(isError(result), false);
       const body = parseText(result);
@@ -287,7 +291,7 @@ describe('provar.properties.read', () => {
 
     setSfConfigDirForTesting(sfDir);
     try {
-      const result = server.call('provar.properties.read', { file_path: filePath });
+      const result = server.call('provar_properties_read', { file_path: filePath });
 
       assert.equal(isError(result), false);
       const body = parseText(result);
@@ -301,7 +305,7 @@ describe('provar.properties.read', () => {
     const filePath = path.join(tmpDir, 'bad.json');
     fs.writeFileSync(filePath, '{ not valid json }', 'utf-8');
 
-    const result = server.call('provar.properties.read', { file_path: filePath });
+    const result = server.call('provar_properties_read', { file_path: filePath });
 
     assert.equal(isError(result), true);
     assert.equal(parseText(result)['error_code'], 'MALFORMED_JSON');
@@ -311,7 +315,7 @@ describe('provar.properties.read', () => {
     const strictServer = new MockMcpServer();
     registerPropertiesRead(strictServer as never, { allowedPaths: [tmpDir] });
 
-    const result = strictServer.call('provar.properties.read', {
+    const result = strictServer.call('provar_properties_read', {
       file_path: '/etc/passwd',
     });
 
@@ -321,9 +325,9 @@ describe('provar.properties.read', () => {
   });
 });
 
-// ── provar.properties.set ─────────────────────────────────────────────────────
+// ── provar_properties_set ─────────────────────────────────────────────────────
 
-describe('provar.properties.set', () => {
+describe('provar_properties_set', () => {
   it('partial update preserves unmodified fields (deep merge)', () => {
     const filePath = path.join(tmpDir, 'props.json');
     const initial = {
@@ -338,7 +342,7 @@ describe('provar.properties.set', () => {
     };
     fs.writeFileSync(filePath, JSON.stringify(initial, null, 2), 'utf-8');
 
-    const result = server.call('provar.properties.set', {
+    const result = server.call('provar_properties_set', {
       file_path: filePath,
       updates: { provarHome: '/opt/provar-2' },
     });
@@ -362,7 +366,7 @@ describe('provar.properties.set', () => {
     };
     fs.writeFileSync(filePath, JSON.stringify(initial, null, 2), 'utf-8');
 
-    server.call('provar.properties.set', {
+    server.call('provar_properties_set', {
       file_path: filePath,
       updates: { environment: { webBrowser: 'Firefox' } },
     });
@@ -381,7 +385,7 @@ describe('provar.properties.set', () => {
       'utf-8'
     );
 
-    server.call('provar.properties.set', {
+    server.call('provar_properties_set', {
       file_path: filePath,
       updates: { testCase: ['new/test2.testcase'] },
     });
@@ -391,7 +395,7 @@ describe('provar.properties.set', () => {
   });
 
   it('returns PROPERTIES_FILE_NOT_FOUND when file does not exist', () => {
-    const result = server.call('provar.properties.set', {
+    const result = server.call('provar_properties_set', {
       file_path: path.join(tmpDir, 'ghost.json'),
       updates: { provarHome: '/x' },
     });
@@ -404,7 +408,7 @@ describe('provar.properties.set', () => {
     const strictServer = new MockMcpServer();
     registerPropertiesSet(strictServer as never, { allowedPaths: [tmpDir] });
 
-    const result = strictServer.call('provar.properties.set', {
+    const result = strictServer.call('provar_properties_set', {
       file_path: '/etc/hosts',
       updates: { provarHome: '/evil' },
     });
@@ -415,11 +419,11 @@ describe('provar.properties.set', () => {
   });
 });
 
-// ── provar.properties.validate ────────────────────────────────────────────────
+// ── provar_properties_validate ────────────────────────────────────────────────
 
-describe('provar.properties.validate', () => {
+describe('provar_properties_validate', () => {
   it('is_valid=true for a fully-populated valid properties object (inline content)', () => {
-    const result = server.call('provar.properties.validate', {
+    const result = server.call('provar_properties_validate', {
       content: JSON.stringify(validProps()),
     });
 
@@ -433,7 +437,7 @@ describe('provar.properties.validate', () => {
     const props = validProps();
     delete props['provarHome'];
 
-    const result = server.call('provar.properties.validate', { content: JSON.stringify(props) });
+    const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
 
     const body = parseText(result);
     assert.equal(body['is_valid'], false);
@@ -448,7 +452,7 @@ describe('provar.properties.validate', () => {
     const props = validProps();
     props['provarHome'] = '${PROVAR_HOME}';
 
-    const result = server.call('provar.properties.validate', { content: JSON.stringify(props) });
+    const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
 
     const body = parseText(result);
     assert.ok((body['warning_count'] as number) > 0, 'Expected at least one warning');
@@ -460,7 +464,7 @@ describe('provar.properties.validate', () => {
   });
 
   it('accepts inline content without file_path', () => {
-    const result = server.call('provar.properties.validate', {
+    const result = server.call('provar_properties_validate', {
       content: JSON.stringify(validProps()),
     });
     assert.equal(isError(result), false);
@@ -471,21 +475,21 @@ describe('provar.properties.validate', () => {
     const filePath = path.join(tmpDir, 'valid.json');
     fs.writeFileSync(filePath, JSON.stringify(validProps()), 'utf-8');
 
-    const result = server.call('provar.properties.validate', { file_path: filePath });
+    const result = server.call('provar_properties_validate', { file_path: filePath });
 
     assert.equal(isError(result), false);
     assert.equal((parseText(result) as { is_valid: boolean })['is_valid'], true);
   });
 
   it('returns MISSING_INPUT when neither file_path nor content is provided', () => {
-    const result = server.call('provar.properties.validate', {});
+    const result = server.call('provar_properties_validate', {});
 
     assert.equal(isError(result), true);
     assert.equal(parseText(result)['error_code'], 'MISSING_INPUT');
   });
 
   it('returns PROPERTIES_FILE_NOT_FOUND when file_path points to a missing file', () => {
-    const result = server.call('provar.properties.validate', {
+    const result = server.call('provar_properties_validate', {
       file_path: path.join(tmpDir, 'nope.json'),
     });
 
@@ -494,7 +498,7 @@ describe('provar.properties.validate', () => {
   });
 
   it('returns is_valid=false with root-level error for malformed JSON content', () => {
-    const result = server.call('provar.properties.validate', { content: '{ broken json' });
+    const result = server.call('provar_properties_validate', { content: '{ broken json' });
 
     assert.equal(isError(result), false, 'validate returns a result, not an error response');
     const body = parseText(result);
@@ -506,7 +510,7 @@ describe('provar.properties.validate', () => {
     const props = validProps();
     (props['environment'] as Record<string, unknown>)['webBrowser'] = 'Netscape';
 
-    const result = server.call('provar.properties.validate', { content: JSON.stringify(props) });
+    const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
 
     const body = parseText(result);
     assert.equal(body['is_valid'], false);
@@ -521,7 +525,7 @@ describe('provar.properties.validate', () => {
     const props = validProps();
     (props['metadata'] as Record<string, unknown>)['metadataLevel'] = 'Nuke';
 
-    const result = server.call('provar.properties.validate', { content: JSON.stringify(props) });
+    const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
 
     const body = parseText(result);
     assert.equal(body['is_valid'], false);

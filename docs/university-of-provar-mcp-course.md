@@ -126,7 +126,7 @@ You should see a list of flags and tool descriptions. If you see an error, confi
 
 3. Fully quit and reopen Claude Desktop.
 
-4. In a new conversation, look for Provar tools in the tool list. You should see entries like `provar.project.inspect`, `provar.testcase.validate`, etc.
+4. In a new conversation, look for Provar tools in the tool list. You should see entries like `provar_project_inspect`, `provar_testcase_validate`, etc.
 
 > **macOS note:** If `sf` is not found, use the full path. Find it with `which sf` in your terminal, then use that path as the `"command"` value.
 
@@ -155,7 +155,7 @@ Alternatively, run this inside a Claude Code session:
 
 In your AI client, type:
 
-> "Call provardx.ping with message 'hello'"
+> "Call provardx_ping with message 'hello'"
 
 Expected response:
 
@@ -191,7 +191,7 @@ You should see `API key configured` with a source of `~/.provar/credentials.json
 
 1. After editing `claude_desktop_config.json`, what do you need to do for the changes to take effect?
    _(Fully quit and reopen Claude Desktop — closing the window is not enough)_
-2. What does `provardx.ping` tell you when it responds successfully?
+2. What does `provardx_ping` tell you when it responds successfully?
    _(That the MCP server is running, the client is connected, and the server version)_
 3. You get a `LICENSE_NOT_FOUND` error when the server starts. What is the most likely cause and how do you fix it?
    _(Provar Automation IDE license is not activated on this machine — open Provar Automation IDE, go to Help → Manage License, activate the license, then retry)_
@@ -204,13 +204,13 @@ You should see `API key configured` with a source of `~/.provar/credentials.json
 
 **Learning objectives**
 
-- Use `provar.project.inspect` to get a full inventory of a Provar project
+- Use `provar_project_inspect` to get a full inventory of a Provar project
 - Identify test coverage gaps from inspection output
 - Understand what project context the AI uses when reasoning about your tests
 
 ### 3.1 — What inspection tells you
 
-`provar.project.inspect` reads your entire project directory and returns:
+`provar_project_inspect` reads your entire project directory and returns:
 
 | What                                   | Why it matters                                                  |
 | -------------------------------------- | --------------------------------------------------------------- |
@@ -225,7 +225,7 @@ You should see `API key configured` with a source of `~/.provar/credentials.json
 
 Point the AI at your project and ask for a summary:
 
-> "Use provar.project.inspect on `/path/to/your/provar/project` and give me a summary: how many test cases, suites, and plans are there? Which test cases aren't in any plan?"
+> "Use provar_project_inspect on `/path/to/your/provar/project` and give me a summary: how many test cases, suites, and plans are there? Which test cases aren't in any plan?"
 
 **What to observe:**
 
@@ -273,7 +273,7 @@ A file can be valid (no schema errors) but have a low quality score (missing des
 
 ### 4.2 — Two validation modes
 
-The `provar.testcase.validate` tool operates in one of two modes depending on whether a Quality Hub API key is configured:
+The `provar_testcase_validate` tool operates in one of two modes depending on whether a Quality Hub API key is configured:
 
 | Mode                | `validation_source` | Rules                            | Requires                      |
 | ------------------- | ------------------- | -------------------------------- | ----------------------------- |
@@ -342,7 +342,7 @@ Run a project-wide quality scan:
 
 ### 5.1 — Page Object generation
 
-Provar Page Objects are Java classes annotated with `@Page` or `@SalesforcePage`. The `provar.pageobject.generate` tool creates a skeleton with correct structure, package declaration, and `@FindBy` field stubs — ready for you to refine and complete.
+Provar Page Objects are Java classes annotated with `@Page` or `@SalesforcePage`. The `provar_pageobject_generate` tool creates a skeleton with correct structure, package declaration, and `@FindBy` field stubs — ready for you to refine and complete.
 
 ### Lab 5.1 — Generate a Salesforce Page Object
 
@@ -384,7 +384,7 @@ If the quality score is below 80, ask:
    _(Both return the content without writing to disk, but `dry_run: true` makes the intent explicit and works even if an `output_path` is provided — the path is ignored. Omitting `output_path` simply means there is nowhere to write)_
 2. Why should you validate a generated test case immediately after generation?
    _(Generated artefacts may be missing best-practice fields — like a test case description or step metadata — that drop the quality score below the 80-point threshold required for plan coverage to count in Quality Hub)_
-3. What annotation does `provar.pageobject.generate` use for Salesforce pages vs non-Salesforce pages?
+3. What annotation does `provar_pageobject_generate` use for Salesforce pages vs non-Salesforce pages?
    _(`@SalesforcePage` for Salesforce pages; `@Page` for standard web pages)_
 
 ---
@@ -414,11 +414,11 @@ This is the configuration file that tells the Provar DX CLI how and where to run
 
 > "Update the `environment.testEnvironment` field in `/path/to/project/provardx-properties.json` to `QA`."
 
-The AI uses `provar.properties.set` to make a targeted update without touching the rest of the file.
+The AI uses `provar_properties_set` to make a targeted update without touching the rest of the file.
 
 ### Knowledge check
 
-1. What does `provar.automation.config.load` do, and why is it required before triggering a test run?
+1. What does `provar_automation_config_load` do, and why is it required before triggering a test run?
    _(It validates and registers a `provardx-properties.json` as the active configuration in the current session. The compile and testrun tools depend on this loaded state — without it they don't know which project, Provar home, or test cases to use)_
 2. What happens if `provardx-properties.json` still contains `${PLACEHOLDER}` values when you try to run tests?
    _(The config load step will surface validation warnings for each unresolved placeholder. The run may still attempt to start but will likely fail when Provar Automation encounters the literal placeholder string instead of a real value)_
@@ -439,10 +439,10 @@ The AI uses `provar.properties.set` to make a targeted update without touching t
 
 **The AI chains these tools:**
 
-1. `provar.automation.config.load` — registers the properties file
-2. `provar.automation.compile` — compiles Java Page Objects
-3. `provar.automation.testrun` — executes the run
-4. `provar.testrun.report.locate` — finds the report artefacts
+1. `provar_automation_config_load` — registers the properties file
+2. `provar_automation_compile` — compiles Java Page Objects
+3. `provar_automation_testrun` — executes the run
+4. `provar_testrun_report_locate` — finds the report artefacts
 
 **What to observe:**
 
@@ -473,15 +473,15 @@ Then in your AI client:
 
 > "Find the JUnit XML results for the run that just completed and summarise any failures."
 
-The AI uses `provar.testrun.report.locate` to resolve the artefact paths, then reads the JUnit XML to extract failure details.
+The AI uses `provar_testrun_report_locate` to resolve the artefact paths, then reads the JUnit XML to extract failure details.
 
 ### Knowledge check
 
-1. What does `provar.automation.compile` do, and when is it necessary?
+1. What does `provar_automation_compile` do, and when is it necessary?
    _(It compiles Java Page Object and Page Control source files into class files. It is necessary after any Page Object is created or modified — Provar Automation executes the compiled `.class` files, not the `.java` source)_
 2. Why does a Quality Hub test run use a polling loop rather than waiting synchronously?
-   _(Quality Hub runs are executed on a remote grid and can take minutes to hours. The MCP tools invoke `sf` CLI subprocesses synchronously, so a long-running run would block the entire AI conversation. Polling with `provar.qualityhub.testrun.report` lets the AI check in periodically and report status without blocking)_
-3. Where does `provar.testrun.report.locate` look for report artefacts?
+   _(Quality Hub runs are executed on a remote grid and can take minutes to hours. The MCP tools invoke `sf` CLI subprocesses synchronously, so a long-running run would block the entire AI conversation. Polling with `provar_qualityhub_testrun_report` lets the AI check in periodically and report status without blocking)_
+3. Where does `provar_testrun_report_locate` look for report artefacts?
    _(It searches the project's `Results/` directory for the most recent JUnit XML and HTML report files written by the last Provar Automation test run)_
 
 ---
@@ -490,7 +490,7 @@ The AI uses `provar.testrun.report.locate` to resolve the artefact paths, then r
 
 **Learning objectives**
 
-- Use `provar.testrun.rca` to classify test failures
+- Use `provar_testrun_rca` to classify test failures
 - Distinguish pre-existing issues from new regressions
 - Create a Quality Hub defect from a failed test execution
 
@@ -510,14 +510,14 @@ After a test run with failures:
 
 > "The test 'LoginTest' failed with an assertion error on the Account Name field. Create a defect in Quality Hub for it, tagged to the 'Regression' test project."
 
-The AI uses `provar.qualityhub.defect.create` to raise the defect without you leaving the chat session.
+The AI uses `provar_qualityhub_defect_create` to raise the defect without you leaving the chat session.
 
 ### Knowledge check
 
-1. What information does `provar.testrun.rca` use to classify failures as pre-existing vs new?
+1. What information does `provar_testrun_rca` use to classify failures as pre-existing vs new?
    _(It reads the JUnit XML results from the completed run, analyses failure messages and stack traces, and cross-references them against the test case history and Page Objects involved to identify patterns that suggest a pre-existing flake vs a newly introduced failure)_
 2. What is required in Quality Hub before you can create a defect from an MCP tool call?
-   _(The Quality Hub org must be connected via `provar.qualityhub.connect` (or `sf provar quality-hub connect`) in the current session, and the test project you're filing against must already exist in Quality Hub)_
+   _(The Quality Hub org must be connected via `provar_qualityhub_connect` (or `sf provar quality-hub connect`) in the current session, and the test project you're filing against must already exist in Quality Hub)_
 
 ---
 
@@ -535,7 +535,7 @@ After generating a new test case in Module 5:
 
 > "Add the test case at `/path/to/project/tests/smoke/CreateNewContact.testcase` to the test plan 'Smoke Tests', under the suite 'Contact Management'. Create the instance file at `/path/to/project/plans/SmokeTests/ContactManagement/CreateNewContact.testinstance`."
 
-The AI uses `provar.testplan.add-instance` to write the `.testinstance` file with the correct `testCasePath` attribute.
+The AI uses `provar_testplan_add-instance` to write the `.testinstance` file with the correct `testCasePath` attribute.
 
 ### Lab 9.2 — Create a new suite in a plan
 
@@ -547,9 +547,9 @@ The AI uses `provar.testplan.add-instance` to write the `.testinstance` file wit
 
 ### Knowledge check
 
-1. What file type does `provar.testplan.add-instance` create, and what key attribute does it contain?
+1. What file type does `provar_testplan_add-instance` create, and what key attribute does it contain?
    _(A `.testinstance` file. The key attribute is `testCasePath`, which holds the relative path to the `.testcase` file being wired into the plan)_
-2. After adding test instances to a plan, how does that affect the `coverage_percent` reported by `provar.project.inspect`?
+2. After adding test instances to a plan, how does that affect the `coverage_percent` reported by `provar_project_inspect`?
    _(The newly wired test cases move from `uncovered_test_case_paths` to `covered_test_case_paths`, increasing the `coverage_percent` value)_
 
 ---
@@ -586,15 +586,16 @@ After completing the workflow, consider:
 
 You have now covered the full Provar MCP feature set:
 
-| Area               | Key tools                                                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Project awareness  | `provar.project.inspect`, `provar.project.validate`                                                               |
-| Quality validation | `provar.testcase.validate`, `provar.pageobject.validate`, `provar.testsuite.validate`, `provar.testplan.validate` |
-| Test authoring     | `provar.pageobject.generate`, `provar.testcase.generate`                                                          |
-| Run configuration  | `provar.properties.generate`, `provar.properties.set`, `provar.automation.config.load`                            |
-| Test execution     | `provar.automation.testrun`, `provar.qualityhub.testrun`, `provar.testrun.report.locate`                          |
-| Failure analysis   | `provar.testrun.rca`, `provar.qualityhub.defect.create`                                                           |
-| Plan management    | `provar.testplan.add-instance`, `provar.testplan.create-suite`, `provar.testplan.remove-instance`                 |
+| Area               | Key tools                                                                                                                   |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Project awareness  | `provar_project_inspect`, `provar_project_validate`, `provar_connection_list`                                               |
+| Quality validation | `provar_testcase_validate`, `provar_pageobject_validate`, `provar_testsuite_validate`, `provar_testplan_validate`           |
+| Test authoring     | `provar_pageobject_generate`, `provar_testcase_generate`, `provar_testcase_step_edit`                                       |
+| Run configuration  | `provar_properties_generate`, `provar_properties_set`, `provar_automation_config_load`                                      |
+| Test execution     | `provar_automation_testrun`, `provar_qualityhub_testrun`, `provar_testrun_report_locate`                                    |
+| Failure analysis   | `provar_testrun_rca`, `provar_qualityhub_defect_create`, `provar_qualityhub_examples_retrieve`                              |
+| Plan management    | `provar_testplan_create`, `provar_testplan_add-instance`, `provar_testplan_create-suite`, `provar_testplan_remove-instance` |
+| NitroX             | `provar_nitrox_discover`, `provar_nitrox_generate`, `provar_nitrox_patch`, `provar_nitrox_read`, `provar_nitrox_validate`   |
 
 ## Frequently asked questions
 
@@ -602,7 +603,7 @@ You have now covered the full Provar MCP feature set:
 No. Your existing Provar Automation license covers MCP usage. The MCP server reads your IDE license automatically.
 
 **Can I use Provar MCP without an existing Provar project?**
-The AI can generate new artefacts (Page Objects, test cases, properties files) from scratch, but project-level tools like `provar.project.inspect` and `provar.project.validate` require a project directory with at least a `.testproject` file. We recommend starting from an existing project.
+The AI can generate new artefacts (Page Objects, test cases, properties files) from scratch, but project-level tools like `provar_project_inspect` and `provar_project_validate` require a project directory with at least a `.testproject` file. We recommend starting from an existing project.
 
 **Will the AI send my project files to Provar?**
 No. The MCP server runs entirely on your local machine. File contents pass between the server and your AI client only (e.g. Claude Desktop, which runs locally). No data is sent to Provar's servers.
