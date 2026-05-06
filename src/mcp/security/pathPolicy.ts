@@ -61,9 +61,18 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
     }
   });
 
+  // Windows file paths are case-insensitive; fs.realpathSync does not always
+  // canonicalize drive-letter case (e.g. `c:\` vs `C:\`), so compare case-insensitively.
+  const isWindows = process.platform === 'win32';
+  const normalizeForCompare = (p: string): string => (isWindows ? p.toLowerCase() : p);
+  const resolvedKey = normalizeForCompare(resolved);
+
   if (
     resolvedAllowed.length > 0 &&
-    !resolvedAllowed.some((base) => resolved === base || resolved.startsWith(base + path.sep))
+    !resolvedAllowed.some((base) => {
+      const baseKey = normalizeForCompare(base);
+      return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
+    })
   ) {
     throw new PathPolicyError(
       'PATH_NOT_ALLOWED',
