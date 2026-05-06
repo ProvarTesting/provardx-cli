@@ -278,7 +278,29 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
 // ── XML builder ───────────────────────────────────────────────────────────────
 
-// Build the <value> element for a single argument (D2/D4 aware).
+// F1/F3: build class="compound" for strings that mix literal text with {VarName} tokens.
+function buildCompoundValue(val: string, indent: string): string {
+  const i = `${indent}  `;
+  const parts: string[] = [];
+  const tokenRe = /\{([\w.]+)\}/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = tokenRe.exec(val)) !== null) {
+    const before = val.slice(last, m.index);
+    if (before) parts.push(`${i}<value valueClass="string">${escapeXmlContent(before)}</value>`);
+    const pathElements = m[1]
+      .split('.')
+      .map((p) => `${i}  <path element="${escapeXmlAttr(p)}"/>`)
+      .join('\n');
+    parts.push(`${i}<variable>\n${pathElements}\n${i}</variable>`);
+    last = m.index + m[0].length;
+  }
+  const tail = val.slice(last);
+  if (tail) parts.push(`${i}<value valueClass="string">${escapeXmlContent(tail)}</value>`);
+  return `${indent}<value class="compound">\n${i}<parts>\n${parts.join('\n')}\n${i}</parts>\n${indent}</value>`;
+}
+
+// Build the <value> element for a single argument (D2/D4/F1 aware).
 // inNamedValues: when true (inside SetValues namedValues), skip uiTarget/uiLocator dispatch.
 // apiId: resolved API ID used to restrict key-name dispatch to the correct UI APIs.
 function buildArgumentValue(key: string, val: string, indent: string, inNamedValues = false, apiId = ''): string {
@@ -290,6 +312,10 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
       .map((p) => `${indent}  <path element="${escapeXmlAttr(p)}"/>`)
       .join('\n');
     return `${indent}<value class="variable">\n${pathElements}\n${indent}</value>`;
+  }
+  // F1/F3: {VarName} embedded in surrounding text → class="compound" with <parts>.
+  if (/\{[\w.]+\}/.test(val)) {
+    return buildCompoundValue(val, indent);
   }
   if (!inNamedValues) {
     // D2: 'target' argument → class="uiTarget" (only for UiWithScreen / UiWithRow).

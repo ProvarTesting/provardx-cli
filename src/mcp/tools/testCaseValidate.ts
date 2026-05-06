@@ -329,23 +329,43 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     validateApiCall(call, issues);
   }
 
-  // VAR-REF-001 (gap in both local and quality-hub-agents backend):
-  // Detect {VarName} or {Obj.Field} literals stored as plain string values.
-  // Provar will pass these as-is to the API rather than resolving them as variable references.
-  const varLiteralRe = /<value[^>]+valueClass="string"[^>]*>\{([\w.]+)\}<\/value>/g;
-  let varMatch: RegExpExecArray | null;
-  while ((varMatch = varLiteralRe.exec(xmlContent)) !== null) {
-    issues.push({
-      rule_id: 'VAR-REF-001',
-      severity: 'WARNING',
-      message: `Argument value "{${varMatch[1]}}" looks like a variable reference but is stored as a plain string — Provar will not resolve it at runtime.`,
-      applies_to: 'argument',
-      suggestion: `Replace with <value class="variable"><path element="${varMatch[1]
-        .split('.')
-        .join(
-          '"/><path element="'
-        )}"/></value>. In provar_testcase_generate, use the {VarName} syntax in the attributes object — the generator converts it automatically.`,
-    });
+  // VAR-REF-001 / VAR-REF-002: detect {VarName} tokens inside valueClass="string" elements.
+  // Provar does not interpolate {…} tokens in plain string values at runtime — they must use
+  // class="variable" (pure reference) or class="compound" (embedded in surrounding text).
+  const stringValueRe = /<value[^>]+valueClass="string"[^>]*>([^<]+)<\/value>/g;
+  let stringMatch: RegExpExecArray | null;
+  while ((stringMatch = stringValueRe.exec(xmlContent)) !== null) {
+    const rawContent = stringMatch[1];
+    if (!/\{[\w.]+\}/.test(rawContent)) continue;
+    const isPure = /^\{[\w.]+\}$/.test(rawContent.trim());
+    const varNames = [...rawContent.matchAll(/\{([\w.]+)\}/g)].map((m) => m[1]);
+    if (isPure) {
+      const varName = varNames[0];
+      issues.push({
+        rule_id: 'VAR-REF-001',
+        severity: 'WARNING',
+        message: `Argument value "{${varName}}" looks like a variable reference but is stored as a plain string — Provar will not resolve it at runtime.`,
+        applies_to: 'argument',
+        suggestion: `Replace with <value class="variable"><path element="${varName
+          .split('.')
+          .join(
+            '"/><path element="'
+          )}"/></value>. In provar_testcase_generate, use the {VarName} syntax in the attributes object — the generator converts it automatically.`,
+      });
+    } else {
+      const preview = rawContent.length > 60 ? rawContent.slice(0, 57) + '…' : rawContent;
+      issues.push({
+        rule_id: 'VAR-REF-002',
+        severity: 'WARNING',
+        message: `Argument value "${preview}" contains {${varNames.join(
+          '}, {'
+        )}} embedded in a plain string — Provar does not interpolate {…} tokens in string values at runtime.`,
+        applies_to: 'argument',
+        suggestion:
+          'Use class="compound" with <parts> to split literal text and variable references at each {VarName} boundary. ' +
+          'In provar_testcase_generate, pass the value with {VarName} placeholders in the attributes object — the generator emits compound XML automatically.',
+      });
+    }
   }
 
   return finalize(issues, tcId, tcName, apiCalls.length, xmlContent, testName);

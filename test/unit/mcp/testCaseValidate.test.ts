@@ -788,6 +788,110 @@ describe('validateTestCase', () => {
       );
     });
   });
+
+  describe('VAR-REF-002', () => {
+    it('warns when {VarName} is embedded in a larger SOQL string (F1)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="ApexSoqlQuery" name="Query account" testItemId="1">
+      <arguments>
+        <argument id="soqlQuery">
+          <value class="value" valueClass="string">SELECT Id, Name FROM Account WHERE Id = '{AccountId}'</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
+        'Expected VAR-REF-002 for embedded variable in SOQL string'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'VAR-REF-002')!;
+      assert.equal(issue.severity, 'WARNING');
+      assert.ok(issue.message.includes('AccountId'), `Message should include variable name: ${issue.message}`);
+      assert.ok(issue.suggestion?.includes('compound'), 'Suggestion should mention compound format');
+    });
+
+    it('warns for multiple embedded variables in one string (F3 / system vars)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SetValues" name="Set name" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues>
+              <namedValue name="AccountName">
+                <value class="value" valueClass="string">Acme Corp CRUD Test {NOW}</value>
+              </namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
+        'Expected VAR-REF-002 for {NOW} embedded in SetValues string'
+      );
+      assert.ok(r.issues.find((i) => i.rule_id === 'VAR-REF-002')!.message.includes('NOW'));
+    });
+
+    it('does NOT fire for a pure {VarName} value (VAR-REF-001 owns that case)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Pure var" testItemId="1">
+      <arguments>
+        <argument id="id">
+          <value class="value" valueClass="string">{AccountId}</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(!r.issues.some((i) => i.rule_id === 'VAR-REF-002'), 'VAR-REF-002 must not double-fire on pure vars');
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
+        'VAR-REF-001 should still fire'
+      );
+    });
+
+    it('does NOT fire for a correct class="compound" value', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="ApexSoqlQuery" name="Query account" testItemId="1">
+      <arguments>
+        <argument id="soqlQuery">
+          <value class="compound">
+            <parts>
+              <value valueClass="string">SELECT Id FROM Account WHERE Id = '</value>
+              <variable><path element="AccountId"/></variable>
+              <value valueClass="string">'</value>
+            </parts>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
+        'VAR-REF-002 must not fire on correct compound value'
+      );
+    });
+  });
 });
 
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────

@@ -744,4 +744,121 @@ describe('provar_testcase_generate', () => {
       assert.ok(!('validation' in body), 'validation field should be absent when validate_after_edit=false');
     });
   });
+
+  describe('F1/F3 — compound value emission for embedded {VarName} tokens', () => {
+    it('emits class="compound" with <parts> when a SOQL query embeds a variable (F1)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'SOQL Compound Test',
+        steps: [
+          {
+            api_id: 'ApexSoqlQuery',
+            name: 'Query account',
+            attributes: { soqlQuery: "SELECT Id, Name FROM Account WHERE Id = '{AccountId}'" },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected class="compound" for embedded variable in SOQL');
+      assert.ok(xml.includes('<parts>'), 'Expected <parts> element inside compound value');
+      assert.ok(xml.includes('<variable>'), 'Expected <variable> element for the AccountId reference');
+      assert.ok(xml.includes('<path element="AccountId"/>'), 'Expected <path element="AccountId"/>');
+      assert.ok(
+        !xml.includes('valueClass="string">{AccountId}'),
+        'Must NOT emit {AccountId} as a plain string literal'
+      );
+    });
+
+    it('emits class="compound" for Provar system variables embedded in a string (F3: {NOW})', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'NOW Compound Test',
+        steps: [
+          {
+            api_id: 'SetValues',
+            name: 'Set account name',
+            attributes: { AccountName: 'Acme Corp CRUD Test {NOW}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected class="compound" inside namedValues');
+      assert.ok(xml.includes('<path element="NOW"/>'), 'Expected <path element="NOW"/> for system variable');
+      assert.ok(
+        !xml.includes('valueClass="string">Acme Corp CRUD Test {NOW}'),
+        'Must NOT emit {NOW} as a literal string'
+      );
+    });
+
+    it('emits <parts> with correct literal fragments around the variable', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Fragment Test',
+        steps: [
+          {
+            api_id: 'ApexSoqlQuery',
+            name: 'Query with prefix and suffix',
+            attributes: { soqlQuery: "SELECT Id FROM Contact WHERE Email = '{Email}' LIMIT 1" },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes("SELECT Id FROM Contact WHERE Email = '"), 'Expected literal prefix fragment');
+      assert.ok(xml.includes("' LIMIT 1"), 'Expected literal suffix fragment');
+      assert.ok(xml.includes('<path element="Email"/>'), 'Expected variable path element');
+    });
+
+    it('handles multiple embedded variables in one string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Multi Var Test',
+        steps: [
+          {
+            api_id: 'ApexSoqlQuery',
+            name: 'Query by two fields',
+            attributes: { soqlQuery: "SELECT Id FROM Case WHERE AccountId='{AccId}' AND OwnerId='{OwnerId}'" },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<path element="AccId"/>'), 'Expected first variable path');
+      assert.ok(xml.includes('<path element="OwnerId"/>'), 'Expected second variable path');
+      const compoundCount = (xml.match(/class="compound"/g) ?? []).length;
+      assert.equal(compoundCount, 1, 'Should be exactly one compound element for the soqlQuery argument');
+    });
+
+    it('pure {VarName} value (entire argument) still uses class="variable", not compound', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Pure Var Test',
+        steps: [
+          {
+            api_id: 'ApexDeleteObject',
+            name: 'Delete account',
+            attributes: { recordId: '{AccountId}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="variable"'), 'Pure {VarName} should use class="variable"');
+      assert.ok(!xml.includes('class="compound"'), 'Pure {VarName} must NOT use class="compound"');
+    });
+  });
 });
