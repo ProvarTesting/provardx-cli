@@ -70,7 +70,7 @@ jobs:
             else
               # Manual dispatch: find the nearest ancestor tag from HEAD
               # (git describe respects branch ancestry; avoids pulling in commits from sibling branches)
-              PREV=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || "")
+              PREV=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
             fi
 
             RANGE="${PREV:+${PREV}..}HEAD"
