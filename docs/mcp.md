@@ -752,6 +752,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
+- **VAR-REF-002** — A `{VarName}` token is embedded inside a larger plain string (e.g. `SELECT Id FROM Account WHERE Id = '{AccountId}'`). Provar does not perform `{…}` interpolation in string values at runtime; the braces are emitted literally. Use `class="compound"` with `<parts>` children to split the literal text and variable references. In `provar_testcase_generate`, pass the value with `{VarName}` placeholders — the generator emits compound XML automatically.
 
 ---
 

@@ -47,7 +47,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     {
       title: 'Validate Test Case',
       description:
-        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied.',
+        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.',
       inputSchema: {
         content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
         xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),

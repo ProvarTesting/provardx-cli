@@ -790,15 +790,15 @@ describe('validateTestCase', () => {
   });
 
   describe('VAR-REF-002', () => {
-    it('warns when {VarName} is embedded in a larger SOQL string (F1)', () => {
+    it('warns when {VarName} is embedded inside a larger string value', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
   <steps>
-    <apiCall guid="${GUID_S1}" apiId="ApexSoqlQuery" name="Query account" testItemId="1">
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="SOQL query" testItemId="1">
       <arguments>
-        <argument id="soqlQuery">
-          <value class="value" valueClass="string">SELECT Id, Name FROM Account WHERE Id = '{AccountId}'</value>
+        <argument id="query">
+          <value class="value" valueClass="string">SELECT Id FROM Account WHERE Id = &apos;{AccountId}&apos;</value>
         </argument>
       </arguments>
     </apiCall>
@@ -807,29 +807,23 @@ describe('validateTestCase', () => {
       );
       assert.ok(
         r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
-        'Expected VAR-REF-002 for embedded variable in SOQL string'
+        `Expected VAR-REF-002, got: ${JSON.stringify(r.issues.map((i) => i.rule_id))}`
       );
       const issue = r.issues.find((i) => i.rule_id === 'VAR-REF-002')!;
       assert.equal(issue.severity, 'WARNING');
-      assert.ok(issue.message.includes('AccountId'), `Message should include variable name: ${issue.message}`);
-      assert.ok(issue.suggestion?.includes('compound'), 'Suggestion should mention compound format');
+      assert.ok(issue.message.includes('AccountId'), `Message should mention the variable: ${issue.message}`);
+      assert.ok(issue.suggestion?.includes('compound'), `Suggestion should mention compound: ${issue.suggestion}`);
     });
 
-    it('warns for multiple embedded variables in one string (F3 / system vars)', () => {
+    it('warns for {NOW} system variable embedded in a SetValues string', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
   <steps>
-    <apiCall guid="${GUID_S1}" apiId="SetValues" name="Set name" testItemId="1">
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.core.data.SetValues" name="Set date" testItemId="1">
       <arguments>
         <argument id="values">
-          <value class="valueList" mutable="Mutable">
-            <namedValues>
-              <namedValue name="AccountName">
-                <value class="value" valueClass="string">Acme Corp CRUD Test {NOW}</value>
-              </namedValue>
-            </namedValues>
-          </value>
+          <value class="value" valueClass="string">startDate=prefix_{NOW}</value>
         </argument>
       </arguments>
     </apiCall>
@@ -838,19 +832,20 @@ describe('validateTestCase', () => {
       );
       assert.ok(
         r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
-        'Expected VAR-REF-002 for {NOW} embedded in SetValues string'
+        `Expected VAR-REF-002, got: ${JSON.stringify(r.issues.map((i) => i.rule_id))}`
       );
-      assert.ok(r.issues.find((i) => i.rule_id === 'VAR-REF-002')!.message.includes('NOW'));
+      const issue = r.issues.find((i) => i.rule_id === 'VAR-REF-002')!;
+      assert.ok(issue.message.includes('NOW'), `Message should mention NOW: ${issue.message}`);
     });
 
-    it('does NOT fire for a pure {VarName} value (VAR-REF-001 owns that case)', () => {
+    it('does NOT fire VAR-REF-002 for a pure {VarName} value (that is VAR-REF-001)', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
   <steps>
     <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Pure var" testItemId="1">
       <arguments>
-        <argument id="id">
+        <argument id="accountId">
           <value class="value" valueClass="string">{AccountId}</value>
         </argument>
       </arguments>
@@ -858,26 +853,29 @@ describe('validateTestCase', () => {
   </steps>
 </testCase>`
       );
-      assert.ok(!r.issues.some((i) => i.rule_id === 'VAR-REF-002'), 'VAR-REF-002 must not double-fire on pure vars');
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
+        'VAR-REF-002 must not fire for a pure {VarName} value'
+      );
       assert.ok(
         r.issues.some((i) => i.rule_id === 'VAR-REF-001'),
-        'VAR-REF-001 should still fire'
+        'VAR-REF-001 should still fire for pure {VarName}'
       );
     });
 
-    it('does NOT fire for a correct class="compound" value', () => {
+    it('does NOT fire VAR-REF-002 for correct class="compound" XML', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
   <steps>
-    <apiCall guid="${GUID_S1}" apiId="ApexSoqlQuery" name="Query account" testItemId="1">
+    <apiCall guid="${GUID_S1}" apiId="SomeApi" name="Compound arg" testItemId="1">
       <arguments>
-        <argument id="soqlQuery">
+        <argument id="query">
           <value class="compound">
             <parts>
-              <value valueClass="string">SELECT Id FROM Account WHERE Id = '</value>
+              <value valueClass="string">SELECT Id FROM Account WHERE Id = &apos;</value>
               <variable><path element="AccountId"/></variable>
-              <value valueClass="string">'</value>
+              <value valueClass="string">&apos;</value>
             </parts>
           </value>
         </argument>
@@ -888,7 +886,7 @@ describe('validateTestCase', () => {
       );
       assert.ok(
         !r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
-        'VAR-REF-002 must not fire on correct compound value'
+        'VAR-REF-002 must not fire when class="compound" is used correctly'
       );
     });
   });
@@ -901,6 +899,7 @@ describe('registerTestCaseValidate handler', () => {
   // Cast to McpServer via unknown — safe because registerTestCaseValidate only calls server.tool().
   class CapturingServer {
     public capturedHandler: ((args: Record<string, unknown>) => Promise<unknown>) | null = null;
+    public capturedDescription: string | null = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public tool(...args: any[]): void {
       this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
@@ -908,6 +907,8 @@ describe('registerTestCaseValidate handler', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public registerTool(...args: any[]): void {
+      const config = args[1] as { description?: string };
+      if (config?.description) this.capturedDescription = config.description;
       this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
     }
   }
@@ -1037,5 +1038,28 @@ describe('validateTestCaseXml', () => {
   it('throws when file path is outside allowed paths', () => {
     const outside = path.join(os.tmpdir(), 'outside.testcase');
     assert.throws(() => validateTestCaseXml(outside, makeConfig(tmpDir)));
+  });
+});
+
+// ── tool description ──────────────────────────────────────────────────────────
+
+describe('provar_testcase_validate description', () => {
+  class DescriptionCapturingServer {
+    public capturedDescription: string | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public registerTool(...args: any[]): void {
+      const config = args[1] as { description?: string };
+      if (config?.description) this.capturedDescription = config.description;
+    }
+  }
+
+  it('includes step-reference guidance', () => {
+    const srv = new DescriptionCapturingServer();
+    registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths: [] });
+    assert.ok(srv.capturedDescription, 'description should be captured');
+    assert.ok(
+      String(srv.capturedDescription).includes('provar://docs/step-reference'),
+      'description should include step-reference guidance'
+    );
   });
 });
