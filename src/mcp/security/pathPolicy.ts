@@ -84,7 +84,12 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
       // A trailing sep from user input like "/tmp/" would otherwise cause double-sep prefix
       // checks ("startsWith('/tmp//')") and equality mismatches ("/tmp" !== "/tmp/").
       const isRoot = rawBaseKey === path.sep || (isWindows && /^[a-z]:[/\\]$/.test(rawBaseKey));
-      const baseKey = !isRoot && rawBaseKey.endsWith(path.sep) ? rawBaseKey.slice(0, -1) : rawBaseKey;
+      if (isRoot) {
+        // Root path already ends with its own separator (/ or C:\).
+        // Appending path.sep would produce // or C:\\, breaking startsWith for all children.
+        return resolvedKey.startsWith(rawBaseKey);
+      }
+      const baseKey = rawBaseKey.endsWith(path.sep) ? rawBaseKey.slice(0, -1) : rawBaseKey;
       return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
     })
   ) {

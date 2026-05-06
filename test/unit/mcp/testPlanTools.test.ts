@@ -373,9 +373,12 @@ describe('provar_testplan_add-instance', () => {
       makeProject(projectDir);
       makePlan(projectDir, 'MyPlan');
 
+      // Construct the absolute path from the filesystem root so the test is robust
+      // regardless of whether projectDir happens to be absolute or relative.
+      const absolutePath = path.join(path.parse(projectDir).root, 'escape', 'MyTest.testcase');
       const result = server.call('provar_testplan_add-instance', {
         project_path: projectDir,
-        test_case_path: path.join(projectDir, 'tests', 'MyTest.testcase'),
+        test_case_path: absolutePath,
         plan_name: 'MyPlan',
         overwrite: false,
         dry_run: false,
