@@ -502,6 +502,8 @@ PathPolicy: assertPathAllowed(filePath, allowedPaths)
 
 This check runs before every file read and write, including all path-type input fields — not just output file paths. Symlinks are dereferenced so that a symlink inside an allowed directory cannot escape containment. The allowed roots are set at server startup via `--allowed-paths` and cannot be changed while the server is running.
 
+On **Windows**, all path comparisons are performed case-insensitively. `fs.realpathSync` does not always canonicalize drive-letter case (e.g. `c:\` vs `C:\`), so the policy normalizes both the candidate path and the allowed roots to lowercase before comparing. This means `C:\Projects\MyProject` and `c:\projects\myproject` are treated as the same path for containment purposes.
+
 ### Audit log
 
 All tool invocations are logged to **stderr** with a unique `requestId` per call. The log format is structured JSON:

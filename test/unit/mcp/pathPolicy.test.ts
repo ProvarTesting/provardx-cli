@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, it, afterEach } from 'mocha';
+import { describe, it, afterEach, before } from 'mocha';
 import { assertPathAllowed, PathPolicyError } from '../../../src/mcp/security/pathPolicy.js';
 
 const tmp = os.tmpdir();
@@ -41,9 +41,23 @@ describe('pathPolicy', () => {
   });
 
   it('allows nested paths inside allowedPaths', () => {
-    assert.doesNotThrow(() =>
-      assertPathAllowed(path.join(tmp, 'a', 'b', 'c', 'file.xml'), [tmp])
-    );
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'a', 'b', 'c', 'file.xml'), [tmp]));
+  });
+
+  it('allows path when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'foo.java'), [tmp + path.sep]));
+  });
+
+  it('allows exact match when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(tmp, [tmp + path.sep]));
+  });
+
+  it('allows child paths when allowed root is the filesystem root', () => {
+    // path.parse gives the drive root on Windows (C:\) or / on Unix.
+    // Regression: prior code appended path.sep to the root, producing "//" or "C:\\\\",
+    // causing startsWith to fail for all children.
+    const fsRoot = path.parse(tmp).root;
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'foo.java'), [fsRoot]));
   });
 
   it('rejects sibling directories that share a prefix', () => {
@@ -63,7 +77,11 @@ describe('pathPolicy', () => {
 
     afterEach(() => {
       if (symlinkDir) {
-        try { fs.rmSync(symlinkDir, { recursive: true, force: true }); } catch { /* ignore */ }
+        try {
+          fs.rmSync(symlinkDir, { recursive: true, force: true });
+        } catch {
+          /* ignore */
+        }
       }
     });
 
@@ -96,6 +114,42 @@ describe('pathPolicy', () => {
       const allowedDir = symlinkDir;
       fs.writeFileSync(real, 'content');
       assert.doesNotThrow(() => assertPathAllowed(real, [allowedDir]));
+    });
+  });
+
+  describe('Windows case-insensitive comparison', () => {
+    before(function () {
+      if (process.platform !== 'win32') this.skip();
+    });
+
+    it('allows a path with lowercase drive letter when allowed has uppercase', () => {
+      // Reproduces GitHub Copilot bug: agent sends `c:\...` but allowed path is `C:\...`
+      const allowed = tmp; // typically `C:\Users\<user>\AppData\Local\Temp`
+      const lowerDrive = allowed.charAt(0).toLowerCase() + allowed.slice(1);
+      assert.doesNotThrow(() => assertPathAllowed(path.join(lowerDrive, 'foo.java'), [allowed]));
+    });
+
+    it('allows a path with uppercase drive letter when allowed has lowercase', () => {
+      const upperDrive = tmp.charAt(0).toUpperCase() + tmp.slice(1);
+      const lowerAllowed = tmp.charAt(0).toLowerCase() + tmp.slice(1);
+      assert.doesNotThrow(() => assertPathAllowed(path.join(upperDrive, 'foo.java'), [lowerAllowed]));
+    });
+
+    it('allows a path with mixed-case directory segments', () => {
+      const mixed = tmp.toUpperCase();
+      assert.doesNotThrow(() => assertPathAllowed(path.join(mixed, 'foo.java'), [tmp]));
+    });
+
+    it('still rejects a sibling path that differs only after the prefix (case-insensitive)', () => {
+      const allowed = path.join(tmp, 'myproject');
+      const sibling = path.join(tmp.toUpperCase(), 'myproject-evil', 'secret.txt');
+      try {
+        assertPathAllowed(sibling, [allowed]);
+        assert.fail('Expected PathPolicyError to be thrown');
+      } catch (e) {
+        assert.ok(e instanceof PathPolicyError, 'Expected PathPolicyError');
+        assert.equal(e.code, 'PATH_NOT_ALLOWED');
+      }
     });
   });
 });

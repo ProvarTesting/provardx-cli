@@ -65,18 +65,21 @@ jobs:
           else
             # Auto-extract from git log since the previous tag
             if [ "${{ github.event_name }}" = "release" ]; then
-              # For a release event HEAD is already the new tag; find the one before it
-              PREV=$(git tag --sort=-creatordate | awk -v tag="${GITHUB_REF_NAME}" '$0==tag{found=1;next} found{print;exit}')
+              # Release event: HEAD is the new tag — find the nearest ancestor tag before it
+              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git tag --sort=-version:refname | head -1)
             else
-              # For a manual dispatch use the most recent existing tag
-              PREV=$(git tag --sort=-creatordate | head -1)
+              # Manual dispatch: find the nearest ancestor tag from HEAD
+              # (git describe respects branch ancestry; avoids pulling in commits from sibling branches)
+              PREV=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
             fi
 
             RANGE="${PREV:+${PREV}..}HEAD"
 
-            RAW=$(git log --pretty=format:"%s" $RANGE \
+            RAW=$(git log --pretty=format:"%s" "$RANGE" \
               | sed 's/^[A-Z][A-Z0-9]*-[0-9]*: //' \
-              | grep -Ev "^(Merge |chore)" \
+              | grep -Ev "^(Merge |chore|bump|increment)" \
+              | grep -Ev "\(ci\):" \
+              | grep -Eiv "review comments?|merge conflict|feedback items?|test fixtures?|pre-landing|address session|address PR|session [0-9]|resolving merge|PR #[0-9]|dot\.notation|server\.tool|registerTool|bump version|increment version|testCasePath|planitem|uuid lookup|coverage (count|skew)|buildTestCase|awk regex|deploy workflow" \
               | head -20)
 
             FEATS=$(printf '%s\n' "$RAW" | grep '^feat' | sed 's/^feat[^:]*: /• /' | head -8)

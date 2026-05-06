@@ -44,12 +44,21 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
   try {
     resolved = fs.realpathSync(filePath);
   } catch {
-    // Path doesn't exist — resolve the parent (which should exist) to catch symlinks there
-    const parent = path.dirname(path.resolve(filePath));
+    // Path doesn't exist — walk up the ancestor hierarchy to find the deepest existing directory,
+    // resolve symlinks there, then re-attach the non-existent tail segments. This handles macOS
+    // where os.tmpdir() returns /var/... (a symlink to /private/var/...) and intermediate dirs
+    // for a new output path may not yet exist.
+    const full = path.resolve(filePath);
+    let cur = full;
+    const tail: string[] = [];
+    while (!fs.existsSync(cur) && cur !== path.dirname(cur)) {
+      tail.unshift(path.basename(cur));
+      cur = path.dirname(cur);
+    }
     try {
-      resolved = path.join(fs.realpathSync(parent), path.basename(filePath));
+      resolved = path.join(fs.realpathSync(cur), ...tail);
     } catch {
-      resolved = path.resolve(filePath);
+      resolved = full;
     }
   }
 
@@ -61,9 +70,28 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
     }
   });
 
+  // Windows file paths are case-insensitive; fs.realpathSync does not always
+  // canonicalize drive-letter case (e.g. `c:\` vs `C:\`), so compare case-insensitively.
+  const isWindows = process.platform === 'win32';
+  const normalizeForCompare = (p: string): string => (isWindows ? p.toLowerCase() : p);
+  const resolvedKey = normalizeForCompare(resolved);
+
   if (
     resolvedAllowed.length > 0 &&
-    !resolvedAllowed.some((base) => resolved === base || resolved.startsWith(base + path.sep))
+    !resolvedAllowed.some((base) => {
+      const rawBaseKey = normalizeForCompare(base);
+      // Strip trailing separator unless base is a filesystem root (/ on Unix, C:\ on Windows).
+      // A trailing sep from user input like "/tmp/" would otherwise cause double-sep prefix
+      // checks ("startsWith('/tmp//')") and equality mismatches ("/tmp" !== "/tmp/").
+      const isRoot = rawBaseKey === path.sep || (isWindows && /^[a-z]:[/\\]$/.test(rawBaseKey));
+      if (isRoot) {
+        // Root path already ends with its own separator (/ or C:\).
+        // Appending path.sep would produce // or C:\\, breaking startsWith for all children.
+        return resolvedKey.startsWith(rawBaseKey);
+      }
+      const baseKey = rawBaseKey.endsWith(path.sep) ? rawBaseKey.slice(0, -1) : rawBaseKey;
+      return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
+    })
   ) {
     throw new PathPolicyError(
       'PATH_NOT_ALLOWED',

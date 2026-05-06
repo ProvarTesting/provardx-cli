@@ -369,6 +369,25 @@ describe('provar_testplan_add-instance', () => {
       assert.equal(errorCode(result), 'FILE_NOT_FOUND');
     });
 
+    it('returns INVALID_PATH when test_case_path is absolute', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'MyPlan');
+
+      // Construct the absolute path from the filesystem root so the test is robust
+      // regardless of whether projectDir happens to be absolute or relative.
+      const absolutePath = path.join(path.parse(projectDir).root, 'escape', 'MyTest.testcase');
+      const result = server.call('provar_testplan_add-instance', {
+        project_path: projectDir,
+        test_case_path: absolutePath,
+        plan_name: 'MyPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'INVALID_PATH');
+    });
+
     it('returns INVALID_PATH when test_case_path does not end with .testcase', () => {
       makeProject(projectDir);
       // Create the file but with wrong extension
@@ -504,6 +523,28 @@ describe('provar_testplan_add-instance', () => {
 
       assert.equal(isError(result), false);
       assert.equal(parseText(result)['test_case_id'], 'guid-only-id');
+    });
+  });
+
+  describe('path policy on test_case_path', () => {
+    it('returns PATH_TRAVERSAL when test_case_path contains .. (rejected before path.join normalizes it)', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'P');
+
+      // Use unrestricted server (empty allowedPaths) to confirm '..' is caught even without containment check
+      const unrestrictedServer = new MockMcpServer();
+      registerAllTestPlanTools(unrestrictedServer as never, { allowedPaths: [] });
+
+      const result = unrestrictedServer.call('provar_testplan_add-instance', {
+        project_path: projectDir,
+        test_case_path: '../outside.testcase',
+        plan_name: 'P',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'PATH_TRAVERSAL');
     });
   });
 
