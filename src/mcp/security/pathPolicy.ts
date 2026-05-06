@@ -80,7 +80,9 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
     resolvedAllowed.length > 0 &&
     !resolvedAllowed.some((base) => {
       const baseKey = normalizeForCompare(base);
-      return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
+      // Strip a trailing separator so roots like '/' or 'C:\' don't produce '//' or 'C:\\'
+      const baseKeyNorm = baseKey.endsWith(path.sep) ? baseKey.slice(0, -1) : baseKey;
+      return resolvedKey === baseKey || resolvedKey.startsWith(baseKeyNorm + path.sep);
     })
   ) {
     throw new PathPolicyError(

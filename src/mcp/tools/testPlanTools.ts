@@ -259,9 +259,15 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
           };
         }
 
-        // Resolve testcase absolute path — normalize backslashes so Windows-style paths work on macOS/Linux
+        // Resolve testcase absolute path — normalize backslashes so Windows-style paths work on macOS/Linux.
+        // Check for '..' before path.join() normalizes them away; otherwise traversal goes undetected
+        // when allowedPaths is empty (unrestricted mode). Then enforce containment on the resolved path.
         const normalizedTestCasePath = toForwardSlashes(test_case_path);
+        if (normalizedTestCasePath.split('/').some((seg) => seg === '..')) {
+          throw new PathPolicyError('PATH_TRAVERSAL', `Path traversal detected in test_case_path: ${test_case_path}`);
+        }
         const absoluteTestCasePath = path.join(projectRoot, normalizedTestCasePath);
+        assertPathAllowed(absoluteTestCasePath, config.allowedPaths);
         if (!fs.existsSync(absoluteTestCasePath)) {
           return {
             isError: true,
