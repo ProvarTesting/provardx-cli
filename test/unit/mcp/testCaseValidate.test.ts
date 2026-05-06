@@ -797,6 +797,7 @@ describe('registerTestCaseValidate handler', () => {
   // Cast to McpServer via unknown — safe because registerTestCaseValidate only calls server.tool().
   class CapturingServer {
     public capturedHandler: ((args: Record<string, unknown>) => Promise<unknown>) | null = null;
+    public capturedDescription: string | null = null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public tool(...args: any[]): void {
       this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
@@ -804,6 +805,8 @@ describe('registerTestCaseValidate handler', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public registerTool(...args: any[]): void {
+      const config = args[1] as { description?: string };
+      if (config?.description) this.capturedDescription = config.description;
       this.capturedHandler = args[args.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
     }
   }
@@ -933,5 +936,28 @@ describe('validateTestCaseXml', () => {
   it('throws when file path is outside allowed paths', () => {
     const outside = path.join(os.tmpdir(), 'outside.testcase');
     assert.throws(() => validateTestCaseXml(outside, makeConfig(tmpDir)));
+  });
+});
+
+// ── tool description ──────────────────────────────────────────────────────────
+
+describe('provar_testcase_validate description', () => {
+  class DescriptionCapturingServer {
+    public capturedDescription: string | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public registerTool(...args: any[]): void {
+      const config = args[1] as { description?: string };
+      if (config?.description) this.capturedDescription = config.description;
+    }
+  }
+
+  it('includes step-reference guidance', () => {
+    const srv = new DescriptionCapturingServer();
+    registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths: [] });
+    assert.ok(srv.capturedDescription, 'description should be captured');
+    assert.ok(
+      String(srv.capturedDescription).includes('provar://docs/step-reference'),
+      'description should include step-reference guidance'
+    );
   });
 });

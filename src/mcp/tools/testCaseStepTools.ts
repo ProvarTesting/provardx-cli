@@ -98,6 +98,7 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
         'Returns STEP_NOT_FOUND (with all_test_item_ids list) when the target step is absent.',
         'Returns INVALID_STEP_XML when step_xml cannot be parsed or contains ≠1 <apiCall> elements.',
         'Returns INVALID_XML_AFTER_EDIT (backup restored) when the mutated file fails validation.',
+        'Grounding for step_xml: call provar_qualityhub_examples_retrieve for corpus examples of the step type you need; if the response has count: 0 with a warning field, fall back: read the provar://docs/step-reference MCP resource.',
       ].join(' '),
       inputSchema: {
         test_case_path: z.string().describe('Absolute path to the .testcase XML file; must be within --allowed-paths'),
