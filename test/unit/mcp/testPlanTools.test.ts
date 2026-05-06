@@ -507,6 +507,28 @@ describe('provar_testplan_add-instance', () => {
     });
   });
 
+  describe('path policy on test_case_path', () => {
+    it('returns PATH_NOT_ALLOWED when test_case_path escapes project root via ..', () => {
+      const strictServer = new MockMcpServer();
+      // Use projectDir as the allowed root so ../outside.testcase is outside allowed paths
+      registerAllTestPlanTools(strictServer as never, { allowedPaths: [projectDir] });
+      makeProject(projectDir);
+      makePlan(projectDir, 'P');
+
+      const result = strictServer.call('provar_testplan_add-instance', {
+        project_path: projectDir,
+        test_case_path: '../outside.testcase',
+        plan_name: 'P',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      const code = errorCode(result);
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error code: ${code}`);
+    });
+  });
+
   describe('testCasePath forward-slash normalization', () => {
     it('normalizes backslashes to forward slashes in written XML', () => {
       makeProject(projectDir);

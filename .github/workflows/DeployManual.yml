@@ -66,7 +66,7 @@ jobs:
             # Auto-extract from git log since the previous tag
             if [ "${{ github.event_name }}" = "release" ]; then
               # Release event: HEAD is the new tag — find the nearest ancestor tag before it
-              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git tag --sort=-version:refname | tail -1)
+              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git tag --sort=-version:refname | head -1)
             else
               # Manual dispatch: find the nearest ancestor tag from HEAD
               # (git describe respects branch ancestry; avoids pulling in commits from sibling branches)

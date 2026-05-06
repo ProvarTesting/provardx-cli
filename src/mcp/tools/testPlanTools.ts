@@ -259,8 +259,9 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
           };
         }
 
-        // Resolve testcase absolute path
+        // Resolve testcase absolute path and enforce path policy before any fs access
         const absoluteTestCasePath = path.join(projectRoot, test_case_path);
+        assertPathAllowed(absoluteTestCasePath, config.allowedPaths);
         if (!fs.existsSync(absoluteTestCasePath)) {
           return {
             isError: true,
