@@ -523,6 +523,28 @@ describe('provar_testplan_add-instance', () => {
     });
   });
 
+  describe('path policy on test_case_path', () => {
+    it('returns PATH_TRAVERSAL when test_case_path contains .. (rejected before path.join normalizes it)', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'P');
+
+      // Use unrestricted server (empty allowedPaths) to confirm '..' is caught even without containment check
+      const unrestrictedServer = new MockMcpServer();
+      registerAllTestPlanTools(unrestrictedServer as never, { allowedPaths: [] });
+
+      const result = unrestrictedServer.call('provar_testplan_add-instance', {
+        project_path: projectDir,
+        test_case_path: '../outside.testcase',
+        plan_name: 'P',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'PATH_TRAVERSAL');
+    });
+  });
+
   describe('testCasePath forward-slash normalization', () => {
     it('normalizes backslashes to forward slashes in written XML', () => {
       makeProject(projectDir);
