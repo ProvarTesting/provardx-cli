@@ -695,6 +695,76 @@ describe('provar_testcase_generate', () => {
     });
   });
 
+  describe('F1 — Compound values for {VarName} embedded in surrounding text', () => {
+    it('"Hello {Name}" emits class="compound" with literal and variable parts', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Compound Value Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Enter greeting',
+            attributes: { value: 'Hello {Name}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected class="compound" for mixed value');
+      assert.ok(xml.includes('<parts>'), 'Expected <parts> element');
+      assert.ok(xml.includes('valueClass="string">Hello '), 'Expected literal prefix as string part');
+      assert.ok(xml.includes('<variable>'), 'Expected <variable> element for the token');
+      assert.ok(xml.includes('<path element="Name"/>'), 'Expected <path element="Name"/>');
+      assert.ok(!xml.includes('valueClass="string">Hello {Name}'), 'Must NOT emit raw {Name} as string literal');
+    });
+
+    it('"{A} and {B}" emits compound with two variable parts', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Multi-Var Compound Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Combine two vars',
+            attributes: { value: '{First} and {Last}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="compound"'), 'Expected compound for two variables');
+      assert.ok(xml.includes('<path element="First"/>'), 'Expected path for First');
+      assert.ok(xml.includes('<path element="Last"/>'), 'Expected path for Last');
+    });
+
+    it('pure {VarName} alone still uses class="variable" (not compound)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Pure Var Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Pure var',
+            attributes: { value: '{AccountId}' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="variable"'), 'Pure token should still use class="variable"');
+      assert.ok(!xml.includes('class="compound"'), 'Should not emit compound for a pure variable token');
+    });
+  });
+
   describe('D7 — Cleanup warning for ApexDeleteObject', () => {
     it('includes cleanup warning when ApexDeleteObject is in the step list', () => {
       const result = server.call('provar_testcase_generate', {
