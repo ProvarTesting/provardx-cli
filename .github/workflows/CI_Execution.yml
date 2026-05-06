@@ -100,7 +100,7 @@ jobs:
           sf plugins link .
           yarn prepack
       - name: Unit tests
-        run: node node_modules/.bin/mocha "test/**/*.test.ts" --timeout 30000
+        run: npx mocha "test/**/*.test.ts" --timeout 30000
       - name: MCP smoke test
         timeout-minutes: 5
         env:
