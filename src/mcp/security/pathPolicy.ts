@@ -79,10 +79,18 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
   if (
     resolvedAllowed.length > 0 &&
     !resolvedAllowed.some((base) => {
-      const baseKey = normalizeForCompare(base);
-      // Strip a trailing separator so roots like '/' or 'C:\' don't produce '//' or 'C:\\'
-      const baseKeyNorm = baseKey.endsWith(path.sep) ? baseKey.slice(0, -1) : baseKey;
-      return resolvedKey === baseKey || resolvedKey.startsWith(baseKeyNorm + path.sep);
+      const rawBaseKey = normalizeForCompare(base);
+      // Strip trailing separator unless base is a filesystem root (/ on Unix, C:\ on Windows).
+      // A trailing sep from user input like "/tmp/" would otherwise cause double-sep prefix
+      // checks ("startsWith('/tmp//')") and equality mismatches ("/tmp" !== "/tmp/").
+      const isRoot = rawBaseKey === path.sep || (isWindows && /^[a-z]:[/\\]$/.test(rawBaseKey));
+      if (isRoot) {
+        // Root path already ends with its own separator (/ or C:\).
+        // Appending path.sep would produce // or C:\\, breaking startsWith for all children.
+        return resolvedKey.startsWith(rawBaseKey);
+      }
+      const baseKey = rawBaseKey.endsWith(path.sep) ? rawBaseKey.slice(0, -1) : rawBaseKey;
+      return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
     })
   ) {
     throw new PathPolicyError(

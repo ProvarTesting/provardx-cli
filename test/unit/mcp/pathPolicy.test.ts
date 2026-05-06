@@ -44,6 +44,22 @@ describe('pathPolicy', () => {
     assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'a', 'b', 'c', 'file.xml'), [tmp]));
   });
 
+  it('allows path when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'foo.java'), [tmp + path.sep]));
+  });
+
+  it('allows exact match when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(tmp, [tmp + path.sep]));
+  });
+
+  it('allows child paths when allowed root is the filesystem root', () => {
+    // path.parse gives the drive root on Windows (C:\) or / on Unix.
+    // Regression: prior code appended path.sep to the root, producing "//" or "C:\\\\",
+    // causing startsWith to fail for all children.
+    const fsRoot = path.parse(tmp).root;
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'foo.java'), [fsRoot]));
+  });
+
   it('rejects sibling directories that share a prefix', () => {
     const allowed = path.join(tmp, 'myproject');
     const sibling = path.join(tmp, 'myproject-evil', 'secret.txt');
