@@ -44,12 +44,21 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
   try {
     resolved = fs.realpathSync(filePath);
   } catch {
-    // Path doesn't exist — resolve the parent (which should exist) to catch symlinks there
-    const parent = path.dirname(path.resolve(filePath));
+    // Path doesn't exist — walk up the ancestor hierarchy to find the deepest existing directory,
+    // resolve symlinks there, then re-attach the non-existent tail segments. This handles macOS
+    // where os.tmpdir() returns /var/... (a symlink to /private/var/...) and intermediate dirs
+    // for a new output path may not yet exist.
+    const full = path.resolve(filePath);
+    let cur = full;
+    const tail: string[] = [];
+    while (!fs.existsSync(cur) && cur !== path.dirname(cur)) {
+      tail.unshift(path.basename(cur));
+      cur = path.dirname(cur);
+    }
     try {
-      resolved = path.join(fs.realpathSync(parent), path.basename(filePath));
+      resolved = path.join(fs.realpathSync(cur), ...tail);
     } catch {
-      resolved = path.resolve(filePath);
+      resolved = full;
     }
   }
 

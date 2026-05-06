@@ -259,8 +259,9 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
           };
         }
 
-        // Resolve testcase absolute path
-        const absoluteTestCasePath = path.join(projectRoot, test_case_path);
+        // Resolve testcase absolute path — normalize backslashes so Windows-style paths work on macOS/Linux
+        const normalizedTestCasePath = toForwardSlashes(test_case_path);
+        const absoluteTestCasePath = path.join(projectRoot, normalizedTestCasePath);
         if (!fs.existsSync(absoluteTestCasePath)) {
           return {
             isError: true,
@@ -274,7 +275,7 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
             ],
           };
         }
-        if (!test_case_path.endsWith('.testcase')) {
+        if (!normalizedTestCasePath.endsWith('.testcase')) {
           return {
             isError: true,
             content: [
@@ -331,7 +332,7 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
         }
 
         // Determine filename and full path
-        const instanceFileName = path.basename(test_case_path, '.testcase') + '.testinstance';
+        const instanceFileName = path.basename(normalizedTestCasePath, '.testcase') + '.testinstance';
         const instanceFilePath = path.join(instanceDir, instanceFileName);
 
         if (!overwrite && fs.existsSync(instanceFilePath)) {
@@ -354,7 +355,6 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
 
         // Build XML
         const guid = randomUUID();
-        const normalizedTestCasePath = toForwardSlashes(test_case_path);
         const xmlContent = buildTestInstanceXml(guid, testCaseId, normalizedTestCasePath);
 
         if (!dry_run) {
