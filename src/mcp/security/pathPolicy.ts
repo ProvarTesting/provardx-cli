@@ -79,7 +79,12 @@ export function assertPathAllowed(filePath: string, allowedPaths: string[]): voi
   if (
     resolvedAllowed.length > 0 &&
     !resolvedAllowed.some((base) => {
-      const baseKey = normalizeForCompare(base);
+      const rawBaseKey = normalizeForCompare(base);
+      // Strip trailing separator unless base is a filesystem root (/ on Unix, C:\ on Windows).
+      // A trailing sep from user input like "/tmp/" would otherwise cause double-sep prefix
+      // checks ("startsWith('/tmp//')") and equality mismatches ("/tmp" !== "/tmp/").
+      const isRoot = rawBaseKey === path.sep || (isWindows && /^[a-z]:[/\\]$/.test(rawBaseKey));
+      const baseKey = !isRoot && rawBaseKey.endsWith(path.sep) ? rawBaseKey.slice(0, -1) : rawBaseKey;
       return resolvedKey === baseKey || resolvedKey.startsWith(baseKey + path.sep);
     })
   ) {

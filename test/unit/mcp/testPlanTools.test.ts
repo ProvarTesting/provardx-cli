@@ -369,6 +369,22 @@ describe('provar_testplan_add-instance', () => {
       assert.equal(errorCode(result), 'FILE_NOT_FOUND');
     });
 
+    it('returns INVALID_PATH when test_case_path is absolute', () => {
+      makeProject(projectDir);
+      makePlan(projectDir, 'MyPlan');
+
+      const result = server.call('provar_testplan_add-instance', {
+        project_path: projectDir,
+        test_case_path: path.join(projectDir, 'tests', 'MyTest.testcase'),
+        plan_name: 'MyPlan',
+        overwrite: false,
+        dry_run: false,
+      });
+
+      assert.equal(isError(result), true);
+      assert.equal(errorCode(result), 'INVALID_PATH');
+    });
+
     it('returns INVALID_PATH when test_case_path does not end with .testcase', () => {
       makeProject(projectDir);
       // Create the file but with wrong extension

@@ -259,6 +259,22 @@ export function registerTestPlanAddInstance(server: McpServer, config: ServerCon
           };
         }
 
+        // Reject absolute test_case_path: path.join(root, absPath) ignores root on Windows (drive-letter paths)
+        // and Unix, allowing the caller to escape the project directory entirely.
+        if (path.isAbsolute(test_case_path)) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify(
+                  makeError('INVALID_PATH', 'test_case_path must be relative to project_path, not absolute', requestId)
+                ),
+              },
+            ],
+          };
+        }
+
         // Resolve testcase absolute path — normalize backslashes so Windows-style paths work on macOS/Linux
         const normalizedTestCasePath = toForwardSlashes(test_case_path);
         const absoluteTestCasePath = path.join(projectRoot, normalizedTestCasePath);

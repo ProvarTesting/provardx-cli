@@ -44,6 +44,14 @@ describe('pathPolicy', () => {
     assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'a', 'b', 'c', 'file.xml'), [tmp]));
   });
 
+  it('allows path when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(path.join(tmp, 'foo.java'), [tmp + path.sep]));
+  });
+
+  it('allows exact match when allowed root has a trailing separator', () => {
+    assert.doesNotThrow(() => assertPathAllowed(tmp, [tmp + path.sep]));
+  });
+
   it('rejects sibling directories that share a prefix', () => {
     const allowed = path.join(tmp, 'myproject');
     const sibling = path.join(tmp, 'myproject-evil', 'secret.txt');
