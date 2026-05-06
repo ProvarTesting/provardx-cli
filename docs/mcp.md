@@ -473,6 +473,8 @@ All file-system operations (read, write, generate) are restricted to the paths s
 
 Symlinks are resolved via `fs.realpathSync` before the containment check, so a symlink inside an allowed directory that points outside it cannot bypass the restriction. For tools that accept multiple path inputs (such as `provar_ant_generate`'s `provar_home`, `project_path`, and `results_path`), all path fields are validated before any file operation occurs — not just the output path.
 
+On **Windows**, path comparisons are performed case-insensitively to account for the fact that `fs.realpathSync` does not always canonicalize drive-letter case (e.g. `c:\` vs `C:\`). This means `C:\Projects\my-project` and `c:\projects\my-project` are treated as equivalent when checking against `--allowed-paths`.
+
 ---
 
 ## Available tools
