@@ -19,18 +19,19 @@ Everything you need to clone, build, run locally, and test changes to `@provarte
   - [Full test + lint gate](#full-test--lint-gate)
 - [Linting and formatting](#linting-and-formatting)
 - [Developing the MCP server locally](#developing-the-mcp-server-locally)
+  - [MCP Inspector (interactive tool testing)](#mcp-inspector-interactive-tool-testing)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prerequisites
 
-| Tool | Minimum version | How to check |
-|------|----------------|--------------|
-| Node.js | 18.0.0 | `node --version` |
-| npm | 8+ (ships with Node 18) | `npm --version` |
-| Salesforce CLI (`sf`) | any recent | `sf --version` |
-| Git | any | `git --version` |
+| Tool                  | Minimum version         | How to check     |
+| --------------------- | ----------------------- | ---------------- |
+| Node.js               | 18.0.0                  | `node --version` |
+| npm                   | 8+ (ships with Node 18) | `npm --version`  |
+| Salesforce CLI (`sf`) | any recent              | `sf --version`   |
+| Git                   | any                     | `git --version`  |
 
 The Salesforce CLI is required to run the compiled plugin commands in development mode (`bin/dev.js`). Install it from [developer.salesforce.com/tools/salesforcecli](https://developer.salesforce.com/tools/salesforcecli) if needed.
 
@@ -99,11 +100,13 @@ provardx-cli/
 ## Build system overview
 
 This project uses **[Wireit](https://github.com/google/wireit)** as a build orchestrator on top of npm scripts. Wireit provides:
+
 - **Incremental builds** — only recompiles files that changed
 - **Dependency ordering** — `build` depends on `compile` + `lint`; `test` depends on `test:compile` + `test:only` + `lint`
 - **Caching** — subsequent `npm run compile` runs skip unchanged files
 
 The compile step does two things:
+
 1. `tsc` — transpiles `src/**/*.ts` → `lib/`
 2. `shx cp src/mcp/rules/*.json lib/mcp/rules/` — copies the JSON rules file (TypeScript does not copy non-`.ts` assets automatically)
 
@@ -144,6 +147,7 @@ node bin/dev.js provar mcp start --allowed-paths /path/to/project
 ```
 
 > **Tip:** On Unix you can `chmod +x bin/dev.js` and run it as `./bin/dev.js` or add a shell alias:
+>
 > ```sh
 > alias sfdev="node $(pwd)/bin/dev.js"
 > sfdev provar mcp start
@@ -159,11 +163,11 @@ node bin/dev.js provar mcp start --allowed-paths /path/to/project
 
 Unit tests live in `test/unit/mcp/` and cover all pure validator functions (no filesystem, no network, no Salesforce CLI required). There are three ways to run them, depending on your workflow:
 
-| Command | When to use |
-|---------|-------------|
-| `npm run test:dev` | **Daily development** — always executes, never cached, fastest for iteration |
+| Command              | When to use                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `npm run test:dev`   | **Daily development** — always executes, never cached, fastest for iteration   |
 | `npm run test:watch` | **TDD mode** — re-runs automatically whenever a `src/` or `test/` file changes |
-| `npm run test:only` | **CI / pre-commit** — wireit-managed; skips if no files changed since last run |
+| `npm run test:only`  | **CI / pre-commit** — wireit-managed; skips if no files changed since last run |
 
 ```sh
 # Always runs — no caching, best for iterating on changes
@@ -188,13 +192,13 @@ The test runner is **Mocha** with `ts-node/esm` as the loader, so test files are
 
 **Current test files and what they cover:**
 
-| File | Covers |
-|------|--------|
-| `testCaseValidate.test.ts` | XML schema rules TC_001–TC_035 |
-| `pageObjectValidate.test.ts` | Java PO rules PO_001–PO_080 |
-| `pathPolicy.test.ts` | Path security policy (allowed paths, traversal) |
-| `hierarchyValidate.test.ts` | Suite/plan/project structural + naming rules, `buildHierarchySummary` |
-| `bestPracticesEngine.test.ts` | Scoring formula (exact Lambda parity), `runBestPractices` |
+| File                          | Covers                                                                |
+| ----------------------------- | --------------------------------------------------------------------- |
+| `testCaseValidate.test.ts`    | XML schema rules TC_001–TC_035                                        |
+| `pageObjectValidate.test.ts`  | Java PO rules PO_001–PO_080                                           |
+| `pathPolicy.test.ts`          | Path security policy (allowed paths, traversal)                       |
+| `hierarchyValidate.test.ts`   | Suite/plan/project structural + naming rules, `buildHierarchySummary` |
+| `bestPracticesEngine.test.ts` | Scoring formula (exact Lambda parity), `runBestPractices`             |
 
 ### Coverage
 
@@ -282,8 +286,11 @@ Update `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
       "command": "node",
       "args": [
         "/absolute/path/to/provardx-cli/bin/dev.js",
-        "provar", "mcp", "start",
-        "--allowed-paths", "/path/to/your/provar/project"
+        "provar",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/path/to/your/provar/project"
       ]
     }
   }
@@ -291,6 +298,47 @@ Update `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ```
 
 Restart Claude Desktop after saving.
+
+### MCP Inspector (interactive tool testing)
+
+The [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) is a browser-based UI for calling MCP tools directly — no AI client required. Use it to iterate on tool schemas and verify request/response shapes.
+
+```sh
+# Compile first, then launch the Inspector against the dev server
+npm run compile
+npx @modelcontextprotocol/inspector node bin/dev.js provar mcp start --allowed-paths /absolute/path/to/your/provar/project
+```
+
+> **Run this as a single line.** Line-wrapping the command (e.g. with a newline before `--allowed-paths`) causes the shell to treat `--allowed-paths` as a separate command and fail with `command not found`. Use `\` for explicit line continuation in bash if needed.
+
+If the Inspector fails with `Proxy Server PORT IS IN USE at port 6277`, a previous Inspector process is still running. Free the ports and try again:
+
+```sh
+# macOS / Linux
+kill $(lsof -ti :6277) $(lsof -ti :6274) 2>/dev/null
+
+# Windows PowerShell
+foreach ($p in 6277,6274) { $c = Get-NetTCPConnection -LocalPort $p -EA 0; if ($c) { Stop-Process -Id $c.OwningProcess -Force } }
+```
+
+The command starts two processes: the MCP Inspector proxy (default port **6277**) and opens a browser tab at **http://localhost:6274**. From there you can:
+
+- Browse all registered tools and their input schemas
+- Invoke any tool with custom JSON input
+- Inspect the raw JSON-RPC request and response
+- View server stderr logs in the **Notifications** panel
+
+> **Windows path note:** Use forward slashes or escaped backslashes in `--allowed-paths` (e.g. `C:/Users/you/provar-project` or `C:\\Users\\you\\provar-project`). The path must match one of the roots configured in `provardx-properties.json`.
+
+To pin a specific Inspector version or avoid repeated downloads, install it once globally:
+
+```sh
+npm install -g @modelcontextprotocol/inspector
+# Then run as:
+mcp-inspector node bin/dev.js provar mcp start --allowed-paths /path/to/project
+```
+
+---
 
 ### Debugging MCP tool calls
 

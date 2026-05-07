@@ -106,6 +106,35 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 
   // ── Documentation resources ──────────────────────────────────────────────────
   const docsDir = join(dirname(fileURLToPath(import.meta.url)), 'docs');
+
+  server.resource(
+    'provar-nitrox-component-catalog',
+    'provar://nitrox/component-catalog',
+    {
+      description:
+        'Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists every package with its components, types, tagNames, interactions, and attributes. Read this before calling provar_nitrox_generate to understand available component patterns and naming conventions.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'NITROX_COMPONENT_CATALOG.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://nitrox/component-catalog', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://nitrox/component-catalog',
+              mimeType: 'text/markdown',
+              text: '# NitroX Component Catalog\n\nCatalog not found. If you are developing from source, rebuild the package. Otherwise, reinstall or upgrade the plugin/package and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
   server.resource(
     'provar-step-reference',
     'provar://docs/step-reference',
