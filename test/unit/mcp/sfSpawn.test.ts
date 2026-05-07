@@ -223,6 +223,21 @@ describe('runSfCommand', () => {
     assert.equal(cmd, '/custom/path/sf');
   });
 
+  it('falls through to auto-discovery when sfPath is empty string', () => {
+    // Empty string is not a valid path — should behave as if sfPath was absent
+    spawnStub.returns(makeSpawnOk('ok'));
+    runSfCommand(['--version'], '');
+    const [cmd] = spawnStub.firstCall.args as [string, string[]];
+    assert.equal(cmd, 'sf'); // uses the cached path, not the empty string
+  });
+
+  it('falls through to auto-discovery when sfPath is whitespace only', () => {
+    spawnStub.returns(makeSpawnOk('ok'));
+    runSfCommand(['--version'], '   ');
+    const [cmd] = spawnStub.firstCall.args as [string, string[]];
+    assert.equal(cmd, 'sf');
+  });
+
   it('throws SfNotFoundError when cache is null and no sfPath given', () => {
     setSfPathCacheForTesting(null);
     assert.throws(

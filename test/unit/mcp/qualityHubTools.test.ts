@@ -7,6 +7,7 @@
 /* eslint-disable camelcase */
 
 import { strict as assert } from 'node:assert';
+import path from 'node:path';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sfSpawnHelper, getSfCommonPaths, setSfPathCacheForTesting } from '../../../src/mcp/tools/sfSpawn.js';
@@ -445,14 +446,10 @@ describe('qualityHubTools', () => {
       Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
       try {
         const paths = getSfCommonPaths();
-        assert.ok(
-          paths.some((p) => p.includes('Program Files') && p.includes('sf') && p.includes('bin')),
-          'Expected C:\\Program Files\\sf\\bin\\sf.cmd in common paths'
-        );
-        assert.ok(
-          paths.some((p) => p.includes('Program Files') && p.includes('sf') && p.includes('client')),
-          'Expected C:\\Program Files\\sf\\client\\bin\\sf.cmd in common paths'
-        );
+        const expectedBin = path.join('C:', 'Program Files', 'sf', 'bin', 'sf.cmd');
+        const expectedClientBin = path.join('C:', 'Program Files', 'sf', 'client', 'bin', 'sf.cmd');
+        assert.ok(paths.includes(expectedBin), `Expected ${expectedBin} in common paths`);
+        assert.ok(paths.includes(expectedClientBin), `Expected ${expectedClientBin} in common paths`);
       } finally {
         if (origPlatform) Object.defineProperty(process, 'platform', origPlatform);
       }

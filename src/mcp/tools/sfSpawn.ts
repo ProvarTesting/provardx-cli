@@ -185,8 +185,11 @@ function assertShellSafePath(sfPath: string): void {
  * Pass `sfPath` to override auto-discovery with an explicit executable path.
  */
 export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
-  // Use explicit path if provided; otherwise use cached probe result
-  const executable = sfPath ?? resolveSfExecutable();
+  // Treat empty/whitespace sfPath as absent so auto-discovery runs instead of
+  // throwing SfNotFoundError with no useful path hint.
+  const trimmedSfPath = sfPath?.trim();
+  const resolvedSfPath = trimmedSfPath !== '' ? trimmedSfPath : undefined;
+  const executable = resolvedSfPath ?? resolveSfExecutable();
   if (!executable) throw new SfNotFoundError();
 
   const platform = sfPlatformOverride ?? process.platform;
@@ -194,8 +197,8 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
 
   // Guard against injection when shell:true is used with a user-supplied path.
   // Common install locations returned by resolveSfExecutable() are safe by construction.
-  if (useShell && sfPath) {
-    assertShellSafePath(sfPath);
+  if (useShell && resolvedSfPath) {
+    assertShellSafePath(resolvedSfPath);
   }
 
   const result = sfSpawnHelper.spawnSync(executable, args, {
@@ -207,7 +210,7 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   if (result.error) {
     const err = result.error as NodeJS.ErrnoException;
     if (err.code === 'ENOENT') {
-      throw new SfNotFoundError(sfPath);
+      throw new SfNotFoundError(resolvedSfPath);
     }
     throw result.error;
   }
