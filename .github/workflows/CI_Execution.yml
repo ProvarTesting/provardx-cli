@@ -19,6 +19,22 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  quality-analysis:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mrdailey99/QualityOrchestrator@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          test-dir: 'test'
+          framework: 'auto'
+          generate-stubs: 'true'
+          fail-on-high: 'false'
+
   provardx-ci-execution:
     strategy:
       matrix:
