@@ -724,6 +724,8 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
         'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
         "Applicable to any component type supported by Provar's Hybrid Model:",
         'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+        'Read the provar-nitrox-component-catalog resource first to understand available component types,',
+        'tagName conventions, interaction titles, and attribute patterns from shipped base packages.',
         'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
         'writes to disk only when dry_run=false.',
       ].join(' '),

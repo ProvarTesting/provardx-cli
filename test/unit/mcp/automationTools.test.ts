@@ -16,6 +16,7 @@ import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
 import {
   needsWindowsShell,
   setSfPlatformForTesting,
+  getSfCommonPaths,
   filterTestRunOutput,
   setSfResultsPathForTesting,
 } from '../../../src/mcp/tools/automationTools.js';
@@ -926,5 +927,33 @@ describe('filterTestRunOutput', () => {
     assert.ok(!filtered.includes('\r'), 'No trailing \\r should remain in output');
     assert.ok(filtered.includes('INFO Starting'), 'Real output should remain');
     assert.ok(filtered.includes('INFO Done'), 'Real output should remain');
+  });
+});
+
+// ── getSfCommonPaths — B2a Windows standalone installer paths ─────────────────
+
+describe('getSfCommonPaths', () => {
+  it('includes Windows standalone installer paths on win32 (B2a fix)', () => {
+    const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const paths = getSfCommonPaths();
+      const sfBinPath = paths.find(
+        (p) => p.includes('Program Files') && p.includes('sf') && p.includes('bin') && !p.includes('client')
+      );
+      const sfClientPath = paths.find((p) => p.includes('Program Files') && p.includes('sf') && p.includes('client'));
+      assert.ok(sfBinPath, 'Expected C:\\Program Files\\sf\\bin\\sf.cmd in win32 paths');
+      assert.ok(sfClientPath, 'Expected C:\\Program Files\\sf\\client\\bin\\sf.cmd in win32 paths');
+    } finally {
+      if (origPlatform) Object.defineProperty(process, 'platform', origPlatform);
+    }
+  });
+
+  it('does not include Windows standalone paths on non-Windows platforms', () => {
+    if (process.platform !== 'win32') {
+      const paths = getSfCommonPaths();
+      assert.ok(!paths.some((p) => p.includes('Program Files')), 'Windows paths should not appear on non-Windows');
+      assert.ok(paths.includes('/usr/local/bin/sf'), 'Linux/macOS fallback path should be present');
+    }
   });
 });

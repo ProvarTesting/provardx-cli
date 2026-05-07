@@ -72,6 +72,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.loop.db](#provarloopdb)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
+  - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -1577,6 +1578,8 @@ NitroX is Provar's **Hybrid Model** for locators. Instead of hand-written Java P
 
 The five `provar_nitrox_*` tools let an AI agent discover existing NitroX page objects, read them as training context, validate new ones against the schema, generate fresh components from a description, and apply surgical edits via JSON merge-patch.
 
+> **Tip:** Before calling `provar_nitrox_generate`, read the `provar://nitrox/component-catalog` resource to understand the component types, tagName conventions, interaction titles, and attribute patterns from the shipped base packages.
+
 > **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
 
 ---
@@ -1935,7 +1938,7 @@ Generate a Provar XML test case that connects to an **external database** (SQL S
 
 ## MCP Resources
 
-The Provar MCP server also exposes one **MCP resource** — structured reference content that AI clients can read directly from the server.
+The Provar MCP server exposes **MCP resources** — structured reference content that AI clients can read directly from the server.
 
 ---
 
@@ -1947,6 +1950,17 @@ Canonical reference for all Provar XML test step API IDs, argument formats, vali
 **MIME type:** `text/markdown`
 
 The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this repository, compiled into the package at build time.
+
+---
+
+### `provar://nitrox/component-catalog`
+
+Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists every package with its components, types, tagNames, interactions, and attributes. Read this before calling `provar_nitrox_generate` to understand available component patterns and naming conventions.
+
+**URI:** `provar://nitrox/component-catalog`  
+**MIME type:** `text/markdown`
+
+The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time. To regenerate the catalog after Provar ships updated NitroX packages, run `node scripts/generate-nitrox-catalog.cjs` on a machine with Provar NitroX installed, then commit the result.
 
 ---
 

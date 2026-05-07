@@ -19,6 +19,24 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  quality-analysis:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: mrdailey99/QualityOrchestrator@v1.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          test-dir: 'test'
+          framework: 'auto'
+          generate-stubs: 'false'
+          fail-on-high: 'false'
+
   provardx-ci-execution:
     strategy:
       matrix:
@@ -26,12 +44,12 @@ jobs:
         nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.nodeversion }}
       - name: 'Cache node_modules'
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.os == 'windows-latest' && 'C:\\Users\\runneradmin\\AppData\\Roaming\\npm-cache' || '~/.npm' }}
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
@@ -62,7 +80,7 @@ jobs:
 
       - name: Check for target branch in Utils repo
         id: check_branch
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           script: |
             const branch = process.env.BRANCH_NAME;
@@ -80,7 +98,7 @@ jobs:
             return branchExists;
 
       - name: Check out Utils repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ProvarTesting/provardx-plugins-utils
           path: utils
@@ -107,7 +125,7 @@ jobs:
           PROVAR_DEV_WHITELIST_KEYS: ${{ secrets.PROVAR_DEV_WHITELIST_KEYS }}
         run: node scripts/mcp-smoke.cjs
       - name: Check out Regression repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ProvarTesting/provar-manager-regression
           path: ProvarRegression
@@ -127,7 +145,7 @@ jobs:
           yarn run test:nuts
       - name: Archive NUTS results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nuts-report-${{ matrix.os }}
           path: mochawesome-report
