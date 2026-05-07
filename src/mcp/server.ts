@@ -6,7 +6,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -105,7 +105,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllPrompts(server);
 
   // ── Documentation resources ──────────────────────────────────────────────────
-  const docsDir = join(dirname(fileURLToPath(import.meta.url)), 'docs');
+  const docsDir = resolveDocsDir(dirname(fileURLToPath(import.meta.url)));
 
   server.resource(
     'provar-nitrox-component-catalog',
@@ -170,4 +170,14 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   return server;
+}
+
+/**
+ * Resolve the docs directory for bundled MCP Markdown resources.
+ * In compiled output (lib/mcp/) the sibling docs/ dir exists; in dev/ts-node
+ * mode (src/mcp/) it doesn't, so fall back two levels to the repo-root docs/.
+ */
+export function resolveDocsDir(currentDir: string): string {
+  const sibling = join(currentDir, 'docs');
+  return existsSync(sibling) ? sibling : join(currentDir, '..', '..', 'docs');
 }

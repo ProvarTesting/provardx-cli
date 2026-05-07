@@ -309,6 +309,8 @@ npm run compile
 npx @modelcontextprotocol/inspector node bin/dev.js provar mcp start --allowed-paths /absolute/path/to/your/provar/project
 ```
 
+> **MCP resources in dev mode:** `bin/dev.js` runs the TypeScript source via ts-node. The server automatically falls back to reading bundled Markdown resources (e.g. `provar://nitrox/component-catalog`, `provar://docs/step-reference`) from the repo-root `docs/` directory when the compiled `lib/mcp/docs/` path is not present, so resources work correctly after `npm run compile` with either entry point.
+
 > **Run this as a single line.** Line-wrapping the command (e.g. with a newline before `--allowed-paths`) causes the shell to treat `--allowed-paths` as a separate command and fail with `command not found`. Use `\` for explicit line continuation in bash if needed.
 
 If the Inspector fails with `Proxy Server PORT IS IN USE at port 6277`, a previous Inspector process is still running. Free the ports and try again:
