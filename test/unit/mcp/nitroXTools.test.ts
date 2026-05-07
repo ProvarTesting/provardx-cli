@@ -17,14 +17,17 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
+  public registrations: Array<{ name: string; description: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _desc: string, _schema: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
   }
 
-  public registerTool(name: string, _config: unknown, handler: ToolHandler): void {
+  public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
+    const desc = (config as Record<string, unknown>)['description'];
+    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -530,6 +533,19 @@ describe('nitroXTools', () => {
       const ids = [generated['componentId'], elements[0]['componentId'], elements[1]['componentId']];
       const unique = new Set(ids);
       assert.equal(unique.size, 3);
+    });
+  });
+
+  // ── provar_nitrox_generate description ────────────────────────────────────
+
+  describe('provar_nitrox_generate description', () => {
+    it('references the nitrox-component-catalog resource', () => {
+      const reg = server.registrations.find((r) => r.name === 'provar_nitrox_generate');
+      assert.ok(reg, 'provar_nitrox_generate not registered');
+      assert.ok(
+        reg.description.includes('provar-nitrox-component-catalog'),
+        'description should reference the component catalog resource'
+      );
     });
   });
 
