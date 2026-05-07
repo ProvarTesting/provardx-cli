@@ -26,7 +26,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: mrdailey99/QualityOrchestrator@v1.0.0
@@ -44,7 +44,7 @@ jobs:
         nodeversion: [20]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.nodeversion }}
@@ -98,7 +98,7 @@ jobs:
             return branchExists;
 
       - name: Check out Utils repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ProvarTesting/provardx-plugins-utils
           path: utils
@@ -125,7 +125,7 @@ jobs:
           PROVAR_DEV_WHITELIST_KEYS: ${{ secrets.PROVAR_DEV_WHITELIST_KEYS }}
         run: node scripts/mcp-smoke.cjs
       - name: Check out Regression repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ProvarTesting/provar-manager-regression
           path: ProvarRegression
