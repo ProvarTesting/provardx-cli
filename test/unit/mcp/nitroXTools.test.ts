@@ -17,8 +17,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
-  private handlers = new Map<string, ToolHandler>();
   public registrations: Array<{ name: string; description: string }> = [];
+  private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _desc: string, _schema: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
