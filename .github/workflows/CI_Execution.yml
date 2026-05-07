@@ -55,6 +55,13 @@ jobs:
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
+      - name: 'Exclude npm dirs from Windows Defender (CI speed)'
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath "$env:APPDATA\npm"
+          Add-MpPreference -ExclusionPath "$env:APPDATA\npm-cache"
+          Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\npm-cache"
       - name: 'sf installation'
         run: |
           npm install -g @salesforce/cli
@@ -139,6 +146,13 @@ jobs:
                chmod 777 ./bin/run.js
           fi
         shell: bash
+      - name: 'Exclude workspace from Windows Defender (NUTS speed)'
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+          Add-MpPreference -ExclusionPath "$env:APPDATA\sf"
+          Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\sf"
       - name: Execute NUTS
         run: |
           sf plugins link .
