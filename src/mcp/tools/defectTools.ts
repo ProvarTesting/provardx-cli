@@ -45,8 +45,8 @@ interface FailureContext {
 
 // ── SF CLI helpers ─────────────────────────────────────────────────────────────
 
-function runSfArgs(args: string[]): { stdout: string; stderr: string; exitCode: number } {
-  const { stdout, stderr, exitCode } = runSfCommand(args);
+function runSfArgs(args: string[], sfPath?: string): { stdout: string; stderr: string; exitCode: number } {
+  const { stdout, stderr, exitCode } = runSfCommand(args, sfPath);
   return { stdout, stderr, exitCode };
 }
 
@@ -57,35 +57,22 @@ function formatSfCommandError(action: string, exitCode: number, stderr: string, 
     : `${action} failed with exit code ${exitCode}`;
 }
 
-function runQuery(soql: string, targetOrg: string): SfQueryResponse {
-  const { stdout, stderr, exitCode } = runSfArgs([
-    'data',
-    'query',
-    '--query',
-    soql,
-    '--target-org',
-    targetOrg,
-    '--json',
-  ]);
+function runQuery(soql: string, targetOrg: string, sfPath?: string): SfQueryResponse {
+  const { stdout, stderr, exitCode } = runSfArgs(
+    ['data', 'query', '--query', soql, '--target-org', targetOrg, '--json'],
+    sfPath
+  );
   if (exitCode !== 0) {
     throw new Error(formatSfCommandError('Salesforce query', exitCode, stderr, stdout));
   }
   return JSON.parse(stdout) as SfQueryResponse;
 }
 
-function createRecord(sobject: string, values: string, targetOrg: string): string {
-  const { stdout, stderr, exitCode } = runSfArgs([
-    'data',
-    'create',
-    'record',
-    '--sobject',
-    sobject,
-    '--values',
-    values,
-    '--target-org',
-    targetOrg,
-    '--json',
-  ]);
+function createRecord(sobject: string, values: string, targetOrg: string, sfPath?: string): string {
+  const { stdout, stderr, exitCode } = runSfArgs(
+    ['data', 'create', 'record', '--sobject', sobject, '--values', values, '--target-org', targetOrg, '--json'],
+    sfPath
+  );
   if (exitCode !== 0) {
     throw new Error(formatSfCommandError(`Failed to create ${sobject}`, exitCode, stderr, stdout));
   }
@@ -115,12 +102,14 @@ export interface DefectCreateResult {
 export function createDefectsForRun(
   runId: string,
   targetOrg: string,
-  failedTestFilter?: string[]
+  failedTestFilter?: string[],
+  sfPath?: string
 ): { created: DefectCreateResult[]; skipped: number; message: string } {
   // Step 1: resolve job record ID from tracking ID
   const jobQuery = runQuery(
     `SELECT Id FROM provar__Test_Plan_Schedule_Job__c WHERE provar__Tracking_Id__c = '${soqlEscape(runId)}'`,
-    targetOrg
+    targetOrg,
+    sfPath
   );
   if (jobQuery.result.totalSize === 0) {
     throw new Error(`No Test_Plan_Schedule_Job__c found with Tracking_Id__c = '${runId}'`);
@@ -133,7 +122,8 @@ export function createDefectsForRun(
      FROM provar__Test_Cycle__c
      WHERE provar__Test_Plan_Schedule_Job__c = '${soqlEscape(jobId)}'
      LIMIT 1`,
-    targetOrg
+    targetOrg,
+    sfPath
   );
   const cycle = cycleQuery.result.records[0] ?? {};
   const browser = safeText(cycle['provar__Web_Browser__c'], 100);
@@ -151,7 +141,8 @@ export function createDefectsForRun(
      FROM provar__Test_Execution__c
      WHERE provar__Test_Cycle__c = '${soqlEscape(cycleId)}'
      AND provar__Status__c = 'Failed'`,
-    targetOrg
+    targetOrg,
+    sfPath
   );
 
   if (execQuery.result.totalSize === 0) {
@@ -185,7 +176,8 @@ export function createDefectsForRun(
        AND provar__Result__c = 'Fail'
        ORDER BY provar__Sequence_No__c ASC
        LIMIT 1`,
-      targetOrg
+      targetOrg,
+      sfPath
     );
 
     const step = stepQuery.result.records[0] ?? {};
@@ -227,7 +219,7 @@ export function createDefectsForRun(
       `provar__Description__c="${safeText(descLines, 2000)}" ` +
       'provar__Status__c="Open"';
 
-    const defectId = createRecord('provar__Defect__c', defectValues, targetOrg);
+    const defectId = createRecord('provar__Defect__c', defectValues, targetOrg, sfPath);
 
     // Step 5b: link TC → Defect
     const tcDefectValues =
@@ -235,7 +227,7 @@ export function createDefectsForRun(
       `provar__Test_Case__c="${testCaseId}"` +
       (stepId ? ` provar__Test_Step__c="${stepId}"` : '');
 
-    const tcDefectId = createRecord('provar__Test_Case_Defect__c', tcDefectValues, targetOrg);
+    const tcDefectId = createRecord('provar__Test_Case_Defect__c', tcDefectValues, targetOrg, sfPath);
 
     // Step 5c: link Execution → Defect (with step execution if available)
     const execDefectValues =
@@ -243,7 +235,7 @@ export function createDefectsForRun(
       `provar__Test_Execution__c="${executionId}"` +
       (stepExecutionId ? ` provar__Test_Step_Execution__c="${stepExecutionId}"` : '');
 
-    const execDefectId = createRecord('provar__Test_Execution_Defect__c', execDefectValues, targetOrg);
+    const execDefectId = createRecord('provar__Test_Execution_Defect__c', execDefectValues, targetOrg, sfPath);
 
     log('info', 'defect created', { defectId, tcDefectId, execDefectId, executionId });
 
@@ -281,14 +273,22 @@ export function registerQualityHubDefectCreate(server: McpServer): void {
           .describe(
             'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
           ),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ run_id, target_org, failed_tests }) => {
+    ({ run_id, target_org, failed_tests, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_defect_create', { requestId, run_id, target_org });
 
       try {
-        const result = createDefectsForRun(run_id, target_org, failed_tests);
+        const result = createDefectsForRun(run_id, target_org, failed_tests, sf_path);
         const response = { requestId, ...result };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(response) }],
