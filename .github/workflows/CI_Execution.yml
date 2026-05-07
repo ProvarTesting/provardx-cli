@@ -27,12 +27,14 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: mrdailey99/QualityOrchestrator@v1
+        with:
+          persist-credentials: false
+      - uses: mrdailey99/QualityOrchestrator@v1.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           test-dir: 'test'
           framework: 'auto'
-          generate-stubs: 'true'
+          generate-stubs: 'false'
           fail-on-high: 'false'
 
   provardx-ci-execution:
