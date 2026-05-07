@@ -7,9 +7,10 @@
 /* eslint-disable camelcase */
 
 import { strict as assert } from 'node:assert';
+import path from 'node:path';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
+import { sfSpawnHelper, getSfCommonPaths, setSfPathCacheForTesting } from '../../../src/mcp/tools/sfSpawn.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ describe('qualityHubTools', () => {
   beforeEach(async () => {
     server = new MockMcpServer();
     spawnStub = sinon.stub(sfSpawnHelper, 'spawnSync');
+    // Pre-seed the sf path cache to bypass the probe spawn — tests control spawnStub directly
+    setSfPathCacheForTesting('sf');
 
     const { registerAllQualityHubTools } = await import('../../../src/mcp/tools/qualityHubTools.js');
     registerAllQualityHubTools(server as unknown as McpServer);
@@ -81,6 +84,7 @@ describe('qualityHubTools', () => {
 
   afterEach(() => {
     sinon.restore();
+    setSfPathCacheForTesting(undefined); // reset cache so next test probes cleanly
   });
 
   // ── provar_qualityhub_connect ───────────────────────────────────────────────
@@ -389,6 +393,75 @@ describe('qualityHubTools', () => {
       spawnStub.returns(makeEnoentResult());
       const result = server.call('provar_qualityhub_testcase_retrieve', { target_org: 'myorg', flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
+    });
+  });
+
+  // ── sf_path threading ─────────────────────────────────────────────────────────
+
+  describe('sf_path threading', () => {
+    it('provar_qualityhub_connect uses explicit sf_path as the executable', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar_qualityhub_connect', {
+        target_org: 'myorg',
+        flags: [],
+        sf_path: '/custom/bin/sf',
+      });
+      const [cmd] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(cmd, '/custom/bin/sf');
+    });
+
+    it('provar_qualityhub_display uses explicit sf_path as the executable', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      server.call('provar_qualityhub_display', { flags: [], sf_path: '/custom/bin/sf' });
+      const [cmd] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(cmd, '/custom/bin/sf');
+    });
+
+    it('returns SF_NOT_FOUND with path hint when explicit sf_path gives ENOENT', () => {
+      spawnStub.returns(makeEnoentResult());
+      const result = server.call('provar_qualityhub_connect', {
+        target_org: 'myorg',
+        flags: [],
+        sf_path: '/nonexistent/sf',
+      });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'SF_NOT_FOUND');
+      assert.ok((body.message as string).includes('/nonexistent/sf'), 'message should include the bad path');
+    });
+
+    it('returns SF_NOT_FOUND when no sf found and cache is null', () => {
+      setSfPathCacheForTesting(null); // simulate: probe already ran, nothing found
+      const result = server.call('provar_qualityhub_connect', { target_org: 'myorg', flags: [] });
+      assert.ok(isError(result));
+      assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
+    });
+  });
+
+  // ── getSfCommonPaths — B2a Windows standalone installer paths ─────────────────
+
+  describe('getSfCommonPaths', () => {
+    it('includes Windows standalone installer paths on win32', () => {
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+      try {
+        const paths = getSfCommonPaths();
+        const expectedBin = path.join('C:', 'Program Files', 'sf', 'bin', 'sf.cmd');
+        const expectedClientBin = path.join('C:', 'Program Files', 'sf', 'client', 'bin', 'sf.cmd');
+        assert.ok(paths.includes(expectedBin), `Expected ${expectedBin} in common paths`);
+        assert.ok(paths.includes(expectedClientBin), `Expected ${expectedClientBin} in common paths`);
+      } finally {
+        if (origPlatform) Object.defineProperty(process, 'platform', origPlatform);
+      }
+    });
+
+    it('returns non-empty list on non-Windows platforms', () => {
+      // On the current test platform (Linux/macOS), paths should include /usr/local/bin/sf
+      if (process.platform !== 'win32') {
+        const paths = getSfCommonPaths();
+        assert.ok(paths.length > 0);
+        assert.ok(paths.includes('/usr/local/bin/sf'));
+      }
     });
   });
 });
