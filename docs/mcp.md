@@ -73,6 +73,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
+  - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -1960,7 +1961,31 @@ Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists ever
 **URI:** `provar://nitrox/component-catalog`  
 **MIME type:** `text/markdown`
 
-The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time. To regenerate the catalog after Provar ships updated NitroX packages, run `node scripts/generate-nitrox-catalog.cjs` on a machine with Provar NitroX installed, then commit the result.
+The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time.
+
+The catalog is automatically refreshed from the `main` branch of [ProvarTesting/factPackages](https://github.com/ProvarTesting/factPackages) during each `provardx-cli` release build (via `scripts/fetch-nitrox-packages.cjs`). If the fetch fails at build time (e.g. no `GITHUB_TOKEN`, network unavailable), the previously committed catalog is used as a fallback and a warning is logged.
+
+To check which version is bundled in a running server, read the `provar://nitrox/catalog-source` resource.
+
+---
+
+### `provar://nitrox/catalog-source`
+
+Version metadata for the bundled NitroX component catalog. Returns the `factPackages` commit SHA and fetch timestamp recorded during the release build that produced this package.
+
+**URI:** `provar://nitrox/catalog-source`  
+**MIME type:** `application/json`
+
+```json
+{
+  "repo": "https://github.com/ProvarTesting/factPackages",
+  "branch": "main",
+  "commitSha": "<40-char SHA or null if fetched from fallback>",
+  "fetchedAt": "<ISO 8601 timestamp or null>"
+}
+```
+
+`commitSha` and `fetchedAt` are `null` when the release build could not reach GitHub (fallback catalog in use).
 
 ---
 

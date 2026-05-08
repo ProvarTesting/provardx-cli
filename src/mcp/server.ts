@@ -136,6 +136,22 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   server.resource(
+    'provar-nitrox-catalog-source',
+    'provar://nitrox/catalog-source',
+    {
+      description:
+        'Version metadata for the bundled NitroX component catalog. Returns the factPackages commit SHA and fetch timestamp from the last successful release build. Use this to verify which version of the ProvarTesting/factPackages repo is bundled in the running MCP server.',
+      mimeType: 'application/json',
+    },
+    () => {
+      const text = readCatalogSource(docsDir);
+      return {
+        contents: [{ uri: 'provar://nitrox/catalog-source', mimeType: 'application/json', text }],
+      };
+    }
+  );
+
+  server.resource(
     'provar-step-reference',
     'provar://docs/step-reference',
     {
@@ -208,4 +224,28 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 export function resolveDocsDir(currentDir: string): string {
   const sibling = join(currentDir, 'docs');
   return existsSync(sibling) ? sibling : join(currentDir, '..', '..', 'docs');
+}
+
+/**
+ * Read NITROX_CATALOG_SOURCE.json from the docs directory and return it as
+ * a formatted JSON string.  Returns a fallback object string if the file is
+ * absent or unreadable.
+ */
+export function readCatalogSource(docsDir: string): string {
+  try {
+    const raw = readFileSync(join(docsDir, 'NITROX_CATALOG_SOURCE.json'), 'utf-8');
+    // Round-trip through JSON to normalise formatting
+    return JSON.stringify(JSON.parse(raw) as unknown, null, 2);
+  } catch {
+    return JSON.stringify(
+      {
+        repo: 'https://github.com/ProvarTesting/factPackages',
+        branch: 'main',
+        commitSha: null,
+        fetchedAt: null,
+      },
+      null,
+      2
+    );
+  }
 }

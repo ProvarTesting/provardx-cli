@@ -127,7 +127,7 @@
     "format": "wireit",
     "lint": "wireit",
     "postpack": "shx rm -f oclif.manifest.json",
-    "prepack": "sf-prepack",
+    "prepack": "node scripts/fetch-nitrox-packages.cjs && sf-prepack",
     "test": "wireit",
     "test:nuts": "nyc mocha  \"**/*generate.nut.ts\" \"**/*permission.nut.ts\" \"**/*load.nut.ts\" \"**/*validate.nut.ts\" \"**/*set.nut.ts\" \"**/*get.nut.ts\" \"**/*key.nut.ts\" \"**/*status.nut.ts\" \"**/*clear.nut.ts\" --slow 4500 --timeout 600000 --reporter mochawesome",
     "test:only": "wireit",
@@ -146,11 +146,12 @@
       ]
     },
     "compile": {
-      "command": "tsc -p . --pretty --incremental && shx mkdir -p lib/mcp/rules && shx cp src/mcp/rules/*.json lib/mcp/rules/ && shx mkdir -p lib/mcp/docs && shx cp docs/PROVAR_TEST_STEP_REFERENCE.md lib/mcp/docs/ && shx cp docs/NITROX_COMPONENT_CATALOG.md lib/mcp/docs/ && shx cp docs/PROVAR_TOOL_GUIDE.md lib/mcp/docs/",
+      "command": "tsc -p . --pretty --incremental && shx mkdir -p lib/mcp/rules && shx cp src/mcp/rules/*.json lib/mcp/rules/ && shx mkdir -p lib/mcp/docs && shx cp docs/PROVAR_TEST_STEP_REFERENCE.md lib/mcp/docs/ && shx cp docs/NITROX_COMPONENT_CATALOG.md lib/mcp/docs/ && shx cp docs/NITROX_CATALOG_SOURCE.json lib/mcp/docs/ && shx cp docs/PROVAR_TOOL_GUIDE.md lib/mcp/docs/",
       "files": [
         "src/**/*.ts",
         "src/mcp/rules/*.json",
         "docs/NITROX_COMPONENT_CATALOG.md",
+        "docs/NITROX_CATALOG_SOURCE.json",
         "**/tsconfig.json",
         "messages/**"
       ],
