@@ -6,7 +6,7 @@
  */
 
 import { createRequire } from 'node:module';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -105,7 +105,36 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllPrompts(server);
 
   // ── Documentation resources ──────────────────────────────────────────────────
-  const docsDir = join(dirname(fileURLToPath(import.meta.url)), 'docs');
+  const docsDir = resolveDocsDir(dirname(fileURLToPath(import.meta.url)));
+
+  server.resource(
+    'provar-nitrox-component-catalog',
+    'provar://nitrox/component-catalog',
+    {
+      description:
+        'Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists every package with its components, types, tagNames, interactions, and attributes. Read this before calling provar_nitrox_generate to understand available component patterns and naming conventions.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'NITROX_COMPONENT_CATALOG.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://nitrox/component-catalog', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://nitrox/component-catalog',
+              mimeType: 'text/markdown',
+              text: '# NitroX Component Catalog\n\nCatalog not found. If you are developing from source, rebuild the package. Otherwise, reinstall or upgrade the plugin/package and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
   server.resource(
     'provar-step-reference',
     'provar://docs/step-reference',
@@ -169,4 +198,14 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   return server;
+}
+
+/**
+ * Resolve the docs directory for bundled MCP Markdown resources.
+ * In compiled output (lib/mcp/) the sibling docs/ dir exists; in dev/ts-node
+ * mode (src/mcp/) it doesn't, so fall back two levels to the repo-root docs/.
+ */
+export function resolveDocsDir(currentDir: string): string {
+  const sibling = join(currentDir, 'docs');
+  return existsSync(sibling) ? sibling : join(currentDir, '..', '..', 'docs');
 }

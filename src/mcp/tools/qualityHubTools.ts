@@ -46,14 +46,25 @@ export function registerQualityHubConnect(server: McpServer): void {
           .optional()
           .default([])
           .describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, flags }) => {
+    ({ target_org, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_connect', { requestId, target_org });
 
       try {
-        const result = runSfCommand(['provar', 'quality-hub', 'connect', '--target-org', target_org, ...flags]);
+        const result = runSfCommand(
+          ['provar', 'quality-hub', 'connect', '--target-org', target_org, ...flags],
+          sf_path
+        );
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
@@ -87,9 +98,17 @@ export function registerQualityHubDisplay(server: McpServer): void {
       inputSchema: {
         target_org: z.string().optional().describe('SF org alias or username (uses default if omitted)'),
         flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags to forward'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, flags }) => {
+    ({ target_org, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_display', { requestId, target_org });
 
@@ -97,7 +116,7 @@ export function registerQualityHubDisplay(server: McpServer): void {
         const args = ['provar', 'quality-hub', 'display', ...flags];
         if (target_org) args.splice(3, 0, '--target-org', target_org);
 
-        const result = runSfCommand(args);
+        const result = runSfCommand(args, sf_path);
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
@@ -155,15 +174,26 @@ export function registerQualityHubTestRun(server: McpServer): void {
           .describe(
             'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.'
           ),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, flags }) => {
+    ({ target_org, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_testrun', { requestId, target_org });
 
       try {
         const wildcardWarning = detectWildcardFlags(flags);
-        const result = runSfCommand(['provar', 'quality-hub', 'test', 'run', '--target-org', target_org, ...flags]);
+        const result = runSfCommand(
+          ['provar', 'quality-hub', 'test', 'run', '--target-org', target_org, ...flags],
+          sf_path
+        );
         const response: Record<string, unknown> = {
           requestId,
           exitCode: result.exitCode,
@@ -207,25 +237,25 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
         target_org: z.string().describe('SF org alias or username'),
         run_id: z.string().describe('Test run ID returned by provar_qualityhub_testrun'),
         flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, run_id, flags }) => {
+    ({ target_org, run_id, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_testrun_report', { requestId, target_org, run_id });
 
       try {
-        const result = runSfCommand([
-          'provar',
-          'quality-hub',
-          'test',
-          'run',
-          'report',
-          '--target-org',
-          target_org,
-          '--run-id',
-          run_id,
-          ...flags,
-        ]);
+        const result = runSfCommand(
+          ['provar', 'quality-hub', 'test', 'run', 'report', '--target-org', target_org, '--run-id', run_id, ...flags],
+          sf_path
+        );
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
@@ -279,25 +309,25 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
         target_org: z.string().describe('SF org alias or username'),
         run_id: z.string().describe('Test run ID to abort'),
         flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, run_id, flags }) => {
+    ({ target_org, run_id, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_testrun_abort', { requestId, target_org, run_id });
 
       try {
-        const result = runSfCommand([
-          'provar',
-          'quality-hub',
-          'test',
-          'run',
-          'abort',
-          '--target-org',
-          target_org,
-          '--run-id',
-          run_id,
-          ...flags,
-        ]);
+        const result = runSfCommand(
+          ['provar', 'quality-hub', 'test', 'run', 'abort', '--target-org', target_org, '--run-id', run_id, ...flags],
+          sf_path
+        );
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
@@ -336,22 +366,25 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
           .optional()
           .default([])
           .describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
+        sf_path: z
+          .string()
+          .optional()
+          .describe(
+            'Path to the sf CLI executable when not in PATH ' +
+              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+              'Leave unset to use auto-discovery.'
+          ),
       },
     },
-    ({ target_org, flags }) => {
+    ({ target_org, flags, sf_path }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_testcase_retrieve', { requestId, target_org });
 
       try {
-        const result = runSfCommand([
-          'provar',
-          'quality-hub',
-          'testcase',
-          'retrieve',
-          '--target-org',
-          target_org,
-          ...flags,
-        ]);
+        const result = runSfCommand(
+          ['provar', 'quality-hub', 'testcase', 'retrieve', '--target-org', target_org, ...flags],
+          sf_path
+        );
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
