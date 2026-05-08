@@ -79,12 +79,12 @@ Then: provar_qualityhub_display to confirm the correct org is connected.
 
 If NOT_AUTHENTICATED: the user needs to run: sf org login web -o <alias>
 
-### Step 5 — Retrieve available test plans
+### Step 5 — Retrieve available test cases
 Call: provar_qualityhub_testcase_retrieve to show what's available to run.
-Ask the user which plan they'd like to run first.
+Ask the user which plan they'd like to run first (pass the plan name via --plan-name flag).
 
 ### Step 6 — Run first test
-Call: provar_qualityhub_testrun with the chosen plan name.
+Call: provar_qualityhub_testrun with flags: ["--plan-name", "<chosen plan name>"].
 Poll with provar_qualityhub_testrun_report every 30–60 seconds until the run completes.
 Stop polling after 20 minutes and ask the user to check Quality Hub directly.`
     : `### Step 4 — Configure properties
@@ -93,7 +93,8 @@ If a provardx-properties.json was found in step 2:
   Confirm provarHome and connectionName look correct.
 
 If no properties file was found:
-  Call: provar_properties_generate using the project path and the first connection name from step 3.
+  Call: provar_properties_generate with output_path (e.g. <project_path>/provardx-properties.json) and optionally project_path.
+  Then call: provar_properties_set to set connectionName to the first connection name from step 3.
 
 ### Step 5 — Register the config
 Call: provar_automation_config_load with the properties file path.
@@ -171,7 +172,7 @@ If you have tried the same fix 3 times and the error hasn't changed, STOP. Tell 
 
 If there is a completed test run, use the RCA tool first:
   Call: provar_testrun_report_locate (with project path if available)
-  Call: provar_testrun_rca with mode: "rca"
+  Call: provar_testrun_rca with project_path (required) and optionally mode: "rca"
 
 The RCA tool classifies each failure and gives a recommendation per failure. Use it before reading raw stack traces.
 
@@ -243,7 +244,7 @@ export function registerOrchestrationPrompt(server: McpServer): void {
 Required sequence — do not skip steps:
 
 1. provar_project_inspect       → confirm project root and connections exist
-2. provar_properties_read OR provar_properties_generate
+2. provar_properties_read OR provar_properties_generate (output_path required; set connectionName via provar_properties_set)
 3. provar_automation_config_load   ← MUST succeed before step 4
 4. provar_automation_compile       ← MUST succeed before step 5
 5. provar_automation_testrun
@@ -270,7 +271,7 @@ Required sequence — do not skip steps:
 6. provar_testcase_generate   → create the test case file
 7. provar_testcase_step_edit  → add steps (repeat as needed)
 8. provar_testcase_validate   → MUST pass before adding to a plan
-9. provar_testplan_add_instance → add to an existing plan
+9. provar_testplan_add-instance → add to an existing plan
 10. provar_testplan_validate   → validate the plan`,
 
         'debug-failures': `## Debug Failing Tests
@@ -320,7 +321,7 @@ provar_nitrox_generate OR provar_nitrox_patch
 
 provar_testcase_generate OR provar_testcase_step_edit
   └── provar_testcase_validate
-        └── provar_testplan_add_instance
+        └── provar_testplan_add-instance
               └── provar_testplan_validate
 
 ### Safe to run in parallel (no dependency between them)

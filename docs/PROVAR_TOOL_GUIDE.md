@@ -39,14 +39,21 @@ Fixed sequence — do not skip steps:
 No properties file yet? Generate one first:
 
 ```
-provar_properties_generate  { project_path, connection_name }
+provar_properties_generate  { output_path }   ← required; path to write the .json file
+                             { project_path }  ← optional; pre-fills projectPath field
+```
+
+Then set the connection name:
+
+```
+provar_properties_set  { file_path: "<output_path>", key: "connectionName", value: "<name>" }
 ```
 
 ### Via Quality Hub (remote)
 
 ```
 1. provar_qualityhub_connect        { target_org }
-2. provar_qualityhub_testrun        { target_org, flags: ["--plan", "<name>"] }
+2. provar_qualityhub_testrun        { target_org, flags: ["--plan-name", "<name>"] }
 3. provar_qualityhub_testrun_report { target_org, run_id }   ← poll until done
 ```
 
@@ -61,7 +68,7 @@ provar_properties_generate  { project_path, connection_name }
 
 ```
 1. provar_testrun_report_locate  { project_path }   ← find where results landed
-2. provar_testrun_rca            { report_path, mode: "rca" }
+2. provar_testrun_rca            { project_path }   ← required; results_path/run_index optional
 ```
 
 `provar_testrun_rca` classifies each failure (auth, locator, assertion, data, etc.) and gives a recommendation per failure. Use `mode: "failures"` for the raw failure list without classification.
@@ -73,10 +80,10 @@ provar_properties_generate  { project_path, connection_name }
 ```
 1. provar_project_inspect    { project_path }           ← find coverage gaps first
 2. provar_testcase_generate  { project_path, name, ... }
-3. provar_testcase_step_edit { file_path, ... }         ← repeat per step
+3. provar_testcase_step_edit { test_case_path, ... }    ← repeat per step
 4. provar_testcase_validate  { file_path }              ← must pass before adding to plan
-5. provar_testplan_add_instance  { plan_path, testcase_path }
-6. provar_testplan_validate      { plan_path }
+5. provar_testplan_add-instance  { project_path, plan_name, test_case_path }
+6. provar_testplan_validate      { project_path, plan_name }
 ```
 
 ---
@@ -146,11 +153,12 @@ Returns all connections in `.testproject`. Use the `name` field from each connec
 ## "I want to create a defect for a failed test"
 
 ```
-1. provar_testrun_rca              { report_path, mode: "rca" }
-2. provar_qualityhub_defect_create { target_org, ... }
+1. provar_qualityhub_testrun        { target_org, ... }    ← captures run_id from response
+2. provar_testrun_rca               { project_path }       ← classify failures
+3. provar_qualityhub_defect_create  { run_id, target_org } ← run_id from step 1
 ```
 
-Requires Quality Hub to be connected.
+Requires Quality Hub to be connected (`provar_qualityhub_connect` first).
 
 ---
 

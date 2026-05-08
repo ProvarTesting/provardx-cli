@@ -1,7 +1,5 @@
 You are executing the provardx-cli development git workflow. Follow these steps in order. Stop and confirm with the user at each CONFIRM point before proceeding.
 
-Full reference doc: `.claude/agents/dev-git-workflow.md`
-
 ---
 
 ## Step 0 — Establish the Jira ticket (planning phase)
@@ -21,7 +19,7 @@ User provides the ticket number. Set `TICKET = PDX-<number>`.
 
 Fetch the ticket to confirm it exists and read its summary and status:
 
-- Use `getJiraIssue` (cloudId: `3c8a4f06-8ecc-4723-876f-b096b816c6ec`, issueIdOrKey: `PDX-<number>`)
+- Call `getAccessibleAtlassianResources` to get the cloudId for your Jira instance, then use `getJiraIssue` (cloudId: `<from above>`, issueIdOrKey: `PDX-<number>`)
 - Show the user: ticket summary, current status, and URL
 - If the ticket is already Closed, warn the user before proceeding
 
@@ -75,7 +73,7 @@ Description:
 
 Once confirmed, create the ticket using the `createJiraIssue` MCP tool:
 
-- `cloudId`: `3c8a4f06-8ecc-4723-876f-b096b816c6ec`
+- `cloudId`: `<from getAccessibleAtlassianResources>`
 - `projectKey`: `PDX`
 - `issueTypeName`: as chosen above
 - `summary`: as drafted
@@ -233,7 +231,7 @@ gh pr merge <pr-number> --squash --delete-branch
 For ticketed work (non-PDX-0): transition the Jira ticket to Closed.
 
 - Web: `https://provartesting.atlassian.net/browse/<TICKET>`
-- MCP: `transitionJiraIssue` (cloudId: `3c8a4f06-8ecc-4723-876f-b096b816c6ec`)
+- MCP: `transitionJiraIssue` (cloudId: `<from getAccessibleAtlassianResources>`)
 
 Clean up the worktree:
 
