@@ -363,11 +363,29 @@ async function runTests() {
     arguments: { story: 'Verify Users table has at least one Active record after Salesforce flow runs' },
   });
 
-  // ── 49. provar_connection_list ────────────────────────────────────────────
+  // ── 49. provar.guide.onboarding prompt ───────────────────────────────────
+  await rpc('provar.guide.onboarding (prompt)', 'prompts/get', {
+    name: 'provar.guide.onboarding',
+    arguments: { mode: 'local' },
+  });
+
+  // ── 50. provar.guide.troubleshoot prompt ──────────────────────────────────
+  await rpc('provar.guide.troubleshoot (prompt)', 'prompts/get', {
+    name: 'provar.guide.troubleshoot',
+    arguments: { errorMessage: 'ClassNotFoundException: pageobjects.LoginPage' },
+  });
+
+  // ── 51. provar.guide.orchestration prompt ─────────────────────────────────
+  await rpc('provar.guide.orchestration (prompt)', 'prompts/get', {
+    name: 'provar.guide.orchestration',
+    arguments: { task: 'run-local' },
+  });
+
+  // ── 52. provar_connection_list ────────────────────────────────────────────
   // TMP has no .testproject → CONNECTION_FILE_NOT_FOUND result (not a protocol error)
   await callTool('provar_connection_list', { project_path: TMP });
 
-  // ── 50. provar_testcase_step_edit ─────────────────────────────────────────
+  // ── 53. provar_testcase_step_edit ─────────────────────────────────────────
   // TMP/nonexistent.testcase does not exist → FILE_NOT_FOUND result
   await callTool('provar_testcase_step_edit', {
     test_case_path: path.join(TMP, 'nonexistent.testcase'),
@@ -383,8 +401,8 @@ async function runTests() {
 // ----------------------------------------------------------------------------
 server.on('close', () => {
   clearTimeout(overallTimer);
-  // initialize + tools/list + 40 tools + prompts/list + 8 prompts/get (setup excluded from default count)
-  const TOTAL_EXPECTED = 51 + (INCLUDE_SETUP ? 1 : 0);
+  // initialize + tools/list + 40 tools + prompts/list + 11 prompts/get (setup excluded from default count)
+  const TOTAL_EXPECTED = 54 + (INCLUDE_SETUP ? 1 : 0);
   let passed = 0;
   let failed = 0;
 

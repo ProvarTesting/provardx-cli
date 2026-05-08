@@ -169,6 +169,34 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     }
   );
 
+  server.resource(
+    'provar-tool-guide',
+    'provar://docs/tool-guide',
+    {
+      description:
+        'Tool selection guide for ProvarDX MCP. Organised by what you want to accomplish (run tests, author tests, debug failures, manage config, etc.) rather than by tool name. Read this to choose the right tool and understand correct sequencing before calling tools.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'PROVAR_TOOL_GUIDE.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://docs/tool-guide', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/tool-guide',
+              mimeType: 'text/markdown',
+              text: '# ProvarDX Tool Guide\n\nGuide not found. Reinstall or upgrade the plugin and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
   return server;
 }
 
