@@ -122,10 +122,10 @@ async function getTree(sha, token) {
   return data.tree;
 }
 
-/** Matches top-level package.json files: e.g. "common/package.json" */
-const PKG_JSON_RE = /^[^/]+\/package\.json$/;
-/** Matches component definitions nested under a components/ dir */
-const COMPONENT_FILE_RE = /^[^/]+\/components\/[^/]+\.(cp|po)\.json$/;
+// Matches fact-* package manifests: e.g. "fact-common/src/package.json"
+const PKG_JSON_RE = /^[^/]+\/src\/package\.json$/;
+// Matches component definitions under fact-{pkg}/src/components/
+const COMPONENT_FILE_RE = /^[^/]+\/src\/components\/[^/]+\.(cp|po)\.json$/;
 
 function isRelevant(treePath) {
   return PKG_JSON_RE.test(treePath) || COMPONENT_FILE_RE.test(treePath);
@@ -195,8 +195,11 @@ function buildCatalogFromDir(baseDir, commitSha) {
   ];
 
   for (const entry of pkgDirEntries) {
-    const pkgDir = path.join(baseDir, entry.name);
-    const meta = safeReadJson(path.join(pkgDir, 'package.json')) ?? {};
+    // factPackages stores package content under a src/ subdirectory
+    const srcDir = path.join(baseDir, entry.name, 'src');
+    if (!fs.existsSync(srcDir)) continue;
+
+    const meta = safeReadJson(path.join(srcDir, 'package.json')) ?? {};
 
     const displayName = meta.name ?? entry.name;
     const displayVersion = meta.version ? ` (v${meta.version})` : '';
@@ -206,7 +209,7 @@ function buildCatalogFromDir(baseDir, commitSha) {
     if (meta.provarVersion) lines.push(`**Requires Provar:** ${meta.provarVersion}`);
     lines.push('');
 
-    const componentsDir = path.join(pkgDir, 'components');
+    const componentsDir = path.join(srcDir, 'components');
     if (!fs.existsSync(componentsDir)) {
       lines.push('_No component definitions found._', '', '---', '');
       continue;

@@ -171,7 +171,7 @@ describe('checkForUpdate', () => {
     const { currentVersion } = await checkForUpdate({ noUpdateCheck: true, autoUpdate: false });
     const channel = deriveChannel(currentVersion);
     writeFreshCache({
-      checkedAt: Date.now() - 30 * 60 * 1_000, // 30 min ago
+      checkedAt: Date.now() - 30 * 60 * 1000, // 30 min ago
       currentVersion,
       latestVersion: currentVersion,
       channel,
@@ -188,7 +188,7 @@ describe('checkForUpdate', () => {
 
   it('fetches registry when cache is stale (>4h)', async () => {
     writeFreshCache({
-      checkedAt: Date.now() - 5 * 60 * 60 * 1_000, // 5 hours ago
+      checkedAt: Date.now() - 5 * 60 * 60 * 1000, // 5 hours ago
       currentVersion: '1.5.0-beta.10',
       latestVersion: '1.5.0-beta.10',
       channel: 'beta',
@@ -252,7 +252,7 @@ describe('checkForUpdate', () => {
 
   it('returns updateAvailable=false when cache is >48h stale and fetch fails', async () => {
     writeFreshCache({
-      checkedAt: Date.now() - 50 * 60 * 60 * 1_000, // 50 hours ago
+      checkedAt: Date.now() - 50 * 60 * 60 * 1000, // 50 hours ago
       currentVersion: '1.5.0-beta.10',
       latestVersion: '1.5.0-beta.10',
       channel: 'beta',
@@ -280,7 +280,7 @@ describe('checkForUpdate', () => {
 
   it('returns stale cache within 48h grace period when fetch fails', async () => {
     writeFreshCache({
-      checkedAt: Date.now() - 6 * 60 * 60 * 1_000, // 6 hours ago (stale but within 48h)
+      checkedAt: Date.now() - 6 * 60 * 60 * 1000, // 6 hours ago (stale but within 48h)
       currentVersion: '1.5.0-beta.10',
       latestVersion: '1.5.0-beta.10',
       channel: 'beta',
