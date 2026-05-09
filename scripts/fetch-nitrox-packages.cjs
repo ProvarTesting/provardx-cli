@@ -40,7 +40,9 @@ function log(msg) {
   console.log(`[fetch-nitrox-packages] ${msg}`);
 }
 
-/** Wraps https.get with redirect support; resolves to the response body string. */
+const REQUEST_TIMEOUT_MS = 15_000;
+
+/** Wraps https.get with redirect support and a per-request timeout; resolves to the response body string. */
 function httpsGet(url, headers) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -69,11 +71,14 @@ function httpsGet(url, headers) {
         res.on('error', reject);
       }
     );
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`));
+    });
     req.on('error', reject);
   });
 }
 
-/** Downloads raw file bytes (supports redirect); resolves to a Buffer. */
+/** Downloads raw file bytes (supports redirect and per-request timeout); resolves to a Buffer. */
 function httpsGetBuffer(url, headers) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
@@ -92,6 +97,9 @@ function httpsGetBuffer(url, headers) {
         }
       });
       res.on('error', reject);
+    });
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+      req.destroy(new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`));
     });
     req.on('error', reject);
   });
@@ -131,8 +139,9 @@ function isRelevant(treePath) {
   return PKG_JSON_RE.test(treePath) || COMPONENT_FILE_RE.test(treePath);
 }
 
-async function downloadRaw(filePath, token) {
-  const url = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/${filePath}`;
+async function downloadRaw(filePath, commitSha, token) {
+  // Pin to the resolved commit SHA so all downloads are consistent with the tree listing
+  const url = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${commitSha}/${filePath}`;
   const headers = token ? { Authorization: `Bearer ${token}` } : {};
   return httpsGetBuffer(url, headers);
 }
@@ -265,7 +274,7 @@ async function main() {
     for (const file of relevant) {
       const destPath = path.join(tmpDir, file.path);
       fs.mkdirSync(path.dirname(destPath), { recursive: true });
-      const content = await downloadRaw(file.path, token);
+      const content = await downloadRaw(file.path, commitSha, token);
       fs.writeFileSync(destPath, content);
     }
 
