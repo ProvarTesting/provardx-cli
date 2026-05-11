@@ -243,6 +243,7 @@ export function readCatalogSource(docsDir: string): string {
         branch: 'main',
         commitSha: null,
         fetchedAt: null,
+        schemasUpdated: null,
       },
       null,
       2

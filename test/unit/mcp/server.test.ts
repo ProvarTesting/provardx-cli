@@ -81,12 +81,41 @@ describe('readCatalogSource', () => {
     assert.equal(result.fetchedAt, '2026-05-08T10:00:00.000Z');
   });
 
+  it('passes through schemasUpdated: true when present in the file', () => {
+    const docsDir = makeTmpDir();
+    const source = {
+      repo: 'https://github.com/ProvarTesting/factPackages',
+      branch: 'main',
+      commitSha: 'abc1234567890',
+      fetchedAt: '2026-05-08T10:00:00.000Z',
+      schemasUpdated: true,
+    };
+    fs.writeFileSync(path.join(docsDir, 'NITROX_CATALOG_SOURCE.json'), JSON.stringify(source));
+    const result = JSON.parse(readCatalogSource(docsDir)) as typeof source;
+    assert.equal(result.schemasUpdated, true);
+  });
+
+  it('passes through schemasUpdated: false when schema fetch fell back', () => {
+    const docsDir = makeTmpDir();
+    const source = {
+      repo: 'https://github.com/ProvarTesting/factPackages',
+      branch: 'main',
+      commitSha: 'abc1234567890',
+      fetchedAt: '2026-05-08T10:00:00.000Z',
+      schemasUpdated: false,
+    };
+    fs.writeFileSync(path.join(docsDir, 'NITROX_CATALOG_SOURCE.json'), JSON.stringify(source));
+    const result = JSON.parse(readCatalogSource(docsDir)) as typeof source;
+    assert.equal(result.schemasUpdated, false);
+  });
+
   it('returns fallback object when the file is absent', () => {
     const docsDir = makeTmpDir();
     const result = JSON.parse(readCatalogSource(docsDir)) as Record<string, unknown>;
     assert.equal(result['commitSha'], null);
     assert.equal(result['fetchedAt'], null);
     assert.equal(result['repo'], 'https://github.com/ProvarTesting/factPackages');
+    assert.equal(result['schemasUpdated'], null);
   });
 
   it('returns fallback object when the file contains invalid JSON', () => {
@@ -94,5 +123,6 @@ describe('readCatalogSource', () => {
     fs.writeFileSync(path.join(docsDir, 'NITROX_CATALOG_SOURCE.json'), '{bad json');
     const result = JSON.parse(readCatalogSource(docsDir)) as Record<string, unknown>;
     assert.equal(result['commitSha'], null);
+    assert.equal(result['schemasUpdated'], null);
   });
 });
