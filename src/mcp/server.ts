@@ -234,15 +234,20 @@ export function resolveDocsDir(currentDir: string): string {
 export function readCatalogSource(docsDir: string): string {
   try {
     const raw = readFileSync(join(docsDir, 'NITROX_CATALOG_SOURCE.json'), 'utf-8');
-    // Round-trip through JSON to normalise formatting
-    return JSON.stringify(JSON.parse(raw) as unknown, null, 2);
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Normalise schemasUpdated so older build artifacts (which lack this field)
+    // return a stable shape rather than omitting the key entirely.
+    if (!('schemasUpdated' in parsed)) {
+      parsed['schemasUpdated'] = null;
+    }
+    return JSON.stringify(parsed, null, 2);
   } catch {
     return JSON.stringify(
       {
-        repo: 'https://github.com/ProvarTesting/factPackages',
         branch: 'main',
         commitSha: null,
         fetchedAt: null,
+        schemasUpdated: null,
       },
       null,
       2

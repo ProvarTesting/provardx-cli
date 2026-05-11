@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * Release pipeline utility: fetch the latest NitroX component packages
- * from the ProvarTesting/factPackages GitHub repo (main branch) and
- * regenerate docs/NITROX_COMPONENT_CATALOG.md.
+ * and JSON schema files from the ProvarTesting/factPackages GitHub repo
+ * (main branch), regenerate docs/NITROX_COMPONENT_CATALOG.md, and update
+ * the bundled FactComponent.schema.json and FactPackage.schema.json.
  *
  * On success, writes docs/NITROX_CATALOG_SOURCE.json with the commit SHA
  * so downstream consumers can verify which version was bundled.
  *
- * Falls back silently to the committed catalog when:
+ * Falls back silently to the committed catalog/schemas when:
  *   - GITHUB_TOKEN / GH_TOKEN is not set in the environment
  *   - The GitHub API is unreachable
  *   - Any download fails
@@ -31,6 +32,17 @@ const BRANCH = 'main';
 const DOCS_DIR = path.join(__dirname, '..', 'docs');
 const OUTPUT_CATALOG = path.join(DOCS_DIR, 'NITROX_COMPONENT_CATALOG.md');
 const OUTPUT_SOURCE = path.join(DOCS_DIR, 'NITROX_CATALOG_SOURCE.json');
+
+// Destination directories for the JSON schema files
+const SCHEMA_RULES_DIR = path.join(__dirname, '..', 'src', 'mcp', 'rules');
+const REPO_ROOT_DIR = path.join(__dirname, '..');
+
+// Paths within the factPackages tree that contain the NitroX JSON schemas.
+// Both files must come from the same commit so there is no version skew.
+const SCHEMA_TREE_PATHS = new Set([
+  'fact-parent/src/resources/FactComponent.schema',
+  'fact-parent/src/resources/FactPackage.schema',
+]);
 
 function warn(msg) {
   console.warn(`[fetch-nitrox-packages] WARN: ${msg}`);
@@ -137,6 +149,40 @@ const COMPONENT_FILE_RE = /^[^/]+\/src\/components\/[^/]+\.(cp|po)\.json$/;
 
 function isRelevant(treePath) {
   return PKG_JSON_RE.test(treePath) || COMPONENT_FILE_RE.test(treePath);
+}
+
+function isSchemaFile(treePath) {
+  return SCHEMA_TREE_PATHS.has(treePath);
+}
+
+/**
+ * Download both NitroX schema files from factPackages at the given commit SHA
+ * and write them to src/mcp/rules/ (with .json extension) and to the repo root
+ * (without extension, for schemastore.org registration).
+ *
+ * Returns true on success.  Warns and returns false if the expected files are
+ * absent from the tree.  Throws on download or write errors so the caller can
+ * catch and fall back.
+ */
+async function fetchAndWriteSchemas(tree, commitSha, token) {
+  const schemaFiles = tree.filter((f) => f.type === 'blob' && isSchemaFile(f.path));
+  if (schemaFiles.length !== SCHEMA_TREE_PATHS.size) {
+    warn(
+      `Expected ${SCHEMA_TREE_PATHS.size} schema files in tree, found ${schemaFiles.length} — skipping schema update`
+    );
+    return false;
+  }
+
+  for (const file of schemaFiles) {
+    const content = await downloadRaw(file.path, commitSha, token);
+    const baseName = path.basename(file.path); // e.g. "FactComponent.schema"
+    // Write to src/mcp/rules/ with .json extension (picked up by the compile step)
+    fs.writeFileSync(path.join(SCHEMA_RULES_DIR, baseName + '.json'), content);
+    // Write to repo root without extension (for schemastore.org registration)
+    fs.writeFileSync(path.join(REPO_ROOT_DIR, baseName), content);
+    log(`Updated schema: ${baseName}.json (commitSha: ${commitSha.slice(0, 7)})`);
+  }
+  return true;
 }
 
 async function downloadRaw(filePath, commitSha, token) {
@@ -283,17 +329,33 @@ async function main() {
     fs.writeFileSync(OUTPUT_CATALOG, catalog, 'utf-8');
     log(`Written: docs/NITROX_COMPONENT_CATALOG.md (${catalog.split('\n').length} lines)`);
 
+    // ── Schema fetch ─────────────────────────────────────────────────────────
+    let schemasUpdated = false;
+    try {
+      schemasUpdated = await fetchAndWriteSchemas(tree, commitSha, token);
+    } catch (schemaErr) {
+      warn(`Schema fetch failed — ${String(schemaErr instanceof Error ? schemaErr.message : schemaErr)}`);
+      warn(
+        'Falling back to bundled schemas; release will use existing FactComponent.schema.json and FactPackage.schema.json'
+      );
+    }
+
     const sourceInfo = {
-      repo: `https://github.com/${REPO_OWNER}/${REPO_NAME}`,
       branch: BRANCH,
       commitSha,
       fetchedAt: new Date().toISOString(),
+      schemasUpdated,
     };
     fs.writeFileSync(OUTPUT_SOURCE, JSON.stringify(sourceInfo, null, 2) + '\n', 'utf-8');
-    log(`Written: docs/NITROX_CATALOG_SOURCE.json (commitSha: ${commitSha.slice(0, 7)})`);
+    log(
+      `Written: docs/NITROX_CATALOG_SOURCE.json (commitSha: ${commitSha.slice(
+        0,
+        7
+      )}, schemasUpdated: ${schemasUpdated})`
+    );
   } catch (err) {
     warn(`Fetch failed — ${String(err instanceof Error ? err.message : err)}`);
-    warn('Falling back to bundled catalog; release will use existing NITROX_COMPONENT_CATALOG.md');
+    warn('Falling back to bundled catalog and schemas; release will use existing NITROX_COMPONENT_CATALOG.md');
   } finally {
     try {
       if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });

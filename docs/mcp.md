@@ -1583,6 +1583,8 @@ The five `provar_nitrox_*` tools let an AI agent discover existing NitroX page o
 
 > **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
 
+> **Schema sourcing:** The `FactComponent.schema` and `FactPackage.schema` JSON schemas bundled in this package are used by editors and IDE tooling (e.g., VS Code JSON language server, SchemaStore) to provide IntelliSense when authoring `.po.json` files. They are fetched from an internal Provar source during each `provardx-cli` release build alongside the component catalog, so the bundled copies always reflect the latest NitroX specification. Both schemas are pinned to the same internal revision to avoid version skew. If the fetch fails at build time, the previously committed schemas are used as a fallback. Check `provar://nitrox/catalog-source` to see whether the schemas in a running server were successfully refreshed (`schemasUpdated: true`).
+
 ---
 
 ### `provar_nitrox_discover`
@@ -1963,7 +1965,7 @@ Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists ever
 
 The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time.
 
-The catalog is automatically refreshed from the `main` branch of [ProvarTesting/factPackages](https://github.com/ProvarTesting/factPackages) during each `provardx-cli` release build (via `scripts/fetch-nitrox-packages.cjs`). If the fetch fails at build time (e.g. no `GITHUB_TOKEN`, network unavailable), the previously committed catalog is used as a fallback and a warning is logged.
+The catalog is automatically refreshed from an internal Provar source during each `provardx-cli` release build. If the fetch fails at build time (e.g. network unavailable), the previously committed catalog is used as a fallback and a warning is logged.
 
 To check which version is bundled in a running server, read the `provar://nitrox/catalog-source` resource.
 
@@ -1971,21 +1973,21 @@ To check which version is bundled in a running server, read the `provar://nitrox
 
 ### `provar://nitrox/catalog-source`
 
-Version metadata for the bundled NitroX component catalog. Returns the `factPackages` commit SHA and fetch timestamp recorded during the release build that produced this package.
+Version metadata for the bundled NitroX component catalog and JSON schemas. Returns the internal source commit SHA, fetch timestamp, and schema update status recorded during the release build that produced this package.
 
 **URI:** `provar://nitrox/catalog-source`  
 **MIME type:** `application/json`
 
 ```json
 {
-  "repo": "https://github.com/ProvarTesting/factPackages",
   "branch": "main",
   "commitSha": "<40-char SHA or null if fetched from fallback>",
-  "fetchedAt": "<ISO 8601 timestamp or null>"
+  "fetchedAt": "<ISO 8601 timestamp or null>",
+  "schemasUpdated": "<true | false | null>"
 }
 ```
 
-`commitSha` and `fetchedAt` are `null` when the release build could not reach GitHub (fallback catalog in use).
+`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or pre-PDX-464 release).
 
 ---
 
