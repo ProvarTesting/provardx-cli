@@ -1583,7 +1583,7 @@ The five `provar_nitrox_*` tools let an AI agent discover existing NitroX page o
 
 > **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
 
-> **Schema sourcing:** The `FactComponent.schema` and `FactPackage.schema` JSON schemas used by `provar_nitrox_validate` and `provar_nitrox_patch` are fetched from an internal Provar source during each `provardx-cli` release build alongside the component catalog. Both schemas are pinned to the same internal revision to avoid version skew. If the fetch fails at build time, the previously committed schemas are used as a fallback. Check `provar://nitrox/catalog-source` to see whether the schemas in a running server were successfully refreshed (`schemasUpdated: true`).
+> **Schema sourcing:** The `FactComponent.schema` and `FactPackage.schema` JSON schemas bundled in this package are used by editors and IDE tooling (e.g., VS Code JSON language server, SchemaStore) to provide IntelliSense when authoring `.po.json` files. They are fetched from an internal Provar source during each `provardx-cli` release build alongside the component catalog, so the bundled copies always reflect the latest NitroX specification. Both schemas are pinned to the same internal revision to avoid version skew. If the fetch fails at build time, the previously committed schemas are used as a fallback. Check `provar://nitrox/catalog-source` to see whether the schemas in a running server were successfully refreshed (`schemasUpdated: true`).
 
 ---
 
@@ -1980,7 +1980,6 @@ Version metadata for the bundled NitroX component catalog and JSON schemas. Retu
 
 ```json
 {
-  "repo": "<internal source URL>",
   "branch": "main",
   "commitSha": "<40-char SHA or null if fetched from fallback>",
   "fetchedAt": "<ISO 8601 timestamp or null>",

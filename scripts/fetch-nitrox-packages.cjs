@@ -341,7 +341,6 @@ async function main() {
     }
 
     const sourceInfo = {
-      repo: `https://github.com/${REPO_OWNER}/${REPO_NAME}`,
       branch: BRANCH,
       commitSha,
       fetchedAt: new Date().toISOString(),
