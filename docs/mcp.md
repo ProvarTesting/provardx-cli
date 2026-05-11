@@ -1643,7 +1643,10 @@ Path policy is enforced per-file. A missing or unparseable file returns an `erro
 
 ### `provar_nitrox_validate`
 
-Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a list of issues.
+Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a combined list of issues from two validation passes that run in parallel:
+
+1. **Hardcoded semantic rules (NX001–NX010)** — always run
+2. **JSON schema validation (NX*SCHEMA*\*)** — runs when the bundled `FactComponent.schema.json` is available; falls back to hardcoded-rules-only if the schema cannot be loaded
 
 Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, minimum 0.
 
@@ -1659,7 +1662,7 @@ Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, mi
 | `issue_count` | Total issues                           |
 | `issues`      | Array of `ValidationIssue` (see below) |
 
-**Validation rules:**
+**Hardcoded rules:**
 
 | Rule  | Severity | Description                                                                                                                                  |
 | ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1674,6 +1677,21 @@ Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, mi
 | NX008 | WARNING  | `comparisonType` not one of `"equals"`, `"starts-with"`, `"contains"`                                                                        |
 | NX009 | INFO     | Interaction `name` contains characters outside `[A-Za-z0-9 ]`                                                                                |
 | NX010 | INFO     | `bodyTagName` contains whitespace                                                                                                            |
+
+**JSON schema rules (NX*SCHEMA*\*):**
+
+Rule IDs follow the pattern `NX_SCHEMA_<KEYWORD>` where `<KEYWORD>` is the AJV validation keyword in `SCREAMING_SNAKE_CASE`. Common rule IDs:
+
+| Rule ID                           | Severity | Description                                                                    |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `NX_SCHEMA_TYPE`                  | ERROR    | Property has the wrong JSON type (e.g. string where boolean expected)          |
+| `NX_SCHEMA_REQUIRED`              | ERROR    | Required property missing (per JSON schema `required` array)                   |
+| `NX_SCHEMA_MIN_ITEMS`             | ERROR    | Array has fewer items than `minItems` requires                                 |
+| `NX_SCHEMA_ADDITIONAL_PROPERTIES` | WARNING  | Property not defined in the schema (schema uses `additionalProperties: false`) |
+| `NX_SCHEMA_PATTERN`               | WARNING  | String value does not match the schema `pattern`                               |
+| `NX_SCHEMA_ENUM`                  | WARNING  | Value not in the allowed `enum` list                                           |
+
+Schema issues complement — and may overlap with — the hardcoded NX rules. When overlap occurs, both rule IDs appear in the `issues` array.
 
 **Error codes:** `MISSING_INPUT`, `NX000`, `FILE_NOT_FOUND`, `PATH_NOT_ALLOWED`
 
