@@ -10,6 +10,7 @@ import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import type { ValidateFunction } from 'ajv/dist/2020.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
@@ -411,27 +412,21 @@ describe('nitroXTools', () => {
   // ── NX_SCHEMA_ rules (AJV schema validation) ─────────────────────────────────
 
   describe('NX_SCHEMA_ rules (AJV schema override)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let validateFn: (
+    type IssueShape = { rule_id: string; severity: string; message: string; applies_to: string; field?: string };
+    type ValidateFnType = (
       obj: Record<string, unknown>,
-      v?: any
-    ) => {
-      issues: Array<{ rule_id: string; severity: string; message: string; applies_to: string; field?: string }>;
-      valid: boolean;
-      score: number;
-      issue_count: number;
-    };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let extraPropsValidator: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let typeViolationValidator: any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let permissiveValidator: any;
+      v?: ValidateFunction | null
+    ) => { issues: IssueShape[]; valid: boolean; score: number; issue_count: number };
+
+    let validateFn!: ValidateFnType;
+    let extraPropsValidator!: ValidateFunction;
+    let typeViolationValidator!: ValidateFunction;
+    let permissiveValidator!: ValidateFunction;
 
     before(async () => {
       const mod = await import('../../../src/mcp/tools/nitroXTools.js');
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
-      validateFn = mod.validateNitroXContent as any;
+      // Cast through unknown: the private NitroXValidationResult is structurally compatible with IssueShape[]
+      validateFn = mod.validateNitroXContent as unknown as ValidateFnType;
 
       const { Ajv2020: AjvClass } = await import('ajv/dist/2020.js');
       const ajv = new AjvClass({ allErrors: true, strict: false });
