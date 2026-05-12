@@ -73,6 +73,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
+  - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
@@ -88,8 +89,8 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 ## Quick start
 
 ```sh
-# 1. Install the plugin — @beta is required for MCP support
-sf plugins install @provartesting/provardx-cli@beta
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli
 
 # 2. (Optional) Authenticate for full 170+ rule validation
 sf provar auth login
@@ -223,7 +224,7 @@ claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allow
 }
 ```
 
-> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli@beta`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
+> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
 
 ### Claude Desktop
 
@@ -492,14 +493,14 @@ A lightweight sanity-check tool. Echoes back the message you send. Useful for ve
 
 **Output**
 
-| Field             | Type           | Description                                               |
-| ----------------- | -------------- | --------------------------------------------------------- |
-| `pong`            | string         | The echoed message                                        |
-| `ts`              | string         | ISO-8601 timestamp                                        |
-| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.15`) |
-| `updateAvailable` | boolean        | Whether a newer version is available in the registry      |
-| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`       |
-| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`            |
+| Field             | Type           | Description                                          |
+| ----------------- | -------------- | ---------------------------------------------------- |
+| `pong`            | string         | The echoed message                                   |
+| `ts`              | string         | ISO-8601 timestamp                                   |
+| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0`)    |
+| `updateAvailable` | boolean        | Whether a newer version is available in the registry |
+| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`  |
+| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`       |
 
 ---
 
@@ -1582,6 +1583,8 @@ The five `provar_nitrox_*` tools let an AI agent discover existing NitroX page o
 
 > **Note:** NitroX page objects are read and written directly from disk using the standard file-system path policy (`--allowed-paths`). No `sf` subprocess is involved.
 
+> **Schema sourcing:** The `FactComponent.schema` and `FactPackage.schema` JSON schemas bundled in this package are used by editors and IDE tooling (e.g., VS Code JSON language server, SchemaStore) to provide IntelliSense when authoring `.po.json` files. They are fetched from an internal Provar source during each `provardx-cli` release build alongside the component catalog, so the bundled copies always reflect the latest NitroX specification. Both schemas are pinned to the same internal revision to avoid version skew. If the fetch fails at build time, the previously committed schemas are used as a fallback. Check `provar://nitrox/catalog-source` to see whether the schemas in a running server were successfully refreshed (`schemasUpdated: true`).
+
 ---
 
 ### `provar_nitrox_discover`
@@ -1640,7 +1643,10 @@ Path policy is enforced per-file. A missing or unparseable file returns an `erro
 
 ### `provar_nitrox_validate`
 
-Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a list of issues.
+Validate a NitroX `.po.json` (Hybrid Model component page object) against the FACT schema rules. Returns a quality score (0–100) and a combined list of issues from two sequential validation passes:
+
+1. **Hardcoded semantic rules (NX001–NX010)** — always run
+2. **JSON schema validation (`NX_SCHEMA_*`)** — runs when the bundled `FactComponent.schema.json` is available; falls back to hardcoded-rules-only if the schema cannot be loaded
 
 Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, minimum 0.
 
@@ -1656,7 +1662,7 @@ Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, mi
 | `issue_count` | Total issues                           |
 | `issues`      | Array of `ValidationIssue` (see below) |
 
-**Validation rules:**
+**Hardcoded rules:**
 
 | Rule  | Severity | Description                                                                                                                                  |
 | ----- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1671,6 +1677,21 @@ Score formula: `100 − (20 × errors) − (5 × warnings) − (1 × infos)`, mi
 | NX008 | WARNING  | `comparisonType` not one of `"equals"`, `"starts-with"`, `"contains"`                                                                        |
 | NX009 | INFO     | Interaction `name` contains characters outside `[A-Za-z0-9 ]`                                                                                |
 | NX010 | INFO     | `bodyTagName` contains whitespace                                                                                                            |
+
+**JSON schema rules (`NX_SCHEMA_*`):**
+
+Rule IDs follow the pattern `NX_SCHEMA_<KEYWORD>` where `<KEYWORD>` is the AJV validation keyword in `SCREAMING_SNAKE_CASE`. Common rule IDs:
+
+| Rule ID                           | Severity | Description                                                                    |
+| --------------------------------- | -------- | ------------------------------------------------------------------------------ |
+| `NX_SCHEMA_TYPE`                  | ERROR    | Property has the wrong JSON type (e.g. string where boolean expected)          |
+| `NX_SCHEMA_REQUIRED`              | ERROR    | Required property missing (per JSON schema `required` array)                   |
+| `NX_SCHEMA_MIN_ITEMS`             | WARNING  | Array has fewer items than `minItems` requires                                 |
+| `NX_SCHEMA_ADDITIONAL_PROPERTIES` | WARNING  | Property not defined in the schema (schema uses `additionalProperties: false`) |
+| `NX_SCHEMA_PATTERN`               | WARNING  | String value does not match the schema `pattern`                               |
+| `NX_SCHEMA_ENUM`                  | WARNING  | Value not in the allowed `enum` list                                           |
+
+Schema issues complement — and may overlap with — the hardcoded NX rules. When overlap occurs, both rule IDs appear in the `issues` array.
 
 **Error codes:** `MISSING_INPUT`, `NX000`, `FILE_NOT_FOUND`, `PATH_NOT_ALLOWED`
 
@@ -1960,7 +1981,31 @@ Catalog of all shipped NitroX (Hybrid Model) base component packages. Lists ever
 **URI:** `provar://nitrox/component-catalog`  
 **MIME type:** `text/markdown`
 
-The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time. To regenerate the catalog after Provar ships updated NitroX packages, run `node scripts/generate-nitrox-catalog.cjs` on a machine with Provar NitroX installed, then commit the result.
+The resource content is the same as `docs/NITROX_COMPONENT_CATALOG.md` in this repository, compiled into the package at build time.
+
+The catalog is automatically refreshed from an internal Provar source during each `provardx-cli` release build. If the fetch fails at build time (e.g. network unavailable), the previously committed catalog is used as a fallback and a warning is logged.
+
+To check which version is bundled in a running server, read the `provar://nitrox/catalog-source` resource.
+
+---
+
+### `provar://nitrox/catalog-source`
+
+Version metadata for the bundled NitroX component catalog and JSON schemas. Returns the internal source commit SHA, fetch timestamp, and schema update status recorded during the release build that produced this package.
+
+**URI:** `provar://nitrox/catalog-source`  
+**MIME type:** `application/json`
+
+```json
+{
+  "branch": "main",
+  "commitSha": "<40-char SHA or null if fetched from fallback>",
+  "fetchedAt": "<ISO 8601 timestamp or null>",
+  "schemasUpdated": "<true | false | null>"
+}
+```
+
+`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or pre-PDX-464 release).
 
 ---
 

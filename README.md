@@ -16,7 +16,7 @@ The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to au
 Install the plugin
 
 ```sh-session
-$ sf plugins install @provartesting/provardx-cli@beta
+$ sf plugins install @provartesting/provardx-cli
 ```
 
 Update plugins
@@ -39,26 +39,47 @@ Validation runs in two modes: **local only** (structural rules, no key required)
 
 ## Quick setup
 
-**Requires:** Provar Automation IDE installed with an activated license.
+**Requires:** Provar Automation IDE installed with an activated license. Node.js 18–24 must be on your PATH.
+
+### Option A — Zero-install (recommended for Claude Desktop)
+
+No prior setup needed. Paste this into your Claude Desktop config file and restart the app:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "npx",
+      "args": ["-y", "@provartesting/provardx-cli", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+    }
+  }
+}
+```
+
+`npx -y` downloads the package automatically on first use — no `sf` or separate install step required.
+
+**Claude Code** — run once to register the server:
 
 ```sh
-# 1. Install the plugin — @beta is required for MCP support
-sf plugins install @provartesting/provardx-cli@beta
+claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project
+```
+
+### Option B — Global sf plugin install
+
+Prefer a persistent global install? Install once, then use the `sf` command:
+
+```sh
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli
 
 # 2. (Optional) Authenticate for full 170+ rule validation
 sf provar auth login
 ```
 
-**Claude Code** — run once to register the server:
-
-```sh
-claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
-```
-
-**Claude Desktop** — add to your config file and restart the app:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+**Claude Desktop** config using the global install:
 
 ```json
 {
@@ -72,6 +93,12 @@ claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/yo
 ```
 
 > **Windows (Claude Desktop):** Use `sf.cmd` instead of `sf` if the server fails to start.
+
+**Claude Code** using the global install:
+
+```sh
+claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+```
 
 📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, 7 MCP prompts, troubleshooting.**
 

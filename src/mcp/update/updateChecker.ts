@@ -32,14 +32,14 @@ interface UpdateCacheEntry {
   channel: string;
 }
 
-const UPDATE_TTL_MS = 4 * 60 * 60 * 1_000;
-const UPDATE_GRACE_MS = 48 * 60 * 60 * 1_000;
+const UPDATE_TTL_MS = 4 * 60 * 60 * 1000;
+const UPDATE_GRACE_MS = 48 * 60 * 60 * 1000;
 
 const SPAWN_OPTS = {
   stdio: ['ignore', 'pipe', 'pipe'] as const,
   timeout: 30_000,
   shell: process.platform === 'win32',
-  maxBuffer: 10 * 1_024 * 1_024,
+  maxBuffer: 10 * 1024 * 1024,
 } satisfies SpawnSyncOptions;
 
 const SEMVER_RE = /^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/;
@@ -140,7 +140,7 @@ function resultFromCache(cached: UpdateCacheEntry, currentVersion: string): Chec
 
 async function fetchLatestVersion(channel: string): Promise<string | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5_000);
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const resp = await fetch('https://registry.npmjs.org/@provartesting/provardx-cli', {
       signal: controller.signal,

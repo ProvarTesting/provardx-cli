@@ -136,6 +136,22 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   server.resource(
+    'provar-nitrox-catalog-source',
+    'provar://nitrox/catalog-source',
+    {
+      description:
+        'Version metadata for the bundled NitroX component catalog. Returns the factPackages commit SHA and fetch timestamp from the last successful release build. Use this to verify which version of the ProvarTesting/factPackages repo is bundled in the running MCP server.',
+      mimeType: 'application/json',
+    },
+    () => {
+      const text = readCatalogSource(docsDir);
+      return {
+        contents: [{ uri: 'provar://nitrox/catalog-source', mimeType: 'application/json', text }],
+      };
+    }
+  );
+
+  server.resource(
     'provar-step-reference',
     'provar://docs/step-reference',
     {
@@ -169,6 +185,34 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     }
   );
 
+  server.resource(
+    'provar-tool-guide',
+    'provar://docs/tool-guide',
+    {
+      description:
+        'Tool selection guide for ProvarDX MCP. Organised by what you want to accomplish (run tests, author tests, debug failures, manage config, etc.) rather than by tool name. Read this to choose the right tool and understand correct sequencing before calling tools.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'PROVAR_TOOL_GUIDE.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://docs/tool-guide', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/tool-guide',
+              mimeType: 'text/markdown',
+              text: '# ProvarDX Tool Guide\n\nGuide not found. Reinstall or upgrade the plugin and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
   return server;
 }
 
@@ -180,4 +224,33 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 export function resolveDocsDir(currentDir: string): string {
   const sibling = join(currentDir, 'docs');
   return existsSync(sibling) ? sibling : join(currentDir, '..', '..', 'docs');
+}
+
+/**
+ * Read NITROX_CATALOG_SOURCE.json from the docs directory and return it as
+ * a formatted JSON string.  Returns a fallback object string if the file is
+ * absent or unreadable.
+ */
+export function readCatalogSource(docsDir: string): string {
+  try {
+    const raw = readFileSync(join(docsDir, 'NITROX_CATALOG_SOURCE.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // Normalise schemasUpdated so older build artifacts (which lack this field)
+    // return a stable shape rather than omitting the key entirely.
+    if (!('schemasUpdated' in parsed)) {
+      parsed['schemasUpdated'] = null;
+    }
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return JSON.stringify(
+      {
+        branch: 'main',
+        commitSha: null,
+        fetchedAt: null,
+        schemasUpdated: null,
+      },
+      null,
+      2
+    );
+  }
 }

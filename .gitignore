@@ -55,8 +55,11 @@ mochawesome-report
 .env.local
 .env.*.local
 
-# Claude
-.claude/
+# Claude — local-only directories (worktrees, per-dev agent files, gitignored routing index)
+.claude/worktrees/
+.claude/agents/
+AGENTS.md
+# .claude/commands/ is intentionally tracked — project slash commands for Claude Code
 
 # NitroX schema files — do not commit until IP/licensing confirmed with Provar team
 # See: src/mcp/tools/nitroXTools.ts and plan notes

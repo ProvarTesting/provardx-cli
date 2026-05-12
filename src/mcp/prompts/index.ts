@@ -18,6 +18,7 @@ import {
   registerLoopCoveragePrompt,
   registerLoopDbPrompt,
 } from './loopPrompts.js';
+import { registerOnboardingPrompt, registerTroubleshootPrompt, registerOrchestrationPrompt } from './guidePrompts.js';
 
 export function registerAllPrompts(server: McpServer): void {
   registerCrtMigrationPrompt(server);
@@ -28,4 +29,7 @@ export function registerAllPrompts(server: McpServer): void {
   registerLoopReviewPrompt(server);
   registerLoopCoveragePrompt(server);
   registerLoopDbPrompt(server);
+  registerOnboardingPrompt(server);
+  registerTroubleshootPrompt(server);
+  registerOrchestrationPrompt(server);
 }
