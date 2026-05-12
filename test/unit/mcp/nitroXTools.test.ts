@@ -422,6 +422,7 @@ describe('nitroXTools', () => {
     let extraPropsValidator!: ValidateFunction;
     let typeViolationValidator!: ValidateFunction;
     let permissiveValidator!: ValidateFunction;
+    let requiredValidator!: ValidateFunction;
 
     before(async () => {
       const mod = await import('../../../src/mcp/tools/nitroXTools.js');
@@ -453,19 +454,39 @@ describe('nitroXTools', () => {
           fieldDetailsElement: { type: 'boolean' },
         },
       });
+
+      requiredValidator = ajv.compile({
+        type: 'object',
+        required: ['componentId'],
+        properties: { componentId: { type: 'string' } },
+      });
     });
 
-    it('NX_SCHEMA_ADDITIONAL_PROPERTIES: extra property surfaces as WARNING', () => {
-      // Schema only allows componentId; passing an extra field should produce a schema issue
+    it('NX_SCHEMA_ADDITIONAL_PROPERTIES: extra property surfaces as WARNING with correct field and applies_to', () => {
       const result = validateFn({ componentId: VALID_UUID, _extraProp: true }, extraPropsValidator);
-      assert.ok(result.issues.some((i) => i.rule_id === 'NX_SCHEMA_ADDITIONAL_PROPERTIES'));
-      assert.equal(result.issues.find((i) => i.rule_id === 'NX_SCHEMA_ADDITIONAL_PROPERTIES')?.severity, 'WARNING');
+      const issue = result.issues.find((i) => i.rule_id === 'NX_SCHEMA_ADDITIONAL_PROPERTIES');
+      assert.ok(issue, 'expected NX_SCHEMA_ADDITIONAL_PROPERTIES issue');
+      assert.equal(issue?.severity, 'WARNING');
+      assert.equal(issue?.field, '_extraProp');
+      assert.equal(issue?.applies_to, '_extraProp');
+    });
+
+    it('NX_SCHEMA_REQUIRED: missing required property surfaces as ERROR with correct field and applies_to', () => {
+      const result = validateFn({}, requiredValidator);
+      const issue = result.issues.find((i) => i.rule_id === 'NX_SCHEMA_REQUIRED');
+      assert.ok(issue, 'expected NX_SCHEMA_REQUIRED issue');
+      assert.equal(issue?.severity, 'ERROR');
+      assert.equal(issue?.field, 'componentId');
+      assert.equal(issue?.applies_to, 'componentId');
     });
 
     it('NX_SCHEMA_TYPE: wrong property type surfaces as ERROR', () => {
-      // Schema expects pageStructureElement to be boolean; passing a string should produce a type error
+      // instancePath points directly to the offending property; field derives from pathParts
       const result = validateFn({ ...VALID_ROOT, pageStructureElement: 'yes' }, typeViolationValidator);
-      assert.ok(result.issues.some((i) => i.rule_id === 'NX_SCHEMA_TYPE' && i.severity === 'ERROR'));
+      const issue = result.issues.find((i) => i.rule_id === 'NX_SCHEMA_TYPE');
+      assert.ok(issue && issue.severity === 'ERROR');
+      assert.equal(issue?.field, 'pageStructureElement');
+      assert.equal(issue?.applies_to, 'pageStructureElement');
     });
 
     it('valid object matching schema produces no NX_SCHEMA_ issues', () => {
