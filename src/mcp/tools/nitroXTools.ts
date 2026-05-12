@@ -68,9 +68,7 @@ function ajvErrorToIssue(err: ErrorObject): NitroXIssue {
   const instancePath = err.instancePath;
   const appliesTo = instancePath ? instancePath.replace(/^\//, '').replace(/\//g, '.') : 'root';
   const pathParts = instancePath.split('/').filter(Boolean);
-  const severity: 'ERROR' | 'WARNING' = ['REQUIRED', 'TYPE', 'MIN_ITEMS', 'MINIMUM', 'MAXIMUM'].includes(keyword)
-    ? 'ERROR'
-    : 'WARNING';
+  const severity: 'ERROR' | 'WARNING' = ['REQUIRED', 'TYPE'].includes(keyword) ? 'ERROR' : 'WARNING';
   const issue: NitroXIssue = {
     rule_id: `NX_SCHEMA_${keyword}`,
     severity,
@@ -686,7 +684,7 @@ export function registerNitroXValidate(server: McpServer, config: ServerConfig):
       description: [
         'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
         'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-        'Runs two passes in parallel: hardcoded semantic rules (NX001–NX010) and JSON schema validation (NX_SCHEMA_* rule IDs).',
+        'Runs two validation passes sequentially: hardcoded semantic rules (NX001–NX010) then JSON schema validation (NX_SCHEMA_* rule IDs).',
         'Schema issues catch structural errors not covered by NX rules: wrong property types, extra properties, enum violations.',
         'Returns a quality score (0–100) and a combined list of issues with rule IDs, severity, and suggestions.',
         'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
