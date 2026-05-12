@@ -100,7 +100,7 @@ sf provar auth login
 claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 ```
 
-📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, 7 MCP prompts, troubleshooting.**
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, 11 MCP prompts, troubleshooting.**
 
 ---
 
