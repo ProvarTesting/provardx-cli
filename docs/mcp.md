@@ -89,8 +89,8 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 ## Quick start
 
 ```sh
-# 1. Install the plugin — @beta is required for MCP support
-sf plugins install @provartesting/provardx-cli@beta
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli
 
 # 2. (Optional) Authenticate for full 170+ rule validation
 sf provar auth login
@@ -224,7 +224,7 @@ claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allow
 }
 ```
 
-> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli@beta`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
+> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
 
 ### Claude Desktop
 
@@ -493,14 +493,14 @@ A lightweight sanity-check tool. Echoes back the message you send. Useful for ve
 
 **Output**
 
-| Field             | Type           | Description                                               |
-| ----------------- | -------------- | --------------------------------------------------------- |
-| `pong`            | string         | The echoed message                                        |
-| `ts`              | string         | ISO-8601 timestamp                                        |
-| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0-beta.15`) |
-| `updateAvailable` | boolean        | Whether a newer version is available in the registry      |
-| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`       |
-| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`            |
+| Field             | Type           | Description                                          |
+| ----------------- | -------------- | ---------------------------------------------------- |
+| `pong`            | string         | The echoed message                                   |
+| `ts`              | string         | ISO-8601 timestamp                                   |
+| `server`          | string         | Server name and version (e.g. `provar-mcp@1.5.0`)    |
+| `updateAvailable` | boolean        | Whether a newer version is available in the registry |
+| `latestVersion`   | string \| null | Latest version found in the npm registry, or `null`  |
+| `updateCommand`   | string \| null | Command to run to update the plugin, or `null`       |
 
 ---
 

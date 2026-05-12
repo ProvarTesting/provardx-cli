@@ -16,7 +16,7 @@ The Provar DX CLI is a Salesforce CLI plugin for Provar customers who want to au
 Install the plugin
 
 ```sh-session
-$ sf plugins install @provartesting/provardx-cli@beta
+$ sf plugins install @provartesting/provardx-cli
 ```
 
 Update plugins
@@ -53,14 +53,7 @@ No prior setup needed. Paste this into your Claude Desktop config file and resta
   "mcpServers": {
     "provar": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@provartesting/provardx-cli@beta",
-        "mcp",
-        "start",
-        "--allowed-paths",
-        "/path/to/your/provar/project"
-      ]
+      "args": ["-y", "@provartesting/provardx-cli", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
     }
   }
 }
@@ -71,7 +64,7 @@ No prior setup needed. Paste this into your Claude Desktop config file and resta
 **Claude Code** — run once to register the server:
 
 ```sh
-claude mcp add provar -s user -- npx -y @provartesting/provardx-cli@beta mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project
 ```
 
 ### Option B — Global sf plugin install
@@ -79,8 +72,8 @@ claude mcp add provar -s user -- npx -y @provartesting/provardx-cli@beta mcp sta
 Prefer a persistent global install? Install once, then use the `sf` command:
 
 ```sh
-# 1. Install the plugin — @beta is required for MCP support
-sf plugins install @provartesting/provardx-cli@beta
+# 1. Install the plugin
+sf plugins install @provartesting/provardx-cli
 
 # 2. (Optional) Authenticate for full 170+ rule validation
 sf provar auth login
