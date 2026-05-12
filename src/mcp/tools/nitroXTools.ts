@@ -10,6 +10,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { Ajv2020, type ValidateFunction, type ErrorObject } from 'ajv/dist/2020.js';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerConfig } from '../server.js';
@@ -34,6 +36,47 @@ type JsonObj = Record<string, unknown>;
 
 function isObj(v: unknown): v is JsonObj {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+// ── AJV Schema Validator ──────────────────────────────────────────────────────
+
+const RULES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'rules');
+
+let cachedFactComponentValidator: ValidateFunction | null | undefined;
+
+function getFactComponentValidator(): ValidateFunction | null {
+  if (cachedFactComponentValidator !== undefined) return cachedFactComponentValidator;
+
+  const schemaPath = path.join(RULES_DIR, 'FactComponent.schema.json');
+  try {
+    // Fix known broken $ref in the bundled schema (#/defs/ → #/$defs/)
+    const patched = fs.readFileSync(schemaPath, 'utf-8').replace(/"#\/defs\//g, '"#/$defs/');
+    const schema = JSON.parse(patched) as Record<string, unknown>;
+    const ajv = new Ajv2020({ allErrors: true, strict: false, validateFormats: false });
+    cachedFactComponentValidator = ajv.compile(schema);
+  } catch (e) {
+    log('warn', 'provar_nitrox_validate: FactComponent schema unavailable, using hardcoded rules only', {
+      error: String(e),
+    });
+    cachedFactComponentValidator = null;
+  }
+  return cachedFactComponentValidator;
+}
+
+function ajvErrorToIssue(err: ErrorObject): NitroXIssue {
+  const keyword = err.keyword.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase();
+  const instancePath = err.instancePath;
+  const appliesTo = instancePath ? instancePath.replace(/^\//, '').replace(/\//g, '.') : 'root';
+  const pathParts = instancePath.split('/').filter(Boolean);
+  const severity: 'ERROR' | 'WARNING' = ['REQUIRED', 'TYPE'].includes(keyword) ? 'ERROR' : 'WARNING';
+  const issue: NitroXIssue = {
+    rule_id: `NX_SCHEMA_${keyword}`,
+    severity,
+    message: `Schema: ${instancePath || 'root'} — ${err.message ?? 'validation failed'}`,
+    applies_to: appliesTo,
+  };
+  if (pathParts.length > 0) issue.field = pathParts[pathParts.length - 1];
+  return issue;
 }
 
 // ── Directory Utilities ───────────────────────────────────────────────────────
@@ -168,37 +211,42 @@ function validateRootProperties(obj: JsonObj, issues: NitroXIssue[]): void {
   }
 }
 
-/** Validate a parsed NitroX .po.json object against schema-derived rules. */
-export function validateNitroXContent(obj: JsonObj): NitroXValidationResult {
+/** Validate a parsed NitroX .po.json against hardcoded NX rules and the FactComponent JSON schema. */
+export function validateNitroXContent(obj: JsonObj, schemaOverride?: ValidateFunction | null): NitroXValidationResult {
   const issues: NitroXIssue[] = [];
 
   validateRootProperties(obj, issues);
 
-  // Validate root-level parameters
   if (Array.isArray(obj['parameters'])) {
     for (const param of obj['parameters']) {
       if (isObj(param)) validateParameter(param, 'root', issues);
     }
   }
 
-  // Validate root-level interactions
   if (Array.isArray(obj['interactions'])) {
     for (const interaction of obj['interactions']) {
       if (isObj(interaction)) validateInteraction(interaction, 'root', issues);
     }
   }
 
-  // Validate root-level selectors
   if (Array.isArray(obj['selectors'])) {
     for (const sel of obj['selectors']) {
       if (isObj(sel)) validateSelector(sel, issues);
     }
   }
 
-  // Validate elements recursively
   if (Array.isArray(obj['elements'])) {
     for (const el of obj['elements']) {
       if (isObj(el)) validateElement(el, issues);
+    }
+  }
+
+  // AJV schema validation runs additively alongside NX001–NX010
+  const validator = schemaOverride === undefined ? getFactComponentValidator() : schemaOverride;
+  if (validator) {
+    validator(obj);
+    for (const err of validator.errors ?? []) {
+      issues.push(ajvErrorToIssue(err));
     }
   }
 
@@ -636,7 +684,9 @@ export function registerNitroXValidate(server: McpServer, config: ServerConfig):
       description: [
         'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
         'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-        'Returns a quality score (0–100) and a list of issues with rule IDs (NX001–NX010), severity, and suggestions.',
+        'Runs two validation passes sequentially: hardcoded semantic rules (NX001–NX010) then JSON schema validation (NX_SCHEMA_* rule IDs).',
+        'Schema issues catch structural errors not covered by NX rules: wrong property types, extra properties, enum violations.',
+        'Returns a quality score (0–100) and a combined list of issues with rule IDs, severity, and suggestions.',
         'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
       ].join(' '),
       inputSchema: {

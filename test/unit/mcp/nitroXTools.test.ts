@@ -10,6 +10,7 @@ import { strict as assert } from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import type { ValidateFunction } from 'ajv/dist/2020.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
@@ -405,6 +406,78 @@ describe('nitroXTools', () => {
       const body = parseBody(result);
       const issues = body['issues'] as Array<Record<string, unknown>>;
       assert.ok(issues.some((i) => i['rule_id'] === 'NX006'));
+    });
+  });
+
+  // ── NX_SCHEMA_ rules (AJV schema validation) ─────────────────────────────────
+
+  describe('NX_SCHEMA_ rules (AJV schema override)', () => {
+    type IssueShape = { rule_id: string; severity: string; message: string; applies_to: string; field?: string };
+    type ValidateFnType = (
+      obj: Record<string, unknown>,
+      v?: ValidateFunction | null
+    ) => { issues: IssueShape[]; valid: boolean; score: number; issue_count: number };
+
+    let validateFn!: ValidateFnType;
+    let extraPropsValidator!: ValidateFunction;
+    let typeViolationValidator!: ValidateFunction;
+    let permissiveValidator!: ValidateFunction;
+
+    before(async () => {
+      const mod = await import('../../../src/mcp/tools/nitroXTools.js');
+      // Cast through unknown: the private NitroXValidationResult is structurally compatible with IssueShape[]
+      validateFn = mod.validateNitroXContent as unknown as ValidateFnType;
+
+      const { Ajv2020: AjvClass } = await import('ajv/dist/2020.js');
+      const ajv = new AjvClass({ allErrors: true, strict: false });
+
+      extraPropsValidator = ajv.compile({
+        type: 'object',
+        additionalProperties: false,
+        properties: { componentId: { type: 'string' } },
+      });
+
+      typeViolationValidator = ajv.compile({
+        type: 'object',
+        properties: { pageStructureElement: { type: 'boolean' } },
+      });
+
+      permissiveValidator = ajv.compile({
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          componentId: { type: 'string' },
+          name: { type: 'string' },
+          type: { type: 'string' },
+          pageStructureElement: { type: 'boolean' },
+          fieldDetailsElement: { type: 'boolean' },
+        },
+      });
+    });
+
+    it('NX_SCHEMA_ADDITIONAL_PROPERTIES: extra property surfaces as WARNING', () => {
+      // Schema only allows componentId; passing an extra field should produce a schema issue
+      const result = validateFn({ componentId: VALID_UUID, _extraProp: true }, extraPropsValidator);
+      assert.ok(result.issues.some((i) => i.rule_id === 'NX_SCHEMA_ADDITIONAL_PROPERTIES'));
+      assert.equal(result.issues.find((i) => i.rule_id === 'NX_SCHEMA_ADDITIONAL_PROPERTIES')?.severity, 'WARNING');
+    });
+
+    it('NX_SCHEMA_TYPE: wrong property type surfaces as ERROR', () => {
+      // Schema expects pageStructureElement to be boolean; passing a string should produce a type error
+      const result = validateFn({ ...VALID_ROOT, pageStructureElement: 'yes' }, typeViolationValidator);
+      assert.ok(result.issues.some((i) => i.rule_id === 'NX_SCHEMA_TYPE' && i.severity === 'ERROR'));
+    });
+
+    it('valid object matching schema produces no NX_SCHEMA_ issues', () => {
+      const result = validateFn(VALID_ROOT, permissiveValidator);
+      assert.ok(!result.issues.some((i) => i.rule_id.startsWith('NX_SCHEMA_')));
+    });
+
+    it('null schema override: hardcoded rules still run; valid object scores 100', () => {
+      const result = validateFn(VALID_ROOT, null);
+      assert.equal(result.valid, true);
+      assert.equal(result.score, 100);
+      assert.equal(result.issue_count, 0);
     });
   });
 
