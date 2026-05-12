@@ -66,7 +66,16 @@ function getFactComponentValidator(): ValidateFunction | null {
 function ajvErrorToIssue(err: ErrorObject): NitroXIssue {
   const keyword = err.keyword.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase();
   const instancePath = err.instancePath;
-  const appliesTo = instancePath ? instancePath.replace(/^\//, '').replace(/\//g, '.') : 'root';
+  // For additionalProperties/required, instancePath points to the parent object;
+  // the actual property name is in err.params.
+  const params = err.params as Record<string, unknown>;
+  const extraProp =
+    err.keyword === 'additionalProperties' ? (params['additionalProperty'] as string | undefined) : undefined;
+  const missingProp = err.keyword === 'required' ? (params['missingProperty'] as string | undefined) : undefined;
+  const leafProp = extraProp ?? missingProp;
+
+  const basePath = instancePath ? instancePath.replace(/^\//, '').replace(/\//g, '.') : 'root';
+  const appliesTo = leafProp ? (basePath === 'root' ? leafProp : `${basePath}.${leafProp}`) : basePath;
   const pathParts = instancePath.split('/').filter(Boolean);
   const severity: 'ERROR' | 'WARNING' = ['REQUIRED', 'TYPE'].includes(keyword) ? 'ERROR' : 'WARNING';
   const issue: NitroXIssue = {
@@ -75,7 +84,7 @@ function ajvErrorToIssue(err: ErrorObject): NitroXIssue {
     message: `Schema: ${instancePath || 'root'} — ${err.message ?? 'validation failed'}`,
     applies_to: appliesTo,
   };
-  if (pathParts.length > 0) issue.field = pathParts[pathParts.length - 1];
+  issue.field = leafProp ?? (pathParts.length > 0 ? pathParts[pathParts.length - 1] : undefined);
   return issue;
 }
 
