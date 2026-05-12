@@ -75,23 +75,27 @@ jobs:
         if: success()
         env:
           RELEASE_BODY: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="${{ github.event.inputs.tag || 'latest' }}"
 
           # --- Determine change notes source ---
           if [ -n "$RELEASE_BODY" ]; then
-            # GitHub Release body provided — use it verbatim
+            # GitHub Release body provided via release event — use it verbatim
             NOTES="$RELEASE_BODY"
           else
-            # Auto-extract from git log since the previous tag
+            # workflow_dispatch: fetch release notes from the GitHub release for this version
+            NOTES=$(gh api "repos/${{ github.repository }}/releases/tags/v${VERSION}" --jq '.body' 2>/dev/null || echo "")
+          fi
+
+          if [ -z "$NOTES" ]; then
+            # Final fallback: auto-extract from git log since the previous tag
             if [ "${{ github.event_name }}" = "release" ]; then
-              # Release event: HEAD is the new tag — find the nearest ancestor tag before it
               PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git tag --sort=-version:refname | head -1)
             else
-              # Manual dispatch: find the nearest ancestor tag from HEAD
-              # (git describe respects branch ancestry; avoids pulling in commits from sibling branches)
-              PREV=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+              # HEAD^ avoids returning the current tag itself when HEAD is exactly at a tag
+              PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
             fi
 
             RANGE="${PREV:+${PREV}..}HEAD"
