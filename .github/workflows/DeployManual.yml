@@ -33,10 +33,31 @@ jobs:
           cat /home/runner/work/_temp/.npmrc
           cat $NPM_CONFIG_USERCONFIG
       - name: Publish package on NPM
-        run: npm publish --tag "$TAG" --access public
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/%40provartesting%2Fprovardx-cli/${VERSION}")
+          if [ "$STATUS" = "200" ]; then
+            echo "Version ${VERSION} already published on npm, skipping."
+          else
+            npm publish --tag "$TAG" --access public
+          fi
         env:
           TAG: ${{ github.event.inputs.tag || 'latest' }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Wait for npm package to be available
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Waiting for @provartesting/provardx-cli@${VERSION} to appear on npm..."
+          for i in $(seq 1 18); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/%40provartesting%2Fprovardx-cli/${VERSION}")
+            if [ "$STATUS" = "200" ]; then
+              echo "Package is available (attempt ${i})."
+              exit 0
+            fi
+            echo "Attempt ${i}/18: npm returned ${STATUS}, retrying in 10s..."
+            sleep 10
+          done
+          echo "Package not available after 3 minutes; proceeding anyway."
       - name: Install mcp-publisher
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
