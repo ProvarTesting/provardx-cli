@@ -187,16 +187,18 @@ describe('checkForUpdate', () => {
   });
 
   it('fetches registry when cache is stale (>4h)', async () => {
+    const { currentVersion } = await checkForUpdate({ noUpdateCheck: true, autoUpdate: false });
+    const channel = deriveChannel(currentVersion);
     writeFreshCache({
       checkedAt: Date.now() - 5 * 60 * 60 * 1000, // 5 hours ago
-      currentVersion: '1.5.0',
-      latestVersion: '1.5.0',
-      channel: 'latest',
+      currentVersion,
+      latestVersion: currentVersion,
+      channel,
     });
-    mockFetchOk({ latest: '1.5.1' });
+    mockFetchOk({ [channel]: '99.0.0' });
     const result = await checkForUpdate({ noUpdateCheck: false, autoUpdate: false });
     assert.equal(result.fromCache, false);
-    assert.equal(result.latestVersion, '1.5.1');
+    assert.equal(result.latestVersion, '99.0.0');
   });
 
   it('returns updateAvailable=true when update is available', async () => {
