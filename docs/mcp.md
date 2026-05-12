@@ -1816,7 +1816,7 @@ The SF Hosted MCP uses per-user OAuth 2.0, respects field-level security and sha
 
 ## MCP Prompts
 
-The Provar MCP server registers **11 MCP prompts** that pre-wire the tool chain into guided workflows. AI clients that support MCP prompts can invoke them directly by name instead of manually orchestrating the underlying tool sequence. **Important:** prompts that need to list, read, or write local project files (for example, `.testcase` files used by `provar.loop.fix` and `provar.loop.coverage`) also require a client with its own workspace/file tools, such as Claude Code or another MCP-compatible client with local file access configured; MCP prompt support alone is not sufficient for those workflows.
+The Provar MCP server registers **7 MCP prompts** that pre-wire the tool chain into guided workflows. AI clients that support MCP prompts can invoke them directly by name instead of manually orchestrating the underlying tool sequence. **Important:** prompts that need to list, read, or write local project files (for example, `.testcase` files used by `provar.loop.fix` and `provar.loop.coverage`) also require a client with its own workspace/file tools, such as Claude Code or another MCP-compatible client with local file access configured; MCP prompt support alone is not sufficient for those workflows.
 
 ---
 
