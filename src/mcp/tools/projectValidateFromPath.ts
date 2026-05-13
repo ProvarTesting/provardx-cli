@@ -15,7 +15,6 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateProjectFromPath, ProjectValidationError } from '../../services/projectValidation.js';
 import type { ProjectValidationResult, ValidatedPlan } from '../../services/projectValidation.js';
-import { desc } from './descHelper.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
 import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
 import {
@@ -26,6 +25,7 @@ import {
   computeDiff,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
+import { desc } from './descHelper.js';
 
 // ── Response shaping ──────────────────────────────────────────────────────────
 

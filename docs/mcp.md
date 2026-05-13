@@ -771,29 +771,34 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Input**
 
-| Parameter   | Type   | Required                                    | Description                                    |
-| ----------- | ------ | ------------------------------------------- | ---------------------------------------------- |
-| `content`   | string | one of `content`/`xml`/`file_path` required | XML content to validate (MCP field name)       |
-| `xml`       | string | one of `content`/`xml`/`file_path` required | XML content to validate (API-compatible alias) |
-| `file_path` | string | one of `content`/`xml`/`file_path` required | Path to the `.testcase` XML file               |
+| Parameter         | Type                              | Required                                    | Description                                                                                                                                                                             |
+| ----------------- | --------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`         | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (MCP field name)                                                                                                                                                |
+| `xml`             | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (API-compatible alias)                                                                                                                                          |
+| `file_path`       | string                            | one of `content`/`xml`/`file_path` required | Path to the `.testcase` XML file                                                                                                                                                        |
+| `detail`          | `summary` \| `standard` \| `full` | no                                          | Response verbosity. `"summary"`: is_valid, scores, and stop signal only. `"standard"`/`"full"`: full issues list (default).                                                             |
+| `baseline_run_id` | string                            | no                                          | `run_id` from a previous call. Returns only new/resolved issues since that run (`{ added, resolved, unchanged_count, run_id }`). Returns `BASELINE_NOT_FOUND` if the run ID is unknown. |
 
 **Output**
 
-| Field                            | Type           | Description                                                                                            |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------ |
-| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                                                           |
-| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                        |
-| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                      |
-| `error_count`                    | integer        | Schema error count                                                                                     |
-| `warning_count`                  | integer        | Schema warning count                                                                                   |
-| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                            |
-| `test_case_id`                   | string         | Value of the `id` attribute                                                                            |
-| `test_case_name`                 | string         | Value of the `name` attribute                                                                          |
-| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                    |
-| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                              |
-| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                             |
-| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                               |
-| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed) |
+| Field                            | Type           | Description                                                                                                                    |
+| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `run_id`                         | string         | Stable identifier for this validation run. Pass as `baseline_run_id` in the next call to receive only new/resolved issues.     |
+| `completeness_score`             | number (0–1)   | Ratio of valid test cases to total test cases validated (`0.0`–`1.0`).                                                         |
+| `recommended_next_action`        | string         | `"stop"` (all passing), `"continue"` (issues remain), or `"escalate"` (no baseline yet — run without `baseline_run_id` first). |
+| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                                                                                   |
+| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                                                |
+| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                                              |
+| `error_count`                    | integer        | Schema error count                                                                                                             |
+| `warning_count`                  | integer        | Schema warning count                                                                                                           |
+| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                                                    |
+| `test_case_id`                   | string         | Value of the `id` attribute                                                                                                    |
+| `test_case_name`                 | string         | Value of the `name` attribute                                                                                                  |
+| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                                            |
+| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                                                      |
+| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                                                     |
+| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                                                       |
+| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed)                         |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
 
@@ -807,6 +812,15 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
 - **VAR-REF-002** — A `{VarName}` token is embedded inside a larger plain string (e.g. `SELECT Id FROM Account WHERE Id = '{AccountId}'`). Provar does not perform `{…}` interpolation in string values at runtime; the braces are emitted literally. Use `class="compound"` with `<parts>` children to split the literal text and variable references. In `provar_testcase_generate`, pass the value with `{VarName}` placeholders — the generator emits compound XML automatically.
 
+**Error codes**
+
+| Code                 | Meaning                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------- |
+| `BASELINE_NOT_FOUND` | The `baseline_run_id` was not found. Run without `baseline_run_id` first to establish a baseline. |
+| `VALIDATE_ERROR`     | Unexpected validation error                                                                       |
+| `FILE_NOT_FOUND`     | `file_path` does not exist                                                                        |
+| `PATH_NOT_ALLOWED`   | `file_path` is outside the server's `--allowed-paths`                                             |
+
 ---
 
 ### `provar_testsuite_validate`
@@ -815,15 +829,23 @@ Validates a Provar test suite — checks for empty suites, duplicate names (with
 
 **Input**
 
-| Parameter           | Type           | Required | Description                                                                                                  |
-| ------------------- | -------------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `suite_name`        | string         | yes      | Name of the test suite                                                                                       |
-| `test_cases`        | array          | no       | Test cases directly in this suite. Each item: `{ name, xml_content \| xml }`                                 |
-| `child_suites`      | array          | no       | Child suites (up to 2 levels of nesting). Each item: `{ name, test_cases?, test_suites?, test_case_count? }` |
-| `test_case_count`   | integer        | no       | Override total count for the size check (useful when not sending full XML)                                   |
-| `quality_threshold` | number (0–100) | no       | Minimum quality score for a test case to be "valid" (default: 80)                                            |
+| Parameter           | Type                              | Required | Description                                                                                                                                      |
+| ------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `suite_name`        | string                            | yes      | Name of the test suite                                                                                                                           |
+| `test_cases`        | array                             | no       | Test cases directly in this suite. Each item: `{ name, xml_content \| xml }`                                                                     |
+| `child_suites`      | array                             | no       | Child suites (up to 2 levels of nesting). Each item: `{ name, test_cases?, test_suites?, test_case_count? }`                                     |
+| `test_case_count`   | integer                           | no       | Override total count for the size check (useful when not sending full XML)                                                                       |
+| `quality_threshold` | number (0–100)                    | no       | Minimum quality score for a test case to be "valid" (default: 80)                                                                                |
+| `detail`            | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: name, scores, and stop signal only. `"standard"`/`"full"`: full violations and per-test-case results (default). |
+| `baseline_run_id`   | string                            | no       | `run_id` from a previous call. Returns only new/resolved violations since that run. Returns `BASELINE_NOT_FOUND` if the run ID is unknown.       |
 
-**Output** — `{ name, level: "suite", quality_score, violations[], test_cases[], test_suites[], summary }`
+**Output** — `{ run_id, completeness_score, recommended_next_action, name, level: "suite", quality_score, violations[], test_cases[], test_suites[], summary }`
+
+| Field                     | Type         | Description                                                                                                         |
+| ------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `run_id`                  | string       | Stable identifier for this run. Pass as `baseline_run_id` in the next call to receive only new/resolved violations. |
+| `completeness_score`      | number (0–1) | Ratio of valid test cases to total (`0.0`–`1.0`).                                                                   |
+| `recommended_next_action` | string       | `"stop"`, `"continue"`, or `"escalate"` — see [Quality scores explained](#quality-scores-explained).                |
 
 **Violation rule IDs:** SUITE-EMPTY-001, SUITE-DUP-001, SUITE-DUP-002, SUITE-SIZE-001, SUITE-NAMING-001, SUITE-NAMING-002
 
@@ -835,14 +857,15 @@ Validates a Provar test plan — checks for empty plans, duplicate suite names, 
 
 **Input**
 
-| Parameter           | Type           | Required | Description                             |
-| ------------------- | -------------- | -------- | --------------------------------------- |
-| `plan_name`         | string         | yes      | Name of the test plan                   |
-| `test_suites`       | array          | no       | Test suites in this plan                |
-| `test_cases`        | array          | no       | Test cases directly in this plan        |
-| `test_suite_count`  | integer        | no       | Override suite count for the size check |
-| `metadata`          | object         | no       | Plan completeness metadata (see below)  |
-| `quality_threshold` | number (0–100) | no       | Minimum quality score (default: 80)     |
+| Parameter           | Type                              | Required | Description                                                                                                                                  |
+| ------------------- | --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plan_name`         | string                            | yes      | Name of the test plan                                                                                                                        |
+| `test_suites`       | array                             | no       | Test suites in this plan                                                                                                                     |
+| `test_cases`        | array                             | no       | Test cases directly in this plan                                                                                                             |
+| `test_suite_count`  | integer                           | no       | Override suite count for the size check                                                                                                      |
+| `metadata`          | object                            | no       | Plan completeness metadata (see below)                                                                                                       |
+| `quality_threshold` | number (0–100)                    | no       | Minimum quality score (default: 80)                                                                                                          |
+| `detail`            | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: name, scores, and stop signal only. `"standard"`/`"full"`: full violations and hierarchy results (default). |
 
 **`metadata` fields**
 
@@ -857,7 +880,12 @@ Validates a Provar test plan — checks for empty plans, duplicate suite names, 
 | `test_data_strategy`   | How test data is prepared and cleaned up   |
 | `risks`                | Identified risks and mitigations           |
 
-**Output** — `{ name, level: "plan", quality_score, violations[], test_suites[], test_cases[], summary }`
+**Output** — `{ completeness_score, recommended_next_action, name, level: "plan", quality_score, violations[], test_suites[], test_cases[], summary }`
+
+| Field                     | Type         | Description                                                                                          |
+| ------------------------- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| `completeness_score`      | number (0–1) | Ratio of valid test cases to total (`0.0`–`1.0`).                                                    |
+| `recommended_next_action` | string       | `"stop"`, `"continue"`, or `"escalate"` — see [Quality scores explained](#quality-scores-explained). |
 
 **Violation rule IDs:** PLAN-EMPTY-001, PLAN-DUP-001, PLAN-SIZE-001, PLAN-NAMING-001, PLAN-META-001 through PLAN-META-007
 
@@ -871,27 +899,32 @@ Validates a Provar project directly from its directory on disk. Reads the plan/s
 
 **Input**
 
-| Parameter              | Type           | Required | Description                                                                                                          |
-| ---------------------- | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
-| `project_path`         | string         | yes      | Absolute path to the Provar project root (directory containing `.testproject`)                                       |
-| `quality_threshold`    | number (0–100) | no       | Minimum quality score for a test case to be considered valid (default: 80)                                           |
-| `save_results`         | boolean        | no       | Write a QH-compatible JSON report to `{project_path}/provardx/validation/` (default: true)                           |
-| `results_dir`          | string         | no       | Override the output directory for the saved report (must be within `allowed-paths`)                                  |
-| `include_plan_details` | boolean        | no       | Include full per-suite and per-test-case data in the response (default: false — keep false to avoid token explosion) |
-| `max_uncovered`        | integer        | no       | Maximum uncovered test case paths to return (default: 20; set to `0` for none)                                       |
-| `max_violations`       | integer        | no       | When `include_plan_details: true`, caps project violations returned (default: 50)                                    |
+| Parameter              | Type                              | Required | Description                                                                                                                                                                       |
+| ---------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path`         | string                            | yes      | Absolute path to the Provar project root (directory containing `.testproject`)                                                                                                    |
+| `quality_threshold`    | number (0–100)                    | no       | Minimum quality score for a test case to be considered valid (default: 80)                                                                                                        |
+| `save_results`         | boolean                           | no       | Write a QH-compatible JSON report to `{project_path}/provardx/validation/` (default: true)                                                                                        |
+| `results_dir`          | string                            | no       | Override the output directory for the saved report (must be within `allowed-paths`)                                                                                               |
+| `detail`               | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: key scores and stop signal only. `"standard"`: slim violation summary (default). `"full"`: full per-suite and per-test-case data.                |
+| `baseline_run_id`      | string                            | no       | `run_id` from a previous call. Returns only new/resolved project violations since that run. Returns `BASELINE_NOT_FOUND` if the run ID is unknown. Requires `save_results: true`. |
+| `include_plan_details` | boolean                           | no       | **@deprecated** — use `detail="full"` instead. Include full per-suite and per-test-case data (default: false).                                                                    |
+| `max_uncovered`        | integer                           | no       | **@deprecated** — response is automatically scoped by `detail` level. Maximum uncovered test case paths to return (default: 20).                                                  |
+| `max_violations`       | integer                           | no       | **@deprecated** — response is automatically scoped by `detail` level. Caps project violations returned when `include_plan_details: true` (default: 50).                           |
 
 **Output** (slim mode, `include_plan_details: false`)
 
-| Field                     | Description                                                                                                                                              |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `quality_score`           | Project quality score (0–100)                                                                                                                            |
-| `coverage_percent`        | Percentage of test cases covered by at least one plan                                                                                                    |
-| `violation_summary`       | Map of `rule_id → count` for all violations found                                                                                                        |
-| `plan_scores`             | Array of `{ name, quality_score }` per plan                                                                                                              |
-| `uncovered_test_cases`    | Uncovered test case paths (capped at `max_uncovered`)                                                                                                    |
-| `save_error`              | Present only if the results file could not be written                                                                                                    |
-| `plan_integrity_warnings` | Present when any plan or suite directory is missing a `.planitem` file — test instances in those directories are silently invisible to the Provar runner |
+| Field                     | Description                                                                                                                                                  |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `run_id`                  | Stable identifier for this run (only present when `save_results: true`). Pass as `baseline_run_id` in the next call to receive only new/resolved violations. |
+| `completeness_score`      | Ratio of valid test cases to total (`0.0`–`1.0`).                                                                                                            |
+| `recommended_next_action` | `"stop"`, `"continue"`, or `"escalate"` — see [Quality scores explained](#quality-scores-explained).                                                         |
+| `quality_score`           | Project quality score (0–100)                                                                                                                                |
+| `coverage_percent`        | Percentage of test cases covered by at least one plan                                                                                                        |
+| `violation_summary`       | Map of `rule_id → count` for all violations found                                                                                                            |
+| `plan_scores`             | Array of `{ name, quality_score }` per plan                                                                                                                  |
+| `uncovered_test_cases`    | Uncovered test case paths (capped at `max_uncovered`)                                                                                                        |
+| `save_error`              | Present only if the results file could not be written                                                                                                        |
+| `plan_integrity_warnings` | Present when any plan or suite directory is missing a `.planitem` file — test instances in those directories are silently invisible to the Provar runner     |
 
 When `include_plan_details: true`, the response additionally includes full `test_plans[]` with nested suite and per-test-case data.
 
@@ -899,7 +932,7 @@ When `include_plan_details: true`, the response additionally includes full `test
 
 **Violation rule IDs:** PROJ-EMPTY-001, PROJ-DUP-001, PROJ-DUP-002, PROJ-CALLABLE-001, PROJ-CALLABLE-002, PROJ-CONN-001, PROJ-ENV-001, PROJ-ENV-002, PROJ-SECRET-001
 
-**Error codes:** `NOT_A_PROJECT`, `AMBIGUOUS_PROJECT`, `PATH_NOT_FOUND`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`
+**Error codes:** `NOT_A_PROJECT`, `AMBIGUOUS_PROJECT`, `PATH_NOT_FOUND`, `PATH_NOT_ALLOWED`, `PATH_TRAVERSAL`, `BASELINE_NOT_FOUND` (baseline run not found — run without `baseline_run_id` first to establish a baseline)
 
 ---
 
