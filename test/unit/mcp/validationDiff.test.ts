@@ -29,7 +29,7 @@ afterEach(() => {
 describe('generateRunId', () => {
   it('produces a timestamp-hash string', () => {
     const id = generateRunId('/some/project/path');
-    assert.match(id, /^\d+-[0-9a-f]{8}$/);
+    assert.match(id, /^\d+-[0-9a-f]{8}-[0-9a-z]{4}$/);
   });
 
   it('produces different IDs for different contexts', () => {

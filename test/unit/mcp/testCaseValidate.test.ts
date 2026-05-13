@@ -1000,6 +1000,98 @@ describe('registerTestCaseValidate handler', () => {
     assert.equal(result['validation_source'], 'local_fallback');
     assert.ok(String(result['validation_warning']).toLowerCase().includes('rate limit'));
   });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes is_valid, issues, and run_id', async () => {
+      const res = (await capServer.capturedHandler!({
+        content: VALID_TC,
+        detail: 'standard',
+      })) as { content: Array<{ text: string }> };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.ok('is_valid' in result, 'standard should include is_valid');
+      assert.ok('issues' in result, 'standard should include issues');
+      assert.ok('run_id' in result, 'standard should include run_id');
+    });
+
+    it('summary response includes only key fields, not issues', async () => {
+      const res = (await capServer.capturedHandler!({
+        content: VALID_TC,
+        detail: 'summary',
+      })) as { content: Array<{ text: string }> };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.ok('is_valid' in result, 'summary should include is_valid');
+      assert.ok('quality_score' in result, 'summary should include quality_score');
+      assert.ok('completeness_score' in result, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in result, 'summary should include recommended_next_action');
+      assert.ok(!('issues' in result), 'summary should NOT include issues');
+    });
+  });
+
+  describe('PDX-473 — completeness_score and recommended_next_action', () => {
+    it('completeness_score is 100 for a valid test case', async () => {
+      const res = (await capServer.capturedHandler!({ content: VALID_TC })) as {
+        content: Array<{ text: string }>;
+      };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.equal(result['completeness_score'], 100);
+    });
+
+    it('recommended_next_action is stop for a valid test case', async () => {
+      const res = (await capServer.capturedHandler!({ content: VALID_TC })) as {
+        content: Array<{ text: string }>;
+      };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.equal(result['recommended_next_action'], 'stop');
+    });
+
+    it('recommended_next_action is inspect_failures for an invalid test case (first run)', async () => {
+      const badXml = '<?xml version="1.0"?><testCase id="x" guid="not-a-uuid" registryId="r"><steps/></testCase>';
+      const res = (await capServer.capturedHandler!({ content: badXml })) as {
+        content: Array<{ text: string }>;
+      };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.equal(result['completeness_score'], 0);
+      assert.equal(result['recommended_next_action'], 'inspect_failures');
+    });
+  });
+
+  describe('PDX-471 — baseline_run_id diff mode', () => {
+    it('run_id is present in every response', async () => {
+      const res = (await capServer.capturedHandler!({ content: VALID_TC })) as {
+        content: Array<{ text: string }>;
+      };
+      const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.ok(typeof result['run_id'] === 'string' && result['run_id'].length > 0);
+    });
+
+    it('returns BASELINE_NOT_FOUND for an unknown baseline_run_id', async () => {
+      const res = (await capServer.capturedHandler!({
+        content: VALID_TC,
+        baseline_run_id: 'nonexistent-run-id-xyz',
+      })) as { isError?: boolean; content: Array<{ text: string }> };
+      assert.equal(res.isError, true);
+      const body = JSON.parse(res.content[0].text) as Record<string, unknown>;
+      assert.equal(body['error_code'], 'BASELINE_NOT_FOUND');
+    });
+
+    it('diff mode returns added/resolved/unchanged_count when baseline exists', async () => {
+      const first = (await capServer.capturedHandler!({ content: VALID_TC })) as {
+        content: Array<{ text: string }>;
+      };
+      const firstBody = JSON.parse(first.content[0].text) as Record<string, unknown>;
+      const runId = firstBody['run_id'] as string;
+
+      const second = (await capServer.capturedHandler!({
+        content: VALID_TC,
+        baseline_run_id: runId,
+      })) as { content: Array<{ text: string }> };
+      assert.ok(!(second as { isError?: boolean }).isError);
+      const diffBody = JSON.parse(second.content[0].text) as Record<string, unknown>;
+      assert.ok('added' in diffBody, 'diff should include added');
+      assert.ok('resolved' in diffBody, 'diff should include resolved');
+      assert.ok('unchanged_count' in diffBody, 'diff should include unchanged_count');
+    });
+  });
 });
 
 // ── validateTestCaseXml ───────────────────────────────────────────────────────

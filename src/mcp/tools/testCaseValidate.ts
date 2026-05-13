@@ -70,6 +70,46 @@ function tcStorageDir(): string {
   return path.join(os.homedir(), '.provardx', 'validation');
 }
 
+/** Resolve validation result from QualityHub API or fall back to local. */
+async function resolveBaseResult(
+  source: string,
+  apiKey: string | null,
+  requestId: string
+): Promise<TestCaseValidationResult> {
+  if (!apiKey) {
+    return { ...validateTestCase(source), validation_source: 'local', validation_warning: ONBOARDING_MESSAGE };
+  }
+  const baseUrl = getQualityHubBaseUrl();
+  try {
+    const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
+    const localMeta = validateTestCase(source);
+    log('info', 'provar_testcase_validate: quality_hub', { requestId });
+    return {
+      ...apiResult,
+      issues: apiResult.issues as unknown as ValidationIssue[],
+      step_count: localMeta.step_count,
+      error_count: apiResult.issues.filter((i) => i.severity === 'ERROR').length,
+      warning_count: apiResult.issues.filter((i) => i.severity === 'WARNING').length,
+      test_case_id: localMeta.test_case_id,
+      test_case_name: localMeta.test_case_name,
+      validation_source: 'quality_hub',
+    };
+  } catch (apiErr: unknown) {
+    let warning: string;
+    if (apiErr instanceof QualityHubAuthError) {
+      warning = AUTH_WARNING;
+      log('warn', 'provar_testcase_validate: auth error, falling back', { requestId });
+    } else if (apiErr instanceof QualityHubRateLimitError) {
+      warning = RATE_LIMIT_WARNING;
+      log('warn', 'provar_testcase_validate: rate limited, falling back', { requestId });
+    } else {
+      warning = UNREACHABLE_WARNING;
+      log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
+    }
+    return { ...validateTestCase(source), validation_source: 'local_fallback', validation_warning: warning };
+  }
+}
+
 /** Derive a stable context key for run ID generation. */
 function tcRunContext(filePath: string | undefined, xmlContent: string): string {
   if (filePath) return filePath;
@@ -140,56 +180,23 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const apiKey = resolveApiKey();
-        let baseResult: Omit<TestCaseValidationResult, 'validation_source'> & {
-          validation_source: 'quality_hub' | 'local' | 'local_fallback';
-          validation_warning?: string;
-        };
-
-        if (apiKey) {
-          const baseUrl = getQualityHubBaseUrl();
-          try {
-            const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
-            const localMeta = validateTestCase(source);
-            baseResult = {
-              ...apiResult,
-              issues: apiResult.issues as unknown as (typeof baseResult)['issues'],
-              step_count: localMeta.step_count,
-              error_count: apiResult.issues.filter((i) => i.severity === 'ERROR').length,
-              warning_count: apiResult.issues.filter((i) => i.severity === 'WARNING').length,
-              test_case_id: localMeta.test_case_id,
-              test_case_name: localMeta.test_case_name,
-              validation_source: 'quality_hub' as const,
-            };
-            log('info', 'provar_testcase_validate: quality_hub', { requestId });
-          } catch (apiErr: unknown) {
-            let warning: string;
-            if (apiErr instanceof QualityHubAuthError) {
-              warning = AUTH_WARNING;
-              log('warn', 'provar_testcase_validate: auth error, falling back', { requestId });
-            } else if (apiErr instanceof QualityHubRateLimitError) {
-              warning = RATE_LIMIT_WARNING;
-              log('warn', 'provar_testcase_validate: rate limited, falling back', { requestId });
-            } else {
-              warning = UNREACHABLE_WARNING;
-              log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
-            }
-            baseResult = {
-              ...validateTestCase(source),
-              validation_source: 'local_fallback' as const,
-              validation_warning: warning,
-            };
-          }
-        } else {
-          baseResult = {
-            ...validateTestCase(source),
-            validation_source: 'local' as const,
-            validation_warning: ONBOARDING_MESSAGE,
-          };
-        }
+        const baseResult = await resolveBaseResult(source, apiKey, requestId);
 
         const storageDir = tcStorageDir();
         const runId = generateRunId(tcRunContext(file_path, source));
-        const currentViolations = baseResult.issues as unknown as DiffableViolation[];
+        const bpViolations = (baseResult.best_practices_violations ?? []) as unknown as DiffableViolation[];
+        const currentViolations: DiffableViolation[] = [
+          ...(baseResult.issues as unknown as DiffableViolation[]),
+          ...bpViolations,
+        ];
+
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id)
+            : null;
+
+        const hasBaseline = hasAnyRun(storageDir);
 
         try {
           saveRun(storageDir, runId, currentViolations);
@@ -202,7 +209,6 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
 
         // Diff mode
         if (baseline_run_id !== undefined && baseline_run_id !== '') {
-          const baseline = loadBaselineViolations(storageDir, baseline_run_id);
           if (!baseline) {
             const errResult = makeError(
               'BASELINE_NOT_FOUND',
@@ -230,7 +236,6 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
-        const hasBaseline = hasAnyRun(storageDir);
         const recommended_next_action = calcNextAction(completeness_score, hasBaseline);
 
         const result = {

@@ -115,6 +115,15 @@ function shapeResponse(
   };
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function classifyError(err: Error & { code?: string }): { code: string; isUserError: boolean } {
+  if (err instanceof PathPolicyError || err instanceof ProjectValidationError) {
+    return { code: err.code, isUserError: true };
+  }
+  return { code: err.code ?? 'VALIDATE_ERROR', isUserError: false };
+}
+
 // ── Tool registration ─────────────────────────────────────────────────────────
 
 const PROJECT_VALIDATE_SUMMARY_FIELDS = [
@@ -279,6 +288,12 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
 
         const currentViolations = result.project_violations as unknown as DiffableViolation[];
 
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          save_results !== false && baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id)
+            : null;
+
         const hasBaseline = save_results !== false ? hasAnyRun(storageDir) : false;
 
         if (save_results !== false) {
@@ -294,7 +309,6 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
 
         // Diff mode
         if (baseline_run_id !== undefined && baseline_run_id !== '') {
-          const baseline = loadBaselineViolations(storageDir, baseline_run_id);
           if (!baseline) {
             const errResult = makeError(
               'BASELINE_NOT_FOUND',
@@ -313,7 +327,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           const recommended_next_action = calcNextAction(completeness_score, true);
           const diffResponse = {
             requestId,
-            run_id: runId,
+            ...(save_results !== false ? { run_id: runId } : {}),
             ...diff,
             completeness_score,
             recommended_next_action,
@@ -332,7 +346,13 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
 
         const usePlanDetails = include_plan_details || detail === 'full';
         const shaped = shapeResponse(result, usePlanDetails, max_uncovered, max_violations);
-        const response = { requestId, run_id: runId, completeness_score, recommended_next_action, ...shaped };
+        const response = {
+          requestId,
+          ...(save_results !== false ? { run_id: runId } : {}),
+          completeness_score,
+          recommended_next_action,
+          ...shaped,
+        };
 
         const detailLevel = (detail ?? 'standard') as DetailLevel;
         const finalResponse = applyDetailLevel(response, detailLevel, PROJECT_VALIDATE_SUMMARY_FIELDS);
@@ -343,13 +363,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
         };
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
-        const code =
-          error instanceof PathPolicyError
-            ? error.code
-            : error instanceof ProjectValidationError
-            ? error.code
-            : error.code ?? 'VALIDATE_ERROR';
-        const isUserError = error instanceof PathPolicyError || error instanceof ProjectValidationError;
+        const { code, isUserError } = classifyError(error);
         const errResult = makeError(code, error.message, requestId, !isUserError);
         log('error', 'provar_project_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };

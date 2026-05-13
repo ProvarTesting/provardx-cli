@@ -69,7 +69,8 @@ function saveIndex(storageDir: string, index: RunsIndex): void {
 
 /** Generate a run ID from a context string (e.g. project path or suite name). */
 export function generateRunId(context: string): string {
-  return `${Date.now()}-${shortHash(context)}`;
+  const rand = Math.random().toString(36).slice(2, 6);
+  return `${Date.now()}-${shortHash(context)}-${rand}`;
 }
 
 /**

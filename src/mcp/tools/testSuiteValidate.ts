@@ -22,8 +22,19 @@ import {
   computeDiff,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
-import { validateSuite, buildHierarchySummary, type TestSuiteInput } from './hierarchyValidate.js';
+import { validateSuite, buildHierarchySummary, type TestSuiteInput, type SuiteResult } from './hierarchyValidate.js';
 import { desc } from './descHelper.js';
+
+function collectAllViolations(result: SuiteResult): DiffableViolation[] {
+  const all: DiffableViolation[] = [...(result.violations as unknown as DiffableViolation[])];
+  for (const tc of result.test_cases) {
+    all.push(...(tc.issues as unknown as DiffableViolation[]));
+  }
+  for (const child of result.test_suites) {
+    all.push(...collectAllViolations(child));
+  }
+  return all;
+}
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -143,7 +154,15 @@ export function registerTestSuiteValidate(server: McpServer): void {
 
         const storageDir = suiteStorageDir();
         const runId = generateRunId(suite_name);
-        const currentViolations = result.violations as unknown as DiffableViolation[];
+        const currentViolations = collectAllViolations(result);
+
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id)
+            : null;
+
+        const hasBaseline = hasAnyRun(storageDir);
 
         try {
           saveRun(storageDir, runId, currentViolations);
@@ -156,7 +175,6 @@ export function registerTestSuiteValidate(server: McpServer): void {
 
         // Diff mode
         if (baseline_run_id !== undefined && baseline_run_id !== '') {
-          const baseline = loadBaselineViolations(storageDir, baseline_run_id);
           if (!baseline) {
             const errResult = makeError(
               'BASELINE_NOT_FOUND',
@@ -184,7 +202,6 @@ export function registerTestSuiteValidate(server: McpServer): void {
         }
 
         const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
-        const hasBaseline = hasAnyRun(storageDir);
         const recommended_next_action = calcNextAction(completeness_score, hasBaseline);
 
         const response = {
