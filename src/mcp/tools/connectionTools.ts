@@ -16,6 +16,7 @@ import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { desc } from './descHelper.js';
+import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -155,9 +156,20 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
               'string, absolute path to project root'
             )
           ),
+        fields: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Comma-separated list of top-level response keys to retain (e.g. "connections,summary"). ' +
+                'Supports dot notation for nested filtering (e.g. "connections.name,connections.type"). ' +
+                'Unknown field names are silently ignored. Omit for full response.',
+              'string, optional; comma-separated keys to keep (supports dot notation)'
+            )
+          ),
       },
     },
-    ({ project_path }) => {
+    ({ project_path, fields }) => {
       const requestId = makeRequestId();
       log('info', 'provar_connection_list', { requestId, project_path });
 
@@ -195,7 +207,7 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
         const connections = parseConnectionList(content);
         const environments = parseEnvironmentList(content);
 
-        const result = {
+        let result: Record<string, unknown> = {
           requestId,
           project_path: resolvedPath,
           connections,
@@ -205,6 +217,12 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
             environment_count: environments.length,
           },
         };
+
+        const fieldList = parseFieldsParam(fields);
+        if (fieldList) {
+          result = maskFields(result, fieldList) as Record<string, unknown>;
+        }
+
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           structuredContent: result,

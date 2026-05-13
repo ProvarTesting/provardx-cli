@@ -15,6 +15,10 @@ import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { desc } from './descHelper.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
+
+const INSPECT_SUMMARY_FIELDS = ['requestId', 'project_path', 'provar_home', 'summary'];
 
 export function registerProjectInspect(server: McpServer, config: ServerConfig): void {
   server.registerTool(
@@ -45,9 +49,31 @@ export function registerProjectInspect(server: McpServer, config: ServerConfig):
               'string, absolute path to project root'
             )
           ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            desc(
+              'Response verbosity: "summary" returns only requestId, project_path, provar_home, and the summary object; ' +
+                '"standard" (default) returns the full inventory; "full" is identical to standard for this tool.',
+              'enum summary|standard|full, optional; default standard'
+            )
+          ),
+        fields: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Comma-separated list of top-level keys to retain (e.g. "test_case_files,summary"). ' +
+                'Supports dot notation for nested filtering (e.g. "test_project.connections"). ' +
+                'Unknown field names are silently ignored. Applied after the detail filter.',
+              'string, optional; comma-separated keys to keep (supports dot notation)'
+            )
+          ),
       },
     },
-    ({ project_path }) => {
+    ({ project_path, detail, fields }) => {
       const requestId = makeRequestId();
       log('info', 'provar_project_inspect', { requestId, project_path });
 
@@ -60,7 +86,18 @@ export function registerProjectInspect(server: McpServer, config: ServerConfig):
           return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
         }
 
-        const result = buildProjectInventory(resolved, requestId);
+        let result = buildProjectInventory(resolved, requestId);
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        if (detailLevel !== 'standard') {
+          result = applyDetailLevel(result, detailLevel, INSPECT_SUMMARY_FIELDS);
+        }
+
+        const fieldList = parseFieldsParam(fields);
+        if (fieldList) {
+          result = maskFields(result, fieldList) as typeof result;
+        }
+
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result) }],
           structuredContent: result,

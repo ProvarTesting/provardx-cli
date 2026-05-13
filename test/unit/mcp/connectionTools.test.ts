@@ -190,6 +190,59 @@ describe('provar_connection_list', () => {
     });
   });
 
+  describe('fields param (sparse field masking)', () => {
+    it('retains only specified top-level keys when fields is provided', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections,summary',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('connections' in body, 'connections should be retained');
+      assert.ok('summary' in body, 'summary should be retained');
+      assert.ok(!('environments' in body), 'environments should be masked out');
+      assert.ok(!('requestId' in body), 'requestId should be masked out');
+    });
+
+    it('omitting fields returns the full response', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
+      const body = parseText(result);
+      assert.ok('connections' in body);
+      assert.ok('environments' in body);
+      assert.ok('requestId' in body);
+    });
+
+    it('silently ignores unknown field names', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections,ghost_field',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('connections' in body);
+      assert.ok(!('ghost_field' in body));
+    });
+
+    it('supports dot notation to narrow connection entries', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections.name,connections.type',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const connections = body['connections'] as Array<Record<string, unknown>>;
+      assert.ok(Array.isArray(connections));
+      assert.ok('name' in connections[0], 'name should be retained');
+      assert.ok('type' in connections[0], 'type should be retained');
+      assert.ok(!('url' in connections[0]), 'url should be masked out');
+      assert.ok(!('sso_configured' in connections[0]), 'sso_configured should be masked out');
+    });
+  });
+
   describe('error cases', () => {
     it('returns CONNECTION_FILE_NOT_FOUND when .testproject is missing', () => {
       const result = server.call('provar_connection_list', { project_path: tmpDir });
