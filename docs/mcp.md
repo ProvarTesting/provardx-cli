@@ -481,7 +481,7 @@ Two environment variables let you reduce the context budget consumed by the Prov
 PROVAR_MCP_SCHEMA_MODE=compact
 ```
 
-When set to `compact`, every tool description and parameter description is replaced with a short summary (typically ≤15 words). This can save hundreds of tokens per tool in the initial context handshake, at the cost of reduced in-description guidance for the agent.
+When set to `compact`, tool descriptions and parameter descriptions are replaced with short summaries (typically ≤15 words). This can save hundreds of tokens per tool in the initial context handshake, at the cost of reduced in-description guidance for the agent.
 
 Use this mode if:
 

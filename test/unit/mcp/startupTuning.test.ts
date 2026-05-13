@@ -9,6 +9,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it, afterEach } from 'mocha';
 import { parseActiveGroups } from '../../../src/mcp/server.js';
+import { desc } from '../../../src/mcp/tools/descHelper.js';
 import { registerTestSuiteValidate } from '../../../src/mcp/tools/testSuiteValidate.js';
 import { registerAllNitroXTools } from '../../../src/mcp/tools/nitroXTools.js';
 import { registerProjectInspect } from '../../../src/mcp/tools/projectInspect.js';
@@ -26,6 +27,28 @@ class MockMcpServer {
 }
 
 const MOCK_CONFIG = { allowedPaths: ['/tmp'] };
+
+// ── PDX-468: desc() helper ────────────────────────────────────────────────────
+
+describe('desc() helper (PDX-468)', () => {
+  afterEach(() => {
+    delete process.env['PROVAR_MCP_SCHEMA_MODE'];
+  });
+
+  it('returns standard string when PROVAR_MCP_SCHEMA_MODE is unset', () => {
+    assert.equal(desc('standard text', 'compact text'), 'standard text');
+  });
+
+  it('returns compact string when PROVAR_MCP_SCHEMA_MODE=compact', () => {
+    process.env['PROVAR_MCP_SCHEMA_MODE'] = 'compact';
+    assert.equal(desc('standard text', 'compact text'), 'compact text');
+  });
+
+  it('returns standard string for any value other than "compact"', () => {
+    process.env['PROVAR_MCP_SCHEMA_MODE'] = 'verbose';
+    assert.equal(desc('standard text', 'compact text'), 'standard text');
+  });
+});
 
 // ── PDX-468: compact descriptions in registered tools ─────────────────────────
 
@@ -121,6 +144,16 @@ describe('parseActiveGroups() (PDX-469)', () => {
     assert.ok(groups instanceof Set);
     assert.equal(groups.size, 1);
     assert.ok(groups.has('nitrox'));
+  });
+
+  it('returns null when env var is only a comma (no valid group names)', () => {
+    process.env['PROVAR_MCP_TOOLS'] = ',';
+    assert.equal(parseActiveGroups(), null);
+  });
+
+  it('returns null when env var is only commas (no valid group names)', () => {
+    process.env['PROVAR_MCP_TOOLS'] = ',,';
+    assert.equal(parseActiveGroups(), null);
   });
 });
 

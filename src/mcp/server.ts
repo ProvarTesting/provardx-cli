@@ -75,12 +75,17 @@ export interface ServerConfig {
 export function parseActiveGroups(): Set<string> | null {
   const env = process.env['PROVAR_MCP_TOOLS'];
   if (!env?.trim()) return null;
-  return new Set(
+  const groups = new Set(
     env
       .split(',')
       .map((g) => g.trim().toLowerCase())
       .filter(Boolean)
   );
+  if (groups.size === 0) {
+    log('warn', 'PROVAR_MCP_TOOLS was set but contained no valid group names — activating all groups', { raw: env });
+    return null;
+  }
+  return groups;
 }
 
 export function createProvarMcpServer(config: ServerConfig): McpServer {
@@ -101,7 +106,11 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
         'Echo message back with timestamp; verify MCP server is reachable.'
       ),
       inputSchema: {
-        message: z.string().optional().default('ping').describe('Optional message to echo back'),
+        message: z
+          .string()
+          .optional()
+          .default('ping')
+          .describe(desc('Optional message to echo back', 'message to echo')),
       },
     },
     ({ message }) => {
