@@ -344,4 +344,105 @@ describe('provar_testplan_validate', () => {
       assert.equal(isError(result), false);
     });
   });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes violations and test_suites', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'DetailPlan',
+        test_suites: [SUITE_A],
+        detail: 'standard',
+      });
+
+      const body = parseText(result);
+      assert.ok('violations' in body, 'standard should include violations');
+      assert.ok('test_suites' in body, 'standard should include test_suites');
+    });
+
+    it('summary response includes only key fields, not violations or test_suites', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'SummaryPlan',
+        test_suites: [SUITE_A],
+        detail: 'summary',
+      });
+
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'summary should include quality_score');
+      assert.ok('completeness_score' in body, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'summary should include recommended_next_action');
+      assert.ok(!('violations' in body), 'summary should NOT include violations');
+      assert.ok(!('test_suites' in body), 'summary should NOT include test_suites');
+    });
+
+    it('full response includes all fields (same as standard for plan)', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'FullPlan',
+        test_suites: [SUITE_A],
+        detail: 'full',
+      });
+
+      const body = parseText(result);
+      assert.ok('violations' in body, 'full should include violations');
+      assert.ok('test_suites' in body, 'full should include test_suites');
+    });
+  });
+
+  describe('PDX-473 — completeness_score and recommended_next_action', () => {
+    const TC_VALID = { name: 'Valid.testcase', xml_content: makeXml(G.tc1, G.s1, '1') };
+    const SUITE_VALID = { name: 'ValidSuite', test_cases: [TC_VALID] };
+
+    it('completeness_score is present in every response', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'ScorePlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok('completeness_score' in body, 'completeness_score should be present');
+      assert.ok(typeof body['completeness_score'] === 'number');
+    });
+
+    it('completeness_score is 0 when plan has no test cases', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'EmptyPlan',
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 0);
+    });
+
+    it('recommended_next_action is a valid string value', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'ActionPlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok('recommended_next_action' in body);
+      const valid = ['stop', 'fix_and_revalidate', 'inspect_failures'];
+      assert.ok(valid.includes(body['recommended_next_action'] as string));
+    });
+
+    it('recommended_next_action is stop when all test cases are valid (score=100)', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'AllValidPlan',
+        test_suites: [SUITE_VALID],
+        metadata: fullMeta(),
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.equal(body['recommended_next_action'], 'stop');
+    });
+
+    it('recommended_next_action is inspect_failures when plan has failures (no baseline)', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'FailingPlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok((body['completeness_score'] as number) < 100);
+      assert.equal(body['recommended_next_action'], 'inspect_failures');
+    });
+  });
 });
