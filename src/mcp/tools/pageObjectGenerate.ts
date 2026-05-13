@@ -14,6 +14,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 const VALID_LOCATOR_STRATEGIES = [
   'xpath',
@@ -105,48 +106,97 @@ export function registerPageObjectGenerate(server: McpServer, config: ServerConf
     'provar_pageobject_generate',
     {
       title: 'Generate Page Object',
-      description: [
-        'Generate a Provar Java Page Object skeleton with @Page/@SalesforcePage annotation, standard imports, and @FindBy WebElement fields.',
-        'Returns Java source. Writes to disk only when dry_run=false.',
-        'SSO support: set sso_class to also generate an ILoginPage implementation stub for non-SF SSO pages.',
-        'Example: sso_class="LoginPageSso" generates a LoginPageSso.java that implements ILoginPage with loginAs() and logout() stubs.',
-        'The ILoginPage stub is written to the same directory as output_path when dry_run=false.',
-      ].join(' '),
+      description: desc(
+        [
+          'Generate a Provar Java Page Object skeleton with @Page/@SalesforcePage annotation, standard imports, and @FindBy WebElement fields.',
+          'Returns Java source. Writes to disk only when dry_run=false.',
+          'SSO support: set sso_class to also generate an ILoginPage implementation stub for non-SF SSO pages.',
+          'Example: sso_class="LoginPageSso" generates a LoginPageSso.java that implements ILoginPage with loginAs() and logout() stubs.',
+          'The ILoginPage stub is written to the same directory as output_path when dry_run=false.',
+        ].join(' '),
+        'Generate a Provar Java Page Object skeleton with @Page/@FindBy fields.'
+      ),
       inputSchema: {
-        class_name: z.string().describe('PascalCase class name, e.g. AccountDetailPage'),
+        class_name: z
+          .string()
+          .describe(desc('PascalCase class name, e.g. AccountDetailPage', 'string, PascalCase class name')),
         package_name: z
           .string()
           .default('pageobjects')
-          .describe('Java package, e.g. pageobjects or pageobjects.accounts'),
+          .describe(
+            desc('Java package, e.g. pageobjects or pageobjects.accounts', 'string, optional; Java package name')
+          ),
         page_type: z
           .enum(['standard', 'salesforce'])
           .default('standard')
-          .describe('@Page (standard) or @SalesforcePage (salesforce)'),
-        title: z.string().optional().describe('Page title attribute; defaults to class_name if omitted'),
+          .describe(desc('@Page (standard) or @SalesforcePage (salesforce)', 'enum standard|salesforce')),
+        title: z
+          .string()
+          .optional()
+          .describe(
+            desc('Page title attribute; defaults to class_name if omitted', 'string, optional; page title attribute')
+          ),
         connection_name: z
           .string()
           .optional()
-          .describe('Salesforce connection name (required when page_type=salesforce)'),
+          .describe(
+            desc(
+              'Salesforce connection name (required when page_type=salesforce)',
+              'string, optional; SF connection name'
+            )
+          ),
         salesforce_page_attribute: z
           .enum(['page', 'auraComponent', 'object', 'lightningWebComponent'])
           .optional()
-          .describe('Page type attribute for @SalesforcePage'),
-        fields: z.array(FieldSchema).default([]).describe('WebElement fields to generate'),
+          .describe(
+            desc('Page type attribute for @SalesforcePage', 'enum page|auraComponent|object|lightningWebComponent')
+          ),
+        fields: z
+          .array(FieldSchema)
+          .default([])
+          .describe(desc('WebElement fields to generate', 'array, optional; WebElement fields')),
         sso_class: z
           .string()
           .optional()
           .describe(
-            'PascalCase class name for an ILoginPage implementation stub (non-SF SSO pages). ' +
-              'When provided, an additional Java class implementing ILoginPage is generated alongside the page object. ' +
-              'Example: "LoginPageSso" → LoginPageSso.java with loginAs() and logout() method stubs.'
+            desc(
+              'PascalCase class name for an ILoginPage implementation stub (non-SF SSO pages). ' +
+                'When provided, an additional Java class implementing ILoginPage is generated alongside the page object. ' +
+                'Example: "LoginPageSso" → LoginPageSso.java with loginAs() and logout() method stubs.',
+              'string, optional; PascalCase class name for ILoginPage SSO stub'
+            )
           ),
-        output_path: z.string().optional().describe('Suggested file path for the .java file (returned in response)'),
-        overwrite: z.boolean().default(false).describe('Overwrite existing file when dry_run=false'),
+        output_path: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Suggested file path for the .java file (returned in response)',
+              'string, optional; output .java file path'
+            )
+          ),
+        overwrite: z
+          .boolean()
+          .default(false)
+          .describe(desc('Overwrite existing file when dry_run=false', 'bool, optional; overwrite if exists')),
         dry_run: z
           .boolean()
           .default(true)
-          .describe('true = return source only (default); false = write to output_path'),
-        idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+          .describe(
+            desc(
+              'true = return source only (default); false = write to output_path',
+              'bool, optional; default true, skip write'
+            )
+          ),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Caller-provided key echoed back for deduplication tracking',
+              'string, optional; deduplication key echoed in response'
+            )
+          ),
       },
     },
     (input) => {

@@ -15,6 +15,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId, type ValidationIssue } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 // ── Sub-schemas ───────────────────────────────────────────────────────────────
 
@@ -70,72 +71,109 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
     'provar_ant_generate',
     {
       title: 'Generate ANT Build File',
-      description: [
-        'Generate a Provar ANT build.xml file.',
-        'Produces the standard <project> skeleton with Provar-Compile and Run-Test-Case tasks.',
-        'Supports targeting tests by project folder, plan folder, or specific .testcase files via filesets.',
-        'Returns XML content. Writes to disk only when dry_run=false.',
-      ].join(' '),
+      description: desc(
+        [
+          'Generate a Provar ANT build.xml file.',
+          'Produces the standard <project> skeleton with Provar-Compile and Run-Test-Case tasks.',
+          'Supports targeting tests by project folder, plan folder, or specific .testcase files via filesets.',
+          'Returns XML content. Writes to disk only when dry_run=false.',
+        ].join(' '),
+        'Generate a Provar ANT build.xml with Provar-Compile and Run-Test-Case tasks.'
+      ),
       inputSchema: {
         // ── Core paths ──────────────────────────────────────────────────────────
         provar_home: z
           .string()
           .describe(
-            'Absolute path to the Provar installation directory (e.g. "C:/Program Files/Provar/"). Used for provar.home property and ant taskdef classpaths.'
+            desc(
+              'Absolute path to the Provar installation directory (e.g. "C:/Program Files/Provar/"). Used for provar.home property and ant taskdef classpaths.',
+              'string, absolute path to Provar installation'
+            )
           ),
         project_path: z
           .string()
           .default('..')
-          .describe('Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).'),
+          .describe(
+            desc(
+              'Path to the Provar test project root. Defaults to ".." (parent of the ANT folder).',
+              'string, path to project root'
+            )
+          ),
         results_path: z
           .string()
           .default('../ANT/Results')
-          .describe('Path where test results are written. Defaults to "../ANT/Results".'),
+          .describe(
+            desc('Path where test results are written. Defaults to "../ANT/Results".', 'string, path for test results')
+          ),
         project_cache_path: z
           .string()
           .optional()
           .describe(
-            'Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.'
+            desc(
+              'Path to the .provarCaches directory. Defaults to "../../.provarCaches" relative to the ANT folder.',
+              'string, optional; path to .provarCaches'
+            )
           ),
         license_path: z
           .string()
           .optional()
-          .describe('Path to the Provar .licenses directory (e.g. "${env.PROVAR_HOME}/.licenses").'),
+          .describe(
+            desc(
+              'Path to the Provar .licenses directory (e.g. "${env.PROVAR_HOME}/.licenses").',
+              'string, optional; path to .licenses dir'
+            )
+          ),
         smtp_path: z
           .string()
           .optional()
-          .describe('Path to the Provar .smtp directory (e.g. "${env.PROVAR_HOME}/.smtp").'),
+          .describe(
+            desc(
+              'Path to the Provar .smtp directory (e.g. "${env.PROVAR_HOME}/.smtp").',
+              'string, optional; path to .smtp dir'
+            )
+          ),
 
         // ── Test selection ──────────────────────────────────────────────────────
         filesets: z
           .array(FilesetSchema)
           .min(1)
           .describe(
-            'One or more filesets defining which tests to run. ' +
-              'To run all tests under a folder: { dir: "../tests" }. ' +
-              'To run a plan: { id: "testplan", dir: "../plans/MyPlan" }. ' +
-              'To run specific test cases: { dir: "../tests/Suite", includes: ["MyTest.testcase"] }.'
+            desc(
+              'One or more filesets defining which tests to run. ' +
+                'To run all tests under a folder: { dir: "../tests" }. ' +
+                'To run a plan: { id: "testplan", dir: "../plans/MyPlan" }. ' +
+                'To run specific test cases: { dir: "../tests/Suite", includes: ["MyTest.testcase"] }.',
+              'array, min 1; filesets defining which tests to run'
+            )
           ),
 
         // ── Browser / environment ───────────────────────────────────────────────
         web_browser: z
           .enum(['Chrome', 'Chrome_Headless', 'Firefox', 'Edge', 'Edge_Legacy', 'Safari', 'IE'])
           .default('Chrome')
-          .describe('Web browser to use for test execution.'),
+          .describe(
+            desc('Web browser to use for test execution.', 'enum Chrome|Chrome_Headless|Firefox|Edge|Safari|IE')
+          ),
         web_browser_configuration: z
           .string()
           .default('Full Screen')
-          .describe('Browser window configuration (e.g. "Full Screen").'),
-        web_browser_provider_name: z.string().default('Desktop').describe('Browser provider name (e.g. "Desktop").'),
+          .describe(desc('Browser window configuration (e.g. "Full Screen").', 'string, browser window config')),
+        web_browser_provider_name: z
+          .string()
+          .default('Desktop')
+          .describe(desc('Browser provider name (e.g. "Desktop").', 'string, browser provider name')),
         web_browser_device_name: z
           .string()
           .default('Full Screen')
-          .describe('Browser device name (e.g. "Full Screen").'),
+          .describe(desc('Browser device name (e.g. "Full Screen").', 'string, browser device name')),
         test_environment: z
           .string()
           .default('')
           .describe(
-            'Named test environment to use (must match a connection in the project). Empty string uses default.'
+            desc(
+              'Named test environment to use (must match a connection in the project). Empty string uses default.',
+              'string, optional; named test environment'
+            )
           ),
 
         // ── Cache / metadata ────────────────────────────────────────────────────
@@ -143,7 +181,10 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           .enum(['Reuse', 'Refresh', 'Reload'])
           .default('Reuse')
           .describe(
-            'Salesforce metadata cache strategy: Reuse (fastest, uses cached), Refresh (re-downloads), Reload (clears and re-downloads).'
+            desc(
+              'Salesforce metadata cache strategy: Reuse (fastest, uses cached), Refresh (re-downloads), Reload (clears and re-downloads).',
+              'enum Reuse|Refresh|Reload'
+            )
           ),
 
         // ── Output / logging ────────────────────────────────────────────────────
@@ -151,79 +192,132 @@ export function registerAntGenerate(server: McpServer, config: ServerConfig): vo
           .enum(['Increment', 'Replace', 'Reuse'])
           .default('Increment')
           .describe(
-            'How to handle the results folder when it already exists: Increment (new subfolder), Replace (overwrite), Reuse (append).'
+            desc(
+              'How to handle the results folder when it already exists: Increment (new subfolder), Replace (overwrite), Reuse (append).',
+              'enum Increment|Replace|Reuse'
+            )
           ),
         test_output_level: z
           .enum(['BASIC', 'WARNING', 'DEBUG'])
           .default('BASIC')
-          .describe('Verbosity level for test output logs.'),
+          .describe(desc('Verbosity level for test output logs.', 'enum BASIC|WARNING|DEBUG')),
         plugin_output_level: z
           .enum(['BASIC', 'WARNING', 'DEBUG'])
           .default('WARNING')
-          .describe('Verbosity level for plugin output logs.'),
+          .describe(desc('Verbosity level for plugin output logs.', 'enum BASIC|WARNING|DEBUG')),
 
         // ── Execution behaviour ─────────────────────────────────────────────────
         stop_test_run_on_error: z
           .boolean()
           .default(false)
-          .describe('Abort the entire test run when any test case fails.'),
+          .describe(desc('Abort the entire test run when any test case fails.', 'bool, optional; abort on failure')),
         exclude_callable_test_cases: z
           .boolean()
           .default(true)
-          .describe('Skip test cases marked as callable (library/helper) when true.'),
+          .describe(
+            desc(
+              'Skip test cases marked as callable (library/helper) when true.',
+              'bool, optional; skip callable tests'
+            )
+          ),
         dont_fail_build: z
           .boolean()
           .optional()
           .describe(
-            'When true, the ANT build does not fail even if tests fail. Useful for CI pipelines that collect results separately.'
+            desc(
+              'When true, the ANT build does not fail even if tests fail. Useful for CI pipelines that collect results separately.',
+              'bool, optional; skip build failure on test fail'
+            )
           ),
-        invoke_test_run_monitor: z.boolean().default(true).describe('Enable the Provar test run monitor.'),
+        invoke_test_run_monitor: z
+          .boolean()
+          .default(true)
+          .describe(desc('Enable the Provar test run monitor.', 'bool, optional; enable test run monitor')),
 
         // ── Secrets / security ──────────────────────────────────────────────────
         secrets_password: z
           .string()
           .default('${env.ProvarSecretsPassword}')
           .describe(
-            'Encryption key used to decrypt the Provar .secrets file (the password string itself, not a file path). Defaults to reading from the ProvarSecretsPassword environment variable.'
+            desc(
+              'Encryption key used to decrypt the Provar .secrets file (the password string itself, not a file path). Defaults to reading from the ProvarSecretsPassword environment variable.',
+              'string, NOT a file path; encryption key for .secrets'
+            )
           ),
         test_environment_secrets_password: z
           .string()
           .optional()
           .describe(
-            'Per-environment secrets password. Defaults to reading from the ProvarSecretsPassword_EnvName environment variable.'
+            desc(
+              'Per-environment secrets password. Defaults to reading from the ProvarSecretsPassword_EnvName environment variable.',
+              'string, optional; per-environment secrets key'
+            )
           ),
 
         // ── Test Cycle ──────────────────────────────────────────────────────────
-        test_cycle_path: z.string().optional().describe('Path to a TestCycle folder (used with test cycle reporting).'),
+        test_cycle_path: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Path to a TestCycle folder (used with test cycle reporting).',
+              'string, optional; path to TestCycle folder'
+            )
+          ),
         test_cycle_run_type: z
           .enum(['ALL', 'FAILED', 'NEW'])
           .optional()
-          .describe('Which tests in the cycle to run (ALL, FAILED, NEW).'),
+          .describe(desc('Which tests in the cycle to run (ALL, FAILED, NEW).', 'enum ALL|FAILED|NEW, optional')),
 
         // ── Plan features ───────────────────────────────────────────────────────
         plan_features: z
           .array(PlanFeatureSchema)
           .optional()
           .describe(
-            'Output and notification features to enable/disable (e.g. PDF, PIECHART, EMAIL). ' +
-              'Only meaningful when running by test plan.'
+            desc(
+              'Output and notification features to enable/disable (e.g. PDF, PIECHART, EMAIL). ' +
+                'Only meaningful when running by test plan.',
+              'array, optional; plan output/notification features'
+            )
           ),
 
         // ── Email / attachment reporting ────────────────────────────────────────
         email_properties: EmailPropertiesSchema.optional().describe(
-          'Email notification settings. Omit to exclude <emailProperties> from the XML.'
+          desc(
+            'Email notification settings. Omit to exclude <emailProperties> from the XML.',
+            'object, optional; email notification settings'
+          )
         ),
         attachment_properties: AttachmentPropertiesSchema.optional().describe(
-          'Attachment/report content settings. Omit to exclude <attachmentProperties> from the XML.'
+          desc(
+            'Attachment/report content settings. Omit to exclude <attachmentProperties> from the XML.',
+            'object, optional; attachment/report content settings'
+          )
         ),
 
         // ── File output ─────────────────────────────────────────────────────────
         output_path: z
           .string()
           .optional()
-          .describe('Where to write the build.xml file (returned in response). Required when dry_run=false.'),
-        overwrite: z.boolean().default(false).describe('Overwrite output_path if the file already exists.'),
-        dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path.'),
+          .describe(
+            desc(
+              'Where to write the build.xml file (returned in response). Required when dry_run=false.',
+              'string, optional; absolute path for build.xml output'
+            )
+          ),
+        overwrite: z
+          .boolean()
+          .default(false)
+          .describe(desc('Overwrite output_path if the file already exists.', 'bool, optional; overwrite if exists')),
+        dry_run: z
+          .boolean()
+          .default(true)
+          .describe(
+            desc(
+              'true = return XML only (default); false = write to output_path.',
+              'bool, optional; true=return only, false=write'
+            )
+          ),
       },
     },
     (input) => {
@@ -299,15 +393,24 @@ export function registerAntValidate(server: McpServer, config: ServerConfig): vo
     'provar_ant_validate',
     {
       title: 'Validate ANT Build File',
-      description: [
-        'Validate a Provar ANT build.xml for structural correctness.',
-        'Checks XML well-formedness, required <taskdef> declarations, <Provar-Compile> step,',
-        '<Run-Test-Case> with required attributes (provarHome, projectPath, resultsPath),',
-        'and at least one <fileset> child. Returns is_valid, issues list, and a validity_score.',
-      ].join(' '),
+      description: desc(
+        [
+          'Validate a Provar ANT build.xml for structural correctness.',
+          'Checks XML well-formedness, required <taskdef> declarations, <Provar-Compile> step,',
+          '<Run-Test-Case> with required attributes (provarHome, projectPath, resultsPath),',
+          'and at least one <fileset> child. Returns is_valid, issues list, and a validity_score.',
+        ].join(' '),
+        'Validate a Provar ANT build.xml for structural correctness.'
+      ),
       inputSchema: {
-        content: z.string().optional().describe('XML content to validate directly'),
-        file_path: z.string().optional().describe('Path to the build.xml file to validate'),
+        content: z
+          .string()
+          .optional()
+          .describe(desc('XML content to validate directly', 'string, optional; inline XML')),
+        file_path: z
+          .string()
+          .optional()
+          .describe(desc('Path to the build.xml file to validate', 'string, optional; absolute path to build.xml')),
       },
     },
     ({ content, file_path }) => {

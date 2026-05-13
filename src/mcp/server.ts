@@ -35,6 +35,33 @@ import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
 import { registerAllPrompts } from './prompts/index.js';
+import { desc } from './tools/descHelper.js';
+
+// ── Tool group registry ───────────────────────────────────────────────────────
+// Groups are keyed in lowercase so they match the lowercased env var values.
+const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig) => void>> = {
+  nitrox: [registerAllNitroXTools],
+  automation: [registerAllAutomationTools],
+  qualityhub: [registerAllQualityHubTools, registerAllQualityHubApiTools, registerAllDefectTools],
+  validation: [
+    registerProjectValidateFromPath,
+    registerAllAntTools,
+    registerAllPropertiesTools,
+    registerTestCaseValidate,
+    registerTestSuiteValidate,
+    registerTestPlanValidate,
+    registerPageObjectValidate,
+  ],
+  authoring: [
+    registerTestCaseGenerate,
+    registerPageObjectGenerate,
+    registerAllTestCaseStepTools,
+    registerAllTestPlanTools,
+  ],
+  inspect: [registerProjectInspect],
+  connection: [registerAllConnectionTools],
+  rca: [registerAllRcaTools],
+};
 
 export interface ServerConfig {
   allowedPaths: string[];
@@ -43,6 +70,17 @@ export interface ServerConfig {
     latestVersion: string | null;
     updateCommand: string | null;
   };
+}
+
+export function parseActiveGroups(): Set<string> | null {
+  const env = process.env['PROVAR_MCP_TOOLS'];
+  if (!env?.trim()) return null;
+  return new Set(
+    env
+      .split(',')
+      .map((g) => g.trim().toLowerCase())
+      .filter(Boolean)
+  );
 }
 
 export function createProvarMcpServer(config: ServerConfig): McpServer {
@@ -58,8 +96,10 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     'provardx_ping',
     {
       title: 'Ping MCP Server',
-      description:
+      description: desc(
         'Sanity-check tool. Echoes back a message with a timestamp. Use this to verify the MCP server is reachable before calling other tools.',
+        'Echo message back with timestamp; verify MCP server is reachable.'
+      ),
       inputSchema: {
         message: z.string().optional().default('ping').describe('Optional message to echo back'),
       },
@@ -81,25 +121,14 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   // ── Provar tools ─────────────────────────────────────────────────────────────
-  registerProjectInspect(server, config);
-  registerPageObjectGenerate(server, config);
-  registerPageObjectValidate(server, config);
-  registerTestCaseGenerate(server, config);
-  registerTestCaseValidate(server, config);
-  registerTestSuiteValidate(server);
-  registerTestPlanValidate(server);
-  registerProjectValidateFromPath(server, config);
-  registerAllPropertiesTools(server, config);
-  registerAllQualityHubTools(server);
-  registerAllQualityHubApiTools(server);
-  registerAllAutomationTools(server, config);
-  registerAllDefectTools(server);
-  registerAllAntTools(server, config);
-  registerAllRcaTools(server, config);
-  registerAllTestPlanTools(server, config);
-  registerAllNitroXTools(server, config);
-  registerAllTestCaseStepTools(server, config);
-  registerAllConnectionTools(server, config);
+  const activeGroups = parseActiveGroups();
+  for (const [group, registrars] of Object.entries(TOOL_GROUPS)) {
+    if (activeGroups === null || activeGroups.has(group)) {
+      for (const register of registrars) {
+        register(server, config);
+      }
+    }
+  }
 
   // ── Provar prompts ───────────────────────────────────────────────────────────
   registerAllPrompts(server);

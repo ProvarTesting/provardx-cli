@@ -11,6 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validatePlan, buildHierarchySummary, type TestPlanInput } from './hierarchyValidate.js';
+import { desc } from './descHelper.js';
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -75,25 +76,35 @@ export function registerTestPlanValidate(server: McpServer): void {
     'provar_testplan_validate',
     {
       title: 'Validate Test Plan',
-      description:
+      description: desc(
         'Validate a Provar test plan: checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan completeness (objectives, scope, methodology, environments, acceptance criteria, test data strategy, risk assessment), and naming consistency. Recursively validates child suites and test cases. Returns quality score, plan-level violations, and full hierarchy results.',
+        'Validate a Provar test plan: naming, size, completeness, and per-suite quality.'
+      ),
       inputSchema: {
-        plan_name: z.string().describe('Name of the test plan'),
-        test_suites: z.array(suiteSchema).optional().describe('Test suites belonging to this plan'),
-        test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this plan (not in a suite)'),
+        plan_name: z.string().describe(desc('Name of the test plan', 'string')),
+        test_suites: z
+          .array(suiteSchema)
+          .optional()
+          .describe(desc('Test suites belonging to this plan', 'object[], optional')),
+        test_cases: z
+          .array(testCaseSchema)
+          .optional()
+          .describe(desc('Test cases directly in this plan (not in a suite)', 'object[], optional')),
         test_suite_count: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe('Explicit suite count for size check (overrides counting test_suites)'),
+          .describe(desc('Explicit suite count for size check (overrides counting test_suites)', 'int ≥0, optional')),
         metadata: metadataSchema,
         quality_threshold: z
           .number()
           .min(0)
           .max(100)
           .optional()
-          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+          .describe(
+            desc('Minimum quality score for a test case to be considered valid (default: 80)', 'number 0–100, optional')
+          ),
       },
     },
     ({ plan_name, test_suites, test_cases, test_suite_count, metadata, quality_threshold }) => {

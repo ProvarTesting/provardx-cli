@@ -11,6 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateSuite, buildHierarchySummary, type TestSuiteInput } from './hierarchyValidate.js';
+import { desc } from './descHelper.js';
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -47,27 +48,36 @@ export function registerTestSuiteValidate(server: McpServer): void {
     'provar_testsuite_validate',
     {
       title: 'Validate Test Suite',
-      description:
+      description: desc(
         'Validate a Provar test suite: checks for empty suites, duplicate names, oversized suites (>75 tests), and naming convention consistency. Recursively validates child suites and individual test case XML. Returns quality score, suite-level violations, and per-test-case results.',
+        'Validate a Provar test suite: naming, size, duplicates, and per-test-case quality.'
+      ),
       inputSchema: {
-        suite_name: z.string().describe('Name of the test suite'),
-        test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this suite'),
+        suite_name: z.string().describe(desc('Name of the test suite', 'string')),
+        test_cases: z
+          .array(testCaseSchema)
+          .optional()
+          .describe(desc('Test cases directly in this suite', 'object[], optional')),
         child_suites: z
           .array(childSuiteSchema)
           .optional()
-          .describe('Child test suites (supports up to 2 levels of nesting)'),
+          .describe(desc('Child test suites (supports up to 2 levels of nesting)', 'object[], optional')),
         test_case_count: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe('Explicit total test case count for size check (overrides counting test_cases)'),
+          .describe(
+            desc('Explicit total test case count for size check (overrides counting test_cases)', 'int ≥0, optional')
+          ),
         quality_threshold: z
           .number()
           .min(0)
           .max(100)
           .optional()
-          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+          .describe(
+            desc('Minimum quality score for a test case to be considered valid (default: 80)', 'number 0–100, optional')
+          ),
       },
     },
     ({ suite_name, test_cases, child_suites, test_case_count, quality_threshold }) => {
