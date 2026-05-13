@@ -87,8 +87,10 @@ export function wrapWithDepthGuard(
 
     entry.calls++;
     const result = await handler(args, extra);
-    const tokens = estimateTokens(result);
-    entry.totalEstimatedTokens += tokens;
+
+    if (process.env['PROVAR_MCP_EMIT_TOKEN_META'] === 'true') {
+      entry.totalEstimatedTokens += estimateTokens(result);
+    }
 
     const detailLevel = typeof args['detail'] === 'string' ? args['detail'] : 'standard';
     return attachMeta(result, toolName, detailLevel);
