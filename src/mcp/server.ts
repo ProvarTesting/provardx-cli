@@ -137,7 +137,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 
   // ── Depth-guard middleware (PDX-474) ─────────────────────────────────────────
   const rawLimit = parseInt(process.env['PROVAR_MCP_MAX_TOOL_DEPTH'] ?? '50', 10);
-  const depthLimit = Number.isNaN(rawLimit) || rawLimit < 0 ? 50 : rawLimit;
+  const depthLimit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 50 : rawLimit;
   const depthState = createDepthGuardState();
   patchWithMiddleware(server, depthState, depthLimit);
 
