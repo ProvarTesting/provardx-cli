@@ -1036,12 +1036,19 @@ describe('registerTestCaseValidate handler', () => {
       assert.equal(result['completeness_score'], 100);
     });
 
-    it('recommended_next_action is stop for a valid test case', async () => {
+    it('recommended_next_action is not "stop" when quality violations remain (Bug 9)', async () => {
+      // VALID_TC is structurally valid (is_valid=true, score=100) but has BP violations.
+      // "stop" must not fire until ALL violations are resolved.
       const res = (await capServer.capturedHandler!({ content: VALID_TC })) as {
         content: Array<{ text: string }>;
       };
       const result = JSON.parse(res.content[0].text) as Record<string, unknown>;
-      assert.equal(result['recommended_next_action'], 'stop');
+      assert.ok(
+        ['inspect_failures', 'fix_and_revalidate'].includes(result['recommended_next_action'] as string),
+        `Expected inspect_failures or fix_and_revalidate when BP violations remain, got: ${String(
+          result['recommended_next_action']
+        )}`
+      );
     });
 
     it('recommended_next_action is inspect_failures for an invalid test case (first run)', async () => {

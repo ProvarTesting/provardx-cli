@@ -14,15 +14,18 @@ export function calcCompletenessScore(passing: number, total: number): number {
 }
 
 /**
- * Recommend what the agent should do next based on the completeness score and
- * whether any prior runs exist on disk for this validation context.
+ * Recommend what the agent should do next based on the completeness score,
+ * remaining violation count, and whether any prior runs exist on disk.
  *
- * - `stop`              → score is 100 — nothing left to fix
+ * - `stop`              → score is 100 AND no violations remain
  * - `inspect_failures`  → first run (no baseline on disk) — review what's failing before trying to fix
  * - `fix_and_revalidate`→ subsequent run — agent knows the failure set, should fix and re-run
+ *
+ * The secondary `remainingViolationCount` check prevents `stop` from firing when all
+ * tests pass but quality or best-practice violations are still present.
  */
-export function calcNextAction(score: number, hasBaseline: boolean): NextAction {
-  if (score === 100) return 'stop';
+export function calcNextAction(score: number, hasBaseline: boolean, remainingViolationCount = 0): NextAction {
+  if (score === 100 && remainingViolationCount === 0) return 'stop';
   if (!hasBaseline) return 'inspect_failures';
   return 'fix_and_revalidate';
 }

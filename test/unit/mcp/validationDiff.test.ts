@@ -127,4 +127,20 @@ describe('computeDiff', () => {
     assert.equal(diff.resolved.length, 2);
     assert.equal(diff.unchanged_count, 0);
   });
+
+  it('multiset: duplicate violations are treated as distinct entries', () => {
+    // V1 appears twice in baseline, three times in current → 1 added, 2 unchanged
+    const diff = computeDiff([V1, V1], [V1, V1, V1]);
+    assert.equal(diff.added.length, 1, 'one extra occurrence added');
+    assert.equal(diff.resolved.length, 0);
+    assert.equal(diff.unchanged_count, 2);
+  });
+
+  it('multiset: reducing duplicate count registers as resolved', () => {
+    // V1 appears three times in baseline, once in current → 2 resolved, 1 unchanged
+    const diff = computeDiff([V1, V1, V1], [V1]);
+    assert.equal(diff.added.length, 0);
+    assert.equal(diff.resolved.length, 2, 'two occurrences resolved');
+    assert.equal(diff.unchanged_count, 1);
+  });
 });

@@ -47,7 +47,7 @@ function violationKey(v: DiffableViolation): string {
   const applies_to = Array.isArray(v['applies_to'])
     ? (v['applies_to'] as string[]).join(',')
     : String(v['applies_to'] ?? '');
-  const message = String(v['message'] ?? '').slice(0, 120);
+  const message = String(v['message'] ?? '');
   return `${rule_id}||${applies_to}||${message}`;
 }
 
@@ -134,31 +134,51 @@ export function loadBaselineViolations(storageDir: string, baselineRunId: string
 
 /**
  * Compute the diff between a baseline and current violations array.
- * Uses (rule_id + applies_to + message[0..120]) as the unique key.
+ * Uses (rule_id + applies_to + full message) as the unique key.
+ * Duplicate violations (same key, multiple occurrences) are treated as
+ * distinct entries — each occurrence is counted separately (multiset semantics).
  */
 export function computeDiff(baseline: DiffableViolation[], current: DiffableViolation[]): Omit<DiffResult, 'run_id'> {
-  const baselineKeys = new Map<string, DiffableViolation>();
-  for (const v of baseline) baselineKeys.set(violationKey(v), v);
+  // Build multiset counts keyed by violation identity
+  const baselineCounts = new Map<string, { count: number; sample: DiffableViolation }>();
+  for (const v of baseline) {
+    const key = violationKey(v);
+    const entry = baselineCounts.get(key);
+    if (entry) {
+      entry.count++;
+    } else {
+      baselineCounts.set(key, { count: 1, sample: v });
+    }
+  }
 
-  const currentKeys = new Map<string, DiffableViolation>();
-  for (const v of current) currentKeys.set(violationKey(v), v);
+  const currentCounts = new Map<string, { count: number; sample: DiffableViolation }>();
+  for (const v of current) {
+    const key = violationKey(v);
+    const entry = currentCounts.get(key);
+    if (entry) {
+      entry.count++;
+    } else {
+      currentCounts.set(key, { count: 1, sample: v });
+    }
+  }
 
   const added: DiffableViolation[] = [];
   const resolved: DiffableViolation[] = [];
   let unchanged_count = 0;
 
-  for (const [key, v] of currentKeys) {
-    if (baselineKeys.has(key)) {
-      unchanged_count++;
-    } else {
-      added.push(v);
-    }
+  // Tally additions: occurrences in current that exceed baseline count
+  for (const [key, { count: curr, sample }] of currentCounts) {
+    const base = baselineCounts.get(key)?.count ?? 0;
+    unchanged_count += Math.min(base, curr);
+    const addedCount = curr - base;
+    for (let i = 0; i < addedCount; i++) added.push(sample);
   }
 
-  for (const [key, v] of baselineKeys) {
-    if (!currentKeys.has(key)) {
-      resolved.push(v);
-    }
+  // Tally resolutions: occurrences in baseline that exceed current count
+  for (const [key, { count: base, sample }] of baselineCounts) {
+    const curr = currentCounts.get(key)?.count ?? 0;
+    const resolvedCount = base - Math.min(base, curr);
+    for (let i = 0; i < resolvedCount; i++) resolved.push(sample);
   }
 
   return { added, resolved, unchanged_count };

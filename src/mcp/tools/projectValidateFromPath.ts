@@ -210,9 +210,9 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(false)
           .describe(
             desc(
-              'When true, include full per-suite and per-test-case violation data in the response. ' +
-                'Default false to keep response small. Use only when you need to inspect specific test case failures.',
-              'bool, optional; default false, include full per-suite violation data'
+              '@deprecated — use detail="full" instead. When true, include full per-suite and per-test-case violation data in the response. ' +
+                'Default false to keep response small.',
+              'bool, optional, @deprecated; use detail="full" instead'
             )
           ),
         max_uncovered: z
@@ -223,8 +223,8 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(20)
           .describe(
             desc(
-              'Maximum number of uncovered test case paths to include in the response (default: 20). Set to 0 for none, or a large number for all.',
-              'int ≥0, optional; max uncovered test case paths returned'
+              '@deprecated — no replacement; response is automatically scoped by detail level. Maximum number of uncovered test case paths to include in the response (default: 20).',
+              'int ≥0, optional, @deprecated; auto-scoped by detail'
             )
           ),
         max_violations: z
@@ -235,8 +235,8 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(50)
           .describe(
             desc(
-              'When include_plan_details:true, caps project_violations returned (default: 50). Ignored in slim mode where violations are grouped by rule_id instead.',
-              'int ≥0, optional; max violations returned in detail mode'
+              '@deprecated — no replacement; response is automatically scoped by detail level. When include_plan_details:true, caps project_violations returned (default: 50).',
+              'int ≥0, optional, @deprecated; auto-scoped by detail'
             )
           ),
         detail: z
@@ -324,7 +324,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
             result.summary.test_cases_valid,
             result.summary.total_test_cases
           );
-          const recommended_next_action = calcNextAction(completeness_score, true);
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
           const diffResponse = {
             requestId,
             ...(save_results !== false ? { run_id: runId } : {}),
@@ -342,7 +342,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           result.summary.test_cases_valid,
           result.summary.total_test_cases
         );
-        const recommended_next_action = calcNextAction(completeness_score, hasBaseline);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
 
         const usePlanDetails = include_plan_details || detail === 'full';
         const shaped = shapeResponse(result, usePlanDetails, max_uncovered, max_violations);

@@ -77,7 +77,7 @@ const SUITE_VALIDATE_SUMMARY_FIELDS = [
 ];
 
 function suiteStorageDir(): string {
-  return path.join(os.homedir(), '.provardx', 'validation');
+  return path.join(os.homedir(), '.provardx', 'validation', 'testsuite');
 }
 
 export function registerTestSuiteValidate(server: McpServer): void {
@@ -187,7 +187,7 @@ export function registerTestSuiteValidate(server: McpServer): void {
           }
           const diff = computeDiff(baseline, currentViolations);
           const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
-          const recommended_next_action = calcNextAction(completeness_score, true);
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
           const diffResponse = {
             requestId,
             run_id: runId,
@@ -202,7 +202,7 @@ export function registerTestSuiteValidate(server: McpServer): void {
         }
 
         const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
-        const recommended_next_action = calcNextAction(completeness_score, hasBaseline);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
 
         const response = {
           requestId,

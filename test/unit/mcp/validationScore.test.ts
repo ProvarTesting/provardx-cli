@@ -29,9 +29,10 @@ describe('calcCompletenessScore', () => {
 });
 
 describe('calcNextAction', () => {
-  it('returns "stop" when score is 100', () => {
+  it('returns "stop" when score is 100 and no violations remain', () => {
     assert.equal(calcNextAction(100, true), 'stop');
     assert.equal(calcNextAction(100, false), 'stop');
+    assert.equal(calcNextAction(100, true, 0), 'stop');
   });
 
   it('returns "inspect_failures" when score < 100 and no baseline (first run)', () => {
@@ -44,5 +45,13 @@ describe('calcNextAction', () => {
     assert.equal(calcNextAction(0, true), 'fix_and_revalidate');
     assert.equal(calcNextAction(50, true), 'fix_and_revalidate');
     assert.equal(calcNextAction(99, true), 'fix_and_revalidate');
+  });
+
+  it('returns "fix_and_revalidate" when score is 100 but quality violations remain and baseline exists', () => {
+    assert.equal(calcNextAction(100, true, 3), 'fix_and_revalidate');
+  });
+
+  it('returns "inspect_failures" when score is 100 but violations remain on first run', () => {
+    assert.equal(calcNextAction(100, false, 2), 'inspect_failures');
   });
 });

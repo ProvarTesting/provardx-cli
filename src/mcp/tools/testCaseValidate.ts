@@ -65,9 +65,9 @@ const TC_VALIDATE_SUMMARY_FIELDS = [
   'recommended_next_action',
 ];
 
-/** Storage dir for testcase diff runs (home-based, shared across projects). */
+/** Storage dir for testcase diff runs (namespaced to avoid cross-tool baseline collisions). */
 function tcStorageDir(): string {
-  return path.join(os.homedir(), '.provardx', 'validation');
+  return path.join(os.homedir(), '.provardx', 'validation', 'testcase');
 }
 
 /** Resolve validation result from QualityHub API or fall back to local. */
@@ -221,7 +221,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           }
           const diff = computeDiff(baseline, currentViolations);
           const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
-          const recommended_next_action = calcNextAction(completeness_score, true);
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
           const diffResponse = {
             requestId,
             run_id: runId,
@@ -236,7 +236,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
-        const recommended_next_action = calcNextAction(completeness_score, hasBaseline);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
 
         const result = {
           requestId,
