@@ -14,9 +14,9 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { desc } from './descHelper.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
 import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
+import { desc } from './descHelper.js';
 
 const INSPECT_SUMMARY_FIELDS = ['requestId', 'project_path', 'provar_home', 'summary'];
 

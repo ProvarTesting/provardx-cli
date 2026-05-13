@@ -15,8 +15,8 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { desc } from './descHelper.js';
 import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
+import { desc } from './descHelper.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

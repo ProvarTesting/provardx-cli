@@ -561,14 +561,17 @@ Inspects a Provar project folder and returns a structured inventory of all key p
 
 **Input**
 
-| Parameter      | Type   | Required | Description                              |
-| -------------- | ------ | -------- | ---------------------------------------- |
-| `project_path` | string | yes      | Absolute path to the Provar project root |
+| Parameter      | Type                              | Required | Description                                                                                                                                                                                                                               |
+| -------------- | --------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path` | string                            | yes      | Absolute path to the Provar project root                                                                                                                                                                                                  |
+| `detail`       | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"` returns only `requestId`, `project_path`, `provar_home`, and `summary`. `"standard"` (default) returns full inventory. `"full"` is identical to `"standard"` for this tool.                               |
+| `fields`       | string                            | no       | Comma-separated top-level keys to retain (e.g. `"test_case_files,summary"`). Supports dot notation for nested filtering (e.g. `"test_project.connections"`). Unknown field names are silently ignored. Applied after the `detail` filter. |
 
 **Output** — JSON object containing:
 
 | Field                         | Description                                                                                                                          |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `requestId`                   | Unique identifier for this request (always present, including in `detail="summary"` responses)                                       |
 | `provar_home`                 | The Provar installation path, or `null` if not found                                                                                 |
 | `provar_home_source`          | Where the value came from: `"PROVAR_HOME environment variable"`, `"provardx-properties.json (<rel>)"`, or `"ANT build file (<rel>)"` |
 | `provardx_properties_files`   | Relative paths to any `provardx-properties.json` files found (ProvarDX CLI run configs)                                              |
@@ -607,9 +610,10 @@ Lists all connections and named environments defined in the project's `.testproj
 
 **Input**
 
-| Parameter      | Type   | Required | Description                                                       |
-| -------------- | ------ | -------- | ----------------------------------------------------------------- |
-| `project_path` | string | yes      | Absolute path to the Provar project root (within `allowed-paths`) |
+| Parameter      | Type   | Required | Description                                                                                                                                                                      |
+| -------------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path` | string | yes      | Absolute path to the Provar project root (within `allowed-paths`)                                                                                                                |
+| `fields`       | string | no       | Comma-separated response keys to retain (e.g. `"connections,summary"`). Supports dot notation (e.g. `"connections.name,connections.type"`). Unknown fields are silently ignored. |
 
 **Output**
 
@@ -1227,12 +1231,14 @@ Displays information about the currently connected Quality Hub org. Invokes `sf 
 
 **Input**
 
-| Parameter    | Type     | Required | Description                                |
-| ------------ | -------- | -------- | ------------------------------------------ |
-| `target_org` | string   | no       | SF CLI org alias (uses default if omitted) |
-| `flags`      | string[] | no       | Additional raw CLI flags                   |
+| Parameter    | Type                              | Required | Description                                                                                                                                              |
+| ------------ | --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_org` | string                            | no       | SF CLI org alias (uses default if omitted)                                                                                                               |
+| `flags`      | string[]                          | no       | Additional raw CLI flags                                                                                                                                 |
+| `detail`     | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"` returns only `requestId` and `exitCode`. `"standard"` (default) returns `requestId`, `exitCode`, `stdout`, and `stderr`. |
+| `fields`     | string                            | no       | Comma-separated response keys to retain (e.g. `"exitCode,stdout"`). Unknown fields are silently ignored. Applied after the `detail` filter.              |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr }`. Use `detail="summary"` to reduce to `{ requestId, exitCode }` only, or pass `fields` to select specific keys.
 
 ---
 
@@ -1297,12 +1303,14 @@ Retrieves test cases from Quality Hub by user story or metadata component. Invok
 
 **Input**
 
-| Parameter    | Type     | Required | Description                                                                          |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------------ |
-| `target_org` | string   | yes      | SF CLI org alias or username                                                         |
-| `flags`      | string[] | no       | Additional raw CLI flags (e.g. `["--issues", "US-123", "--test-project", "MyProj"]`) |
+| Parameter    | Type                              | Required | Description                                                                                                                                              |
+| ------------ | --------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `target_org` | string                            | yes      | SF CLI org alias or username                                                                                                                             |
+| `flags`      | string[]                          | no       | Additional raw CLI flags (e.g. `["--issues", "US-123", "--test-project", "MyProj"]`)                                                                     |
+| `detail`     | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"` returns only `requestId` and `exitCode`. `"standard"` (default) returns `requestId`, `exitCode`, `stdout`, and `stderr`. |
+| `fields`     | string                            | no       | Comma-separated response keys to retain (e.g. `"exitCode,stdout"`). Unknown fields are silently ignored. Applied after the `detail` filter.              |
 
-**Output** — `{ requestId, exitCode, stdout, stderr }`
+**Output** — `{ requestId, exitCode, stdout, stderr }`. Use `detail="summary"` to reduce to `{ requestId, exitCode }` only, or pass `fields` to select specific keys.
 
 **Error codes:** `QH_RETRIEVE_FAILED`, `SF_NOT_FOUND`
 
