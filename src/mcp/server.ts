@@ -35,6 +35,12 @@ import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
 import { registerAllPrompts } from './prompts/index.js';
+import {
+  createDepthGuardState,
+  wrapWithDepthGuard,
+  type AnyToolCallback,
+  type DepthGuardState,
+} from './utils/tokenMeta.js';
 import { desc } from './tools/descHelper.js';
 
 // ── Tool group registry ───────────────────────────────────────────────────────
@@ -128,6 +134,12 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
       };
     }
   );
+
+  // ── Depth-guard middleware (PDX-474) ─────────────────────────────────────────
+  const rawLimit = parseInt(process.env['PROVAR_MCP_MAX_TOOL_DEPTH'] ?? '50', 10);
+  const depthLimit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 50 : rawLimit;
+  const depthState = createDepthGuardState();
+  patchWithMiddleware(server, depthState, depthLimit);
 
   // ── Provar tools ─────────────────────────────────────────────────────────────
   const activeGroups = parseActiveGroups();
@@ -252,6 +264,15 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   return server;
+}
+
+function patchWithMiddleware(server: McpServer, state: DepthGuardState, limit: number): void {
+  const orig = server.registerTool.bind(server);
+  type RegisterToolFn = (n: string, c: unknown, h: AnyToolCallback) => unknown;
+  // Cast through unknown to patch the overloaded method without triggering no-unsafe-any.
+  const patchable = server as unknown as { registerTool: RegisterToolFn };
+  patchable.registerTool = (name: string, config: unknown, handler: AnyToolCallback): unknown =>
+    (orig as unknown as RegisterToolFn)(name, config, wrapWithDepthGuard(name, handler, state, limit));
 }
 
 /**

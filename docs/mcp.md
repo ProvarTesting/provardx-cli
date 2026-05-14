@@ -77,6 +77,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [AI loop pattern](#ai-loop-pattern)
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
+- [Performance Tuning](#performance-tuning)
 
 ---
 
@@ -2135,3 +2136,80 @@ provar_nitrox_patch      → apply targeted edits to an existing .po.json (RFC 7
 ```
 
 > **Note:** `provar_automation_*` and `provar_qualityhub_*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
+
+---
+
+## Performance Tuning
+
+These environment variables let you control agentic-loop safety and observability without modifying tool code.
+
+### Agentic loop guard (`PROVAR_MCP_MAX_TOOL_DEPTH`)
+
+Limits the number of Provar tool calls an AI agent may make within a single MCP session before the server starts returning errors instead of results.
+
+```
+PROVAR_MCP_MAX_TOOL_DEPTH=30   # allow at most 30 tool calls per session (default: 50)
+```
+
+Once the limit is reached, every further call returns:
+
+```json
+{
+  "error": "TOOL_BUDGET_EXCEEDED",
+  "callsMade": 30,
+  "limit": 30,
+  "suggestion": "Summarize progress and return control to the user."
+}
+```
+
+| Property  | Value                                                                      |
+| --------- | -------------------------------------------------------------------------- |
+| Default   | `50`                                                                       |
+| Scope     | Per MCP session (`sessionId` from the MCP SDK)                             |
+| Exemption | `provardx_ping` is never counted or blocked                                |
+| Memory    | Sessions are tracked in-process; restarting the server resets all counters |
+
+The guard is designed to prevent runaway agentic loops from making hundreds of tool calls without human review. Set it lower (e.g. `10`) for tightly supervised workflows; raise it or omit it for long-running automation pipelines where you trust the agent.
+
+### Per-call token attribution (`PROVAR_MCP_EMIT_TOKEN_META`)
+
+Appends a `_meta` object to `structuredContent` on every tool response, giving observability tooling a lightweight token-cost signal per call.
+
+```
+PROVAR_MCP_EMIT_TOKEN_META=true
+```
+
+When enabled, `structuredContent` gains a `_meta` key:
+
+```json
+{
+  "result": "...",
+  "_meta": {
+    "tool": "provar_project_inspect",
+    "detailLevel": "standard",
+    "estimatedTokens": 412
+  }
+}
+```
+
+On `TOOL_BUDGET_EXCEEDED` errors the meta also includes the session cumulative total:
+
+```json
+{
+  "_meta": {
+    "tool": "provar_project_inspect",
+    "detailLevel": "standard",
+    "estimatedTokens": 38,
+    "sessionTotalEstimatedTokens": 8204
+  }
+}
+```
+
+| Field                         | Description                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `tool`                        | Name of the tool that produced this response                                                 |
+| `detailLevel`                 | Value of the `detail` argument passed by the caller (`"summary"`, `"standard"`, or `"full"`) |
+| `estimatedTokens`             | `ceil(len(JSON.stringify(response)) / 4)` — a rough character-to-token estimate              |
+| `sessionTotalEstimatedTokens` | Cumulative estimate for the session; only present on budget-exceeded errors                  |
+
+> **Implementation note:** `_meta` is intentionally placed only in `structuredContent`, never in `content[0].text`. LLM clients read `content[0].text`; including observability data there would waste tokens on every response.
