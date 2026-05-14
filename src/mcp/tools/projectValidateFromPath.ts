@@ -6,6 +6,7 @@
  */
 
 /* eslint-disable camelcase */
+import path from 'node:path';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServerConfig } from '../server.js';
@@ -14,6 +15,16 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateProjectFromPath, ProjectValidationError } from '../../services/projectValidation.js';
 import type { ProjectValidationResult, ValidatedPlan } from '../../services/projectValidation.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
+import {
+  generateRunId,
+  saveRun,
+  hasAnyRun,
+  loadBaselineViolations,
+  computeDiff,
+  type DiffableViolation,
+} from '../utils/validationDiff.js';
 import { desc } from './descHelper.js';
 
 // ── Response shaping ──────────────────────────────────────────────────────────
@@ -104,7 +115,28 @@ function shapeResponse(
   };
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function classifyError(err: Error & { code?: string }): { code: string; isUserError: boolean } {
+  if (err instanceof PathPolicyError || err instanceof ProjectValidationError) {
+    return { code: err.code, isUserError: true };
+  }
+  return { code: err.code ?? 'VALIDATE_ERROR', isUserError: false };
+}
+
 // ── Tool registration ─────────────────────────────────────────────────────────
+
+const PROJECT_VALIDATE_SUMMARY_FIELDS = [
+  'requestId',
+  'project_path',
+  'project_name',
+  'quality_score',
+  'quality_tier',
+  'saved_to',
+  'run_id',
+  'completeness_score',
+  'recommended_next_action',
+];
 
 export function registerProjectValidateFromPath(server: McpServer, config: ServerConfig): void {
   server.registerTool(
@@ -120,16 +152,17 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           'the full validation rule set.',
           'Returns a compact quality score, violation summary, and per-plan/suite scores.',
           'By default returns a slim summary response to avoid token explosion.',
-          'Pass include_plan_details:true to get full per-suite and per-test-case data.',
+          'Pass include_plan_details:true or detail:full to get full per-suite and per-test-case data.',
           'By default saves a QH-compatible JSON report to',
           '{project_path}/provardx/validation/ (created if absent).',
           'Plan integrity: if any plan or suite directory is missing a .planitem file, the response includes a plan_integrity_warnings array.',
           'Test instances in those directories are silently ignored by the Provar runner — fix these before running tests.',
+          'Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved violations.',
           'IMPORTANT: Use this tool for whole-project validation —',
           'DO NOT read individual test case files and pass XML content inline.',
           'Pass a project_path and let this tool handle all file reading.',
         ].join(' '),
-        'Validate a Provar project from disk; returns quality score and violation summary.'
+        'Validate a Provar project from disk; quality score, violation summary, run_id for diff.'
       ),
       inputSchema: {
         project_path: z
@@ -177,9 +210,9 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(false)
           .describe(
             desc(
-              'When true, include full per-suite and per-test-case violation data in the response. ' +
-                'Default false to keep response small. Use only when you need to inspect specific test case failures.',
-              'bool, optional; default false, include full per-suite violation data'
+              '@deprecated — use detail="full" instead. When true, include full per-suite and per-test-case violation data in the response. ' +
+                'Default false to keep response small.',
+              'bool, optional, @deprecated; use detail="full" instead'
             )
           ),
         max_uncovered: z
@@ -190,8 +223,8 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(20)
           .describe(
             desc(
-              'Maximum number of uncovered test case paths to include in the response (default: 20). Set to 0 for none, or a large number for all.',
-              'int ≥0, optional; max uncovered test case paths returned'
+              '@deprecated — no replacement; response is automatically scoped by detail level. Maximum number of uncovered test case paths to include in the response (default: 20).',
+              'int ≥0, optional, @deprecated; auto-scoped by detail'
             )
           ),
         max_violations: z
@@ -202,9 +235,22 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .default(50)
           .describe(
             desc(
-              'When include_plan_details:true, caps project_violations returned (default: 50). Ignored in slim mode where violations are grouped by rule_id instead.',
-              'int ≥0, optional; max violations returned in detail mode'
+              '@deprecated — no replacement; response is automatically scoped by detail level. When include_plan_details:true, caps project_violations returned (default: 50).',
+              'int ≥0, optional, @deprecated; auto-scoped by detail'
             )
+          ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            'Response verbosity. "summary": key scores and stop signal only. "standard": slim violation summary (default). "full": full per-suite and per-test-case data (implies include_plan_details:true).'
+          ),
+        baseline_run_id: z
+          .string()
+          .optional()
+          .describe(
+            'run_id from a previous call. When provided, returns only project-level violations that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.'
           ),
       },
     },
@@ -216,6 +262,8 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
       include_plan_details,
       max_uncovered,
       max_violations,
+      detail,
+      baseline_run_id,
     }) => {
       const requestId = makeRequestId();
       log('info', 'provar_project_validate', { requestId, project_path, include_plan_details });
@@ -223,6 +271,9 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
       try {
         assertPathAllowed(project_path, config.allowedPaths);
         if (results_dir) assertPathAllowed(results_dir, config.allowedPaths);
+
+        const storageDir = results_dir ?? path.join(project_path, 'provardx', 'validation');
+        const runId = generateRunId(project_path);
 
         const result = validateProjectFromPath({
           project_path,
@@ -235,22 +286,84 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           log('warn', 'provar_project_validate: could not save results', { requestId, error: result.save_error });
         }
 
-        const shaped = shapeResponse(result, include_plan_details, max_uncovered, max_violations);
-        const response = { requestId, ...shaped };
+        const currentViolations = result.project_violations as unknown as DiffableViolation[];
+
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          save_results !== false && baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id)
+            : null;
+
+        const hasBaseline = save_results !== false ? hasAnyRun(storageDir) : false;
+
+        if (save_results !== false) {
+          try {
+            saveRun(storageDir, runId, currentViolations);
+          } catch (saveErr) {
+            log('warn', 'provar_project_validate: could not save run for diff', {
+              requestId,
+              error: (saveErr as Error).message,
+            });
+          }
+        }
+
+        // Diff mode
+        if (baseline_run_id !== undefined && baseline_run_id !== '') {
+          if (!baseline) {
+            const errResult = makeError(
+              'BASELINE_NOT_FOUND',
+              'Baseline run not found. Run validation without baseline_run_id first to establish a baseline.',
+              requestId,
+              false,
+              { suggestion: 'Run provar_project_validate without baseline_run_id first to establish a baseline.' }
+            );
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
+          }
+          const diff = computeDiff(baseline, currentViolations);
+          const completeness_score = calcCompletenessScore(
+            result.summary.test_cases_valid,
+            result.summary.total_test_cases
+          );
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
+          const diffResponse = {
+            requestId,
+            ...(save_results !== false ? { run_id: runId } : {}),
+            ...diff,
+            completeness_score,
+            recommended_next_action,
+          };
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(diffResponse) }],
+            structuredContent: diffResponse,
+          };
+        }
+
+        const completeness_score = calcCompletenessScore(
+          result.summary.test_cases_valid,
+          result.summary.total_test_cases
+        );
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
+
+        const usePlanDetails = include_plan_details || detail === 'full';
+        const shaped = shapeResponse(result, usePlanDetails, max_uncovered, max_violations);
+        const response = {
+          requestId,
+          ...(save_results !== false ? { run_id: runId } : {}),
+          completeness_score,
+          recommended_next_action,
+          ...shaped,
+        };
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        const finalResponse = applyDetailLevel(response, detailLevel, PROJECT_VALIDATE_SUMMARY_FIELDS);
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(response) }],
-          structuredContent: response,
+          content: [{ type: 'text' as const, text: JSON.stringify(finalResponse) }],
+          structuredContent: finalResponse,
         };
       } catch (err: unknown) {
         const error = err as Error & { code?: string };
-        const code =
-          error instanceof PathPolicyError
-            ? error.code
-            : error instanceof ProjectValidationError
-            ? error.code
-            : error.code ?? 'VALIDATE_ERROR';
-        const isUserError = error instanceof PathPolicyError || error instanceof ProjectValidationError;
+        const { code, isUserError } = classifyError(error);
         const errResult = makeError(code, error.message, requestId, !isUserError);
         log('error', 'provar_project_validate failed', { requestId, error: error.message });
         return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };

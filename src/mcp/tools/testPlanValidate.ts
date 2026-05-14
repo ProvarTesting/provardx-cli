@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
 import { validatePlan, buildHierarchySummary, type TestPlanInput } from './hierarchyValidate.js';
 import { desc } from './descHelper.js';
 
@@ -71,14 +73,23 @@ const metadataSchema = z
     'Plan completeness metadata — these fields are configured in the Provar Quality Hub app, not in local project files'
   );
 
+const PLAN_VALIDATE_SUMMARY_FIELDS = [
+  'requestId',
+  'name',
+  'quality_score',
+  'summary',
+  'completeness_score',
+  'recommended_next_action',
+];
+
 export function registerTestPlanValidate(server: McpServer): void {
   server.registerTool(
     'provar_testplan_validate',
     {
       title: 'Validate Test Plan',
       description: desc(
-        'Validate a Provar test plan: checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan completeness (objectives, scope, methodology, environments, acceptance criteria, test data strategy, risk assessment), and naming consistency. Recursively validates child suites and test cases. Returns quality score, plan-level violations, and full hierarchy results.',
-        'Validate a Provar test plan: naming, size, completeness, and per-suite quality.'
+        'Validate a Provar test plan: checks for empty plans, duplicate suite names, oversized plans (>20 suites), plan completeness (objectives, scope, methodology, environments, acceptance criteria, test data strategy, risk assessment), and naming consistency. Recursively validates child suites and test cases. Returns quality score, plan-level violations, and full hierarchy results. Use completeness_score and recommended_next_action to determine whether to continue iterating.',
+        'Validate a Provar test plan: naming, size, completeness, per-suite quality; stop signal via completeness_score.'
       ),
       inputSchema: {
         plan_name: z.string().describe(desc('Name of the test plan', 'string')),
@@ -105,9 +116,19 @@ export function registerTestPlanValidate(server: McpServer): void {
           .describe(
             desc('Minimum quality score for a test case to be considered valid (default: 80)', 'number 0–100, optional')
           ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            desc(
+              'Response verbosity. "summary": name, scores, and stop signal only. "standard"/"full": full violations and hierarchy results (default).',
+              'enum summary|standard|full, optional; default standard'
+            )
+          ),
       },
     },
-    ({ plan_name, test_suites, test_cases, test_suite_count, metadata, quality_threshold }) => {
+    ({ plan_name, test_suites, test_cases, test_suite_count, metadata, quality_threshold, detail }) => {
       const requestId = makeRequestId();
       log('info', 'provar_testplan_validate', { requestId, plan_name });
 
@@ -123,11 +144,24 @@ export function registerTestPlanValidate(server: McpServer): void {
 
         const result = validatePlan(input, threshold);
         const summary = buildHierarchySummary(result);
-        const response = { requestId, ...result, summary };
+
+        const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
+        const recommended_next_action = calcNextAction(completeness_score, false);
+
+        const response = {
+          requestId,
+          completeness_score,
+          recommended_next_action,
+          ...result,
+          summary,
+        };
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        const finalResponse = applyDetailLevel(response, detailLevel, PLAN_VALIDATE_SUMMARY_FIELDS);
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(response) }],
-          structuredContent: response,
+          content: [{ type: 'text' as const, text: JSON.stringify(finalResponse) }],
+          structuredContent: finalResponse,
         };
       } catch (err: unknown) {
         const error = err as Error;

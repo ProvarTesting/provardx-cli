@@ -346,4 +346,138 @@ describe('provar_testsuite_validate', () => {
       assert.equal(isError(result), false);
     });
   });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes violations, test_cases, and run_id', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'DetailSuite',
+        test_cases: [TC_LOGIN],
+        detail: 'standard',
+      });
+      const body = parseText(result);
+      assert.ok('violations' in body, 'standard should include violations');
+      assert.ok('test_cases' in body, 'standard should include test_cases');
+      assert.ok('run_id' in body, 'standard should include run_id');
+    });
+
+    it('summary response includes only key metrics', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'SummarySuite',
+        test_cases: [TC_LOGIN],
+        detail: 'summary',
+      });
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'summary should include quality_score');
+      assert.ok('completeness_score' in body, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'summary should include recommended_next_action');
+      assert.ok(!('violations' in body), 'summary should NOT include violations');
+      assert.ok(!('test_cases' in body), 'summary should NOT include test_cases');
+    });
+
+    it('full response includes all fields', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'FullSuite',
+        test_cases: [TC_LOGIN],
+        detail: 'full',
+      });
+      const body = parseText(result);
+      assert.ok('violations' in body, 'full should include violations');
+      assert.ok('test_cases' in body, 'full should include test_cases');
+    });
+  });
+
+  describe('PDX-473 — completeness_score and recommended_next_action', () => {
+    // Valid XML: id="1" passes TC_010, proper UUID passes TC_011/012
+    const TC_VALID = { name: 'Valid.testcase', xml_content: makeXml(G.tc1, G.s1, '1') };
+
+    it('completeness_score is present in response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'CompleteSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      assert.ok(typeof body['completeness_score'] === 'number', 'completeness_score should be a number');
+    });
+
+    it('completeness_score is 0 when suite has no test cases', () => {
+      const result = server.call('provar_testsuite_validate', { suite_name: 'EmptySuite' });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 0);
+    });
+
+    it('completeness_score is 100 when all test cases are valid', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'AllValidSuite',
+        test_cases: [TC_VALID],
+      });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+    });
+
+    it('recommended_next_action is a string in the response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'ActionSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      const action = body['recommended_next_action'];
+      assert.ok(typeof action === 'string', 'recommended_next_action should be a string');
+      assert.ok(['stop', 'inspect_failures', 'fix_and_revalidate'].includes(action), `Unexpected action: ${action}`);
+    });
+
+    it('recommended_next_action is "stop" when completeness_score is 100', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'StopSuite',
+        test_cases: [TC_VALID],
+      });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.equal(body['recommended_next_action'], 'stop');
+    });
+  });
+
+  describe('PDX-471 — baseline_run_id diff mode', () => {
+    it('run_id is present in every standard response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'RunIdSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      assert.ok(typeof body['run_id'] === 'string' && body['run_id'].length > 0);
+    });
+
+    it('returns BASELINE_NOT_FOUND for an unknown baseline_run_id', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'DiffSuite',
+        test_cases: [TC_LOGIN],
+        baseline_run_id: 'nonexistent-run-id-xyz',
+      });
+      assert.equal(isError(result), true);
+      const body = parseText(result);
+      assert.equal(body['error_code'], 'BASELINE_NOT_FOUND');
+    });
+
+    it('diff mode returns added/resolved/unchanged_count when baseline exists', () => {
+      // First call to establish baseline
+      const first = server.call('provar_testsuite_validate', {
+        suite_name: 'BaselineSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const firstBody = parseText(first);
+      const runId = firstBody['run_id'] as string;
+
+      // Second call with baseline_run_id should return diff
+      const second = server.call('provar_testsuite_validate', {
+        suite_name: 'BaselineSuite',
+        test_cases: [TC_LOGIN],
+        baseline_run_id: runId,
+      });
+      assert.equal(isError(second), false);
+      const diffBody = parseText(second);
+      assert.ok('added' in diffBody, 'diff should have added');
+      assert.ok('resolved' in diffBody, 'diff should have resolved');
+      assert.ok('unchanged_count' in diffBody, 'diff should have unchanged_count');
+      assert.ok('run_id' in diffBody, 'diff should have run_id');
+    });
+  });
 });
