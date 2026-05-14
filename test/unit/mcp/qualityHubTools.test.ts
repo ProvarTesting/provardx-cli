@@ -163,6 +163,58 @@ describe('qualityHubTools', () => {
     });
   });
 
+  // ── provar_qualityhub_display — detail + fields ────────────────────────────
+
+  describe('provar_qualityhub_display — detail param', () => {
+    it('standard (default) returns requestId, exitCode, stdout, stderr', () => {
+      spawnStub.returns(makeSpawnResult('display output', '', 0));
+      const result = server.call('provar_qualityhub_display', { flags: [] });
+      const body = parseBody(result);
+      assert.ok('requestId' in body);
+      assert.ok('exitCode' in body);
+      assert.ok('stdout' in body);
+      assert.ok('stderr' in body);
+    });
+
+    it('summary returns only requestId and exitCode', () => {
+      spawnStub.returns(makeSpawnResult('display output', '', 0));
+      const result = server.call('provar_qualityhub_display', { flags: [], detail: 'summary' });
+      const body = parseBody(result);
+      assert.ok('requestId' in body, 'summary must include requestId');
+      assert.ok('exitCode' in body, 'summary must include exitCode');
+      assert.ok(!('stdout' in body), 'summary must not include stdout');
+      assert.ok(!('stderr' in body), 'summary must not include stderr');
+    });
+
+    it('full returns same fields as standard', () => {
+      spawnStub.returns(makeSpawnResult('display output', '', 0));
+      const full = parseBody(server.call('provar_qualityhub_display', { flags: [], detail: 'full' }));
+      const std = parseBody(server.call('provar_qualityhub_display', { flags: [], detail: 'standard' }));
+      assert.deepEqual(Object.keys(full).sort(), Object.keys(std).sort());
+    });
+  });
+
+  describe('provar_qualityhub_display — fields param', () => {
+    it('retains only specified keys', () => {
+      spawnStub.returns(makeSpawnResult('display output', '', 0));
+      const result = server.call('provar_qualityhub_display', { flags: [], fields: 'exitCode,stdout' });
+      const body = parseBody(result);
+      assert.ok('exitCode' in body);
+      assert.ok('stdout' in body);
+      assert.ok(!('requestId' in body));
+      assert.ok(!('stderr' in body));
+    });
+
+    it('silently ignores unknown fields', () => {
+      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      const result = server.call('provar_qualityhub_display', { flags: [], fields: 'exitCode,ghost' });
+      assert.equal(isError(result), false);
+      const body = parseBody(result);
+      assert.ok('exitCode' in body);
+      assert.ok(!('ghost' in body));
+    });
+  });
+
   // ── provar_qualityhub_testrun ───────────────────────────────────────────────
 
   describe('provar_qualityhub_testrun', () => {
@@ -393,6 +445,62 @@ describe('qualityHubTools', () => {
       spawnStub.returns(makeEnoentResult());
       const result = server.call('provar_qualityhub_testcase_retrieve', { target_org: 'myorg', flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
+    });
+  });
+
+  // ── provar_qualityhub_testcase_retrieve — detail + fields ─────────────────────
+
+  describe('provar_qualityhub_testcase_retrieve — detail param', () => {
+    it('standard (default) returns requestId, exitCode, stdout, stderr', () => {
+      spawnStub.returns(makeSpawnResult('[]', '', 0));
+      const result = server.call('provar_qualityhub_testcase_retrieve', { target_org: 'myorg', flags: [] });
+      const body = parseBody(result);
+      assert.ok('requestId' in body);
+      assert.ok('exitCode' in body);
+      assert.ok('stdout' in body);
+      assert.ok('stderr' in body);
+    });
+
+    it('summary returns only requestId and exitCode', () => {
+      spawnStub.returns(makeSpawnResult('[]', '', 0));
+      const result = server.call('provar_qualityhub_testcase_retrieve', {
+        target_org: 'myorg',
+        flags: [],
+        detail: 'summary',
+      });
+      const body = parseBody(result);
+      assert.ok('requestId' in body, 'summary must include requestId');
+      assert.ok('exitCode' in body, 'summary must include exitCode');
+      assert.ok(!('stdout' in body), 'summary must not include stdout');
+      assert.ok(!('stderr' in body), 'summary must not include stderr');
+    });
+  });
+
+  describe('provar_qualityhub_testcase_retrieve — fields param', () => {
+    it('retains only specified keys', () => {
+      spawnStub.returns(makeSpawnResult('[]', '', 0));
+      const result = server.call('provar_qualityhub_testcase_retrieve', {
+        target_org: 'myorg',
+        flags: [],
+        fields: 'exitCode,stdout',
+      });
+      const body = parseBody(result);
+      assert.ok('exitCode' in body);
+      assert.ok('stdout' in body);
+      assert.ok(!('requestId' in body));
+    });
+
+    it('silently ignores unknown field names', () => {
+      spawnStub.returns(makeSpawnResult('[]', '', 0));
+      const result = server.call('provar_qualityhub_testcase_retrieve', {
+        target_org: 'myorg',
+        flags: [],
+        fields: 'exitCode,nope',
+      });
+      assert.equal(isError(result), false);
+      const body = parseBody(result);
+      assert.ok('exitCode' in body);
+      assert.ok(!('nope' in body));
     });
   });
 
