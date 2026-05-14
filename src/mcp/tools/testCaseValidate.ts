@@ -24,6 +24,7 @@ import {
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
 import { runBestPractices } from './bestPracticesEngine.js';
+import { desc } from './descHelper.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
@@ -46,12 +47,20 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     'provar_testcase_validate',
     {
       title: 'Validate Test Case',
-      description:
+      description: desc(
         'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.',
+        'Validate a Provar XML test case: structure, UUIDs, steps, and quality scoring.'
+      ),
       inputSchema: {
-        content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
-        xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),
-        file_path: z.string().optional().describe('Path to .xml test case file'),
+        content: z
+          .string()
+          .optional()
+          .describe(desc('XML content to validate directly (alias: xml)', 'string, inline content')),
+        xml: z
+          .string()
+          .optional()
+          .describe(desc('XML content to validate — API-compatible alias for content', 'string, inline content')),
+        file_path: z.string().optional().describe(desc('Path to .xml test case file', 'string, path to file')),
       },
     },
     async ({ content, xml, file_path }) => {

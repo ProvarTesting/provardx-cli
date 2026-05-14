@@ -15,6 +15,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -135,17 +136,25 @@ export function registerConnectionList(server: McpServer, config: ServerConfig):
     'provar_connection_list',
     {
       title: 'List Connections',
-      description: [
-        'List all connections and named environments defined in the .testproject file.',
-        'Use this before generating test cases or page objects to get the correct connection names.',
-        'Returns connections (name, type, url, sso_configured) and environments (name, connection, url).',
-        'Prerequisite: the project must have a .testproject file — run provar_project_validate first if unsure.',
-        'Security: only connection names, types, and URLs are returned — credential values from .secrets are never included.',
-      ].join(' '),
+      description: desc(
+        [
+          'List all connections and named environments defined in the .testproject file.',
+          'Use this before generating test cases or page objects to get the correct connection names.',
+          'Returns connections (name, type, url, sso_configured) and environments (name, connection, url).',
+          'Prerequisite: the project must have a .testproject file — run provar_project_validate first if unsure.',
+          'Security: only connection names, types, and URLs are returned — credential values from .secrets are never included.',
+        ].join(' '),
+        'List connections and environments from the .testproject file.'
+      ),
       inputSchema: {
         project_path: z
           .string()
-          .describe('Absolute or relative path to the Provar project root directory (must be within --allowed-paths)'),
+          .describe(
+            desc(
+              'Absolute or relative path to the Provar project root directory (must be within --allowed-paths)',
+              'string, absolute path to project root'
+            )
+          ),
       },
     },
     ({ project_path }) => {

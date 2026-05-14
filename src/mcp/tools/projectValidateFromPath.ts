@@ -14,6 +14,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateProjectFromPath, ProjectValidationError } from '../../services/projectValidation.js';
 import type { ProjectValidationResult, ValidatedPlan } from '../../services/projectValidation.js';
+import { desc } from './descHelper.js';
 
 // ── Response shaping ──────────────────────────────────────────────────────────
 
@@ -110,50 +111,76 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
     'provar_project_validate',
     {
       title: 'Validate Project',
-      description: [
-        'Validate a Provar project directly from its directory on disk.',
-        'Reads the plan/suite/testinstance hierarchy from the plans/ directory,',
-        'resolves test case XML from the tests/ directory, extracts project context',
-        '(connections, environments, secrets) from the .testproject file, then runs',
-        'the full validation rule set.',
-        'Returns a compact quality score, violation summary, and per-plan/suite scores.',
-        'By default returns a slim summary response to avoid token explosion.',
-        'Pass include_plan_details:true to get full per-suite and per-test-case data.',
-        'By default saves a QH-compatible JSON report to',
-        '{project_path}/provardx/validation/ (created if absent).',
-        'Plan integrity: if any plan or suite directory is missing a .planitem file, the response includes a plan_integrity_warnings array.',
-        'Test instances in those directories are silently ignored by the Provar runner — fix these before running tests.',
-        'IMPORTANT: Use this tool for whole-project validation —',
-        'DO NOT read individual test case files and pass XML content inline.',
-        'Pass a project_path and let this tool handle all file reading.',
-      ].join(' '),
+      description: desc(
+        [
+          'Validate a Provar project directly from its directory on disk.',
+          'Reads the plan/suite/testinstance hierarchy from the plans/ directory,',
+          'resolves test case XML from the tests/ directory, extracts project context',
+          '(connections, environments, secrets) from the .testproject file, then runs',
+          'the full validation rule set.',
+          'Returns a compact quality score, violation summary, and per-plan/suite scores.',
+          'By default returns a slim summary response to avoid token explosion.',
+          'Pass include_plan_details:true to get full per-suite and per-test-case data.',
+          'By default saves a QH-compatible JSON report to',
+          '{project_path}/provardx/validation/ (created if absent).',
+          'Plan integrity: if any plan or suite directory is missing a .planitem file, the response includes a plan_integrity_warnings array.',
+          'Test instances in those directories are silently ignored by the Provar runner — fix these before running tests.',
+          'IMPORTANT: Use this tool for whole-project validation —',
+          'DO NOT read individual test case files and pass XML content inline.',
+          'Pass a project_path and let this tool handle all file reading.',
+        ].join(' '),
+        'Validate a Provar project from disk; returns quality score and violation summary.'
+      ),
       inputSchema: {
         project_path: z
           .string()
-          .describe('Absolute path to the Provar project root (the directory containing the .testproject file)'),
+          .describe(
+            desc(
+              'Absolute path to the Provar project root (the directory containing the .testproject file)',
+              'string, absolute path to project root'
+            )
+          ),
         quality_threshold: z
           .number()
           .min(0)
           .max(100)
           .optional()
           .default(80)
-          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+          .describe(
+            desc(
+              'Minimum quality score for a test case to be considered valid (default: 80)',
+              'number 0–100, optional; minimum quality score threshold'
+            )
+          ),
         save_results: z
           .boolean()
           .optional()
           .default(true)
-          .describe('Write a QH-compatible JSON report to provardx/validation/ (default: true)'),
+          .describe(
+            desc(
+              'Write a QH-compatible JSON report to provardx/validation/ (default: true)',
+              'bool, optional; default true, write report to disk'
+            )
+          ),
         results_dir: z
           .string()
           .optional()
-          .describe('Override the output directory for the saved report (default: {project_path}/provardx/validation)'),
+          .describe(
+            desc(
+              'Override the output directory for the saved report (default: {project_path}/provardx/validation)',
+              'string, optional; override report output dir'
+            )
+          ),
         include_plan_details: z
           .boolean()
           .optional()
           .default(false)
           .describe(
-            'When true, include full per-suite and per-test-case violation data in the response. ' +
-              'Default false to keep response small. Use only when you need to inspect specific test case failures.'
+            desc(
+              'When true, include full per-suite and per-test-case violation data in the response. ' +
+                'Default false to keep response small. Use only when you need to inspect specific test case failures.',
+              'bool, optional; default false, include full per-suite violation data'
+            )
           ),
         max_uncovered: z
           .number()
@@ -162,7 +189,10 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .optional()
           .default(20)
           .describe(
-            'Maximum number of uncovered test case paths to include in the response (default: 20). Set to 0 for none, or a large number for all.'
+            desc(
+              'Maximum number of uncovered test case paths to include in the response (default: 20). Set to 0 for none, or a large number for all.',
+              'int ≥0, optional; max uncovered test case paths returned'
+            )
           ),
         max_violations: z
           .number()
@@ -171,7 +201,10 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .optional()
           .default(50)
           .describe(
-            'When include_plan_details:true, caps project_violations returned (default: 50). Ignored in slim mode where violations are grouped by rule_id instead.'
+            desc(
+              'When include_plan_details:true, caps project_violations returned (default: 50). Ignored in slim mode where violations are grouped by rule_id instead.',
+              'int ≥0, optional; max violations returned in detail mode'
+            )
           ),
       },
     },

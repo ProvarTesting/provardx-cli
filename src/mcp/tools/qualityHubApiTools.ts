@@ -18,6 +18,7 @@ import {
   QualityHubRateLimitError,
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
+import { desc } from './descHelper.js';
 
 const CORPUS_FALLBACK_HINT =
   'Fallback: read the provar://docs/step-reference MCP resource for step types and attribute formats, then continue.';
@@ -49,27 +50,33 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
     'provar_qualityhub_examples_retrieve',
     {
       title: 'Retrieve Corpus Examples',
-      description: [
-        'Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests in Bedrock KB).',
-        'Use this BEFORE writing any Provar .testcase XML — whether via provar_testcase_generate, Write, or Edit.',
-        'Pass a user story, requirement, source test file content, or step type keywords as the query.',
-        'Returns up to N example Provar XML test cases ordered by similarity score.',
-        'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
-        'generation workflow can still continue without grounding. Never hard-errors on API failure.',
-        '',
-        'For org-specific field metadata: first call getObjectSchema from the Salesforce Hosted MCP',
-        '(platform/sobject-reads — https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads),',
-        'then include key field names in your query (e.g. "Opportunity: CloseDate, Amount, StageName").',
-        '',
-        'Requires a Provar API key (sf provar auth login). Without a key, returns empty examples with onboarding instructions.',
-      ].join('\n'),
+      description: desc(
+        [
+          'Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests in Bedrock KB).',
+          'Use this BEFORE writing any Provar .testcase XML — whether via provar_testcase_generate, Write, or Edit.',
+          'Pass a user story, requirement, source test file content, or step type keywords as the query.',
+          'Returns up to N example Provar XML test cases ordered by similarity score.',
+          'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
+          'generation workflow can still continue without grounding. Never hard-errors on API failure.',
+          '',
+          'For org-specific field metadata: first call getObjectSchema from the Salesforce Hosted MCP',
+          '(platform/sobject-reads — https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads),',
+          'then include key field names in your query (e.g. "Opportunity: CloseDate, Amount, StageName").',
+          '',
+          'Requires a Provar API key (sf provar auth login). Without a key, returns empty examples with onboarding instructions.',
+        ].join('\n'),
+        'Retrieve similar Provar test case examples from the Quality Hub corpus.'
+      ),
       inputSchema: {
         query: z
           .string()
           .describe(
-            'Text to search against the corpus — a user story, requirement description, or source test file content. ' +
-              'Longer is better: include Salesforce object names, field names, and action descriptions. ' +
-              'Truncated server-side at 2000 characters.'
+            desc(
+              'Text to search against the corpus — a user story, requirement description, or source test file content. ' +
+                'Longer is better: include Salesforce object names, field names, and action descriptions. ' +
+                'Truncated server-side at 2000 characters.',
+              'string, user story or requirement text; include SF object/field names'
+            )
           ),
         n: z
           .number()
@@ -78,18 +85,26 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
           .max(10)
           .optional()
           .default(5)
-          .describe('Number of examples to return. Default 5, max 10.'),
+          .describe(desc('Number of examples to return. Default 5, max 10.', 'int 1–10, optional; examples to return')),
         app_filter: z
           .string()
           .optional()
           .describe(
-            'Optional Salesforce cloud filter to bias results (e.g. "SalesCloud", "ServiceCloud", "HealthCloud").'
+            desc(
+              'Optional Salesforce cloud filter to bias results (e.g. "SalesCloud", "ServiceCloud", "HealthCloud").',
+              'string, optional; SF cloud filter e.g. SalesCloud'
+            )
           ),
         prefer_high_quality: z
           .boolean()
           .optional()
           .default(true)
-          .describe('When true (default), favours tier4/tier3 corpus examples. Set false to include all tiers.'),
+          .describe(
+            desc(
+              'When true (default), favours tier4/tier3 corpus examples. Set false to include all tiers.',
+              'bool, optional; default true, prefer high-quality corpus examples'
+            )
+          ),
       },
     },
     async ({ query, n, app_filter, prefer_high_quality }) => {

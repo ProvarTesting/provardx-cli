@@ -462,10 +462,61 @@ sf provar auth clear
 
 ### Environment variables
 
-| Variable                 | Purpose                               | Default                                           |
-| ------------------------ | ------------------------------------- | ------------------------------------------------- |
-| `PROVAR_API_KEY`         | API key for Quality Hub validation    | None — falls back to `~/.provar/credentials.json` |
-| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL | Dev API Gateway URL (`/dev`)                      |
+| Variable                 | Purpose                                                    | Default                                           |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
+| `PROVAR_API_KEY`         | API key for Quality Hub validation                         | None — falls back to `~/.provar/credentials.json` |
+| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL                      | Dev API Gateway URL (`/dev`)                      |
+| `PROVAR_MCP_SCHEMA_MODE` | Set to `compact` to shorten all tool descriptions          | Standard (full) descriptions                      |
+| `PROVAR_MCP_TOOLS`       | Comma-separated list of tool groups to register at startup | All groups registered                             |
+
+---
+
+## Agent performance tuning
+
+Two environment variables let you reduce the context budget consumed by the ProvarDX MCP server — useful when working with agents that have a limited context window or a large number of registered tools.
+
+### Compact descriptions (`PROVAR_MCP_SCHEMA_MODE`)
+
+```
+PROVAR_MCP_SCHEMA_MODE=compact
+```
+
+When set to `compact`, most tool and parameter descriptions are replaced with short summaries (typically ≤15 words). This can save hundreds of tokens per tool in the initial context handshake, at the cost of reduced in-description guidance for the agent.
+
+Use this mode if:
+
+- Your agent reports context limit warnings on startup
+- You are using a smaller model with a tighter context budget
+- Your agents already have domain context and don't need verbose descriptions
+
+### Tool group filtering (`PROVAR_MCP_TOOLS`)
+
+```
+PROVAR_MCP_TOOLS=nitrox,authoring
+```
+
+Restricts which tool groups are registered when the server starts. Only the groups listed (comma-separated, case-insensitive) are made available. `provardx_ping` is always registered regardless of this setting.
+
+| Group name   | Tools registered                                                                                                                                                                                                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nitrox`     | `provar_nitrox_discover`, `provar_nitrox_generate`, `provar_nitrox_patch`, `provar_nitrox_read`, `provar_nitrox_validate`                                                                                                                                                     |
+| `automation` | `provar_automation_setup`, `provar_automation_config_load`, `provar_automation_metadata_download`, `provar_automation_compile`, `provar_automation_testrun`                                                                                                                   |
+| `qualityhub` | `provar_qualityhub_connect`, `provar_qualityhub_display`, `provar_qualityhub_testrun`, `provar_qualityhub_testrun_abort`, `provar_qualityhub_testrun_report`, `provar_qualityhub_examples_retrieve`, `provar_qualityhub_testcase_retrieve`, `provar_qualityhub_defect_create` |
+| `validation` | `provar_project_validate`, `provar_ant_generate`, `provar_ant_validate`, `provar_properties_*`, `provar_testcase_validate`, `provar_testsuite_validate`, `provar_testplan_validate`, `provar_pageobject_validate`                                                             |
+| `authoring`  | `provar_testcase_generate`, `provar_pageobject_generate`, `provar_testcase_step_edit`, `provar_testplan_*`                                                                                                                                                                    |
+| `inspect`    | `provar_project_inspect`                                                                                                                                                                                                                                                      |
+| `connection` | `provar_connection_list`                                                                                                                                                                                                                                                      |
+| `rca`        | `provar_testrun_rca`, `provar_testrun_report_locate`                                                                                                                                                                                                                          |
+
+**Example — NitroX-only session:**
+
+```json
+{
+  "env": {
+    "PROVAR_MCP_TOOLS": "nitrox"
+  }
+}
+```
 
 ---
 
