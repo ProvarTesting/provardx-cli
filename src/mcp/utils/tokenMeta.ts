@@ -5,8 +5,6 @@
  * For full license text, see LICENSE.md file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { randomUUID } from 'node:crypto';
-
 // --------------------------------------------------------------------------- //
 // Minimal structural types — avoids importing SDK internal paths.
 // --------------------------------------------------------------------------- //
@@ -58,6 +56,9 @@ function getOrCreateEntry(state: DepthGuardState, sessionId: string): SessionEnt
  * Wraps a tool handler to enforce a per-session call budget.
  * Once `limit` calls have been made for a session, every further call returns
  * TOOL_BUDGET_EXCEEDED without invoking the underlying handler.
+ * Callers without a sessionId (stdio transports — Claude Desktop, Cursor, etc.)
+ * share a single 'anon' bucket so the budget actually limits runaway tool use;
+ * giving each anon call a fresh UUID would defeat the purpose of the guard.
  * `provardx_ping` is excluded from wrapping at the call site in server.ts.
  */
 export function wrapWithDepthGuard(
@@ -67,7 +68,7 @@ export function wrapWithDepthGuard(
   limit: number
 ): AnyToolCallback {
   return async (args, extra) => {
-    const sessionId = extra.sessionId ?? `anon-${randomUUID()}`;
+    const sessionId = extra.sessionId ?? 'anon';
     const entry = getOrCreateEntry(state, sessionId);
 
     if (entry.calls >= limit) {

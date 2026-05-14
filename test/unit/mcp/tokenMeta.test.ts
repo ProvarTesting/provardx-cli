@@ -99,13 +99,24 @@ describe('wrapWithDepthGuard', () => {
     assert.strictEqual(resultB.isError, undefined);
   });
 
-  it('assigns a unique anon session UUID per call when sessionId is absent', async () => {
+  it('shares a single anon bucket across calls when sessionId is absent', async () => {
     const state = createDepthGuardState();
     const wrapped = wrapWithDepthGuard('tool', makeHandler(okResponse), state, 1);
-    // Each call without sessionId gets its own anon-UUID → never exceeds limit
-    const [r1, r2] = await Promise.all([wrapped({}, {}), wrapped({}, {})]);
-    assert.strictEqual(r1.isError, undefined);
-    assert.strictEqual(r2.isError, undefined);
+    // Stdio transports (Claude Desktop, Cursor) don't pass a sessionId — all such
+    // calls must share one bucket so the budget actually limits runaway tool use.
+    await wrapped({}, {});
+    const blocked = await wrapped({}, {});
+    assert.strictEqual(blocked.isError, true);
+    const body = JSON.parse(blocked.content[0].text) as Record<string, unknown>;
+    assert.strictEqual(body['error'], 'TOOL_BUDGET_EXCEEDED');
+  });
+
+  it('keeps named sessions independent from the anon bucket', async () => {
+    const state = createDepthGuardState();
+    const wrapped = wrapWithDepthGuard('tool', makeHandler(okResponse), state, 1);
+    await wrapped({}, {}); // anon bucket uses its 1 call
+    const namedResult = await wrapped({}, { sessionId: 'sess-named' });
+    assert.strictEqual(namedResult.isError, undefined);
   });
 
   it('includes a non-empty suggestion in TOOL_BUDGET_EXCEEDED', async () => {
