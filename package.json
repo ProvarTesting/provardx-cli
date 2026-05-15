@@ -180,12 +180,23 @@
     },
     "lint": {
       "command": "eslint src test --color --cache --cache-location .eslintcache",
+      "dependencies": [
+        "lint:script-names"
+      ],
       "files": [
         "src/**/*.ts",
         "test/**/*.ts",
         "messages/**",
         "**/.eslint*",
         "**/tsconfig.json"
+      ],
+      "output": []
+    },
+    "lint:script-names": {
+      "command": "node scripts/lint-script-names.cjs",
+      "files": [
+        "scripts/lint-script-names.cjs",
+        "scripts/**/*"
       ],
       "output": []
     },

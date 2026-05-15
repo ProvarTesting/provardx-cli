@@ -262,15 +262,16 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
         target_uri: input.target_uri,
       });
 
-      // PDX-483: active runtime guard for the PDX-479 regression pattern.
-      // Rejects the exact shape that produces a contract-violating skeleton on
-      // disk: empty steps[] + non-dry-run + persistence target. Other empty-
-      // steps shapes (dry_run preview, no output_path) remain allowed.
+      // Runtime guard for the multi-call construction pattern: rejects the exact
+      // shape that produces a contract-violating skeleton on disk — empty steps[]
+      // + non-dry-run + persistence target. Other empty-steps shapes (dry-run
+      // preview, no output_path) remain allowed.
       if (input.steps.length === 0 && !input.dry_run && input.output_path) {
         const err = makeError(
           'STEPS_REQUIRED',
           'provar_testcase_generate was called with an empty steps[] array and a target output_path. ' +
-            'This produces a contract-violating skeleton (the PDX-479 regression pattern) and is rejected.',
+            'Constructing a test case requires the full step tree in a single call; ' +
+            'an empty payload on the write path would produce a skeleton-only file.',
           requestId,
           false,
           {

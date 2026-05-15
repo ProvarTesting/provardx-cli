@@ -1,8 +1,8 @@
-// PDX-481 prompt-flow trace.
+// Authoring-flow trace.
 //
-// Drives the patched MCP server over JSON-RPC stdio and captures the EXACT
-// bytes that an MCP client (Claude Desktop / Cursor / etc.) would surface to
-// its LLM at every decision point in the test-authoring flow:
+// Drives the MCP server over JSON-RPC stdio and captures the EXACT bytes that
+// an MCP client (Claude Desktop / Cursor / etc.) would surface to its LLM at
+// every decision point in the test-authoring flow:
 //
 //   1. The orchestration prompt the LLM reads when planning ("I want to author a new test case")
 //   2. The tool-guide resource the LLM reads when picking the right tool
@@ -11,7 +11,7 @@
 //   5. The actual XML the tool emits when given a real multi-scenario payload
 //
 // Run from the worktree root after `yarn compile`:
-//   node scripts/pdx-481-trace.cjs
+//   node scripts/authoring-flow-trace.cjs
 
 'use strict';
 
@@ -97,7 +97,7 @@ function extractSection(text, headerRegex, nextHeaderRegex) {
   await rpc('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'pdx-481-trace', version: '1.0.0' },
+    clientInfo: { name: 'authoring-flow-trace', version: '1.0.0' },
   });
 
   // ── 1. The orchestration prompt's author-test flow ────────────────────────

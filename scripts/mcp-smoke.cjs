@@ -177,17 +177,18 @@ async function runTests() {
       dry_run: true,
     });
 
-  // ── 6b. provar_testcase_generate STEPS_REQUIRED runtime guard (PDX-483) ───
+  // ── 6b. provar_testcase_generate STEPS_REQUIRED runtime guard ────────────
   // Drives the rejected shape (steps:[] + dry_run:false + output_path) so the
-  // PDX-479 regression-class shape is exercised on every smoke run. The smoke
+  // multi-call construction shape is exercised on every smoke run. The smoke
   // framework counts any JSON-RPC response as PASS; the assertion that the
-  // body carries error_code='STEPS_REQUIRED' lives in scripts/pdx-482-validate.cjs.
+  // body carries error_code='STEPS_REQUIRED' lives in
+  // scripts/construction-contract-validate.cjs.
   if (inGroup('authoring'))
     await callTool('provar_testcase_generate', {
-      test_case_name: 'PDX-483 Guard Smoke',
+      test_case_name: 'STEPS_REQUIRED Guard Smoke',
       steps: [],
       dry_run: false,
-      output_path: path.join(TMP, 'pdx483-smoke-rejected.testcase'),
+      output_path: path.join(TMP, 'steps-required-smoke-rejected.testcase'),
     });
 
   // ── 7. provar_testcase_validate ───────────────────────────────────────────
