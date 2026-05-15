@@ -89,6 +89,15 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
       title: 'Edit Test Case Step',
       description: desc(
         [
+          // ── Usage contract (READ FIRST — PDX-482) ─────────────────────────────
+          // This tool AMENDS an existing validated test case. It is NOT for
+          // constructing a test case from scratch — building one step-by-step via
+          // repeated step_edit calls produces structurally invalid test cases
+          // (dropped scenarios, flat asserts, inconsistent step types — see PDX-479).
+          'AMENDMENT-ONLY tool: this is for amending an existing, already-validated Provar test case (single-step add, attribute fix, debug edit).',
+          'NOT for constructing a test case from scratch — for new test cases use provar_testcase_generate with the FULL steps[] tree in a single call.',
+          'Building a test case step-by-step via repeated step_edit calls after a steps=[] generate produces structurally invalid output (dropped scenarios, flat asserts, inconsistent step types).',
+          // ── Mechanics (unchanged below) ───────────────────────────────────────
           'Add or remove a single step (apiCall) in a Provar XML test case file.',
           'Uses write-to-temp-then-rename to minimise partial-write risk.',
           'Prerequisites: the test case must exist and be valid XML.',
@@ -102,7 +111,7 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
           'Returns INVALID_XML_AFTER_EDIT (backup restored) when the mutated file fails validation.',
           'Grounding for step_xml: call provar_qualityhub_examples_retrieve for corpus examples of the step type you need; if the response has count: 0 with a warning field, fall back: read the provar://docs/step-reference MCP resource.',
         ].join(' '),
-        'Add or remove a single apiCall step in a Provar XML test case file.'
+        'AMENDMENT-ONLY: add or remove a single apiCall step in an existing Provar test case (not for constructing new ones).'
       ),
       inputSchema: {
         test_case_path: z
