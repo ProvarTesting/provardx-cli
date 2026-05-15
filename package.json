@@ -196,7 +196,7 @@
       "command": "node scripts/lint-script-names.cjs",
       "files": [
         "scripts/lint-script-names.cjs",
-        "scripts/*"
+        "scripts/**/*"
       ],
       "output": []
     },

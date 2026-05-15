@@ -109,11 +109,11 @@ CI runs lint as part of `sf-prepack` — do not skip with `--no-verify` on the f
 
 ## Script naming convention
 
-Files under `scripts/` must be named for what they **do**, not for the ticket that prompted them. Ticket-prefixed names (e.g. `pdx-482-validate.cjs`) leak internal Jira plumbing into the file tree, age poorly once the ticket closes, and surface in customer-visible artifacts (CI logs, PR diffs, repo browsing).
+Files anywhere under `scripts/` (including nested subdirectories) must be named for what they **do**, not for the ticket that prompted them. Ticket-prefixed names (e.g. `pdx-482-validate.cjs`) leak internal Jira plumbing into the file tree, age poorly once the ticket closes, and surface in customer-visible artifacts (CI logs, PR diffs, repo browsing).
 
 - **Allowed:** `authoring-flow-trace.cjs`, `construction-contract-validate.cjs`, `mcp-smoke.cjs`, `fetch-nitrox-packages.cjs`
-- **Rejected:** `pdx-482-validate.cjs`, `PDX_481_trace.cjs`, anything matching `^pdx[-_]?\d+`
+- **Rejected:** `pdx-482-validate.cjs`, `PDX_481_trace.cjs`, `scripts/tmp/pdx-999.cjs`, anything whose basename matches `^pdx[-_]?\d+` (case-insensitive)
 
-Enforced by `scripts/lint-script-names.cjs`, which runs as a dependency of `yarn lint` (wireit `lint:script-names`). The check fails the lint step if any ticket-prefixed filename appears under `scripts/`.
+Enforced by `scripts/lint-script-names.cjs`, which walks `scripts/` recursively and runs as a dependency of `yarn lint` (wireit `lint:script-names`). The check fails the lint step if any ticket-prefixed filename appears at any depth.
 
 Ticket IDs and rationale belong in commit messages and PR descriptions, not in filenames or in user-facing docs (`docs/mcp.md`, `docs/mcp-pilot-guide.md`).
