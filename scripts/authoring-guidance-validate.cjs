@@ -1,9 +1,10 @@
-// PDX-481: server-side validation that the rewritten author-test guidance is
-// reachable and contains the canonical single-call construction copy. Runs
-// without requiring sf CLI to be linked to the local plugin.
+// Authoring-guidance validation: confirm the author-test guidance (prompt +
+// step-reference resource) is reachable and contains the canonical single-call
+// construction copy. Runs without requiring sf CLI to be linked to the local
+// plugin.
 //
 //   yarn compile
-//   node scripts/pdx-481-validate.cjs
+//   node scripts/authoring-guidance-validate.cjs
 
 'use strict';
 
@@ -66,11 +67,11 @@ function record(label, ok, detail) {
   await rpc('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'pdx-481-validate', version: '1.0.0' },
+    clientInfo: { name: 'authoring-guidance-validate', version: '1.0.0' },
   });
 
-  // The orchestration prompt should still be registered (PDX-481 keeps it,
-  // unlike PDX-480 which disabled it).
+  // The orchestration prompt must remain registered; the author-test flow
+  // depends on it as the LLM's entry point.
   const orch = await rpc('prompts/get', {
     name: 'provar.guide.orchestration',
     arguments: { task: 'author-test' },
@@ -94,7 +95,7 @@ function record(label, ok, detail) {
     );
   }
 
-  // PDX-479 anti-patterns
+  // Multi-call construction anti-patterns
   const mustExclude = ['repeat per step'];
   for (const phrase of mustExclude) {
     const present = text.includes(phrase);
@@ -115,7 +116,7 @@ function record(label, ok, detail) {
       : `split confirmed`
   );
 
-  // Tool-guide resource should still serve content (PDX-481 keeps it).
+  // Tool-guide resource must serve content; LLMs read it when picking a tool.
   const guide = await rpc('resources/read', { uri: 'provar://docs/tool-guide' });
   const gcontent = guide.result?.contents?.[0]?.text ?? '';
   record(
@@ -146,7 +147,7 @@ function record(label, ok, detail) {
       fail++;
     }
   }
-  console.log(`\nPDX-481 validation: ${pass} passed, ${fail} failed`);
+  console.log(`\nAuthoring-guidance validation: ${pass} passed, ${fail} failed`);
 
   server.stdin.end();
   process.exit(fail > 0 ? 1 : 0);

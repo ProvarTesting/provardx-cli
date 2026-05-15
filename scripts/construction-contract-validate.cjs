@@ -1,22 +1,23 @@
-// PDX-482 / PDX-483 validation: confirm the construct/amend contract is reachable
-// at the MCP protocol surface and that the PDX-483 runtime guard rejects the
-// PDX-479 multi-call pattern shape.
+// Construction-contract validation: confirm the construct/amend contract is
+// reachable at every MCP protocol surface the LLM sees, and that the runtime
+// guard rejects the multi-call construction shape.
 //
-// PDX-482 (standard + compact modes): assertions on tools/list — every byte the
-// LLM literally sees at the call site. Compact mode coverage is critical because
-// the adversarial review identified that PROVAR_MCP_SCHEMA_MODE=compact silently
-// swapped the description for a contract-free one-liner.
+// Description-contract pass (standard + compact schema modes): assertions on
+// tools/list description bodies — every byte the LLM literally sees at the call
+// site. Compact mode coverage is critical because PROVAR_MCP_SCHEMA_MODE=compact
+// swaps the description for a short one-liner; if the contract isn't in that
+// form, compact mode becomes a regression vector.
 //
-// PDX-483 (runtime-guard mode): drives a real tools/call with the rejected shape
-// (steps:[]+dry_run:false+output_path) and asserts the response is a structured
-// STEPS_REQUIRED error with a non-empty details.suggestion. This catches a
-// regression class that the tools/list assertions cannot reach: the passive
-// contract surviving in the description while the active guard silently
+// Runtime-guard pass: drives a real tools/call with the rejected shape
+// (steps:[] + dry_run:false + output_path) and asserts the response is a
+// structured STEPS_REQUIRED error with a non-empty details.suggestion. This
+// catches a regression that the description-pass assertions cannot reach: the
+// passive contract surviving in the description while the active guard silently
 // regresses (e.g. a refactor reorders the handler so writes happen before the
 // check).
 //
 //   yarn compile
-//   node scripts/pdx-482-validate.cjs
+//   node scripts/construction-contract-validate.cjs
 
 'use strict';
 
@@ -91,7 +92,7 @@ function runValidation(mode, extraEnv, runAssertions) {
       await rpc('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'pdx-482-validate', version: '1.0.0' },
+        clientInfo: { name: 'construction-contract-validate', version: '1.0.0' },
       });
       const tools = await rpc('tools/list', {});
       const toolList = tools.result?.tools ?? [];
@@ -120,7 +121,7 @@ function standardAssertions(toolList, record) {
     record(
       'generate.description contains "single call"',
       d.includes('single call'),
-      'protects against PDX-479 regression at call site'
+      'protects against the multi-call construction regression at call site'
     );
     record(
       'generate.description contains "FULL step tree"',
@@ -134,8 +135,8 @@ function standardAssertions(toolList, record) {
     );
     record(
       'generate.description rejects CONSTRUCTING via step_edit',
-      // PDX-482 hardening: literal substring (not regex) — the previous regex
-      // would false-positive on hostile rewordings like "constructing...not via generate".
+      // Literal substring (not regex) — a regex match would false-positive on
+      // hostile rewordings like "constructing...not via generate".
       d.includes('not for CONSTRUCTING one from scratch'),
       'literal canonical phrase: "not for CONSTRUCTING one from scratch"'
     );
@@ -200,8 +201,8 @@ function standardAssertions(toolList, record) {
 }
 
 // ── Assertions for compact mode (short one-liner) ───────────────────────────
-// Adversarial review (Critical #1): the compact form must STILL carry the
-// contract or PROVAR_MCP_SCHEMA_MODE=compact becomes a regression highway.
+// The compact form must STILL carry the contract or PROVAR_MCP_SCHEMA_MODE=compact
+// becomes a regression highway (the standard description is swapped out entirely).
 function compactAssertions(toolList, record) {
   const gen = toolList.find((t) => t.name === 'provar_testcase_generate');
   if (!gen) {
@@ -224,7 +225,7 @@ function compactAssertions(toolList, record) {
       'must split AMENDING (step_edit) vs CONSTRUCTING (generate) in the compact form'
     );
     record(
-      'compact generate.description does NOT regress to the pre-PDX-482 contract-free form',
+      'compact generate.description does NOT regress to a contract-free one-liner',
       !/^Generate a Provar XML test case skeleton with UUID guids and steps structure\.?$/.test(d),
       'old compact form must be replaced'
     );
@@ -248,7 +249,7 @@ function compactAssertions(toolList, record) {
   }
 }
 
-// ── PDX-483 runtime guard: tools/call assertion ─────────────────────────────
+// ── Runtime guard: tools/call assertion ─────────────────────────────────────
 // Drives a real tools/call(provar_testcase_generate, ...) with the rejected
 // shape (steps:[] + dry_run:false + output_path) and asserts the response is
 // a structured STEPS_REQUIRED error. This is the only check that catches a
@@ -309,11 +310,11 @@ function runRuntimeGuardValidation() {
       await rpc('initialize', {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'pdx-483-validate', version: '1.0.0' },
+        clientInfo: { name: 'construction-contract-validate-runtime', version: '1.0.0' },
       });
 
       // Use a unique tmp path so a leftover file from a prior run can't mask the assertion.
-      const outPath = path.join(TMP, `pdx483-validate-${Date.now()}.testcase`);
+      const outPath = path.join(TMP, `construction-contract-validate-${Date.now()}.testcase`);
       try {
         if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
       } catch {
@@ -323,7 +324,7 @@ function runRuntimeGuardValidation() {
       const callRes = await rpc('tools/call', {
         name: 'provar_testcase_generate',
         arguments: {
-          test_case_name: 'PDX-483 validate',
+          test_case_name: 'construction-contract validate',
           steps: [],
           dry_run: false,
           output_path: outPath,
@@ -409,7 +410,7 @@ function runRuntimeGuardValidation() {
       fail++;
     }
   }
-  console.log(`\nPDX-482/PDX-483 validation: ${pass} passed, ${fail} failed`);
+  console.log(`\nConstruction-contract validation: ${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 })().catch((err) => {
   console.error('Validation script error:', err);
