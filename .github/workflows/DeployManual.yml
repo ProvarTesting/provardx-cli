@@ -24,6 +24,13 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           scope: '@provartesting'
       - name: Install dependencies and build
+        env:
+          # Required by scripts/fetch-nitrox-packages.cjs to pull the latest
+          # NitroX schemas and component catalog from ProvarTesting/factPackages
+          # at release time. Without this, prepack falls back to the bundled
+          # snapshots and ships them as-is. The auto-provided GITHUB_TOKEN has
+          # read access to factPackages.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm install -g @salesforce/cli
           yarn

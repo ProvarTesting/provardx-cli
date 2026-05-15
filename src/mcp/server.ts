@@ -81,17 +81,38 @@ export interface ServerConfig {
 export function parseActiveGroups(): Set<string> | null {
   const env = process.env['PROVAR_MCP_TOOLS'];
   if (!env?.trim()) return null;
-  const groups = new Set(
+  const requested = new Set(
     env
       .split(',')
       .map((g) => g.trim().toLowerCase())
       .filter(Boolean)
   );
-  if (groups.size === 0) {
+  if (requested.size === 0) {
     log('warn', 'PROVAR_MCP_TOOLS was set but contained no valid group names — activating all groups', { raw: env });
     return null;
   }
-  return groups;
+  const known = new Set(Object.keys(TOOL_GROUPS));
+  const matched = new Set<string>();
+  const unknown: string[] = [];
+  for (const g of requested) {
+    if (known.has(g)) matched.add(g);
+    else unknown.push(g);
+  }
+  if (unknown.length > 0) {
+    log('warn', 'PROVAR_MCP_TOOLS contains unknown group names — they will be ignored', {
+      raw: env,
+      unknown,
+      known: [...known],
+    });
+  }
+  if (matched.size === 0) {
+    log('warn', 'PROVAR_MCP_TOOLS matched no known group names — activating all groups', {
+      raw: env,
+      known: [...known],
+    });
+    return null;
+  }
+  return matched;
 }
 
 export function createProvarMcpServer(config: ServerConfig): McpServer {

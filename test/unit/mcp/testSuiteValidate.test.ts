@@ -7,7 +7,10 @@
 
 /* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeEach } from 'mocha';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { registerTestSuiteValidate } from '../../../src/mcp/tools/testSuiteValidate.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -70,18 +73,33 @@ const TC_LOGOUT = { name: 'LogoutTest.testcase', xml_content: makeXml(G.tc2, G.s
 const TC_LOGIN_ALIAS = { name: 'LoginTest.testcase', xml: makeXml(G.tc1, G.s1, 'tc-001') };
 const TC_LOGOUT_ALIAS = { name: 'LogoutTest.testcase', xml: makeXml(G.tc2, G.s2, 'tc-002') };
 
-// ── Test setup ─────────────────────────────────────────────────────────────────
-
-let server: MockMcpServer;
-
-beforeEach(() => {
-  server = new MockMcpServer();
-  registerTestSuiteValidate(server as never);
-});
-
 // ── provar_testsuite_validate ─────────────────────────────────────────────────
 
 describe('provar_testsuite_validate', () => {
+  let server: MockMcpServer;
+  let origHomedir: () => string;
+  let tempHome: string;
+
+  beforeEach(() => {
+    // Redirect os.homedir() into a temp dir so suiteStorageDir() writes to
+    // an isolated location instead of polluting the real developer/CI home.
+    // NOTE: scoped INSIDE this describe so the stub does not leak into other
+    // test files. Mocha root-level beforeEach attaches to the root suite and
+    // runs before every test in every file — see auth/rotate.test.ts which
+    // relies on the real os.homedir() and would otherwise see this stub.
+    tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pvts-home-'));
+    origHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = (): string => tempHome;
+
+    server = new MockMcpServer();
+    registerTestSuiteValidate(server as never);
+  });
+
+  afterEach(() => {
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  });
+
   describe('happy path', () => {
     it('returns a result (not an error) for a valid non-empty suite', () => {
       const result = server.call('provar_testsuite_validate', {

@@ -7,11 +7,14 @@
 
 /* eslint-disable camelcase */
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 const MAX_RUNS = 20;
 const INDEX_FILE = '.runs.json';
+const DEFAULT_ROOT_NAME = '.provardx';
+const VALIDATION_SUBDIR = 'validation';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -28,6 +31,15 @@ interface RunRecord {
   run_id: string;
   timestamp: number;
   filename: string;
+  /**
+   * Hash of `${toolTag}|${context}`. Used by loadBaselineViolations to reject
+   * a run_id whose context (file path, suite name, etc.) does not match the
+   * calling context — prevents cross-context diffs. Optional for backward
+   * compatibility with index records written before this field existed; those
+   * older records are treated as not matching any caller and are effectively
+   * invalidated within one or two new runs as the FIFO cap evicts them.
+   */
+  context_hash?: string;
 }
 
 interface RunsIndex {
@@ -67,6 +79,27 @@ function saveIndex(storageDir: string, index: RunsIndex): void {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+/**
+ * Compute a stable 8-char context hash for a tool + context pair. Used to
+ * scope baseline run lookups so that a run_id from context A cannot be diffed
+ * against context B (different project, different suite, different file).
+ */
+export function computeContextHash(toolTag: string, context: string): string {
+  return shortHash(`${toolTag}|${context}`);
+}
+
+/**
+ * Resolve the validation storage root for a given tool subdir. Honors the
+ * PROVAR_MCP_VALIDATION_DIR env var when set; otherwise falls back to
+ * `~/.provardx/validation/<subdir>`. The env override is useful for restricted
+ * CI/dev environments where the home directory is read-only or shared.
+ */
+export function resolveValidationDir(subdir: string): string {
+  const override = process.env['PROVAR_MCP_VALIDATION_DIR']?.trim();
+  if (override) return path.join(override, subdir);
+  return path.join(os.homedir(), DEFAULT_ROOT_NAME, VALIDATION_SUBDIR, subdir);
+}
+
 /** Generate a run ID from a context string (e.g. project path or suite name). */
 export function generateRunId(context: string): string {
   const rand = Math.random().toString(36).slice(2, 6);
@@ -86,15 +119,29 @@ export function hasAnyRun(storageDir: string): boolean {
  * Save the current violations as a new run in the storage directory.
  * Caps the index at MAX_RUNS by evicting the oldest entry when full.
  * Returns the generated run_id.
+ *
+ * When `contextHash` is provided, it is recorded alongside the run so that
+ * `loadBaselineViolations` can reject a baseline_run_id whose context does
+ * not match the calling context (prevents cross-context diffs).
  */
-export function saveRun(storageDir: string, runId: string, violations: DiffableViolation[]): string {
+export function saveRun(
+  storageDir: string,
+  runId: string,
+  violations: DiffableViolation[],
+  contextHash?: string
+): string {
   fs.mkdirSync(storageDir, { recursive: true });
 
   const filename = `${runId}.json`;
   fs.writeFileSync(path.join(storageDir, filename), JSON.stringify(violations), 'utf-8');
 
   const index = loadIndex(storageDir);
-  index.runs.push({ run_id: runId, timestamp: Date.now(), filename });
+  index.runs.push({
+    run_id: runId,
+    timestamp: Date.now(),
+    filename,
+    ...(contextHash ? { context_hash: contextHash } : {}),
+  });
 
   // Evict oldest entries when over the cap
   while (index.runs.length > MAX_RUNS) {
@@ -117,11 +164,25 @@ export function saveRun(storageDir: string, runId: string, violations: DiffableV
  * Returns null if the run is not found in the index (BASELINE_NOT_FOUND).
  * The filename is looked up from the index only — the run_id itself is never
  * used to construct a file path, preventing path traversal.
+ *
+ * When `expectedContextHash` is provided, the record's `context_hash` must
+ * match. Records without a `context_hash` (written by older versions before
+ * H3) are treated as a mismatch and are effectively retired within one or
+ * two new runs as the FIFO cap evicts them. This guard prevents diffing a
+ * baseline from a different file/suite/project against the current context.
  */
-export function loadBaselineViolations(storageDir: string, baselineRunId: string): DiffableViolation[] | null {
+export function loadBaselineViolations(
+  storageDir: string,
+  baselineRunId: string,
+  expectedContextHash?: string
+): DiffableViolation[] | null {
   const index = loadIndex(storageDir);
   const record = index.runs.find((r) => r.run_id === baselineRunId);
   if (!record) return null;
+
+  if (expectedContextHash !== undefined && record.context_hash !== expectedContextHash) {
+    return null;
+  }
 
   // Use the filename from the index, not the run_id
   try {

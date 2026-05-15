@@ -10,6 +10,8 @@ import {
   hasAnyRun,
   loadBaselineViolations,
   computeDiff,
+  computeContextHash,
+  resolveValidationDir,
 } from '../../../src/mcp/utils/validationDiff.js';
 
 const V1 = { rule_id: 'RULE-001', applies_to: 'TestSuite', message: 'Suite is empty' };
@@ -142,5 +144,88 @@ describe('computeDiff', () => {
     assert.equal(diff.added.length, 0);
     assert.equal(diff.resolved.length, 2, 'two occurrences resolved');
     assert.equal(diff.unchanged_count, 1);
+  });
+});
+
+// ── H3: cross-context scoping ─────────────────────────────────────────────────
+
+describe('computeContextHash', () => {
+  it('is deterministic for the same tool+context', () => {
+    assert.equal(computeContextHash('tc', '/a/b/c.testcase'), computeContextHash('tc', '/a/b/c.testcase'));
+  });
+
+  it('differs for different tools with the same context', () => {
+    assert.notEqual(computeContextHash('tc', '/path'), computeContextHash('suite', '/path'));
+  });
+
+  it('differs for different contexts under the same tool', () => {
+    assert.notEqual(computeContextHash('tc', '/a'), computeContextHash('tc', '/b'));
+  });
+});
+
+describe('loadBaselineViolations — context scoping (H3)', () => {
+  it('returns null when expectedContextHash does not match the saved record', () => {
+    const ctxA = computeContextHash('tc', '/project/a/x.testcase');
+    const ctxB = computeContextHash('tc', '/project/b/y.testcase');
+    const runId = generateRunId('/project/a/x.testcase');
+    saveRun(tmpDir, runId, [V1], ctxA);
+
+    // Same store, same run_id, different context → should be rejected
+    assert.equal(loadBaselineViolations(tmpDir, runId, ctxB), null);
+  });
+
+  it('returns the violations when expectedContextHash matches', () => {
+    const ctx = computeContextHash('tc', '/project/a/x.testcase');
+    const runId = generateRunId('/project/a/x.testcase');
+    saveRun(tmpDir, runId, [V1, V2], ctx);
+
+    const loaded = loadBaselineViolations(tmpDir, runId, ctx);
+    assert.deepEqual(loaded, [V1, V2]);
+  });
+
+  it('treats records written without context_hash as a mismatch when one is expected', () => {
+    // Simulate a record persisted by an older version (no context_hash)
+    const runId = generateRunId('/legacy/path');
+    saveRun(tmpDir, runId, [V1]); // omit contextHash
+    const ctx = computeContextHash('tc', '/legacy/path');
+    assert.equal(loadBaselineViolations(tmpDir, runId, ctx), null);
+  });
+
+  it('still loads when no expectedContextHash is provided (back-compat)', () => {
+    const runId = generateRunId('/path');
+    saveRun(tmpDir, runId, [V1]); // no context hash
+    assert.deepEqual(loadBaselineViolations(tmpDir, runId), [V1]);
+  });
+});
+
+describe('resolveValidationDir', () => {
+  let saved: string | undefined;
+
+  beforeEach(() => {
+    saved = process.env['PROVAR_MCP_VALIDATION_DIR'];
+    delete process.env['PROVAR_MCP_VALIDATION_DIR'];
+  });
+
+  afterEach(() => {
+    if (saved !== undefined) process.env['PROVAR_MCP_VALIDATION_DIR'] = saved;
+    else delete process.env['PROVAR_MCP_VALIDATION_DIR'];
+  });
+
+  it('defaults to ~/.provardx/validation/<subdir> when env override is unset', () => {
+    const dir = resolveValidationDir('testcase');
+    const expected = path.join(os.homedir(), '.provardx', 'validation', 'testcase');
+    assert.equal(dir, expected);
+  });
+
+  it('honors PROVAR_MCP_VALIDATION_DIR when set', () => {
+    process.env['PROVAR_MCP_VALIDATION_DIR'] = path.join(tmpDir, 'custom-root');
+    const dir = resolveValidationDir('testsuite');
+    assert.equal(dir, path.join(tmpDir, 'custom-root', 'testsuite'));
+  });
+
+  it('trims whitespace and falls back to default when env is whitespace-only', () => {
+    process.env['PROVAR_MCP_VALIDATION_DIR'] = '   ';
+    const dir = resolveValidationDir('testcase');
+    assert.equal(dir, path.join(os.homedir(), '.provardx', 'validation', 'testcase'));
   });
 });
