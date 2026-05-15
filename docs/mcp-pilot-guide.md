@@ -439,6 +439,40 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ---
 
+### Scenario 12: Construct a Multi-Scenario Test Case in a Single Call
+
+**Goal:** Confirm the AI authors a multi-scenario test case by passing the full step tree to `provar_testcase_generate` in **one** call — not by generating an empty skeleton and looping `provar_testcase_step_edit` per step.
+
+**Background:** A regression in 1.5.0 (PDX-479) traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
+
+**Prompt:**
+
+> "Create a Provar test case `AccountFlow.testcase` that covers three scenarios:
+>
+> 1. **Create Account** — navigate to the Account home, click New, set Name = `{AccountName}` and Phone = `{AccountPhone}`, click Save
+> 2. **Verify Account on List** — navigate back to the Account list view, assert the Name and Phone values
+> 3. **Open Account Detail** — open the just-created Account, assert all saved field values
+>
+> Use UI On Screen wrappers, AssertValues for value assertions, and reference SetValues variables with `{Name}`. Write to `<project-path>/tests/AccountFlow.testcase`."
+
+**What to look for (PASS):**
+
+- Exactly **one** call to `provar_testcase_generate` with a populated `steps[]` array — not a call with `steps: []` followed by N `step_edit` calls
+- The generated XML lists three scenarios numbered consecutively (1, 2, 3 — no skipped numbers)
+- Each scenario's UI actions and asserts are nested inside the appropriate `UiWithScreen` clause (or its equivalent grouping element) — not flat siblings under `<steps>`
+- Assert step types are consistent across the case (e.g. all `AssertValues`, not mixed `AssertValues` + `UiAssert` for the same purpose)
+- `provar_testcase_validate` on the result returns `is_valid: true`
+
+**What to look for (FAIL — regression indicator):**
+
+- Two or more calls to `provar_testcase_generate` for the same file
+- A call to `provar_testcase_generate` with `steps: []` followed by `provar_testcase_step_edit` calls
+- The generated case skips a scenario number, mixes assert API IDs for similar assertions, or emits asserts as flat siblings rather than nested inside the screen wrapper
+
+If any FAIL indicator appears, file against PDX-479 (or its successor) with the prompt and the generated XML attached.
+
+---
+
 ## Security Model
 
 ### What the server does

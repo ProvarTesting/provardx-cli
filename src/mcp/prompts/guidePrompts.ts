@@ -263,16 +263,23 @@ Required sequence — do not skip steps:
 
         'author-test': `## Author a New Test Case
 
-1. provar_project_inspect     → find coverage gaps before writing
-2. provar_automation_metadata_download  → if SF metadata is stale (missing fields/objects)
-3. provar_pageobject_generate → if a new page object is needed
-4. provar_pageobject_validate → validate before compile
-5. provar_automation_compile  → after any page object change
-6. provar_testcase_generate   → create the test case file
-7. provar_testcase_step_edit  → add steps (repeat as needed)
-8. provar_testcase_validate   → MUST pass before adding to a plan
-9. provar_testplan_add-instance → add to an existing plan
-10. provar_testplan_validate   → validate the plan`,
+Construct the full step tree in a single \`provar_testcase_generate\` call.
+\`provar_testcase_step_edit\` is for amending an existing case, not for
+building one step-by-step (that pattern drops scenarios and flattens nesting).
+
+1. provar_project_inspect              → find coverage gaps before writing
+2. provar_qualityhub_examples_retrieve → ground in corpus examples for the step types you need
+3. provar_automation_metadata_download → if SF metadata is stale (missing fields/objects)
+4. provar_pageobject_generate          → only if a new page object is needed
+5. provar_pageobject_validate          → validate before compile
+6. provar_automation_compile           → after any page object change
+7. provar_testcase_generate            → single call, pass ALL steps in one payload
+8. provar_testcase_validate            → MUST pass before adding to a plan
+9. provar_testplan_add-instance        → add to an existing plan
+10. provar_testplan_validate           → validate the plan
+
+Use provar_testcase_step_edit only to amend an existing validated test case
+(single-step add, attribute fix, debug edit) — never to construct one from scratch.`,
 
         'debug-failures': `## Debug Failing Tests
 
@@ -319,10 +326,13 @@ provar_pageobject_validate
 provar_nitrox_generate OR provar_nitrox_patch
   └── provar_nitrox_validate (always validate after)
 
-provar_testcase_generate OR provar_testcase_step_edit
+provar_testcase_generate (construct full case — pass ALL steps in one call)
   └── provar_testcase_validate
         └── provar_testplan_add-instance
               └── provar_testplan_validate
+
+provar_testcase_step_edit (amend an existing validated case only — never construct)
+  └── provar_testcase_validate
 
 ### Safe to run in parallel (no dependency between them)
 - provar_project_inspect + provar_connection_list
