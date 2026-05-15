@@ -443,7 +443,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **Goal:** Confirm the AI authors a multi-scenario test case by passing the full step tree to `provar_testcase_generate` in **one** call — not by generating an empty skeleton and looping `provar_testcase_step_edit` per step.
 
-**Background:** A regression in 1.5.0 (PDX-479) traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
+**Background:** A previously observed regression traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
 
 **Defense in depth.** Three layers protect against the multi-call construction pattern:
 
@@ -477,7 +477,7 @@ If a pilot LLM falls into the multi-call pattern despite the description contrac
 - A call to `provar_testcase_generate` with `steps: []` followed by `provar_testcase_step_edit` calls
 - The generated case skips a scenario number, mixes assert API IDs for similar assertions, or emits asserts as flat siblings rather than nested inside the screen wrapper
 
-If any FAIL indicator appears, file against PDX-479 (or its successor) with the prompt and the generated XML attached.
+If any FAIL indicator appears, report it to the Provar team with the prompt and the generated XML attached.
 
 ---
 
