@@ -3,10 +3,10 @@
 // guard rejects the multi-call construction shape.
 //
 // Description-contract pass (standard + compact schema modes): assertions on
-// tools/list description bodies — every byte the LLM literally sees at the call
-// site. Compact mode coverage is critical because PROVAR_MCP_SCHEMA_MODE=compact
-// swaps the description for a short one-liner; if the contract isn't in that
-// form, compact mode becomes a regression vector.
+// tools/list description bodies — every byte the LLM literally sees at the
+// call site. Compact mode coverage is critical because
+// PROVAR_MCP_SCHEMA_MODE=compact swaps the description for a short one-liner;
+// if the contract isn't in that form, compact mode becomes a regression vector.
 //
 // Runtime-guard pass: drives a real tools/call with the rejected shape
 // (steps:[] + dry_run:false + output_path) and asserts the response is a
@@ -15,6 +15,11 @@
 // passive contract surviving in the description while the active guard silently
 // regresses (e.g. a refactor reorders the handler so writes happen before the
 // check).
+//
+// Title-contract pass: assertions on the `title:` field that some clients
+// render exclusively (Claude Desktop chips, Cursor audit pane, inline tool-call
+// refs). Titles are schema-mode-independent but we assert in both passes to
+// surface drift early either way.
 //
 //   yarn compile
 //   node scripts/construction-contract-validate.cjs
@@ -104,6 +109,41 @@ function runValidation(mode, extraEnv, runAssertions) {
       reject(err);
     });
   });
+}
+
+// ── Title-level construct-vs-amend contract ────────────────────────────────
+// The `title:` field is independent of schema mode, but we assert it in both
+// passes to catch drift early regardless of which mode a future refactor breaks.
+// Many MCP clients render only the title field in tool-picker chips, so the
+// contract must survive at that surface too.
+function titleAssertions(toolList, record) {
+  const gen = toolList.find((t) => t.name === 'provar_testcase_generate');
+  if (!gen) {
+    record('provar_testcase_generate has a title', false, 'tool not found');
+  } else {
+    const t = gen.title ?? '';
+    record(
+      'generate.title carries "one call" or "single call"',
+      t.includes('one call') || t.includes('single call'),
+      `title: ${JSON.stringify(t)}`
+    );
+    record('generate.title mentions steps', /step/i.test(t), 'chip-level payload shape must be visible');
+    record('generate.title length ≤ 50 chars', t.length <= 50, `length: ${t.length}`);
+  }
+
+  const edit = toolList.find((t) => t.name === 'provar_testcase_step_edit');
+  if (!edit) {
+    record('provar_testcase_step_edit has a title', false, 'tool not found');
+  } else {
+    const t = edit.title ?? '';
+    record('step_edit.title contains "Amend" or "amendment"', /amend/i.test(t), `title: ${JSON.stringify(t)}`);
+    record(
+      'step_edit.title signals "existing" test case only',
+      /exist/i.test(t),
+      'chip-level signal that this tool does not construct new cases'
+    );
+    record('step_edit.title length ≤ 50 chars', t.length <= 50, `length: ${t.length}`);
+  }
 }
 
 // ── Assertions for standard mode (full TOOL_DESCRIPTION) ────────────────────
@@ -198,6 +238,9 @@ function standardAssertions(toolList, record) {
       'consequence is explicit so the contract is judgement-friendly'
     );
   }
+
+  // Title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 // ── Assertions for compact mode (short one-liner) ───────────────────────────
@@ -247,6 +290,9 @@ function compactAssertions(toolList, record) {
       'rejection must survive compact mode'
     );
   }
+
+  // Title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 // ── Runtime guard: tools/call assertion ─────────────────────────────────────

@@ -453,6 +453,8 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 If a pilot LLM falls into the multi-call pattern despite the description contract, the runtime guard converts the failure into an actionable error rather than a silently broken file on disk.
 
+**Title-level contract:** the chip-level `title` fields for the two tools — `Generate Test Case (full steps in one call)` and `Amend Existing Test Case Step` — carry the construct-vs-amend split at the tool-picker surface. MCP clients that render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references in chat threads) still expose the contract to the agent before any description is read.
+
 **Prompt:**
 
 > "Create a Provar test case `AccountFlow.testcase` that covers three scenarios:
