@@ -96,6 +96,44 @@ describe('provar_testcase_step_edit description', () => {
       'description should include step-reference fallback'
     );
   });
+
+  // ── PDX-482 regression guard: amendment-only contract at the call site ────
+  // The PDX-479 regression came from agents using step_edit to build test
+  // cases from scratch. This contract sits at the call site so the LLM reads
+  // it every time it considers calling step_edit, surviving any prompt drift.
+
+  it('description self-identifies as AMENDMENT-ONLY at the top', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('AMENDMENT-ONLY') || reg.description.includes('AMENDING'),
+      'description must lead with AMENDMENT-ONLY / AMENDING framing so the LLM reads it before mechanics'
+    );
+  });
+
+  it('description explicitly rejects construction-from-scratch usage', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('NOT for constructing') || reg.description.includes('not for constructing'),
+      'description must explicitly say it is NOT for constructing a test case from scratch'
+    );
+    assert.ok(
+      reg.description.includes('provar_testcase_generate'),
+      'description must point the agent at provar_testcase_generate for new test case construction'
+    );
+  });
+
+  it('description warns about the structural defects from multi-call construction', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('dropped scenarios') ||
+        reg.description.includes('flat asserts') ||
+        reg.description.includes('inconsistent step types'),
+      'description must spell out the structural defects (PDX-479) caused by multi-call construction so the LLM understands the consequence'
+    );
+  });
 });
 
 // ── provar_testcase_step_edit ──────────────────────────────────────────────────

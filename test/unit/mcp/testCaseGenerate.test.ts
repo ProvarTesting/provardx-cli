@@ -87,6 +87,48 @@ describe('provar_testcase_generate description', () => {
       'description should include step-reference fallback'
     );
   });
+
+  // ── PDX-482 regression guard: construction contract at the call site ──────
+  // The PDX-479 regression came from upstream guidance steering agents toward
+  // multi-call construction. These assertions protect the in-tool contract so
+  // even if upstream prompts/resources regress again, the LLM reads the
+  // single-call requirement at every call site.
+
+  it('TOOL_DESCRIPTION carries the single-call construction contract', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('Construction pattern'),
+      'description must lead with the construction-pattern contract for PDX-479 protection'
+    );
+    assert.ok(
+      reg.description.includes('single call'),
+      'description must say "single call" so the contract is greppable from the call site'
+    );
+    assert.ok(reg.description.includes('FULL step tree'), 'description must instruct passing the FULL step tree');
+  });
+
+  it('TOOL_DESCRIPTION marks step_edit as AMENDING, not constructing', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('AMENDING'),
+      'description must explicitly say provar_testcase_step_edit is for AMENDING (caps for emphasis at the call site)'
+    );
+    assert.ok(
+      /step_edit[^.]*not for CONSTRUCTING|CONSTRUCTING[^.]*not/i.test(reg.description),
+      'description must explicitly reject CONSTRUCTING via step_edit'
+    );
+  });
+
+  it('TOOL_DESCRIPTION gives stop-and-assemble guidance for the common mistake', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('stop and assemble') || reg.description.includes('stop, and assemble'),
+      'description must tell agents to stop and assemble the full step list before calling — the most common mistake'
+    );
+  });
 });
 
 // ── provar_testcase_generate ───────────────────────────────────────────────────

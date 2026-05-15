@@ -118,6 +118,15 @@ const StepSchema = z.object({
 });
 
 const TOOL_DESCRIPTION = [
+  // ── Construction contract (READ FIRST — PDX-482) ──────────────────────────────
+  // The PDX-479 regression happened when authoring guidance steered agents toward
+  // a per-step construction pattern via repeated step_edit calls. These three
+  // lines make the single-call contract authoritative at the call site so it
+  // outweighs any conflicting prompt/resource guidance and survives doc drift.
+  'Construction pattern: pass the FULL step tree in a single call via the steps[] array.',
+  'Do NOT call this tool with an empty steps[] and then append via provar_testcase_step_edit — that pattern drops scenarios, flattens nesting, and produces inconsistent step types.',
+  'provar_testcase_step_edit is for AMENDING an existing validated test case (single-step add, attribute fix, debug edit), not for CONSTRUCTING one from scratch. If you find yourself about to call this tool with steps=[] intending to add steps in subsequent tool calls, stop and assemble the full step list first.',
+  // ── Existing description (unchanged below) ───────────────────────────────────
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
   'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="1" registryId="..."> (id is always the integer literal "1" as required by the Provar runtime), a <summary/> child, then <steps>.',
@@ -168,7 +177,14 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
         steps: z
           .array(StepSchema)
           .default([])
-          .describe(desc('Ordered list of test steps', 'array, optional; ordered test steps')),
+          .describe(
+            desc(
+              'Ordered list of test steps. Pass the COMPLETE step tree for the test case in a single call — ' +
+                'do not call this tool with an empty array intending to append via provar_testcase_step_edit ' +
+                '(that pattern is for amendments only and produces structurally invalid test cases when used to construct).',
+              'array, optional; FULL ordered step tree in one call'
+            )
+          ),
         target_uri: z
           .string()
           .optional()
