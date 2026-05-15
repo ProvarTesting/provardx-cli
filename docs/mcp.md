@@ -2102,7 +2102,7 @@ Version metadata for the bundled NitroX component catalog and JSON schemas. Retu
 }
 ```
 
-`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or pre-PDX-464 release).
+`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or an older release that predates this metadata).
 
 ---
 
