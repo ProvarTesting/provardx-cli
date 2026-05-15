@@ -18,7 +18,9 @@ import { registerAllTestCaseStepTools } from '../../../src/mcp/tools/testCaseSte
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
-  public registrations: Array<{ name: string; description: string }> = [];
+  // PDX-484: capture `title` alongside `description` so tests can assert on the
+  // title-level contract. Many MCP clients render only the title field.
+  public registrations: Array<{ name: string; description: string; title: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _desc: string, _schema: unknown, handler: ToolHandler): void {
@@ -27,8 +29,16 @@ class MockMcpServer {
 
   public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
-    const desc = (config as Record<string, unknown>)['description'];
-    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
+    const cfg = config as Record<string, unknown>;
+    const desc = cfg['description'];
+    const title = cfg['title'];
+    if (typeof desc === 'string') {
+      this.registrations.push({
+        name,
+        description: desc,
+        title: typeof title === 'string' ? title : '',
+      });
+    }
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -94,6 +104,84 @@ describe('provar_testcase_step_edit description', () => {
     assert.ok(
       reg.description.includes('provar://docs/step-reference'),
       'description should include step-reference fallback'
+    );
+  });
+
+  // ── PDX-482 regression guard: amendment-only contract at the call site ────
+  // The PDX-479 regression came from agents using step_edit to build test
+  // cases from scratch. This contract sits at the call site so the LLM reads
+  // it every time it considers calling step_edit, surviving any prompt drift.
+
+  it('description self-identifies as AMENDMENT-ONLY at the top', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('AMENDMENT-ONLY') || reg.description.includes('AMENDING'),
+      'description must lead with AMENDMENT-ONLY / AMENDING framing so the LLM reads it before mechanics'
+    );
+  });
+
+  it('description explicitly rejects construction-from-scratch usage', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('NOT for constructing') || reg.description.includes('not for constructing'),
+      'description must explicitly say it is NOT for constructing a test case from scratch'
+    );
+    assert.ok(
+      reg.description.includes('provar_testcase_generate'),
+      'description must point the agent at provar_testcase_generate for new test case construction'
+    );
+  });
+
+  it('description warns about the structural defects from multi-call construction', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    // Adversarial review (PDX-482 hardening): require ALL three defects, not
+    // just one. An OR-clause would allow silent dilution where a future cleanup
+    // removes two of the three defects but leaves one and the test still passes.
+    // Listing the full consequence chain is what gives the LLM the "why" needed
+    // to apply judgement when guidance is ambiguous.
+    assert.ok(
+      reg.description.includes('dropped scenarios'),
+      'description must call out "dropped scenarios" (the symptom that first surfaced PDX-479)'
+    );
+    assert.ok(
+      reg.description.includes('flat asserts'),
+      'description must call out "flat asserts" (the second observable defect)'
+    );
+    assert.ok(
+      reg.description.includes('inconsistent step types'),
+      'description must call out "inconsistent step types" (the third observable defect)'
+    );
+  });
+
+  // ── PDX-484: title-level amendment-only contract ───────────────────────────
+  // Many MCP clients (Claude Desktop tool-picker chips, Cursor audit pane,
+  // inline tool-call references in chat threads) render only the `title`
+  // field. Without the contract in the title an agent that reads only that
+  // surface gets zero PDX-479 protection. These assertions lock the title to
+  // the canonical phrasing chosen during the PDX-484 cross-client pilot.
+
+  it('title carries the amendment-only contract (PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      /amend/i.test(reg.title),
+      'title must contain "Amend" or "amendment" so the contract is visible in tool-picker chips'
+    );
+    assert.ok(
+      /exist/i.test(reg.title),
+      'title must signal "existing test case only" so an agent reading only the chip does not call this for construction'
+    );
+  });
+
+  it('title fits the cross-client chip-render comfort threshold (≤50 chars, PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.title.length <= 50,
+      `title length ${reg.title.length} exceeds 50 chars — Cursor and other clients may truncate`
     );
   });
 });

@@ -11,6 +11,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { runSfCommand, soqlEscape } from './sfSpawn.js';
+import { desc } from './descHelper.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -257,29 +258,47 @@ export function registerQualityHubDefectCreate(server: McpServer): void {
     'provar_qualityhub_defect_create',
     {
       title: 'Create Defects',
-      description: [
-        'Create Defect__c records in Quality Hub for failed test executions in a given run.',
-        'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
-        'Defect__c per failure (with description, step, browser, environment, tester), and links',
-        'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
-        'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
-      ].join(' '),
+      description: desc(
+        [
+          'Create Defect__c records in Quality Hub for failed test executions in a given run.',
+          'Queries the run by Tracking_Id__c, finds failed Test_Execution__c records, creates a',
+          'Defect__c per failure (with description, step, browser, environment, tester), and links',
+          'it via Test_Case_Defect__c and Test_Execution_Defect__c junction records.',
+          'If Jira or ADO sync is configured in Quality Hub, defects sync to those systems automatically.',
+        ].join(' '),
+        'Create Defect__c records for failed Quality Hub test executions.'
+      ),
       inputSchema: {
-        run_id: z.string().describe('Test run Tracking_Id__c value returned by provar_qualityhub_testrun'),
-        target_org: z.string().describe('SF org alias or username for the Quality Hub org'),
+        run_id: z
+          .string()
+          .describe(
+            desc(
+              'Test run Tracking_Id__c value returned by provar_qualityhub_testrun',
+              'string, tracking ID from qualityhub_testrun'
+            )
+          ),
+        target_org: z
+          .string()
+          .describe(desc('SF org alias or username for the Quality Hub org', 'string, SF org alias or username')),
         failed_tests: z
           .array(z.string())
           .optional()
           .describe(
-            'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures'
+            desc(
+              'Optional filter — list of Test_Case__c record ID substrings to restrict defect creation to specific failures',
+              'array of strings, optional; filter by TC ID substring'
+            )
           ),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
           ),
       },
     },

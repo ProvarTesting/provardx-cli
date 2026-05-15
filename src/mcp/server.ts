@@ -35,6 +35,39 @@ import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
 import { registerAllPrompts } from './prompts/index.js';
+import {
+  createDepthGuardState,
+  wrapWithDepthGuard,
+  type AnyToolCallback,
+  type DepthGuardState,
+} from './utils/tokenMeta.js';
+import { desc } from './tools/descHelper.js';
+
+// ── Tool group registry ───────────────────────────────────────────────────────
+// Groups are keyed in lowercase so they match the lowercased env var values.
+const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig) => void>> = {
+  nitrox: [registerAllNitroXTools],
+  automation: [registerAllAutomationTools],
+  qualityhub: [registerAllQualityHubTools, registerAllQualityHubApiTools, registerAllDefectTools],
+  validation: [
+    registerProjectValidateFromPath,
+    registerAllAntTools,
+    registerAllPropertiesTools,
+    registerTestCaseValidate,
+    registerTestSuiteValidate,
+    registerTestPlanValidate,
+    registerPageObjectValidate,
+  ],
+  authoring: [
+    registerTestCaseGenerate,
+    registerPageObjectGenerate,
+    registerAllTestCaseStepTools,
+    registerAllTestPlanTools,
+  ],
+  inspect: [registerProjectInspect],
+  connection: [registerAllConnectionTools],
+  rca: [registerAllRcaTools],
+};
 
 export interface ServerConfig {
   allowedPaths: string[];
@@ -43,6 +76,43 @@ export interface ServerConfig {
     latestVersion: string | null;
     updateCommand: string | null;
   };
+}
+
+export function parseActiveGroups(): Set<string> | null {
+  const env = process.env['PROVAR_MCP_TOOLS'];
+  if (!env?.trim()) return null;
+  const requested = new Set(
+    env
+      .split(',')
+      .map((g) => g.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  if (requested.size === 0) {
+    log('warn', 'PROVAR_MCP_TOOLS was set but contained no valid group names — activating all groups', { raw: env });
+    return null;
+  }
+  const known = new Set(Object.keys(TOOL_GROUPS));
+  const matched = new Set<string>();
+  const unknown: string[] = [];
+  for (const g of requested) {
+    if (known.has(g)) matched.add(g);
+    else unknown.push(g);
+  }
+  if (unknown.length > 0) {
+    log('warn', 'PROVAR_MCP_TOOLS contains unknown group names — they will be ignored', {
+      raw: env,
+      unknown,
+      known: [...known],
+    });
+  }
+  if (matched.size === 0) {
+    log('warn', 'PROVAR_MCP_TOOLS matched no known group names — activating all groups', {
+      raw: env,
+      known: [...known],
+    });
+    return null;
+  }
+  return matched;
 }
 
 export function createProvarMcpServer(config: ServerConfig): McpServer {
@@ -58,10 +128,16 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     'provardx_ping',
     {
       title: 'Ping MCP Server',
-      description:
+      description: desc(
         'Sanity-check tool. Echoes back a message with a timestamp. Use this to verify the MCP server is reachable before calling other tools.',
+        'Echo message back with timestamp; verify MCP server is reachable.'
+      ),
       inputSchema: {
-        message: z.string().optional().default('ping').describe('Optional message to echo back'),
+        message: z
+          .string()
+          .optional()
+          .default('ping')
+          .describe(desc('Optional message to echo back', 'message to echo')),
       },
     },
     ({ message }) => {
@@ -80,26 +156,21 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     }
   );
 
+  // ── Depth-guard middleware (PDX-474) ─────────────────────────────────────────
+  const rawLimit = parseInt(process.env['PROVAR_MCP_MAX_TOOL_DEPTH'] ?? '50', 10);
+  const depthLimit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 50 : rawLimit;
+  const depthState = createDepthGuardState();
+  patchWithMiddleware(server, depthState, depthLimit);
+
   // ── Provar tools ─────────────────────────────────────────────────────────────
-  registerProjectInspect(server, config);
-  registerPageObjectGenerate(server, config);
-  registerPageObjectValidate(server, config);
-  registerTestCaseGenerate(server, config);
-  registerTestCaseValidate(server, config);
-  registerTestSuiteValidate(server);
-  registerTestPlanValidate(server);
-  registerProjectValidateFromPath(server, config);
-  registerAllPropertiesTools(server, config);
-  registerAllQualityHubTools(server);
-  registerAllQualityHubApiTools(server);
-  registerAllAutomationTools(server, config);
-  registerAllDefectTools(server);
-  registerAllAntTools(server, config);
-  registerAllRcaTools(server, config);
-  registerAllTestPlanTools(server, config);
-  registerAllNitroXTools(server, config);
-  registerAllTestCaseStepTools(server, config);
-  registerAllConnectionTools(server, config);
+  const activeGroups = parseActiveGroups();
+  for (const [group, registrars] of Object.entries(TOOL_GROUPS)) {
+    if (activeGroups === null || activeGroups.has(group)) {
+      for (const register of registrars) {
+        register(server, config);
+      }
+    }
+  }
 
   // ── Provar prompts ───────────────────────────────────────────────────────────
   registerAllPrompts(server);
@@ -214,6 +285,15 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   return server;
+}
+
+function patchWithMiddleware(server: McpServer, state: DepthGuardState, limit: number): void {
+  const orig = server.registerTool.bind(server);
+  type RegisterToolFn = (n: string, c: unknown, h: AnyToolCallback) => unknown;
+  // Cast through unknown to patch the overloaded method without triggering no-unsafe-any.
+  const patchable = server as unknown as { registerTool: RegisterToolFn };
+  patchable.registerTool = (name: string, config: unknown, handler: AnyToolCallback): unknown =>
+    (orig as unknown as RegisterToolFn)(name, config, wrapWithDepthGuard(name, handler, state, limit));
 }
 
 /**

@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "mcpName": "io.github.ProvarTesting/provar",
   "license": "BSD-3-Clause",
   "plugins": [
@@ -158,6 +158,7 @@
         "src/mcp/rules/*.json",
         "docs/NITROX_COMPONENT_CATALOG.md",
         "docs/NITROX_CATALOG_SOURCE.json",
+        "docs/PROVAR_TOOL_GUIDE.md",
         "**/tsconfig.json",
         "messages/**"
       ],
@@ -180,12 +181,23 @@
     },
     "lint": {
       "command": "eslint src test --color --cache --cache-location .eslintcache",
+      "dependencies": [
+        "lint:script-names"
+      ],
       "files": [
         "src/**/*.ts",
         "test/**/*.ts",
         "messages/**",
         "**/.eslint*",
         "**/tsconfig.json"
+      ],
+      "output": []
+    },
+    "lint:script-names": {
+      "command": "node scripts/lint-script-names.cjs",
+      "files": [
+        "scripts/lint-script-names.cjs",
+        "scripts/**/*"
       ],
       "output": []
     },

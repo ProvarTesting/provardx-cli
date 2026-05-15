@@ -10,7 +10,32 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
-import { validateSuite, buildHierarchySummary, type TestSuiteInput } from './hierarchyValidate.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
+import {
+  generateRunId,
+  saveRun,
+  hasAnyRun,
+  loadBaselineViolations,
+  computeDiff,
+  computeContextHash,
+  resolveValidationDir,
+  type DiffableViolation,
+} from '../utils/validationDiff.js';
+import { validateSuite, buildHierarchySummary, type TestSuiteInput, type SuiteResult } from './hierarchyValidate.js';
+import { desc } from './descHelper.js';
+
+function collectAllViolations(result: SuiteResult): DiffableViolation[] {
+  const all: DiffableViolation[] = [...(result.violations as unknown as DiffableViolation[])];
+  for (const tc of result.test_cases) {
+    all.push(...(tc.issues as unknown as DiffableViolation[]));
+    all.push(...(tc.best_practices_violations as unknown as DiffableViolation[]));
+  }
+  for (const child of result.test_suites) {
+    all.push(...collectAllViolations(child));
+  }
+  return all;
+}
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -42,35 +67,77 @@ const childSuiteSchema = z.object({
   test_case_count: z.number().int().min(0).optional().describe('Explicit test case count for size check'),
 });
 
+const SUITE_VALIDATE_SUMMARY_FIELDS = [
+  'requestId',
+  'name',
+  'quality_score',
+  'summary',
+  'run_id',
+  'completeness_score',
+  'recommended_next_action',
+];
+
+function suiteStorageDir(): string {
+  return resolveValidationDir('testsuite');
+}
+
 export function registerTestSuiteValidate(server: McpServer): void {
   server.registerTool(
     'provar_testsuite_validate',
     {
       title: 'Validate Test Suite',
-      description:
-        'Validate a Provar test suite: checks for empty suites, duplicate names, oversized suites (>75 tests), and naming convention consistency. Recursively validates child suites and individual test case XML. Returns quality score, suite-level violations, and per-test-case results.',
+      description: desc(
+        'Validate a Provar test suite: checks for empty suites, duplicate names, oversized suites (>75 tests), and naming convention consistency. Recursively validates child suites and individual test case XML. Returns quality score, suite-level violations, and per-test-case results. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved violations.',
+        'Validate a Provar test suite: naming, size, duplicates, per-test-case quality; run_id for diff.'
+      ),
       inputSchema: {
-        suite_name: z.string().describe('Name of the test suite'),
-        test_cases: z.array(testCaseSchema).optional().describe('Test cases directly in this suite'),
+        suite_name: z.string().describe(desc('Name of the test suite', 'string')),
+        test_cases: z
+          .array(testCaseSchema)
+          .optional()
+          .describe(desc('Test cases directly in this suite', 'object[], optional')),
         child_suites: z
           .array(childSuiteSchema)
           .optional()
-          .describe('Child test suites (supports up to 2 levels of nesting)'),
+          .describe(desc('Child test suites (supports up to 2 levels of nesting)', 'object[], optional')),
         test_case_count: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe('Explicit total test case count for size check (overrides counting test_cases)'),
+          .describe(
+            desc('Explicit total test case count for size check (overrides counting test_cases)', 'int ≥0, optional')
+          ),
         quality_threshold: z
           .number()
           .min(0)
           .max(100)
           .optional()
-          .describe('Minimum quality score for a test case to be considered valid (default: 80)'),
+          .describe(
+            desc('Minimum quality score for a test case to be considered valid (default: 80)', 'number 0–100, optional')
+          ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            desc(
+              'Response verbosity. "summary": name, scores, and stop signal only. "standard"/"full": full violations and per-test-case results (default).',
+              'enum summary|standard|full, optional; default standard'
+            )
+          ),
+        baseline_run_id: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'run_id from a previous call. When provided, returns only violations that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.',
+              'string, optional; prev run_id for diff response'
+            )
+          ),
       },
     },
-    ({ suite_name, test_cases, child_suites, test_case_count, quality_threshold }) => {
+    ({ suite_name, test_cases, child_suites, test_case_count, quality_threshold, detail, baseline_run_id }) => {
       const requestId = makeRequestId();
       log('info', 'provar_testsuite_validate', { requestId, suite_name });
 
@@ -85,11 +152,75 @@ export function registerTestSuiteValidate(server: McpServer): void {
 
         const result = validateSuite(input, threshold);
         const summary = buildHierarchySummary(result);
-        const response = { requestId, ...result, summary };
+
+        const storageDir = suiteStorageDir();
+        const contextHash = computeContextHash('suite', suite_name);
+        const runId = generateRunId(suite_name);
+        const currentViolations = collectAllViolations(result);
+
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id, contextHash)
+            : null;
+
+        const hasBaseline = hasAnyRun(storageDir);
+
+        try {
+          saveRun(storageDir, runId, currentViolations, contextHash);
+        } catch (saveErr) {
+          log('warn', 'provar_testsuite_validate: could not save run for diff', {
+            requestId,
+            error: (saveErr as Error).message,
+          });
+        }
+
+        // Diff mode
+        if (baseline_run_id !== undefined && baseline_run_id !== '') {
+          if (!baseline) {
+            const errResult = makeError(
+              'BASELINE_NOT_FOUND',
+              'Baseline run not found. Run validation without baseline_run_id first to establish a baseline.',
+              requestId,
+              false,
+              { suggestion: 'Run provar_testsuite_validate without baseline_run_id first to establish a baseline.' }
+            );
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
+          }
+          const diff = computeDiff(baseline, currentViolations);
+          const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
+          const diffResponse = {
+            requestId,
+            run_id: runId,
+            ...diff,
+            completeness_score,
+            recommended_next_action,
+          };
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(diffResponse) }],
+            structuredContent: diffResponse,
+          };
+        }
+
+        const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
+
+        const response = {
+          requestId,
+          run_id: runId,
+          completeness_score,
+          recommended_next_action,
+          ...result,
+          summary,
+        };
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        const finalResponse = applyDetailLevel(response, detailLevel, SUITE_VALIDATE_SUMMARY_FIELDS);
 
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(response) }],
-          structuredContent: response,
+          content: [{ type: 'text' as const, text: JSON.stringify(finalResponse) }],
+          structuredContent: finalResponse,
         };
       } catch (err: unknown) {
         const error = err as Error;

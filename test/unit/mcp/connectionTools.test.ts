@@ -53,27 +53,62 @@ function writeTestProject(dir: string, content: string): void {
 
 // ── .testproject fixture content ──────────────────────────────────────────────
 
+// Mirrors the real .testproject XML shape:
+//   connectionClass → connections → connection → connectionUrls → connectionUrl
+//   environment → associations → association[@connectionId]
+// The pre-PDX-478 fixture used a flattened shape that did not exist in real
+// projects, which is how the parser bugs slipped through CI.
 const BASIC_TEST_PROJECT = `<?xml version="1.0" encoding="UTF-8"?>
 <testProject>
   <connectionClasses>
     <connectionClass name="sf">
-      <connection name="MyOrg" url="sfdc://user@example.com;environment=SANDBOX">
-      </connection>
-      <connection name="AdminOrg" url="sfdc://admin@example.com;environment=PROD_DEV">
-      </connection>
+      <connections>
+        <connection id="conn-myorg" name="MyOrg">
+          <connectionUrls>
+            <connectionUrl url="sfdc://user@example.com;environment=SANDBOX" />
+            <connectionUrl envId="env-qa" envName="QA" url="sfdc://user@example.com.qa;environment=SANDBOX" />
+          </connectionUrls>
+        </connection>
+        <connection id="conn-adminorg" name="AdminOrg">
+          <connectionUrls>
+            <connectionUrl url="sfdc://admin@example.com;environment=PROD_DEV" />
+          </connectionUrls>
+        </connection>
+      </connections>
     </connectionClass>
     <connectionClass name="ui">
-      <connection name="Chrome" url="selenium://chrome">
-      </connection>
+      <connections>
+        <connection id="conn-chrome" name="Chrome">
+          <connectionUrls>
+            <connectionUrl url="selenium://chrome" />
+          </connectionUrls>
+        </connection>
+      </connections>
     </connectionClass>
     <connectionClass name="sso">
-      <connection name="OktaSso" url="sso://okta.example.com">
-      </connection>
+      <connections>
+        <connection id="conn-okta" name="OktaSso">
+          <connectionUrls>
+            <connectionUrl url="sso://okta.example.com" />
+          </connectionUrls>
+        </connection>
+      </connections>
     </connectionClass>
   </connectionClasses>
   <environments>
-    <environment name="QA" connectionName="MyOrg" url="https://qa.example.com" />
-    <environment name="UAT" connectionName="AdminOrg" />
+    <environment guid="env-qa" name="QA">
+      <associations>
+        <association assocationType="TM.ENVIRONMENT" connectionId="conn-myorg" />
+      </associations>
+    </environment>
+    <environment guid="env-uat" name="UAT">
+      <associations>
+        <association assocationType="TM.ENVIRONMENT" connectionId="conn-adminorg" />
+      </associations>
+    </environment>
+    <environment guid="env-noassoc" name="NoAssoc">
+      <associations></associations>
+    </environment>
   </environments>
 </testProject>
 `;
@@ -151,25 +186,53 @@ describe('provar_connection_list', () => {
       assert.equal(sfConn['sso_configured'], false);
     });
 
-    it('returns environments with name, connection, and url', () => {
+    it('resolves environment.connection via associations[@connectionId]', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
       const result = server.call('provar_connection_list', { project_path: tmpDir });
       const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
       assert.ok(Array.isArray(environments));
-      assert.equal(environments.length, 2);
+      assert.equal(environments.length, 3);
       const qa = environments.find((e) => e['name'] === 'QA');
       assert.ok(qa);
       assert.equal(qa['connection'], 'MyOrg');
-      assert.equal(qa['url'], 'https://qa.example.com');
     });
 
-    it('returns environment without url when not present', () => {
+    it('returns environment-specific url when a connectionUrl has @envId matching env @guid', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
+      const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
+      const qa = environments.find((e) => e['name'] === 'QA');
+      assert.ok(qa);
+      assert.equal(qa['url'], 'sfdc://user@example.com.qa;environment=SANDBOX');
+    });
+
+    it('omits url on environment when no per-env connectionUrl exists', () => {
       writeTestProject(tmpDir, BASIC_TEST_PROJECT);
       const result = server.call('provar_connection_list', { project_path: tmpDir });
       const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
       const uat = environments.find((e) => e['name'] === 'UAT');
       assert.ok(uat);
-      assert.equal(uat['url'], undefined, 'UAT has no url attribute');
+      assert.equal(uat['url'], undefined, 'UAT has no @envId-matched connectionUrl');
+    });
+
+    it("handles environments with empty <associations> gracefully (no crash, connection='')", () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
+      assert.equal(isError(result), false);
+      const environments = parseText(result)['environments'] as Array<Record<string, unknown>>;
+      const noAssoc = environments.find((e) => e['name'] === 'NoAssoc');
+      assert.ok(noAssoc);
+      assert.equal(noAssoc['connection'], '');
+      assert.equal(noAssoc['url'], undefined);
+    });
+
+    it('connection.url uses the default connectionUrl (entry without @envId)', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
+      const connections = parseText(result)['connections'] as Array<Record<string, unknown>>;
+      const myOrg = connections.find((c) => c['name'] === 'MyOrg');
+      assert.ok(myOrg);
+      assert.equal(myOrg['url'], 'sfdc://user@example.com;environment=SANDBOX');
     });
 
     it('returns summary with correct counts', () => {
@@ -177,7 +240,7 @@ describe('provar_connection_list', () => {
       const result = server.call('provar_connection_list', { project_path: tmpDir });
       const summary = parseText(result)['summary'] as Record<string, number>;
       assert.equal(summary['connection_count'], 4);
-      assert.equal(summary['environment_count'], 2);
+      assert.equal(summary['environment_count'], 3);
     });
 
     it('returns empty arrays for project with no connections or environments', () => {
@@ -187,6 +250,59 @@ describe('provar_connection_list', () => {
       const body = parseText(result);
       assert.deepEqual(body['connections'], []);
       assert.deepEqual(body['environments'], []);
+    });
+  });
+
+  describe('fields param (sparse field masking)', () => {
+    it('retains only specified top-level keys when fields is provided', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections,summary',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('connections' in body, 'connections should be retained');
+      assert.ok('summary' in body, 'summary should be retained');
+      assert.ok(!('environments' in body), 'environments should be masked out');
+      assert.ok(!('requestId' in body), 'requestId should be masked out');
+    });
+
+    it('omitting fields returns the full response', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', { project_path: tmpDir });
+      const body = parseText(result);
+      assert.ok('connections' in body);
+      assert.ok('environments' in body);
+      assert.ok('requestId' in body);
+    });
+
+    it('silently ignores unknown field names', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections,ghost_field',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('connections' in body);
+      assert.ok(!('ghost_field' in body));
+    });
+
+    it('supports dot notation to narrow connection entries', () => {
+      writeTestProject(tmpDir, BASIC_TEST_PROJECT);
+      const result = server.call('provar_connection_list', {
+        project_path: tmpDir,
+        fields: 'connections.name,connections.type',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      const connections = body['connections'] as Array<Record<string, unknown>>;
+      assert.ok(Array.isArray(connections));
+      assert.ok('name' in connections[0], 'name should be retained');
+      assert.ok('type' in connections[0], 'type should be retained');
+      assert.ok(!('url' in connections[0]), 'url should be masked out');
+      assert.ok(!('sso_configured' in connections[0]), 'sso_configured should be masked out');
     });
   });
 

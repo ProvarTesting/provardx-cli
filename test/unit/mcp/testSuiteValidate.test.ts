@@ -7,7 +7,10 @@
 
 /* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
-import { describe, it, beforeEach } from 'mocha';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { describe, it, beforeEach, afterEach } from 'mocha';
 import { registerTestSuiteValidate } from '../../../src/mcp/tools/testSuiteValidate.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -70,18 +73,33 @@ const TC_LOGOUT = { name: 'LogoutTest.testcase', xml_content: makeXml(G.tc2, G.s
 const TC_LOGIN_ALIAS = { name: 'LoginTest.testcase', xml: makeXml(G.tc1, G.s1, 'tc-001') };
 const TC_LOGOUT_ALIAS = { name: 'LogoutTest.testcase', xml: makeXml(G.tc2, G.s2, 'tc-002') };
 
-// ── Test setup ─────────────────────────────────────────────────────────────────
-
-let server: MockMcpServer;
-
-beforeEach(() => {
-  server = new MockMcpServer();
-  registerTestSuiteValidate(server as never);
-});
-
 // ── provar_testsuite_validate ─────────────────────────────────────────────────
 
 describe('provar_testsuite_validate', () => {
+  let server: MockMcpServer;
+  let origHomedir: () => string;
+  let tempHome: string;
+
+  beforeEach(() => {
+    // Redirect os.homedir() into a temp dir so suiteStorageDir() writes to
+    // an isolated location instead of polluting the real developer/CI home.
+    // NOTE: scoped INSIDE this describe so the stub does not leak into other
+    // test files. Mocha root-level beforeEach attaches to the root suite and
+    // runs before every test in every file — see auth/rotate.test.ts which
+    // relies on the real os.homedir() and would otherwise see this stub.
+    tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pvts-home-'));
+    origHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = (): string => tempHome;
+
+    server = new MockMcpServer();
+    registerTestSuiteValidate(server as never);
+  });
+
+  afterEach(() => {
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  });
+
   describe('happy path', () => {
     it('returns a result (not an error) for a valid non-empty suite', () => {
       const result = server.call('provar_testsuite_validate', {
@@ -344,6 +362,148 @@ describe('provar_testsuite_validate', () => {
         quality_threshold: 90,
       });
       assert.equal(isError(result), false);
+    });
+  });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes violations, test_cases, and run_id', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'DetailSuite',
+        test_cases: [TC_LOGIN],
+        detail: 'standard',
+      });
+      const body = parseText(result);
+      assert.ok('violations' in body, 'standard should include violations');
+      assert.ok('test_cases' in body, 'standard should include test_cases');
+      assert.ok('run_id' in body, 'standard should include run_id');
+    });
+
+    it('summary response includes only key metrics', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'SummarySuite',
+        test_cases: [TC_LOGIN],
+        detail: 'summary',
+      });
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'summary should include quality_score');
+      assert.ok('completeness_score' in body, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'summary should include recommended_next_action');
+      assert.ok(!('violations' in body), 'summary should NOT include violations');
+      assert.ok(!('test_cases' in body), 'summary should NOT include test_cases');
+    });
+
+    it('full response includes all fields', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'FullSuite',
+        test_cases: [TC_LOGIN],
+        detail: 'full',
+      });
+      const body = parseText(result);
+      assert.ok('violations' in body, 'full should include violations');
+      assert.ok('test_cases' in body, 'full should include test_cases');
+    });
+  });
+
+  describe('PDX-473 — completeness_score and recommended_next_action', () => {
+    // Valid XML: id="1" passes TC_010, proper UUID passes TC_011/012
+    const TC_VALID = { name: 'Valid.testcase', xml_content: makeXml(G.tc1, G.s1, '1') };
+
+    it('completeness_score is present in response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'CompleteSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      assert.ok(typeof body['completeness_score'] === 'number', 'completeness_score should be a number');
+    });
+
+    it('completeness_score is 0 when suite has no test cases', () => {
+      const result = server.call('provar_testsuite_validate', { suite_name: 'EmptySuite' });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 0);
+    });
+
+    it('completeness_score is 100 when all test cases are valid', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'AllValidSuite',
+        test_cases: [TC_VALID],
+      });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+    });
+
+    it('recommended_next_action is a string in the response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'ActionSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      const action = body['recommended_next_action'];
+      assert.ok(typeof action === 'string', 'recommended_next_action should be a string');
+      assert.ok(['stop', 'inspect_failures', 'fix_and_revalidate'].includes(action), `Unexpected action: ${action}`);
+    });
+
+    it('recommended_next_action is NOT "stop" when test cases have BP violations (B2)', () => {
+      // TC_VALID is structurally valid (issues.length=0) but has BP violations
+      // (e.g. STRUCT-SUMMARY-001 — no <summary> tag). collectAllViolations must
+      // include tc.best_practices_violations so the stop-decision safety hedge
+      // sees the remaining work; otherwise stop fires while BP issues remain.
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'StopSuite',
+        test_cases: [TC_VALID],
+      });
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while BP violations remain, got: ${String(body['recommended_next_action'])}`
+      );
+    });
+  });
+
+  describe('PDX-471 — baseline_run_id diff mode', () => {
+    it('run_id is present in every standard response', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'RunIdSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const body = parseText(result);
+      assert.ok(typeof body['run_id'] === 'string' && body['run_id'].length > 0);
+    });
+
+    it('returns BASELINE_NOT_FOUND for an unknown baseline_run_id', () => {
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'DiffSuite',
+        test_cases: [TC_LOGIN],
+        baseline_run_id: 'nonexistent-run-id-xyz',
+      });
+      assert.equal(isError(result), true);
+      const body = parseText(result);
+      assert.equal(body['error_code'], 'BASELINE_NOT_FOUND');
+    });
+
+    it('diff mode returns added/resolved/unchanged_count when baseline exists', () => {
+      // First call to establish baseline
+      const first = server.call('provar_testsuite_validate', {
+        suite_name: 'BaselineSuite',
+        test_cases: [TC_LOGIN],
+      });
+      const firstBody = parseText(first);
+      const runId = firstBody['run_id'] as string;
+
+      // Second call with baseline_run_id should return diff
+      const second = server.call('provar_testsuite_validate', {
+        suite_name: 'BaselineSuite',
+        test_cases: [TC_LOGIN],
+        baseline_run_id: runId,
+      });
+      assert.equal(isError(second), false);
+      const diffBody = parseText(second);
+      assert.ok('added' in diffBody, 'diff should have added');
+      assert.ok('resolved' in diffBody, 'diff should have resolved');
+      assert.ok('unchanged_count' in diffBody, 'diff should have unchanged_count');
+      assert.ok('run_id' in diffBody, 'diff should have run_id');
     });
   });
 });

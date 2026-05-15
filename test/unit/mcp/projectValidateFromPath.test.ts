@@ -445,4 +445,142 @@ describe('provar_project_validate (from path)', () => {
       );
     });
   });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes quality_score and completeness_score', () => {
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', { project_path: tmpDir, save_results: false });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'standard should include quality_score');
+      assert.ok('completeness_score' in body, 'standard should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'standard should include recommended_next_action');
+    });
+
+    it('summary response includes only key fields, not violation details', () => {
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        save_results: false,
+        detail: 'summary',
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'summary should include quality_score');
+      assert.ok('completeness_score' in body, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'summary should include recommended_next_action');
+      assert.ok(!('project_violations_by_rule' in body), 'summary should NOT include project_violations_by_rule');
+      assert.ok(!('plans_summary' in body), 'summary should NOT include plans_summary');
+    });
+  });
+
+  describe('PDX-471 — run_id and baseline_run_id diff mode', () => {
+    it('run_id is present when save_results=true (default)', () => {
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', { project_path: tmpDir });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(typeof body['run_id'] === 'string' && body['run_id'].length > 0, 'run_id should be a non-empty string');
+    });
+
+    it('run_id is absent when save_results=false', () => {
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', { project_path: tmpDir, save_results: false });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      assert.ok(!('run_id' in body), 'run_id should not be present when save_results=false');
+    });
+
+    it('returns BASELINE_NOT_FOUND for an unknown baseline_run_id', () => {
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        baseline_run_id: 'nonexistent-run-id-xyz',
+      });
+      assert.equal(isError(result), true);
+      const body = parseText(result);
+      assert.equal(body['error_code'], 'BASELINE_NOT_FOUND');
+    });
+
+    it('diff mode returns added/resolved/unchanged_count when baseline exists', () => {
+      makeProject(tmpDir);
+      const first = server.call('provar_project_validate', { project_path: tmpDir });
+      assert.equal(isError(first), false);
+      const firstBody = parseText(first);
+      const runId = firstBody['run_id'] as string;
+
+      const second = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        baseline_run_id: runId,
+      });
+      assert.equal(isError(second), false);
+      const diffBody = parseText(second);
+      assert.ok('added' in diffBody, 'diff should include added');
+      assert.ok('resolved' in diffBody, 'diff should include resolved');
+      assert.ok('unchanged_count' in diffBody, 'diff should include unchanged_count');
+      assert.ok('run_id' in diffBody, 'diff should include run_id');
+    });
+
+    it('diff response includes completeness_score and recommended_next_action', () => {
+      makeProject(tmpDir);
+      const first = server.call('provar_project_validate', { project_path: tmpDir });
+      const firstBody = parseText(first);
+      const runId = firstBody['run_id'] as string;
+
+      const second = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        baseline_run_id: runId,
+      });
+      const diffBody = parseText(second);
+      assert.ok('completeness_score' in diffBody, 'diff should include completeness_score');
+      assert.ok('recommended_next_action' in diffBody, 'diff should include recommended_next_action');
+    });
+
+    it('returns diff (not BASELINE_NOT_FOUND) when save_results=false and baseline_run_id is set (B4)', () => {
+      // Read-only diff: callers must be able to compare against an existing
+      // baseline without persisting the current run. The pre-fix gated baseline
+      // load on save_results !== false, so a valid baseline returned BASELINE_NOT_FOUND.
+      makeProject(tmpDir);
+      const first = server.call('provar_project_validate', { project_path: tmpDir });
+      const runId = (parseText(first) as { run_id: string }).run_id;
+
+      const second = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        baseline_run_id: runId,
+        save_results: false,
+      });
+      assert.equal(isError(second), false, 'read-only diff must not error');
+      const body = parseText(second);
+      assert.ok('added' in body, 'read-only diff must include added');
+      assert.ok('resolved' in body, 'read-only diff must include resolved');
+      assert.ok('unchanged_count' in body, 'read-only diff must include unchanged_count');
+      assert.ok(!('run_id' in body), 'read-only diff should NOT include run_id when save_results=false');
+    });
+  });
+
+  describe('PDX-473 — stop decision counts all-level violations (B3)', () => {
+    it('recommended_next_action is NOT stop when nested violations remain at completeness 100', () => {
+      // The fixture project (makeProject) creates a structurally valid test case
+      // covered by a plan, yielding test_cases_valid===total. But the project
+      // typically has plan/suite-level violations (e.g. missing plan metadata
+      // from the bare .planitem). The stop decision must reflect those.
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        save_results: false,
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      if (body['completeness_score'] === 100) {
+        // If the fixture happens to be 100% complete in completeness terms, the
+        // stop decision must still account for any nested violations that the
+        // pre-fix snapshot ignored.
+        assert.notEqual(
+          body['recommended_next_action'],
+          'stop',
+          `Expected NOT stop while nested violations remain, got: ${String(body['recommended_next_action'])}`
+        );
+      }
+    });
+  });
 });

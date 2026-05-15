@@ -21,7 +21,9 @@ import type { ServerConfig } from '../../../src/mcp/server.js';
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
-  public registrations: Array<{ name: string; description: string }> = [];
+  // PDX-484: capture `title` alongside `description` so tests can assert on the
+  // title-level contract. Many MCP clients render only the title field.
+  public registrations: Array<{ name: string; description: string; title: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _description: string, _schema: unknown, handler: ToolHandler): void {
@@ -30,8 +32,16 @@ class MockMcpServer {
 
   public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
-    const desc = (config as Record<string, unknown>)['description'];
-    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
+    const cfg = config as Record<string, unknown>;
+    const desc = cfg['description'];
+    const title = cfg['title'];
+    if (typeof desc === 'string') {
+      this.registrations.push({
+        name,
+        description: desc,
+        title: typeof title === 'string' ? title : '',
+      });
+    }
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -86,6 +96,140 @@ describe('provar_testcase_generate description', () => {
       reg.description.includes('provar://docs/step-reference'),
       'description should include step-reference fallback'
     );
+  });
+
+  // ── PDX-482 regression guard: construction contract at the call site ──────
+  // The PDX-479 regression came from upstream guidance steering agents toward
+  // multi-call construction. These assertions protect the in-tool contract so
+  // even if upstream prompts/resources regress again, the LLM reads the
+  // single-call requirement at every call site.
+
+  it('TOOL_DESCRIPTION carries the single-call construction contract', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('Construction pattern'),
+      'description must lead with the construction-pattern contract for PDX-479 protection'
+    );
+    assert.ok(
+      reg.description.includes('single call'),
+      'description must say "single call" so the contract is greppable from the call site'
+    );
+    assert.ok(reg.description.includes('FULL step tree'), 'description must instruct passing the FULL step tree');
+  });
+
+  it('TOOL_DESCRIPTION marks step_edit as AMENDING, not constructing', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('AMENDING'),
+      'description must explicitly say provar_testcase_step_edit is for AMENDING (caps for emphasis at the call site)'
+    );
+    // Use a literal substring match (not a regex) — the previous regex
+    // /step_edit[^.]*not for CONSTRUCTING|CONSTRUCTING[^.]*not/i had a
+    // false-positive: the second alternative would pass on hostile text like
+    // "constructing is the only way... not via generate". Locking on the
+    // exact canonical phrasing prevents that drift.
+    assert.ok(
+      reg.description.includes('not for CONSTRUCTING one from scratch'),
+      'description must explicitly say step_edit is "not for CONSTRUCTING one from scratch" (literal canonical phrase)'
+    );
+  });
+
+  it('TOOL_DESCRIPTION gives stop-and-assemble guidance for the common mistake', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.description.includes('stop and assemble') || reg.description.includes('stop, and assemble'),
+      'description must tell agents to stop and assemble the full step list before calling — the most common mistake'
+    );
+  });
+
+  // ── PDX-482 hardening: leading-position assertion (adversarial review fix) ──
+  // The contract must appear EARLY in the description because LLMs weight
+  // earlier tokens more heavily and many MCP clients truncate descriptions.
+  // Without this guard, a future refactor could move the contract to the end
+  // of the joined array and every other assertion would still pass.
+  it('Construction contract appears in the first 200 characters of the description', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    const pos = reg.description.indexOf('Construction pattern');
+    assert.ok(pos >= 0, 'description must contain "Construction pattern"');
+    assert.ok(
+      pos < 200,
+      `"Construction pattern" must appear in the first 200 chars (found at ${pos}) — LLMs weight leading tokens more`
+    );
+  });
+
+  // ── PDX-484: title-level construct-vs-amend contract ──────────────────────
+  // Many MCP clients (Claude Desktop tool-picker chips, Cursor audit pane,
+  // inline tool-call references in chat threads) render only the `title`
+  // field. Without the contract in the title an agent that reads only that
+  // surface gets zero PDX-479 protection. These assertions lock the title to
+  // the canonical phrasing chosen during the PDX-484 cross-client pilot.
+
+  it('title carries the single-call construction contract (PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.title.includes('one call') || reg.title.includes('single call'),
+      'title must contain "one call" or "single call" so the contract is visible in tool-picker chips'
+    );
+    assert.ok(
+      /step/i.test(reg.title),
+      'title must mention steps so the LLM sees the payload shape at the chip-level surface'
+    );
+  });
+
+  it('title fits the cross-client chip-render comfort threshold (≤50 chars, PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.title.length <= 50,
+      `title length ${reg.title.length} exceeds 50 chars — Cursor and other clients may truncate`
+    );
+  });
+
+  // ── PDX-482 hardening: compact-mode coverage (adversarial review fix) ──────
+  // PROVAR_MCP_SCHEMA_MODE=compact swaps the entire description for a short
+  // one-liner. Without this guard, compact mode is a regression highway:
+  // the LLM would see a contract-free description and could fall back to the
+  // multi-call pattern that caused PDX-479.
+  describe('compact-mode (PROVAR_MCP_SCHEMA_MODE=compact)', () => {
+    const ORIGINAL_MODE = process.env['PROVAR_MCP_SCHEMA_MODE'];
+    let compactServer: MockMcpServer;
+
+    beforeEach(() => {
+      process.env['PROVAR_MCP_SCHEMA_MODE'] = 'compact';
+      compactServer = new MockMcpServer();
+      registerTestCaseGenerate(compactServer as never, { allowedPaths: [tmpDir] });
+    });
+
+    afterEach(() => {
+      if (ORIGINAL_MODE === undefined) {
+        delete process.env['PROVAR_MCP_SCHEMA_MODE'];
+      } else {
+        process.env['PROVAR_MCP_SCHEMA_MODE'] = ORIGINAL_MODE;
+      }
+    });
+
+    it('compact description still carries the single-call construction contract', () => {
+      const reg = compactServer.registrations.find((r) => r.name === 'provar_testcase_generate');
+      assert.ok(reg, 'tool should be registered in compact mode');
+      assert.ok(
+        reg.description.includes('ONE call'),
+        'compact description must say "ONE call" — otherwise compact mode silently strips the contract (PDX-479 regression highway)'
+      );
+      assert.ok(reg.description.includes('FULL steps'), 'compact description must mention the FULL steps[] tree');
+      assert.ok(
+        reg.description.includes('AMENDING') || reg.description.includes('amend'),
+        'compact description must mark step_edit as amendment-only'
+      );
+      assert.ok(
+        !reg.description.includes('UUID guids and steps structure'),
+        'old compact form (contract-free) must not be in use anymore'
+      );
+    });
   });
 });
 
@@ -277,11 +421,16 @@ describe('provar_testcase_generate', () => {
   });
 
   describe('writing to disk', () => {
+    // Each disk-write test uses a non-empty steps[] so the PDX-483 STEPS_REQUIRED
+    // guard (which rejects steps:[]+dry_run:false+output_path) does not fire.
+    // These tests assert *other* behaviour: file write, overwrite, mkdirp, path policy.
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
     it('writes file when dry_run=false and output_path provided', () => {
       const outPath = path.join(tmpDir, 'Login.testcase');
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Login',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -310,7 +459,7 @@ describe('provar_testcase_generate', () => {
 
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -326,7 +475,7 @@ describe('provar_testcase_generate', () => {
 
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: true,
@@ -341,7 +490,7 @@ describe('provar_testcase_generate', () => {
       const outPath = path.join(tmpDir, 'tests', 'suite', 'Login.testcase');
       server.call('provar_testcase_generate', {
         test_case_name: 'Login',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -351,14 +500,144 @@ describe('provar_testcase_generate', () => {
     });
   });
 
+  // ── PDX-483 runtime guard: reject empty steps[] on non-dry-run with output_path ──
+  // The PDX-479 regression class arose from agents calling generate with steps:[]
+  // intending to append later via step_edit. The passive contract (PDX-482) lives in
+  // the description; the active runtime guard rejects the exact shape that produces
+  // a contract-violating file on disk. The 6 edge cases below pin down which empty-
+  // steps shapes are allowed (dry-run preview, inspection-only) vs rejected (file write).
+  describe('STEPS_REQUIRED runtime guard (PDX-483)', () => {
+    const SINGLE_STEP = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
+    it('allows steps:[] + dry_run:true + no output_path (skeleton inspection)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Skeleton Inspect',
+        steps: [],
+        dry_run: true,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'dry-run skeleton inspection must remain allowed');
+      assert.equal(parseText(result)['written'], false);
+    });
+
+    it('allows steps:[] + dry_run:true + output_path provided (dry-run preview wins)', () => {
+      const outPath = path.join(tmpDir, 'DryRunWithPath.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DryRun With Path',
+        steps: [],
+        output_path: outPath,
+        dry_run: true,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'dry-run wins over output_path — no file is written');
+      assert.equal(fs.existsSync(outPath), false, 'file must not be written in dry_run mode');
+    });
+
+    it('allows steps:[] + dry_run:false + no output_path (no persistence target)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'No Output Path',
+        steps: [],
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'no output_path means no file write — TODO-only XML is harmless');
+      assert.equal(parseText(result)['written'], false);
+    });
+
+    it('REJECTS steps:[] + dry_run:false + output_path with STEPS_REQUIRED', () => {
+      const outPath = path.join(tmpDir, 'Empty.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Empty Build',
+        steps: [],
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), true, 'multi-call construction pattern must be rejected');
+      const body = parseText(result);
+      assert.equal(body['error_code'], 'STEPS_REQUIRED');
+      assert.equal(body['retryable'], false);
+      const details = body['details'] as Record<string, unknown>;
+      assert.ok(details, 'error must include details');
+      const suggestion = details['suggestion'];
+      assert.ok(typeof suggestion === 'string', 'details.suggestion must be a string');
+      assert.ok(suggestion.length > 0, 'details.suggestion must be non-empty');
+      assert.ok(
+        suggestion.includes('FULL step tree'),
+        'suggestion must instruct passing the FULL step tree in a single call'
+      );
+      assert.ok(
+        suggestion.includes('dry_run=true'),
+        'suggestion must mention the dry_run=true escape hatch for skeleton inspection'
+      );
+    });
+
+    it('STEPS_REQUIRED rejection writes NO file (assertion: fs.existsSync === false)', () => {
+      const outPath = path.join(tmpDir, 'NeverWritten.testcase');
+      server.call('provar_testcase_generate', {
+        test_case_name: 'Never Written',
+        steps: [],
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(
+        fs.existsSync(outPath),
+        false,
+        'STEPS_REQUIRED rejection must run BEFORE fs.writeFileSync — no skeleton on disk'
+      );
+    });
+
+    it('allows non-empty steps + dry_run:false + output_path (happy path — normal write)', () => {
+      const outPath = path.join(tmpDir, 'HappyPath.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Happy Path',
+        steps: SINGLE_STEP,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'normal write path must remain unchanged');
+      assert.equal(parseText(result)['written'], true);
+      assert.equal(fs.existsSync(outPath), true, 'happy-path file must be written');
+    });
+
+    // Path-policy ordering check: the guard must fire BEFORE assertPathAllowed
+    // so that a caller in the rejected shape gets STEPS_REQUIRED (the actionable
+    // root-cause error), not PATH_NOT_ALLOWED (which would mislead about the fix).
+    it('STEPS_REQUIRED fires BEFORE path policy when both would reject', () => {
+      const strictServer = new MockMcpServer();
+      registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+      const result = strictServer.call('provar_testcase_generate', {
+        test_case_name: 'Outside And Empty',
+        steps: [],
+        // Path outside allowedPaths AND empty steps — STEPS_REQUIRED must win
+        // because its suggestion is the actionable one (path is moot if no steps).
+        output_path: path.join(os.tmpdir(), 'outside-and-empty.testcase'),
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), true);
+      assert.equal(
+        parseText(result)['error_code'],
+        'STEPS_REQUIRED',
+        'STEPS_REQUIRED must fire before assertPathAllowed — the empty-payload root cause is what the LLM needs to see'
+      );
+    });
+  });
+
   describe('path policy', () => {
+    // Uses a non-empty steps[] to bypass the PDX-483 STEPS_REQUIRED guard so
+    // the assertion targets the PATH_NOT_ALLOWED branch specifically.
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
     it('returns PATH_NOT_ALLOWED when output_path is outside allowedPaths', () => {
       const strictServer = new MockMcpServer();
       registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call('provar_testcase_generate', {
         test_case_name: 'Evil',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: path.join(os.tmpdir(), 'evil.testcase'),
         dry_run: false,
         overwrite: false,
@@ -949,6 +1228,170 @@ describe('provar_testcase_generate', () => {
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('class="variable"'), 'Pure {VarName} should use class="variable"');
       assert.ok(!xml.includes('class="compound"'), 'Pure {VarName} must NOT use class="compound"');
+    });
+  });
+
+  // ── PDX-481 regression guard ─────────────────────────────────────────────────
+  // The 1.5.0 regression (PDX-479) happened when agents authored test cases
+  // step-by-step via repeated tool calls instead of constructing the full step
+  // tree in a single provar_testcase_generate call. This block proves that
+  // when the full tree IS passed in one call, the output is structurally clean:
+  // scenarios numbered consecutively, asserts emitted with consistent types,
+  // and testItemIds sequential.
+
+  describe('multi-scenario single-call construction (PDX-481 regression guard)', () => {
+    it('emits consecutive testItemIds across a 3-scenario, multi-step payload', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'AccountFlow',
+        steps: [
+          // Scenario 1 — Create Account
+          { api_id: 'UiConnect', name: 'Salesforce Connect', attributes: {} },
+          {
+            api_id: 'SetValues',
+            name: 'Set Account Test Data',
+            attributes: { AccountName: 'Acme', AccountPhone: '555-0100' },
+          },
+          { api_id: 'UiNavigate', name: 'Scenario 1: navigate to Account home', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 1: click New', attributes: {} },
+          {
+            api_id: 'SetValues',
+            name: 'Scenario 1: fill form',
+            attributes: { Name: '{AccountName}', Phone: '{AccountPhone}' },
+          },
+          { api_id: 'UiDoAction', name: 'Scenario 1: click Save', attributes: {} },
+          // Scenario 2 — Verify on list view (the scenario that went missing on 1.5.0)
+          { api_id: 'UiNavigate', name: 'Scenario 2: go to Account list', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 2: assert Name on list',
+            attributes: { expectedValue: '{AccountName}', actualValue: 'Name', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 2: assert Phone on list',
+            attributes: { expectedValue: '{AccountPhone}', actualValue: 'Phone', comparisonType: 'EqualTo' },
+          },
+          // Scenario 3 — Open detail and assert all
+          { api_id: 'UiDoAction', name: 'Scenario 3: open Account detail', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 3: assert Name on detail',
+            attributes: { expectedValue: '{AccountName}', actualValue: 'Name', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 3: assert Phone on detail',
+            attributes: { expectedValue: '{AccountPhone}', actualValue: 'Phone', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false, 'single-call multi-scenario generate must succeed');
+      const body = parseText(result);
+      assert.equal(body['step_count'], 12, 'all 12 steps must be present (no scenarios dropped)');
+
+      const xml = body['xml_content'] as string;
+      // testItemIds must be exactly 1..12 — gaps indicate dropped steps.
+      for (let i = 1; i <= 12; i++) {
+        assert.ok(
+          xml.includes(`testItemId="${i}"`),
+          `expected sequential testItemId="${i}" — gap means a scenario step was dropped`
+        );
+      }
+      // No higher testItemIds emitted (would indicate spurious appends from an internal step_edit loop).
+      assert.ok(!xml.includes('testItemId="13"'), 'no spurious testItemIds beyond the payload count');
+    });
+
+    it('preserves every step name from the payload — no scenario marker is silently dropped', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'ScenarioMarkers',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Scenario 1: When create', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 1: Then verify', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 2: When edit', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 2: Then verify', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 3: When delete', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 3: Then absent', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      for (const marker of [
+        'Scenario 1: When create',
+        'Scenario 1: Then verify',
+        'Scenario 2: When edit',
+        'Scenario 2: Then verify',
+        'Scenario 3: When delete',
+        'Scenario 3: Then absent',
+      ]) {
+        assert.ok(xml.includes(marker), `scenario marker "${marker}" must be preserved verbatim`);
+      }
+    });
+
+    it('emits consistent assert API IDs for repeated AssertValues — no drift between calls', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'AssertConsistency',
+        steps: [
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 1',
+            attributes: { expectedValue: '{a}', actualValue: 'x', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 2',
+            attributes: { expectedValue: '{b}', actualValue: 'y', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 3',
+            attributes: { expectedValue: '{c}', actualValue: 'z', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      const assertValuesMatches = xml.match(/apiId="com\.provar\.plugins\.bundled\.apis\.AssertValues"/g) ?? [];
+      assert.equal(assertValuesMatches.length, 3, 'all 3 asserts must use AssertValues — no API ID drift');
+      // None of them should silently become UiAssert.
+      assert.ok(
+        !xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert"'),
+        'no AssertValues should be substituted with UiAssert'
+      );
+    });
+
+    it('wraps a non-SF target_uri in UiWithScreen with nested steps — full tree in one call', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PageObjectNested',
+        target_uri: 'ui:pageobject:target?pageId=pageobjects.AccountPage',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Click new', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert created',
+            attributes: { expectedValue: '{x}', actualValue: 'y', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('UiWithScreen'), 'non-SF target_uri must wrap in UiWithScreen');
+      assert.ok(xml.includes('<clauses>'), 'wrapper must contain <clauses>');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2">'), 'substeps clause must have testItemId="2"');
+      // Inner steps start at testItemId=3 per builder convention.
+      assert.ok(xml.includes('testItemId="3"'), 'first nested step must have testItemId="3"');
+      assert.ok(xml.includes('testItemId="4"'), 'second nested step must have testItemId="4"');
     });
   });
 });

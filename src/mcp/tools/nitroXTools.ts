@@ -18,6 +18,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId, type ValidationIssue } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -487,29 +488,39 @@ export function registerNitroXDiscover(server: McpServer): void {
     'provar_nitrox_discover',
     {
       title: 'Discover NitroX Components',
-      description: [
-        'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
-        'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
-        "NitroX is Provar's Hybrid Model for locators — component-based page objects for LWC,",
-        'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
-        'Results provide file paths and package info for use with provar_nitrox_read, validate, and generate.',
-      ].join(' '),
+      description: desc(
+        [
+          'Discover Provar projects containing NitroX (Hybrid Model) page objects.',
+          'Scans directories for .testproject marker files, then inventories nitroX/ and nitroXPackages/ directories.',
+          "NitroX is Provar's Hybrid Model for locators — component-based page objects for LWC,",
+          'Screen Flow, Industry Components, Experience Cloud, and HTML5 components.',
+          'Results provide file paths and package info for use with provar_nitrox_read, validate, and generate.',
+        ].join(' '),
+        'Discover Provar projects with NitroX Hybrid Model page objects.'
+      ),
       inputSchema: {
         search_roots: z
           .array(z.string())
           .optional()
-          .describe('Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)'),
+          .describe(
+            desc(
+              'Directories to scan (default: cwd; if empty, falls back to ~/git and ~/Provar)',
+              'array of strings, optional; dirs to scan'
+            )
+          ),
         max_depth: z
           .number()
           .int()
           .min(1)
           .max(20)
           .default(6)
-          .describe('Maximum directory depth for .testproject search'),
+          .describe(desc('Maximum directory depth for .testproject search', 'int 1–20, optional; max scan depth')),
         include_packages: z
           .boolean()
           .default(true)
-          .describe('Include nitroXPackages/ package.json metadata in results'),
+          .describe(
+            desc('Include nitroXPackages/ package.json metadata in results', 'bool, optional; include package metadata')
+          ),
       },
     },
     ({ search_roots, max_depth, include_packages }) => {
@@ -589,24 +600,42 @@ export function registerNitroXRead(server: McpServer, config: ServerConfig): voi
     'provar_nitrox_read',
     {
       title: 'Read NitroX Files',
-      description: [
-        'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
-        'Use this to load examples before generating or validating.',
-        "Provide file_paths for specific files, or project_path to read all .po.json files from a project's nitroX/ directory.",
-      ].join(' '),
+      description: desc(
+        [
+          'Read one or more NitroX .po.json (Hybrid Model page object) files and return their parsed content.',
+          'Use this to load examples before generating or validating.',
+          "Provide file_paths for specific files, or project_path to read all .po.json files from a project's nitroX/ directory.",
+        ].join(' '),
+        'Read NitroX .po.json files and return parsed content.'
+      ),
       inputSchema: {
-        file_paths: z.array(z.string()).optional().describe('Specific .po.json file paths to read'),
+        file_paths: z
+          .array(z.string())
+          .optional()
+          .describe(
+            desc('Specific .po.json file paths to read', 'array of strings, optional; specific .po.json paths')
+          ),
         project_path: z
           .string()
           .optional()
-          .describe('Provar project path — reads all .po.json files from nitroX/ directory'),
+          .describe(
+            desc(
+              'Provar project path — reads all .po.json files from nitroX/ directory',
+              'string, optional; project path to read all nitroX files'
+            )
+          ),
         max_files: z
           .number()
           .int()
           .min(1)
           .max(100)
           .default(20)
-          .describe('Maximum number of files to return (prevents context overflow)'),
+          .describe(
+            desc(
+              'Maximum number of files to return (prevents context overflow)',
+              'int 1–100, optional; max files returned'
+            )
+          ),
       },
     },
     ({ file_paths, project_path, max_files }) => {
@@ -690,17 +719,28 @@ export function registerNitroXValidate(server: McpServer, config: ServerConfig):
     'provar_nitrox_validate',
     {
       title: 'Validate NitroX Component',
-      description: [
-        'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
-        'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-        'Runs two validation passes sequentially: hardcoded semantic rules (NX001–NX010) then JSON schema validation (NX_SCHEMA_* rule IDs).',
-        'Schema issues catch structural errors not covered by NX rules: wrong property types, extra properties, enum violations.',
-        'Returns a quality score (0–100) and a combined list of issues with rule IDs, severity, and suggestions.',
-        'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
-      ].join(' '),
+      description: desc(
+        [
+          'Validate a NitroX .po.json (Hybrid Model component page object) against schema rules.',
+          'Works for any NitroX-mapped component type: LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+          'Runs two validation passes sequentially: hardcoded semantic rules (NX001–NX010) then JSON schema validation (NX_SCHEMA_* rule IDs).',
+          'Schema issues catch structural errors not covered by NX rules: wrong property types, extra properties, enum violations.',
+          'Returns a quality score (0–100) and a combined list of issues with rule IDs, severity, and suggestions.',
+          'Score formula: 100 − (20 × errors) − (5 × warnings) − (1 × infos).',
+        ].join(' '),
+        'Validate a NitroX .po.json against NX001–NX010 and JSON schema rules.'
+      ),
       inputSchema: {
-        content: z.string().optional().describe('JSON string of the .po.json content to validate'),
-        file_path: z.string().optional().describe('Path to a .po.json file to validate'),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            desc('JSON string of the .po.json content to validate', 'string, optional; JSON content to validate')
+          ),
+        file_path: z
+          .string()
+          .optional()
+          .describe(desc('Path to a .po.json file to validate', 'string, optional; path to .po.json file')),
       },
     },
     ({ content, file_path }) => {
@@ -779,26 +819,58 @@ export function registerNitroXGenerate(server: McpServer, config: ServerConfig):
     'provar_nitrox_generate',
     {
       title: 'Generate NitroX Components',
-      description: [
-        'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
-        "Applicable to any component type supported by Provar's Hybrid Model:",
-        'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
-        'Read the provar-nitrox-component-catalog resource first to understand available component types,',
-        'tagName conventions, interaction titles, and attribute patterns from shipped base packages.',
-        'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
-        'writes to disk only when dry_run=false.',
-      ].join(' '),
+      description: desc(
+        [
+          'Generate a new NitroX .po.json (Hybrid Model page object) from a component description.',
+          "Applicable to any component type supported by Provar's Hybrid Model:",
+          'LWC, Screen Flow, Industry Components, Experience Cloud, HTML5.',
+          'Read the provar-nitrox-component-catalog resource first to understand available component types,',
+          'tagName conventions, interaction titles, and attribute patterns from shipped base packages.',
+          'All componentId fields are assigned fresh UUIDs. Returns JSON content;',
+          'writes to disk only when dry_run=false.',
+        ].join(' '),
+        'Generate a NitroX .po.json Hybrid Model page object with fresh UUIDs.'
+      ),
       inputSchema: {
-        name: z.string().describe('Path-like component name, e.g. /com/force/myapp/ButtonComponent'),
-        tag_name: z.string().describe('LWC or HTML tag name, e.g. lightning-button or c-my-component'),
-        type: z.enum(['Block', 'Page']).default('Block').describe('Component type'),
-        page_structure_element: z.boolean().default(true).describe('Whether this is a page structure element'),
-        field_details_element: z.boolean().default(false).describe('Whether this is a field details element'),
-        parameters: z.array(ParameterInputSchema).optional().describe('Component parameters/qualifiers'),
-        elements: z.array(ElementInputSchema).optional().describe('Child elements'),
-        output_path: z.string().optional().describe('File path to write (requires dry_run=false)'),
-        overwrite: z.boolean().default(false).describe('Overwrite if output_path already exists'),
-        dry_run: z.boolean().default(true).describe('Return JSON without writing to disk (default)'),
+        name: z
+          .string()
+          .describe(
+            desc('Path-like component name, e.g. /com/force/myapp/ButtonComponent', 'string, path-like component name')
+          ),
+        tag_name: z
+          .string()
+          .describe(
+            desc('LWC or HTML tag name, e.g. lightning-button or c-my-component', 'string, LWC or HTML tag name')
+          ),
+        type: z.enum(['Block', 'Page']).default('Block').describe(desc('Component type', 'enum Block|Page')),
+        page_structure_element: z
+          .boolean()
+          .default(true)
+          .describe(desc('Whether this is a page structure element', 'bool, optional; default true')),
+        field_details_element: z
+          .boolean()
+          .default(false)
+          .describe(desc('Whether this is a field details element', 'bool, optional; default false')),
+        parameters: z
+          .array(ParameterInputSchema)
+          .optional()
+          .describe(desc('Component parameters/qualifiers', 'array, optional; component parameters')),
+        elements: z
+          .array(ElementInputSchema)
+          .optional()
+          .describe(desc('Child elements', 'array, optional; child elements')),
+        output_path: z
+          .string()
+          .optional()
+          .describe(desc('File path to write (requires dry_run=false)', 'string, optional; output file path')),
+        overwrite: z
+          .boolean()
+          .default(false)
+          .describe(desc('Overwrite if output_path already exists', 'bool, optional; overwrite if exists')),
+        dry_run: z
+          .boolean()
+          .default(true)
+          .describe(desc('Return JSON without writing to disk (default)', 'bool, optional; default true, skip write')),
       },
     },
     (input) => {
@@ -861,22 +933,42 @@ export function registerNitroXPatch(server: McpServer, config: ServerConfig): vo
     'provar_nitrox_patch',
     {
       title: 'Patch NitroX Component',
-      description: [
-        'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
-        'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
-        'optionally validates the merged result, and writes back.',
-        'Use dry_run=true (default) to preview the merged output without writing.',
-      ].join(' '),
+      description: desc(
+        [
+          'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.',
+          'Reads the file, merges the patch (null values remove keys, other values replace or recurse into objects),',
+          'optionally validates the merged result, and writes back.',
+          'Use dry_run=true (default) to preview the merged output without writing.',
+        ].join(' '),
+        'Apply a JSON merge-patch (RFC 7396) to an existing NitroX .po.json file.'
+      ),
       inputSchema: {
-        file_path: z.string().describe('Path to the existing .po.json file to patch'),
+        file_path: z
+          .string()
+          .describe(desc('Path to the existing .po.json file to patch', 'string, absolute path to .po.json file')),
         patch: z
           .record(z.unknown())
-          .describe('JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)'),
-        dry_run: z.boolean().default(true).describe('Return merged result without writing to disk (default)'),
+          .describe(
+            desc(
+              'JSON merge-patch to apply (RFC 7396: null removes key, any other value replaces)',
+              'object, RFC 7396 merge-patch'
+            )
+          ),
+        dry_run: z
+          .boolean()
+          .default(true)
+          .describe(
+            desc('Return merged result without writing to disk (default)', 'bool, optional; default true, skip write')
+          ),
         validate_after: z
           .boolean()
           .default(true)
-          .describe('Run NX validation on merged result; blocks write if errors found'),
+          .describe(
+            desc(
+              'Run NX validation on merged result; blocks write if errors found',
+              'bool, optional; default true, validate before write'
+            )
+          ),
       },
     },
     ({ file_path, patch, dry_run, validate_after }) => {

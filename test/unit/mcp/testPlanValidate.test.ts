@@ -344,4 +344,135 @@ describe('provar_testplan_validate', () => {
       assert.equal(isError(result), false);
     });
   });
+
+  describe('PDX-470 — detail level', () => {
+    it('standard response includes violations and test_suites', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'DetailPlan',
+        test_suites: [SUITE_A],
+        detail: 'standard',
+      });
+
+      const body = parseText(result);
+      assert.ok('violations' in body, 'standard should include violations');
+      assert.ok('test_suites' in body, 'standard should include test_suites');
+    });
+
+    it('summary response includes only key fields, not violations or test_suites', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'SummaryPlan',
+        test_suites: [SUITE_A],
+        detail: 'summary',
+      });
+
+      const body = parseText(result);
+      assert.ok('quality_score' in body, 'summary should include quality_score');
+      assert.ok('completeness_score' in body, 'summary should include completeness_score');
+      assert.ok('recommended_next_action' in body, 'summary should include recommended_next_action');
+      assert.ok(!('violations' in body), 'summary should NOT include violations');
+      assert.ok(!('test_suites' in body), 'summary should NOT include test_suites');
+    });
+
+    it('full response includes all fields (same as standard for plan)', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'FullPlan',
+        test_suites: [SUITE_A],
+        detail: 'full',
+      });
+
+      const body = parseText(result);
+      assert.ok('violations' in body, 'full should include violations');
+      assert.ok('test_suites' in body, 'full should include test_suites');
+    });
+  });
+
+  describe('PDX-473 — completeness_score and recommended_next_action', () => {
+    const TC_VALID = { name: 'Valid.testcase', xml_content: makeXml(G.tc1, G.s1, '1') };
+    const SUITE_VALID = { name: 'ValidSuite', test_cases: [TC_VALID] };
+
+    it('completeness_score is present in every response', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'ScorePlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok('completeness_score' in body, 'completeness_score should be present');
+      assert.ok(typeof body['completeness_score'] === 'number');
+    });
+
+    it('completeness_score is 0 when plan has no test cases', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'EmptyPlan',
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 0);
+    });
+
+    it('recommended_next_action is a valid string value', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'ActionPlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok('recommended_next_action' in body);
+      const valid = ['stop', 'fix_and_revalidate', 'inspect_failures'];
+      assert.ok(valid.includes(body['recommended_next_action'] as string));
+    });
+
+    it('recommended_next_action is NOT stop when test cases are structurally valid but BP violations remain (B1)', () => {
+      // TC_VALID parses as structurally valid (issues=0) but has BP violations
+      // (e.g. STRUCT-SUMMARY-001 — no <summary> tag). With fullMeta() the plan
+      // itself has no PLAN-META-* violations. The stop-decision safety hedge
+      // must include the nested per-test-case BP violations, so the action
+      // must NOT be 'stop' until those are resolved.
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'AllValidPlan',
+        test_suites: [SUITE_VALID],
+        metadata: fullMeta(),
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while BP violations remain, got: ${String(body['recommended_next_action'])}`
+      );
+    });
+
+    it('recommended_next_action is NOT stop when score=100 but plan metadata violations remain (B1)', () => {
+      // Same TC_VALID as above (structurally valid → completeness=100), but
+      // plan metadata is OMITTED, which triggers PLAN-META-* violations at the
+      // plan level. The old impl passed (score, false) to calcNextAction with
+      // a default remainingViolationCount=0, so stop fired despite plan
+      // violations. The fix collects plan/suite/tc/bp counts.
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'MissingMetaPlan',
+        test_suites: [SUITE_VALID],
+        // metadata intentionally omitted → PLAN-META-001..007 fire
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while plan metadata violations remain, got: ${String(body['recommended_next_action'])}`
+      );
+    });
+
+    it('recommended_next_action is inspect_failures when plan has failures (no baseline)', () => {
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'FailingPlan',
+        test_suites: [SUITE_A],
+      });
+
+      const body = parseText(result);
+      assert.ok((body['completeness_score'] as number) < 100);
+      assert.equal(body['recommended_next_action'], 'inspect_failures');
+    });
+  });
 });

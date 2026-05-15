@@ -16,6 +16,7 @@ import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateTestCase } from './testCaseValidate.js';
+import { desc } from './descHelper.js';
 
 // ── Shorthand → fully-qualified API ID map ────────────────────────────────────
 // Provar runtime requires fully-qualified IDs. Shorthand forms are accepted here
@@ -117,6 +118,15 @@ const StepSchema = z.object({
 });
 
 const TOOL_DESCRIPTION = [
+  // ── Construction contract (READ FIRST — PDX-482) ──────────────────────────────
+  // The PDX-479 regression happened when authoring guidance steered agents toward
+  // a per-step construction pattern via repeated step_edit calls. These three
+  // lines make the single-call contract authoritative at the call site so it
+  // outweighs any conflicting prompt/resource guidance and survives doc drift.
+  'Construction pattern: pass the FULL step tree in a single call via the steps[] array.',
+  'Do NOT call this tool with an empty steps[] and then append via provar_testcase_step_edit — that pattern drops scenarios, flattens nesting, and produces inconsistent step types.',
+  'provar_testcase_step_edit is for AMENDING an existing validated test case (single-step add, attribute fix, debug edit), not for CONSTRUCTING one from scratch. If you find yourself about to call this tool with steps=[] intending to add steps in subsequent tool calls, stop and assemble the full step list first.',
+  // ── Existing description (unchanged below) ───────────────────────────────────
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
   'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="1" registryId="..."> (id is always the integer literal "1" as required by the Provar runtime), a <summary/> child, then <steps>.',
@@ -157,32 +167,90 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
   server.registerTool(
     'provar_testcase_generate',
     {
-      title: 'Generate Test Case',
-      description: TOOL_DESCRIPTION,
+      // PDX-484: carry the construct-vs-amend contract into the `title:` field
+      // because many MCP clients (Claude Desktop tool-picker chips, Cursor audit
+      // pane, inline tool-call references in chat threads) render only the title.
+      // Without the "(full steps in one call)" suffix an agent that reads only
+      // the title surface gets zero PDX-479 protection. Length: 43 chars —
+      // well under the ~50 char comfort threshold for the clients we test.
+      title: 'Generate Test Case (full steps in one call)',
+      description: desc(
+        TOOL_DESCRIPTION,
+        // PDX-482: the compact form must also carry the construction contract,
+        // otherwise PROVAR_MCP_SCHEMA_MODE=compact is a regression highway —
+        // the LLM would see a contract-free one-liner and could fall back to
+        // the multi-call pattern that caused PDX-479.
+        'Generate a Provar test case in ONE call with the FULL steps[] tree. ' +
+          'Do NOT call with steps=[] then append via provar_testcase_step_edit ' +
+          '(step_edit is for AMENDING existing test cases, not for CONSTRUCTING new ones).'
+      ),
       inputSchema: {
-        test_case_name: z.string().describe('Test case name (human-readable label)'),
-        steps: z.array(StepSchema).default([]).describe('Ordered list of test steps'),
+        test_case_name: z.string().describe(desc('Test case name (human-readable label)', 'string, test case name')),
+        steps: z
+          .array(StepSchema)
+          .default([])
+          .describe(
+            desc(
+              'Ordered list of test steps. Pass the COMPLETE step tree for the test case in a single call — ' +
+                'do not call this tool with an empty array intending to append via provar_testcase_step_edit ' +
+                '(that pattern is for amendments only and produces structurally invalid test cases when used to construct).',
+              'array, optional; FULL ordered step tree in one call'
+            )
+          ),
         target_uri: z
           .string()
           .optional()
           .describe(
-            'Page object URI that determines the XML nesting structure. ' +
-              'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
-              'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
-              'steps are wrapped in a UiWithScreen element targeting that class.'
+            desc(
+              'Page object URI that determines the XML nesting structure. ' +
+                'Omit or use "sf:ui:target" for Salesforce targets (flat structure). ' +
+                'Use "ui:pageobject:target?pageId=pageobjects.PageClass" for non-SF page objects — ' +
+                'steps are wrapped in a UiWithScreen element targeting that class.',
+              'string, optional; sf:ui:target (SF) or ui:pageobject:target?pageId=... (non-SF)'
+            )
           ),
-        output_path: z.string().optional().describe('Suggested file path for the .xml file (returned in response)'),
-        overwrite: z.boolean().default(false).describe('Overwrite if output_path file already exists'),
-        dry_run: z.boolean().default(true).describe('true = return XML only (default); false = write to output_path'),
+        output_path: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Suggested file path for the .xml file (returned in response)',
+              'string, optional; output .xml file path'
+            )
+          ),
+        overwrite: z
+          .boolean()
+          .default(false)
+          .describe(desc('Overwrite if output_path file already exists', 'bool, optional; overwrite if exists')),
+        dry_run: z
+          .boolean()
+          .default(true)
+          .describe(
+            desc(
+              'true = return XML only (default); false = write to output_path',
+              'bool, optional; default true, skip write'
+            )
+          ),
         validate_after_edit: z
           .boolean()
           .default(true)
           .describe(
-            'Run structural validation after generation (default: true). ' +
-              'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
-              'Set false to skip validation and omit the validation field from the response.'
+            desc(
+              'Run structural validation after generation (default: true). ' +
+                'Returns TESTCASE_INVALID error if the generated XML fails validation. ' +
+                'Set false to skip validation and omit the validation field from the response.',
+              'bool, optional; default true, validate after generation'
+            )
           ),
-        idempotency_key: z.string().optional().describe('Caller-provided key echoed back for deduplication tracking'),
+        idempotency_key: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Caller-provided key echoed back for deduplication tracking',
+              'string, optional; deduplication key echoed in response'
+            )
+          ),
       },
     },
     (input) => {
@@ -193,6 +261,33 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
         dry_run: input.dry_run,
         target_uri: input.target_uri,
       });
+
+      // Runtime guard for the multi-call construction pattern: rejects the exact
+      // shape that produces a contract-violating skeleton on disk — empty steps[]
+      // + non-dry-run + persistence target. Other empty-steps shapes (dry-run
+      // preview, no output_path) remain allowed.
+      if (input.steps.length === 0 && !input.dry_run && input.output_path) {
+        const err = makeError(
+          'STEPS_REQUIRED',
+          'provar_testcase_generate was called with an empty steps[] array and a target output_path. ' +
+            'Constructing a test case requires the full step tree in a single call; ' +
+            'an empty payload on the write path would produce a skeleton-only file.',
+          requestId,
+          false,
+          {
+            suggestion:
+              'Pass the FULL step tree to provar_testcase_generate in a single call. ' +
+              'provar_testcase_step_edit is for amending an already-validated test case ' +
+              '(single-step add, attribute fix, debug edit), not for constructing one from scratch. ' +
+              'If you genuinely want a skeleton for inspection, set dry_run=true.',
+          }
+        );
+        log('warn', 'provar_testcase_generate: STEPS_REQUIRED', {
+          requestId,
+          output_path: input.output_path,
+        });
+        return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(err) }] };
+      }
 
       try {
         const xmlContent = buildTestCaseXml(input);

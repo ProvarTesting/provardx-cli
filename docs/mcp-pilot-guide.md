@@ -439,6 +439,50 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 ---
 
+### Scenario 12: Construct a Multi-Scenario Test Case in a Single Call
+
+**Goal:** Confirm the AI authors a multi-scenario test case by passing the full step tree to `provar_testcase_generate` in **one** call — not by generating an empty skeleton and looping `provar_testcase_step_edit` per step.
+
+**Background:** A previously observed regression traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
+
+**Defense in depth.** Three layers protect against the multi-call construction pattern:
+
+1. **Prompt and resource guidance** — authoring prompts and the MCP step-reference resource describe single-call construction as the contract.
+2. **Tool-description contract** — `provar_testcase_generate` and `provar_testcase_step_edit` descriptions explicitly mark generate as constructor-only and step_edit as amendment-only, so the LLM reads the contract at every call site (including compact schema mode).
+3. **Runtime guard** — `provar_testcase_generate` rejects the exact shape that would produce a skeleton-only file: `steps:[]` + `dry_run:false` + `output_path`. The rejection returns `STEPS_REQUIRED` with `details.suggestion` telling the LLM to pass the full step tree in one call. Empty-steps shapes that don't write a file (dry-run preview, no `output_path`) remain allowed.
+
+If a pilot LLM falls into the multi-call pattern despite the description contract, the runtime guard converts the failure into an actionable error rather than a silently broken file on disk.
+
+**Title-level contract:** the chip-level `title` fields for the two tools — `Generate Test Case (full steps in one call)` and `Amend Existing Test Case Step` — carry the construct-vs-amend split at the tool-picker surface. MCP clients that render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references in chat threads) still expose the contract to the agent before any description is read.
+
+**Prompt:**
+
+> "Create a Provar test case `AccountFlow.testcase` that covers three scenarios:
+>
+> 1. **Create Account** — navigate to the Account home, click New, set Name = `{AccountName}` and Phone = `{AccountPhone}`, click Save
+> 2. **Verify Account on List** — navigate back to the Account list view, assert the Name and Phone values
+> 3. **Open Account Detail** — open the just-created Account, assert all saved field values
+>
+> Use UI On Screen wrappers, AssertValues for value assertions, and reference SetValues variables with `{Name}`. Write to `<project-path>/tests/AccountFlow.testcase`."
+
+**What to look for (PASS):**
+
+- Exactly **one** call to `provar_testcase_generate` with a populated `steps[]` array — not a call with `steps: []` followed by N `step_edit` calls
+- The generated XML lists three scenarios numbered consecutively (1, 2, 3 — no skipped numbers)
+- Each scenario's UI actions and asserts are nested inside the appropriate `UiWithScreen` clause (or its equivalent grouping element) — not flat siblings under `<steps>`
+- Assert step types are consistent across the case (e.g. all `AssertValues`, not mixed `AssertValues` + `UiAssert` for the same purpose)
+- `provar_testcase_validate` on the result returns `is_valid: true`
+
+**What to look for (FAIL — regression indicator):**
+
+- Two or more calls to `provar_testcase_generate` for the same file
+- A call to `provar_testcase_generate` with `steps: []` followed by `provar_testcase_step_edit` calls
+- The generated case skips a scenario number, mixes assert API IDs for similar assertions, or emits asserts as flat siblings rather than nested inside the screen wrapper
+
+If any FAIL indicator appears, report it to the Provar team with the prompt and the generated XML attached.
+
+---
+
 ## Security Model
 
 ### What the server does

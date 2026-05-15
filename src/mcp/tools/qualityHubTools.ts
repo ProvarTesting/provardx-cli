@@ -10,7 +10,10 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
 import { runSfCommand } from './sfSpawn.js';
+import { desc } from './descHelper.js';
 
 function handleSpawnError(
   err: unknown,
@@ -30,6 +33,8 @@ function handleSpawnError(
   };
 }
 
+const QH_SUMMARY_FIELDS = ['requestId', 'exitCode'];
+
 // ── Tool: provar_qualityhub_connect ───────────────────────────────────────────
 
 export function registerQualityHubConnect(server: McpServer): void {
@@ -37,22 +42,31 @@ export function registerQualityHubConnect(server: McpServer): void {
     'provar_qualityhub_connect',
     {
       title: 'Connect to Quality Hub',
-      description:
+      description: desc(
         'Connect to a Provar Quality Hub org. Invokes `sf provar quality-hub connect` with the supplied flags.',
+        'Connect to a Provar Quality Hub org via sf CLI.'
+      ),
       inputSchema: {
-        target_org: z.string().describe('SF org alias or username to connect as'),
+        target_org: z
+          .string()
+          .describe(desc('SF org alias or username to connect as', 'string, SF org alias or username')),
         flags: z
           .array(z.string())
           .optional()
           .default([])
-          .describe('Additional raw CLI flags to forward (e.g. ["--json"])'),
+          .describe(
+            desc('Additional raw CLI flags to forward (e.g. ["--json"])', 'array of strings, optional; extra CLI flags')
+          ),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
           ),
       },
     },
@@ -94,21 +108,51 @@ export function registerQualityHubDisplay(server: McpServer): void {
     'provar_qualityhub_display',
     {
       title: 'Display Quality Hub Info',
-      description: 'Display connected Quality Hub org info. Invokes `sf provar quality-hub display`.',
+      description: desc(
+        'Display connected Quality Hub org info. Invokes `sf provar quality-hub display`.',
+        'Display connected Quality Hub org info via sf CLI.'
+      ),
       inputSchema: {
-        target_org: z.string().optional().describe('SF org alias or username (uses default if omitted)'),
-        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags to forward'),
+        target_org: z
+          .string()
+          .optional()
+          .describe(
+            desc('SF org alias or username (uses default if omitted)', 'string, optional; SF org alias or username')
+          ),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(desc('Additional raw CLI flags to forward', 'array of strings, optional; extra CLI flags')),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
+          ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            'Response verbosity: "summary" returns only requestId and exitCode; ' +
+              '"standard" (default) returns requestId, exitCode, stdout, and stderr.'
+          ),
+        fields: z
+          .string()
+          .optional()
+          .describe(
+            'Comma-separated list of response keys to retain (e.g. "exitCode,stdout"). ' +
+              'Unknown field names are silently ignored. Applied after the detail filter.'
           ),
       },
     },
-    ({ target_org, flags, sf_path }) => {
+    ({ target_org, flags, sf_path, detail, fields }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_display', { requestId, target_org });
 
@@ -117,7 +161,12 @@ export function registerQualityHubDisplay(server: McpServer): void {
         if (target_org) args.splice(3, 0, '--target-org', target_org);
 
         const result = runSfCommand(args, sf_path);
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        let response: Record<string, unknown> = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        };
 
         if (result.exitCode !== 0) {
           return {
@@ -129,6 +178,15 @@ export function registerQualityHubDisplay(server: McpServer): void {
               },
             ],
           };
+        }
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        if (detailLevel !== 'standard') {
+          response = applyDetailLevel(response, detailLevel, QH_SUMMARY_FIELDS);
+        }
+        const fieldList = parseFieldsParam(fields);
+        if (fieldList) {
+          response = maskFields(response, fieldList) as Record<string, unknown>;
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
@@ -162,25 +220,33 @@ export function registerQualityHubTestRun(server: McpServer): void {
     'provar_qualityhub_testrun',
     {
       title: 'Trigger Quality Hub Test Run',
-      description:
+      description: desc(
         'Trigger a Quality Hub test run. Invokes `sf provar quality-hub test run`. ' +
-        'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
+          'Warning: wildcard characters (* or ?) in flag values will cause QH plan-level reporting to be skipped — use exact plan names.',
+        'Trigger a Quality Hub test run via sf CLI; use exact plan names.'
+      ),
       inputSchema: {
-        target_org: z.string().describe('SF org alias or username'),
+        target_org: z.string().describe(desc('SF org alias or username', 'string, SF org alias or username')),
         flags: z
           .array(z.string())
           .optional()
           .default([])
           .describe(
-            'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.'
+            desc(
+              'Additional raw CLI flags (e.g. ["--plan-name", "SmokeTests"]). Avoid wildcards in --plan-name values — they skip QH plan-level reporting.',
+              'array of strings, optional; extra CLI flags; avoid wildcards in --plan-name'
+            )
           ),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
           ),
       },
     },
@@ -232,18 +298,32 @@ export function registerQualityHubTestRunReport(server: McpServer): void {
     'provar_qualityhub_testrun_report',
     {
       title: 'Poll Quality Hub Test Run',
-      description: 'Poll the status of a Quality Hub test run. Invokes `sf provar quality-hub test run report`.',
+      description: desc(
+        'Poll the status of a Quality Hub test run. Invokes `sf provar quality-hub test run report`.',
+        'Poll a Quality Hub test run status via sf CLI.'
+      ),
       inputSchema: {
-        target_org: z.string().describe('SF org alias or username'),
-        run_id: z.string().describe('Test run ID returned by provar_qualityhub_testrun'),
-        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+        target_org: z.string().describe(desc('SF org alias or username', 'string, SF org alias or username')),
+        run_id: z
+          .string()
+          .describe(
+            desc('Test run ID returned by provar_qualityhub_testrun', 'string, run ID from qualityhub_testrun')
+          ),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(desc('Additional raw CLI flags', 'array of strings, optional; extra CLI flags')),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
           ),
       },
     },
@@ -304,18 +384,28 @@ export function registerQualityHubTestRunAbort(server: McpServer): void {
     'provar_qualityhub_testrun_abort',
     {
       title: 'Abort Quality Hub Test Run',
-      description: 'Abort an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.',
+      description: desc(
+        'Abort an in-progress Quality Hub test run. Invokes `sf provar quality-hub test run abort`.',
+        'Abort an in-progress Quality Hub test run via sf CLI.'
+      ),
       inputSchema: {
-        target_org: z.string().describe('SF org alias or username'),
-        run_id: z.string().describe('Test run ID to abort'),
-        flags: z.array(z.string()).optional().default([]).describe('Additional raw CLI flags'),
+        target_org: z.string().describe(desc('SF org alias or username', 'string, SF org alias or username')),
+        run_id: z.string().describe(desc('Test run ID to abort', 'string, run ID to abort')),
+        flags: z
+          .array(z.string())
+          .optional()
+          .default([])
+          .describe(desc('Additional raw CLI flags', 'array of strings, optional; extra CLI flags')),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
           ),
       },
     },
@@ -357,26 +447,51 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
     'provar_qualityhub_testcase_retrieve',
     {
       title: 'Retrieve Quality Hub Test Cases',
-      description:
+      description: desc(
         'Retrieve Quality Hub test cases by user story or component. Invokes `sf provar quality-hub testcase retrieve`.',
+        'Retrieve Quality Hub test cases by user story or component via sf CLI.'
+      ),
       inputSchema: {
-        target_org: z.string().describe('SF org alias or username'),
+        target_org: z.string().describe(desc('SF org alias or username', 'string, SF org alias or username')),
         flags: z
           .array(z.string())
           .optional()
           .default([])
-          .describe('Additional raw CLI flags (e.g. ["--user-story", "US-123"])'),
+          .describe(
+            desc(
+              'Additional raw CLI flags (e.g. ["--user-story", "US-123"])',
+              'array of strings, optional; extra CLI flags e.g. --user-story'
+            )
+          ),
         sf_path: z
           .string()
           .optional()
           .describe(
-            'Path to the sf CLI executable when not in PATH ' +
-              '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
-              'Leave unset to use auto-discovery.'
+            desc(
+              'Path to the sf CLI executable when not in PATH ' +
+                '(e.g. "C:\\\\Program Files\\\\sf\\\\bin\\\\sf.cmd" for the Windows standalone installer). ' +
+                'Leave unset to use auto-discovery.',
+              'string, optional; path to sf CLI executable'
+            )
+          ),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            'Response verbosity: "summary" returns only requestId and exitCode; ' +
+              '"standard" (default) returns requestId, exitCode, stdout, and stderr.'
+          ),
+        fields: z
+          .string()
+          .optional()
+          .describe(
+            'Comma-separated list of response keys to retain (e.g. "exitCode,stdout"). ' +
+              'Unknown field names are silently ignored. Applied after the detail filter.'
           ),
       },
     },
-    ({ target_org, flags, sf_path }) => {
+    ({ target_org, flags, sf_path, detail, fields }) => {
       const requestId = makeRequestId();
       log('info', 'provar_qualityhub_testcase_retrieve', { requestId, target_org });
 
@@ -385,7 +500,12 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
           ['provar', 'quality-hub', 'testcase', 'retrieve', '--target-org', target_org, ...flags],
           sf_path
         );
-        const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+        let response: Record<string, unknown> = {
+          requestId,
+          exitCode: result.exitCode,
+          stdout: result.stdout,
+          stderr: result.stderr,
+        };
 
         if (result.exitCode !== 0) {
           return {
@@ -397,6 +517,15 @@ export function registerQualityHubTestcaseRetrieve(server: McpServer): void {
               },
             ],
           };
+        }
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        if (detailLevel !== 'standard') {
+          response = applyDetailLevel(response, detailLevel, QH_SUMMARY_FIELDS);
+        }
+        const fieldList = parseFieldsParam(fields);
+        if (fieldList) {
+          response = maskFields(response, fieldList) as Record<string, unknown>;
         }
 
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };

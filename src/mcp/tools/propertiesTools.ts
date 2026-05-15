@@ -16,6 +16,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 // ── Validation helpers ────────────────────────────────────────────────────────
 
@@ -163,23 +164,50 @@ export function registerPropertiesGenerate(server: McpServer, config: ServerConf
     'provar_properties_generate',
     {
       title: 'Generate ProvarDX Properties File',
-      description: [
-        'Generate a provardx-properties.json file from the standard template.',
-        'Optionally pre-fills projectPath and provarHome if provided.',
-        'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
-        'Use provar_properties_set afterwards to update specific fields.',
-      ].join(' '),
+      description: desc(
+        [
+          'Generate a provardx-properties.json file from the standard template.',
+          'Optionally pre-fills projectPath and provarHome if provided.',
+          'The generated file uses ${PLACEHOLDER} values that must be replaced before running tests.',
+          'Use provar_properties_set afterwards to update specific fields.',
+        ].join(' '),
+        'Generate a provardx-properties.json from the standard template.'
+      ),
       inputSchema: {
-        output_path: z.string().describe('Where to write the file (e.g. /path/to/project/provardx-properties.json)'),
-        project_path: z.string().optional().describe('Pre-fill the projectPath field with this value'),
-        provar_home: z.string().optional().describe('Pre-fill the provarHome field with this value'),
-        results_path: z.string().optional().describe('Pre-fill the resultsPath field with this value'),
+        output_path: z
+          .string()
+          .describe(
+            desc(
+              'Where to write the file (e.g. /path/to/project/provardx-properties.json)',
+              'string, absolute path for output .json file'
+            )
+          ),
+        project_path: z
+          .string()
+          .optional()
+          .describe(desc('Pre-fill the projectPath field with this value', 'string, optional; pre-fill projectPath')),
+        provar_home: z
+          .string()
+          .optional()
+          .describe(desc('Pre-fill the provarHome field with this value', 'string, optional; pre-fill provarHome')),
+        results_path: z
+          .string()
+          .optional()
+          .describe(desc('Pre-fill the resultsPath field with this value', 'string, optional; pre-fill resultsPath')),
         overwrite: z
           .boolean()
           .optional()
           .default(false)
-          .describe('Overwrite the file if it already exists (default: false)'),
-        dry_run: z.boolean().optional().default(false).describe('Return the content without writing (default: false)'),
+          .describe(
+            desc('Overwrite the file if it already exists (default: false)', 'bool, optional; overwrite if exists')
+          ),
+        dry_run: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            desc('Return the content without writing (default: false)', 'bool, optional; default false, skip write')
+          ),
       },
     },
     ({ output_path, project_path, provar_home, results_path, overwrite, dry_run }) => {
@@ -326,10 +354,16 @@ export function registerPropertiesRead(server: McpServer, config: ServerConfig):
     'provar_properties_read',
     {
       title: 'Read Properties File',
-      description:
+      description: desc(
         'Read and parse a provardx-properties.json file. Returns the parsed content so you can inspect current settings before making changes with provar_properties_set.',
+        'Read and parse a provardx-properties.json file.'
+      ),
       inputSchema: {
-        file_path: z.string().describe('Path to the provardx-properties.json file'),
+        file_path: z
+          .string()
+          .describe(
+            desc('Path to the provardx-properties.json file', 'string, absolute path to provardx-properties.json')
+          ),
       },
     },
     ({ file_path }) => {
@@ -483,15 +517,25 @@ export function registerPropertiesSet(server: McpServer, config: ServerConfig): 
     'provar_properties_set',
     {
       title: 'Set Property Value',
-      description: [
-        'Update one or more fields in a provardx-properties.json file.',
-        'Only the provided fields are changed — all other fields are preserved.',
-        'Object fields (environment, metadata) are deep-merged.',
-        'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
-        'Use provar_properties_read first to inspect the current state.',
-      ].join(' '),
+      description: desc(
+        [
+          'Update one or more fields in a provardx-properties.json file.',
+          'Only the provided fields are changed — all other fields are preserved.',
+          'Object fields (environment, metadata) are deep-merged.',
+          'Array fields (testCase, testPlan, connectionOverride) replace the existing value entirely.',
+          'Use provar_properties_read first to inspect the current state.',
+        ].join(' '),
+        'Update fields in a provardx-properties.json; other fields preserved.'
+      ),
       inputSchema: {
-        file_path: z.string().describe('Path to the provardx-properties.json file to update'),
+        file_path: z
+          .string()
+          .describe(
+            desc(
+              'Path to the provardx-properties.json file to update',
+              'string, absolute path to provardx-properties.json'
+            )
+          ),
         updates: updatesSchema,
       },
     },
@@ -576,14 +620,33 @@ export function registerPropertiesValidate(server: McpServer, config: ServerConf
     'provar_properties_validate',
     {
       title: 'Validate ProvarDX Properties File',
-      description: [
-        'Validate a provardx-properties.json file against the ProvarDX schema.',
-        'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
-        'Accepts either a file path or inline JSON content.',
-      ].join(' '),
+      description: desc(
+        [
+          'Validate a provardx-properties.json file against the ProvarDX schema.',
+          'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
+          'Accepts either a file path or inline JSON content.',
+        ].join(' '),
+        'Validate a provardx-properties.json against required fields and enum values.'
+      ),
       inputSchema: {
-        file_path: z.string().optional().describe('Path to the provardx-properties.json file to validate'),
-        content: z.string().optional().describe('Inline JSON string to validate (alternative to file_path)'),
+        file_path: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Path to the provardx-properties.json file to validate',
+              'string, optional; path to provardx-properties.json'
+            )
+          ),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'Inline JSON string to validate (alternative to file_path)',
+              'string, optional; inline JSON to validate'
+            )
+          ),
       },
     },
     ({ file_path, content }) => {

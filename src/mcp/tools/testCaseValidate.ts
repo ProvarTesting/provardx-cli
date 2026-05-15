@@ -8,6 +8,7 @@
 /* eslint-disable camelcase */
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { XMLParser } from 'fast-xml-parser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -23,7 +24,20 @@ import {
   QualityHubRateLimitError,
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
+import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
+import {
+  generateRunId,
+  saveRun,
+  hasAnyRun,
+  loadBaselineViolations,
+  computeDiff,
+  computeContextHash,
+  resolveValidationDir,
+  type DiffableViolation,
+} from '../utils/validationDiff.js';
 import { runBestPractices } from './bestPracticesEngine.js';
+import { desc } from './descHelper.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
@@ -41,20 +55,109 @@ const UNREACHABLE_WARNING =
   'Quality Hub API unreachable. Running local validation only (structural rules, no quality scoring).\n' +
   'For CI/CD: set PROVAR_QUALITY_HUB_URL and PROVAR_API_KEY environment variables.';
 
+const TC_VALIDATE_SUMMARY_FIELDS = [
+  'requestId',
+  'is_valid',
+  'validity_score',
+  'quality_score',
+  'validation_source',
+  'run_id',
+  'completeness_score',
+  'recommended_next_action',
+];
+
+/** Storage dir for testcase diff runs (namespaced to avoid cross-tool baseline collisions). */
+function tcStorageDir(): string {
+  return resolveValidationDir('testcase');
+}
+
+/** Resolve validation result from QualityHub API or fall back to local. */
+async function resolveBaseResult(
+  source: string,
+  apiKey: string | null,
+  requestId: string
+): Promise<TestCaseValidationResult> {
+  if (!apiKey) {
+    return { ...validateTestCase(source), validation_source: 'local', validation_warning: ONBOARDING_MESSAGE };
+  }
+  const baseUrl = getQualityHubBaseUrl();
+  try {
+    const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
+    const localMeta = validateTestCase(source);
+    log('info', 'provar_testcase_validate: quality_hub', { requestId });
+    return {
+      ...apiResult,
+      issues: apiResult.issues as unknown as ValidationIssue[],
+      step_count: localMeta.step_count,
+      error_count: apiResult.issues.filter((i) => i.severity === 'ERROR').length,
+      warning_count: apiResult.issues.filter((i) => i.severity === 'WARNING').length,
+      test_case_id: localMeta.test_case_id,
+      test_case_name: localMeta.test_case_name,
+      validation_source: 'quality_hub',
+    };
+  } catch (apiErr: unknown) {
+    let warning: string;
+    if (apiErr instanceof QualityHubAuthError) {
+      warning = AUTH_WARNING;
+      log('warn', 'provar_testcase_validate: auth error, falling back', { requestId });
+    } else if (apiErr instanceof QualityHubRateLimitError) {
+      warning = RATE_LIMIT_WARNING;
+      log('warn', 'provar_testcase_validate: rate limited, falling back', { requestId });
+    } else {
+      warning = UNREACHABLE_WARNING;
+      log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
+    }
+    return { ...validateTestCase(source), validation_source: 'local_fallback', validation_warning: warning };
+  }
+}
+
+/** Derive a stable context key for run ID generation. */
+function tcRunContext(filePath: string | undefined, xmlContent: string): string {
+  if (filePath) return filePath;
+  return createHash('sha1').update(xmlContent.slice(0, 200)).digest('hex').slice(0, 16);
+}
+
 export function registerTestCaseValidate(server: McpServer, config: ServerConfig): void {
   server.registerTool(
     'provar_testcase_validate',
     {
       title: 'Validate Test Case',
-      description:
-        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.',
+      description: desc(
+        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.',
+        'Validate a Provar XML test case: structure, UUIDs, steps, quality scoring; run_id for baseline diff.'
+      ),
       inputSchema: {
-        content: z.string().optional().describe('XML content to validate directly (alias: xml)'),
-        xml: z.string().optional().describe('XML content to validate — API-compatible alias for content'),
-        file_path: z.string().optional().describe('Path to .xml test case file'),
+        content: z
+          .string()
+          .optional()
+          .describe(desc('XML content to validate directly (alias: xml)', 'string, inline content')),
+        xml: z
+          .string()
+          .optional()
+          .describe(desc('XML content to validate — API-compatible alias for content', 'string, inline content')),
+        file_path: z.string().optional().describe(desc('Path to .xml test case file', 'string, path to file')),
+        detail: z
+          .enum(['summary', 'standard', 'full'])
+          .optional()
+          .default('standard')
+          .describe(
+            desc(
+              'Response verbosity. "summary": is_valid, scores, and stop signal only. "standard"/"full": full issues list (default).',
+              'enum summary|standard|full, optional; default standard'
+            )
+          ),
+        baseline_run_id: z
+          .string()
+          .optional()
+          .describe(
+            desc(
+              'run_id from a previous call. When provided, returns only issues that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.',
+              'string, optional; prev run_id for diff response'
+            )
+          ),
       },
     },
-    async ({ content, xml, file_path }) => {
+    async ({ content, xml, file_path, detail, baseline_run_id }) => {
       const requestId = makeRequestId();
       log('info', 'provar_testcase_validate', { requestId, has_content: !!(content ?? xml), file_path });
 
@@ -78,63 +181,80 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const apiKey = resolveApiKey();
+        const baseResult = await resolveBaseResult(source, apiKey, requestId);
 
-        if (apiKey) {
-          const baseUrl = getQualityHubBaseUrl();
-          try {
-            const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
-            const localMeta = validateTestCase(source);
-            const result = {
-              requestId,
-              ...apiResult,
-              step_count: localMeta.step_count,
-              error_count: apiResult.issues.filter((i) => i.severity === 'ERROR').length,
-              warning_count: apiResult.issues.filter((i) => i.severity === 'WARNING').length,
-              test_case_id: localMeta.test_case_id,
-              test_case_name: localMeta.test_case_name,
-              validation_source: 'quality_hub' as const,
-            };
-            log('info', 'provar_testcase_validate: quality_hub', { requestId });
-            return {
-              content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-              structuredContent: result,
-            };
-          } catch (apiErr: unknown) {
-            // API failed — determine the warning and fall through to local validation
-            let warning: string;
-            if (apiErr instanceof QualityHubAuthError) {
-              warning = AUTH_WARNING;
-              log('warn', 'provar_testcase_validate: auth error, falling back', { requestId });
-            } else if (apiErr instanceof QualityHubRateLimitError) {
-              warning = RATE_LIMIT_WARNING;
-              log('warn', 'provar_testcase_validate: rate limited, falling back', { requestId });
-            } else {
-              warning = UNREACHABLE_WARNING;
-              log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
-            }
-            const localResult = {
-              requestId,
-              ...validateTestCase(source),
-              validation_source: 'local_fallback' as const,
-              validation_warning: warning,
-            };
-            return {
-              content: [{ type: 'text' as const, text: JSON.stringify(localResult) }],
-              structuredContent: localResult,
-            };
-          }
+        const storageDir = tcStorageDir();
+        const context = tcRunContext(file_path, source);
+        const contextHash = computeContextHash('tc', context);
+        const runId = generateRunId(context);
+        const bpViolations = (baseResult.best_practices_violations ?? []) as unknown as DiffableViolation[];
+        const currentViolations: DiffableViolation[] = [
+          ...(baseResult.issues as unknown as DiffableViolation[]),
+          ...bpViolations,
+        ];
+
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        const baseline =
+          baseline_run_id !== undefined && baseline_run_id !== ''
+            ? loadBaselineViolations(storageDir, baseline_run_id, contextHash)
+            : null;
+
+        const hasBaseline = hasAnyRun(storageDir);
+
+        try {
+          saveRun(storageDir, runId, currentViolations, contextHash);
+        } catch (saveErr) {
+          log('warn', 'provar_testcase_validate: could not save run for diff', {
+            requestId,
+            error: (saveErr as Error).message,
+          });
         }
 
-        // No API key configured — run local validation with onboarding message
+        // Diff mode
+        if (baseline_run_id !== undefined && baseline_run_id !== '') {
+          if (!baseline) {
+            const errResult = makeError(
+              'BASELINE_NOT_FOUND',
+              'Baseline run not found. Run validation without baseline_run_id first to establish a baseline.',
+              requestId,
+              false,
+              { suggestion: 'Run provar_testcase_validate without baseline_run_id first to establish a baseline.' }
+            );
+            return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(errResult) }] };
+          }
+          const diff = computeDiff(baseline, currentViolations);
+          const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
+          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
+          const diffResponse = {
+            requestId,
+            run_id: runId,
+            ...diff,
+            completeness_score,
+            recommended_next_action,
+          };
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(diffResponse) }],
+            structuredContent: diffResponse,
+          };
+        }
+
+        const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
+
         const result = {
           requestId,
-          ...validateTestCase(source),
-          validation_source: 'local' as const,
-          validation_warning: ONBOARDING_MESSAGE,
+          run_id: runId,
+          completeness_score,
+          recommended_next_action,
+          ...baseResult,
         };
+
+        const detailLevel = (detail ?? 'standard') as DetailLevel;
+        const finalResult = applyDetailLevel(result, detailLevel, TC_VALIDATE_SUMMARY_FIELDS);
+
         return {
-          content: [{ type: 'text' as const, text: JSON.stringify(result) }],
-          structuredContent: result,
+          content: [{ type: 'text' as const, text: JSON.stringify(finalResult) }],
+          structuredContent: finalResult,
         };
       } catch (err: unknown) {
         const error = err as Error & { code?: string };

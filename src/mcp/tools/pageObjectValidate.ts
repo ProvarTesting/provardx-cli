@@ -15,21 +15,35 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId, type ValidationIssue } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { desc } from './descHelper.js';
 
 export function registerPageObjectValidate(server: McpServer, config: ServerConfig): void {
   server.registerTool(
     'provar_pageobject_validate',
     {
       title: 'Validate Page Object',
-      description:
+      description: desc(
         'Validate a Provar Java Page Object against naming conventions, locator best practices, and structural requirements. Returns quality score (0–100) and list of issues.',
+        'Validate a Provar Java Page Object for naming, locators, and structure.'
+      ),
       inputSchema: {
-        content: z.string().optional().describe('Java source code to validate directly'),
-        file_path: z.string().optional().describe('Path to .java Page Object file'),
+        content: z
+          .string()
+          .optional()
+          .describe(desc('Java source code to validate directly', 'string, optional; Java source to validate')),
+        file_path: z
+          .string()
+          .optional()
+          .describe(desc('Path to .java Page Object file', 'string, optional; path to .java file')),
         expected_class_name: z
           .string()
           .optional()
-          .describe('Expected class name for PO_006 check; inferred from file_path when omitted'),
+          .describe(
+            desc(
+              'Expected class name for PO_006 check; inferred from file_path when omitted',
+              'string, optional; expected class name for PO_006 check'
+            )
+          ),
       },
     },
     ({ content, file_path, expected_class_name }) => {
