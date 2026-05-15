@@ -77,14 +77,26 @@ provar_properties_set  { file_path: "<output_path>", key: "connectionName", valu
 
 ## "I want to write a new test"
 
+A Provar test case is a tree (scenarios → UI screens → asserts), not a flat list of steps. The agent that calls `provar_testcase_generate` is responsible for constructing the full tree in **one** call. Splitting authoring across many tool calls causes scenario numbering drift, flat asserts, and inconsistent step types — `provar_testcase_step_edit` is for **amending** an existing test case, not for **constructing** one.
+
+Recommended sequence:
+
 ```
-1. provar_project_inspect    { project_path }           ← find coverage gaps first
-2. provar_testcase_generate  { project_path, name, ... }
-3. provar_testcase_step_edit { test_case_path, ... }    ← repeat per step
-4. provar_testcase_validate  { file_path }              ← must pass before adding to plan
-5. provar_testplan_add-instance  { project_path, plan_name, test_case_path }
-6. provar_testplan_validate      { project_path, plan_name }
+1. provar_project_inspect              { project_path }                        ← find coverage gaps first
+2. provar_qualityhub_examples_retrieve { object_or_scenario }                  ← ground in corpus examples for the step types you need
+3. provar_testcase_generate            { test_case_name, steps: [<ALL steps>] } ← single call, full step tree in one payload
+4. provar_testcase_validate            { file_path }                            ← must pass before adding to plan
+5. provar_testplan_add-instance        { project_path, plan_name, test_case_path }
+6. provar_testplan_validate            { project_path, plan_name }
 ```
+
+Use `provar_testcase_step_edit` only when:
+
+- Adding a single step to an existing, already-validated test case
+- Fixing a step's attributes after a validation finding
+- Targeted edits during debugging
+
+Do **not** use `provar_testcase_step_edit` to construct a test case step-by-step from an empty skeleton — the LLM loses scenario context between calls and the resulting structure is unreliable.
 
 ---
 

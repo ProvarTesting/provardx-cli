@@ -951,4 +951,168 @@ describe('provar_testcase_generate', () => {
       assert.ok(!xml.includes('class="compound"'), 'Pure {VarName} must NOT use class="compound"');
     });
   });
+
+  // ── PDX-481 regression guard ─────────────────────────────────────────────────
+  // The 1.5.0 regression (PDX-479) happened when agents authored test cases
+  // step-by-step via repeated tool calls instead of constructing the full step
+  // tree in a single provar_testcase_generate call. This block proves that
+  // when the full tree IS passed in one call, the output is structurally clean:
+  // scenarios numbered consecutively, asserts emitted with consistent types,
+  // and testItemIds sequential.
+
+  describe('multi-scenario single-call construction (PDX-481 regression guard)', () => {
+    it('emits consecutive testItemIds across a 3-scenario, multi-step payload', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'AccountFlow',
+        steps: [
+          // Scenario 1 — Create Account
+          { api_id: 'UiConnect', name: 'Salesforce Connect', attributes: {} },
+          {
+            api_id: 'SetValues',
+            name: 'Set Account Test Data',
+            attributes: { AccountName: 'Acme', AccountPhone: '555-0100' },
+          },
+          { api_id: 'UiNavigate', name: 'Scenario 1: navigate to Account home', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 1: click New', attributes: {} },
+          {
+            api_id: 'SetValues',
+            name: 'Scenario 1: fill form',
+            attributes: { Name: '{AccountName}', Phone: '{AccountPhone}' },
+          },
+          { api_id: 'UiDoAction', name: 'Scenario 1: click Save', attributes: {} },
+          // Scenario 2 — Verify on list view (the scenario that went missing on 1.5.0)
+          { api_id: 'UiNavigate', name: 'Scenario 2: go to Account list', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 2: assert Name on list',
+            attributes: { expectedValue: '{AccountName}', actualValue: 'Name', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 2: assert Phone on list',
+            attributes: { expectedValue: '{AccountPhone}', actualValue: 'Phone', comparisonType: 'EqualTo' },
+          },
+          // Scenario 3 — Open detail and assert all
+          { api_id: 'UiDoAction', name: 'Scenario 3: open Account detail', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 3: assert Name on detail',
+            attributes: { expectedValue: '{AccountName}', actualValue: 'Name', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Scenario 3: assert Phone on detail',
+            attributes: { expectedValue: '{AccountPhone}', actualValue: 'Phone', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false, 'single-call multi-scenario generate must succeed');
+      const body = parseText(result);
+      assert.equal(body['step_count'], 12, 'all 12 steps must be present (no scenarios dropped)');
+
+      const xml = body['xml_content'] as string;
+      // testItemIds must be exactly 1..12 — gaps indicate dropped steps.
+      for (let i = 1; i <= 12; i++) {
+        assert.ok(
+          xml.includes(`testItemId="${i}"`),
+          `expected sequential testItemId="${i}" — gap means a scenario step was dropped`
+        );
+      }
+      // No higher testItemIds emitted (would indicate spurious appends from an internal step_edit loop).
+      assert.ok(!xml.includes('testItemId="13"'), 'no spurious testItemIds beyond the payload count');
+    });
+
+    it('preserves every step name from the payload — no scenario marker is silently dropped', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'ScenarioMarkers',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Scenario 1: When create', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 1: Then verify', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 2: When edit', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 2: Then verify', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 3: When delete', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Scenario 3: Then absent', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      for (const marker of [
+        'Scenario 1: When create',
+        'Scenario 1: Then verify',
+        'Scenario 2: When edit',
+        'Scenario 2: Then verify',
+        'Scenario 3: When delete',
+        'Scenario 3: Then absent',
+      ]) {
+        assert.ok(xml.includes(marker), `scenario marker "${marker}" must be preserved verbatim`);
+      }
+    });
+
+    it('emits consistent assert API IDs for repeated AssertValues — no drift between calls', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'AssertConsistency',
+        steps: [
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 1',
+            attributes: { expectedValue: '{a}', actualValue: 'x', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 2',
+            attributes: { expectedValue: '{b}', actualValue: 'y', comparisonType: 'EqualTo' },
+          },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert 3',
+            attributes: { expectedValue: '{c}', actualValue: 'z', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      const assertValuesMatches = xml.match(/apiId="com\.provar\.plugins\.bundled\.apis\.AssertValues"/g) ?? [];
+      assert.equal(assertValuesMatches.length, 3, 'all 3 asserts must use AssertValues — no API ID drift');
+      // None of them should silently become UiAssert.
+      assert.ok(
+        !xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert"'),
+        'no AssertValues should be substituted with UiAssert'
+      );
+    });
+
+    it('wraps a non-SF target_uri in UiWithScreen with nested steps — full tree in one call', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PageObjectNested',
+        target_uri: 'ui:pageobject:target?pageId=pageobjects.AccountPage',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Click new', attributes: {} },
+          {
+            api_id: 'AssertValues',
+            name: 'Assert created',
+            attributes: { expectedValue: '{x}', actualValue: 'y', comparisonType: 'EqualTo' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('UiWithScreen'), 'non-SF target_uri must wrap in UiWithScreen');
+      assert.ok(xml.includes('<clauses>'), 'wrapper must contain <clauses>');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2">'), 'substeps clause must have testItemId="2"');
+      // Inner steps start at testItemId=3 per builder convention.
+      assert.ok(xml.includes('testItemId="3"'), 'first nested step must have testItemId="3"');
+      assert.ok(xml.includes('testItemId="4"'), 'second nested step must have testItemId="4"');
+    });
+  });
 });
