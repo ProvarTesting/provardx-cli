@@ -167,7 +167,13 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
   server.registerTool(
     'provar_testcase_generate',
     {
-      title: 'Generate Test Case',
+      // PDX-484: carry the construct-vs-amend contract into the `title:` field
+      // because many MCP clients (Claude Desktop tool-picker chips, Cursor audit
+      // pane, inline tool-call references in chat threads) render only the title.
+      // Without the "(full steps in one call)" suffix an agent that reads only
+      // the title surface gets zero PDX-479 protection. Length: 43 chars —
+      // well under the ~50 char comfort threshold for the clients we test.
+      title: 'Generate Test Case (full steps in one call)',
       description: desc(
         TOOL_DESCRIPTION,
         // PDX-482: the compact form must also carry the construction contract,

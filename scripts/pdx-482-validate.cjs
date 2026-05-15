@@ -1,10 +1,14 @@
-// PDX-482 validation: confirm the construct/amend contract is reachable at the
-// MCP protocol surface in BOTH standard and compact schema modes.
+// PDX-482 / PDX-484 validation: confirm the construct/amend contract is reachable
+// at the MCP protocol surface in BOTH standard and compact schema modes, AND in
+// the `title:` field that some clients render exclusively (Claude Desktop chips,
+// Cursor audit pane, inline tool-call refs).
 //
 // The LLM reads tools/list before every tool call, so every assertion here is
 // on bytes the LLM literally sees at the call site. Compact mode coverage is
 // critical because the adversarial review identified that PROVAR_MCP_SCHEMA_MODE=compact
-// silently swapped the description for a contract-free one-liner.
+// silently swapped the description for a contract-free one-liner. Title-level
+// coverage was added by PDX-484: the title field is independent of schema mode,
+// but we assert it in both passes to surface drift early either way.
 //
 //   yarn compile
 //   node scripts/pdx-482-validate.cjs
@@ -93,6 +97,43 @@ function runValidation(mode, extraEnv, runAssertions) {
       reject(err);
     });
   });
+}
+
+// ── PDX-484: title-level construct-vs-amend contract ───────────────────────
+// Title field is independent of schema mode, but we assert it in both passes
+// to catch drift early regardless of which mode a future refactor breaks.
+function titleAssertions(toolList, record) {
+  const gen = toolList.find((t) => t.name === 'provar_testcase_generate');
+  if (!gen) {
+    record('provar_testcase_generate has a title', false, 'tool not found');
+  } else {
+    const t = gen.title ?? '';
+    record(
+      'generate.title carries "one call" or "single call" (PDX-484)',
+      t.includes('one call') || t.includes('single call'),
+      `title: ${JSON.stringify(t)}`
+    );
+    record('generate.title mentions steps (PDX-484)', /step/i.test(t), 'chip-level payload shape must be visible');
+    record('generate.title length ≤ 50 chars (PDX-484)', t.length <= 50, `length: ${t.length}`);
+  }
+
+  const edit = toolList.find((t) => t.name === 'provar_testcase_step_edit');
+  if (!edit) {
+    record('provar_testcase_step_edit has a title', false, 'tool not found');
+  } else {
+    const t = edit.title ?? '';
+    record(
+      'step_edit.title contains "Amend" or "amendment" (PDX-484)',
+      /amend/i.test(t),
+      `title: ${JSON.stringify(t)}`
+    );
+    record(
+      'step_edit.title signals "existing" test case only (PDX-484)',
+      /exist/i.test(t),
+      'chip-level signal that this tool does not construct new cases'
+    );
+    record('step_edit.title length ≤ 50 chars (PDX-484)', t.length <= 50, `length: ${t.length}`);
+  }
 }
 
 // ── Assertions for standard mode (full TOOL_DESCRIPTION) ────────────────────
@@ -187,6 +228,9 @@ function standardAssertions(toolList, record) {
       'consequence is explicit so the contract is judgement-friendly'
     );
   }
+
+  // PDX-484: title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 // ── Assertions for compact mode (short one-liner) ───────────────────────────
@@ -236,6 +280,9 @@ function compactAssertions(toolList, record) {
       'rejection must survive compact mode'
     );
   }
+
+  // PDX-484: title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 (async () => {

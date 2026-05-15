@@ -703,6 +703,8 @@ Validates a Java Page Object source file against 30+ quality rules (structural c
 
 Generates an XML test case skeleton with UUID v4 guids and sequential `testItemId` values.
 
+The tool's chip-level `title` — `Generate Test Case (full steps in one call)` — carries the construction contract so that MCP clients which render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references) surface the single-call requirement to the agent before any description is read.
+
 > **Construction pattern (read first).** Pass the FULL step tree for the test case in a single call via the `steps[]` array. Do **not** call this tool with `steps: []` and then append steps via repeated `provar_testcase_step_edit` calls — that pattern drops scenarios, flattens nesting, and produces inconsistent step types. `provar_testcase_step_edit` is for **amending** an already-validated test case (single-step add, attribute fix, debug edit), not for **constructing** one from scratch.
 
 **Generated `<testCase>` element structure (Provar requirements):**
@@ -1546,6 +1548,8 @@ Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures �
 ### `provar_testcase_step_edit`
 
 Atomically add or remove a single step (`<apiCall>`) in a Provar XML test case file. Writes a `.bak` backup before mutating, runs structural validation after the edit, and automatically restores the backup if validation fails.
+
+The tool's chip-level `title` — `Amend Existing Test Case Step` — signals the amendment-only contract in MCP clients that render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references). An agent that reads only the title still sees that this tool operates on an existing test case, not a new one.
 
 > **When to use.** This tool is for **amending** an existing, already-validated test case (single-step add, attribute fix, debug edit). It is **not** for constructing a test case from scratch by calling it repeatedly after a `steps: []` `provar_testcase_generate`. Building a case step-by-step via repeated `step_edit` calls produces structurally invalid test cases (dropped scenarios, flat asserts, inconsistent step types). For new test cases, pass the full step tree to `provar_testcase_generate` in a single call.
 

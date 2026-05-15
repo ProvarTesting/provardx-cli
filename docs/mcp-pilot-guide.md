@@ -445,6 +445,8 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **Background:** A regression in 1.5.0 (PDX-479) traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
 
+**Title-level contract:** the chip-level `title` fields for the two tools — `Generate Test Case (full steps in one call)` and `Amend Existing Test Case Step` — carry the construct-vs-amend split at the tool-picker surface. MCP clients that render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references in chat threads) still expose the contract to the agent before any description is read.
+
 **Prompt:**
 
 > "Create a Provar test case `AccountFlow.testcase` that covers three scenarios:
