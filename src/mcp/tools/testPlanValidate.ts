@@ -12,8 +12,36 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
 import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
-import { validatePlan, buildHierarchySummary, type TestPlanInput } from './hierarchyValidate.js';
+import {
+  validatePlan,
+  buildHierarchySummary,
+  type TestPlanInput,
+  type PlanResult,
+  type SuiteResult,
+} from './hierarchyValidate.js';
 import { desc } from './descHelper.js';
+
+function countSuiteViolations(suite: SuiteResult): number {
+  let total = suite.violations.length;
+  for (const tc of suite.test_cases) {
+    total += tc.issues.length + tc.best_practices_violations.length;
+  }
+  for (const child of suite.test_suites) {
+    total += countSuiteViolations(child);
+  }
+  return total;
+}
+
+function countAllPlanViolations(result: PlanResult): number {
+  let total = result.violations.length;
+  for (const suite of result.test_suites) {
+    total += countSuiteViolations(suite);
+  }
+  for (const tc of result.test_cases) {
+    total += tc.issues.length + tc.best_practices_violations.length;
+  }
+  return total;
+}
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
@@ -146,7 +174,8 @@ export function registerTestPlanValidate(server: McpServer): void {
         const summary = buildHierarchySummary(result);
 
         const completeness_score = calcCompletenessScore(summary.test_cases_valid, summary.total_test_cases);
-        const recommended_next_action = calcNextAction(completeness_score, false);
+        const remainingViolations = countAllPlanViolations(result);
+        const recommended_next_action = calcNextAction(completeness_score, false, remainingViolations);
 
         const response = {
           requestId,

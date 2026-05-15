@@ -422,7 +422,12 @@ describe('provar_testplan_validate', () => {
       assert.ok(valid.includes(body['recommended_next_action'] as string));
     });
 
-    it('recommended_next_action is stop when all test cases are valid (score=100)', () => {
+    it('recommended_next_action is NOT stop when test cases are structurally valid but BP violations remain (B1)', () => {
+      // TC_VALID parses as structurally valid (issues=0) but has BP violations
+      // (e.g. STRUCT-SUMMARY-001 — no <summary> tag). With fullMeta() the plan
+      // itself has no PLAN-META-* violations. The stop-decision safety hedge
+      // must include the nested per-test-case BP violations, so the action
+      // must NOT be 'stop' until those are resolved.
       const result = server.call('provar_testplan_validate', {
         plan_name: 'AllValidPlan',
         test_suites: [SUITE_VALID],
@@ -431,7 +436,32 @@ describe('provar_testplan_validate', () => {
 
       const body = parseText(result);
       assert.equal(body['completeness_score'], 100);
-      assert.equal(body['recommended_next_action'], 'stop');
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while BP violations remain, got: ${String(body['recommended_next_action'])}`
+      );
+    });
+
+    it('recommended_next_action is NOT stop when score=100 but plan metadata violations remain (B1)', () => {
+      // Same TC_VALID as above (structurally valid → completeness=100), but
+      // plan metadata is OMITTED, which triggers PLAN-META-* violations at the
+      // plan level. The old impl passed (score, false) to calcNextAction with
+      // a default remainingViolationCount=0, so stop fired despite plan
+      // violations. The fix collects plan/suite/tc/bp counts.
+      const result = server.call('provar_testplan_validate', {
+        plan_name: 'MissingMetaPlan',
+        test_suites: [SUITE_VALID],
+        // metadata intentionally omitted → PLAN-META-001..007 fire
+      });
+
+      const body = parseText(result);
+      assert.equal(body['completeness_score'], 100);
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while plan metadata violations remain, got: ${String(body['recommended_next_action'])}`
+      );
     });
 
     it('recommended_next_action is inspect_failures when plan has failures (no baseline)', () => {

@@ -29,6 +29,7 @@ function collectAllViolations(result: SuiteResult): DiffableViolation[] {
   const all: DiffableViolation[] = [...(result.violations as unknown as DiffableViolation[])];
   for (const tc of result.test_cases) {
     all.push(...(tc.issues as unknown as DiffableViolation[]));
+    all.push(...(tc.best_practices_violations as unknown as DiffableViolation[]));
   }
   for (const child of result.test_suites) {
     all.push(...collectAllViolations(child));
