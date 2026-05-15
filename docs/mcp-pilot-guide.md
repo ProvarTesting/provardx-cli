@@ -445,11 +445,11 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **Background:** A regression in 1.5.0 (PDX-479) traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
 
-**Defense in depth.** Three layers protect against the regression class:
+**Defense in depth.** Three layers protect against the multi-call construction pattern:
 
-1. **Prompt + resource guidance** (PDX-481) — upstream authoring prompts no longer steer toward per-step construction.
-2. **Tool-description contract** (PDX-482) — `provar_testcase_generate` and `provar_testcase_step_edit` descriptions explicitly mark generate as constructor-only and step_edit as amendment-only, so the LLM reads the contract at every call site (including compact schema mode).
-3. **Runtime guard** (PDX-483) — `provar_testcase_generate` actively rejects the exact shape that produces the bad file: `steps:[]` + `dry_run:false` + `output_path`. The rejection returns `STEPS_REQUIRED` with `details.suggestion` telling the LLM to pass the full step tree in one call. Empty-steps shapes that don't write a file (dry-run preview, no output_path) remain allowed.
+1. **Prompt and resource guidance** — authoring prompts and the MCP step-reference resource describe single-call construction as the contract.
+2. **Tool-description contract** — `provar_testcase_generate` and `provar_testcase_step_edit` descriptions explicitly mark generate as constructor-only and step_edit as amendment-only, so the LLM reads the contract at every call site (including compact schema mode).
+3. **Runtime guard** — `provar_testcase_generate` rejects the exact shape that would produce a skeleton-only file: `steps:[]` + `dry_run:false` + `output_path`. The rejection returns `STEPS_REQUIRED` with `details.suggestion` telling the LLM to pass the full step tree in one call. Empty-steps shapes that don't write a file (dry-run preview, no `output_path`) remain allowed.
 
 If a pilot LLM falls into the multi-call pattern despite the description contract, the runtime guard converts the failure into an actionable error rather than a silently broken file on disk.
 

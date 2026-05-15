@@ -765,13 +765,13 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 
 **Error codes**
 
-| Code               | Meaning                                                                                                                                                            |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`)                                                                                              |
-| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                                                                                                                 |
-| `STEPS_REQUIRED`   | Called with `steps:[]` + `dry_run:false` + `output_path` — the PDX-479 multi-call construction pattern. `details.suggestion` tells the caller how to self-correct. |
+| Code               | Meaning                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`)                                                                                                                |
+| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                                                                                                                                   |
+| `STEPS_REQUIRED`   | Called with `steps:[]` + `dry_run:false` + `output_path` — constructing a test case requires the full step tree on the write path. `details.suggestion` tells the caller how to fix. |
 
-**`STEPS_REQUIRED` (PDX-483 runtime guard).** The rejected shape is `steps:[]` + `dry_run:false` + `output_path` — the exact call signature that, before this guard, produced a contract-violating skeleton on disk (the PDX-479 regression class). All other empty-steps shapes remain allowed:
+**`STEPS_REQUIRED`.** The rejected shape is `steps:[]` + `dry_run:false` + `output_path`. Constructing a test case requires the full step tree in a single call; passing an empty array on the write path would produce a skeleton-only file. All other empty-steps shapes remain allowed:
 
 | `steps.length` | `dry_run`     | `output_path` | Result                                                  |
 | -------------- | ------------- | ------------- | ------------------------------------------------------- |
