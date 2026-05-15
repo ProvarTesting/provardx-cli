@@ -23,6 +23,7 @@ import {
   hasAnyRun,
   loadBaselineViolations,
   computeDiff,
+  computeContextHash,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
 import { desc } from './descHelper.js';
@@ -297,6 +298,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
         if (results_dir) assertPathAllowed(results_dir, config.allowedPaths);
 
         const storageDir = results_dir ?? path.join(project_path, 'provardx', 'validation');
+        const contextHash = computeContextHash('project', project_path);
         const runId = generateRunId(project_path);
 
         const result = validateProjectFromPath({
@@ -318,14 +320,14 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
         // Load baseline BEFORE saving to prevent eviction of the requested baseline.
         const baseline =
           baseline_run_id !== undefined && baseline_run_id !== ''
-            ? loadBaselineViolations(storageDir, baseline_run_id)
+            ? loadBaselineViolations(storageDir, baseline_run_id, contextHash)
             : null;
 
         const hasBaseline = hasAnyRun(storageDir);
 
         if (save_results !== false) {
           try {
-            saveRun(storageDir, runId, currentViolations);
+            saveRun(storageDir, runId, currentViolations, contextHash);
           } catch (saveErr) {
             log('warn', 'provar_project_validate: could not save run for diff', {
               requestId,

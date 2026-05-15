@@ -155,6 +155,25 @@ describe('parseActiveGroups() (PDX-469)', () => {
     process.env['PROVAR_MCP_TOOLS'] = ',,';
     assert.equal(parseActiveGroups(), null);
   });
+
+  // ── H1: unknown group names ───────────────────────────────────────────────
+  it('returns null when every requested group name is unknown (typo footgun)', () => {
+    // Pre-fix: a typo like 'validaton' produced Set{'validaton'} which matched
+    // no group and silently disabled all tools. Now we fall back to null (all
+    // tools) so the server is never left with an empty Provar tool surface.
+    process.env['PROVAR_MCP_TOOLS'] = 'validaton';
+    assert.equal(parseActiveGroups(), null);
+  });
+
+  it('keeps known names and ignores unknown ones in a mixed list', () => {
+    process.env['PROVAR_MCP_TOOLS'] = 'nitroX,bogusgroup,validation';
+    const groups = parseActiveGroups();
+    assert.ok(groups instanceof Set);
+    assert.equal(groups.size, 2);
+    assert.ok(groups.has('nitrox'));
+    assert.ok(groups.has('validation'));
+    assert.ok(!groups.has('bogusgroup'));
+  });
 });
 
 // ── PDX-469: tool profile registration ────────────────────────────────────────

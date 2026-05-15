@@ -6,8 +6,6 @@
  */
 
 /* eslint-disable camelcase */
-import os from 'node:os';
-import path from 'node:path';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
@@ -20,6 +18,8 @@ import {
   hasAnyRun,
   loadBaselineViolations,
   computeDiff,
+  computeContextHash,
+  resolveValidationDir,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
 import { validateSuite, buildHierarchySummary, type TestSuiteInput, type SuiteResult } from './hierarchyValidate.js';
@@ -78,7 +78,7 @@ const SUITE_VALIDATE_SUMMARY_FIELDS = [
 ];
 
 function suiteStorageDir(): string {
-  return path.join(os.homedir(), '.provardx', 'validation', 'testsuite');
+  return resolveValidationDir('testsuite');
 }
 
 export function registerTestSuiteValidate(server: McpServer): void {
@@ -154,19 +154,20 @@ export function registerTestSuiteValidate(server: McpServer): void {
         const summary = buildHierarchySummary(result);
 
         const storageDir = suiteStorageDir();
+        const contextHash = computeContextHash('suite', suite_name);
         const runId = generateRunId(suite_name);
         const currentViolations = collectAllViolations(result);
 
         // Load baseline BEFORE saving to prevent eviction of the requested baseline
         const baseline =
           baseline_run_id !== undefined && baseline_run_id !== ''
-            ? loadBaselineViolations(storageDir, baseline_run_id)
+            ? loadBaselineViolations(storageDir, baseline_run_id, contextHash)
             : null;
 
         const hasBaseline = hasAnyRun(storageDir);
 
         try {
-          saveRun(storageDir, runId, currentViolations);
+          saveRun(storageDir, runId, currentViolations, contextHash);
         } catch (saveErr) {
           log('warn', 'provar_testsuite_validate: could not save run for diff', {
             requestId,

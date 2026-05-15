@@ -7,7 +7,6 @@
 
 /* eslint-disable camelcase */
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -33,6 +32,8 @@ import {
   hasAnyRun,
   loadBaselineViolations,
   computeDiff,
+  computeContextHash,
+  resolveValidationDir,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
 import { runBestPractices } from './bestPracticesEngine.js';
@@ -67,7 +68,7 @@ const TC_VALIDATE_SUMMARY_FIELDS = [
 
 /** Storage dir for testcase diff runs (namespaced to avoid cross-tool baseline collisions). */
 function tcStorageDir(): string {
-  return path.join(os.homedir(), '.provardx', 'validation', 'testcase');
+  return resolveValidationDir('testcase');
 }
 
 /** Resolve validation result from QualityHub API or fall back to local. */
@@ -183,7 +184,9 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const baseResult = await resolveBaseResult(source, apiKey, requestId);
 
         const storageDir = tcStorageDir();
-        const runId = generateRunId(tcRunContext(file_path, source));
+        const context = tcRunContext(file_path, source);
+        const contextHash = computeContextHash('tc', context);
+        const runId = generateRunId(context);
         const bpViolations = (baseResult.best_practices_violations ?? []) as unknown as DiffableViolation[];
         const currentViolations: DiffableViolation[] = [
           ...(baseResult.issues as unknown as DiffableViolation[]),
@@ -193,13 +196,13 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         // Load baseline BEFORE saving to prevent eviction of the requested baseline
         const baseline =
           baseline_run_id !== undefined && baseline_run_id !== ''
-            ? loadBaselineViolations(storageDir, baseline_run_id)
+            ? loadBaselineViolations(storageDir, baseline_run_id, contextHash)
             : null;
 
         const hasBaseline = hasAnyRun(storageDir);
 
         try {
-          saveRun(storageDir, runId, currentViolations);
+          saveRun(storageDir, runId, currentViolations, contextHash);
         } catch (saveErr) {
           log('warn', 'provar_testcase_validate: could not save run for diff', {
             requestId,
