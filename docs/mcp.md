@@ -765,10 +765,22 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 
 **Error codes**
 
-| Code               | Meaning                                                               |
-| ------------------ | --------------------------------------------------------------------- |
-| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`) |
-| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                    |
+| Code               | Meaning                                                                                                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`)                                                                                              |
+| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                                                                                                                 |
+| `STEPS_REQUIRED`   | Called with `steps:[]` + `dry_run:false` + `output_path` — the PDX-479 multi-call construction pattern. `details.suggestion` tells the caller how to self-correct. |
+
+**`STEPS_REQUIRED` (PDX-483 runtime guard).** The rejected shape is `steps:[]` + `dry_run:false` + `output_path` — the exact call signature that, before this guard, produced a contract-violating skeleton on disk (the PDX-479 regression class). All other empty-steps shapes remain allowed:
+
+| `steps.length` | `dry_run`     | `output_path` | Result                                                  |
+| -------------- | ------------- | ------------- | ------------------------------------------------------- |
+| 0              | `true`        | any           | Allowed — preserves skeleton inspection / IDE preview   |
+| 0              | `false`       | absent        | Allowed — no file would be written anyway               |
+| 0              | `false`       | **present**   | **Rejected** with `STEPS_REQUIRED` (no file is written) |
+| ≥ 1            | true or false | any           | Allowed — normal happy path                             |
+
+`details.suggestion` instructs the caller to pass the FULL step tree in a single call, clarifies that `provar_testcase_step_edit` is for amendment-only, and notes the `dry_run=true` escape hatch for skeleton inspection.
 
 ---
 

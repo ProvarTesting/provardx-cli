@@ -382,11 +382,16 @@ describe('provar_testcase_generate', () => {
   });
 
   describe('writing to disk', () => {
+    // Each disk-write test uses a non-empty steps[] so the PDX-483 STEPS_REQUIRED
+    // guard (which rejects steps:[]+dry_run:false+output_path) does not fire.
+    // These tests assert *other* behaviour: file write, overwrite, mkdirp, path policy.
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
     it('writes file when dry_run=false and output_path provided', () => {
       const outPath = path.join(tmpDir, 'Login.testcase');
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Login',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -415,7 +420,7 @@ describe('provar_testcase_generate', () => {
 
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -431,7 +436,7 @@ describe('provar_testcase_generate', () => {
 
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Existing',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: true,
@@ -446,7 +451,7 @@ describe('provar_testcase_generate', () => {
       const outPath = path.join(tmpDir, 'tests', 'suite', 'Login.testcase');
       server.call('provar_testcase_generate', {
         test_case_name: 'Login',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: outPath,
         dry_run: false,
         overwrite: false,
@@ -456,14 +461,144 @@ describe('provar_testcase_generate', () => {
     });
   });
 
+  // ── PDX-483 runtime guard: reject empty steps[] on non-dry-run with output_path ──
+  // The PDX-479 regression class arose from agents calling generate with steps:[]
+  // intending to append later via step_edit. The passive contract (PDX-482) lives in
+  // the description; the active runtime guard rejects the exact shape that produces
+  // a contract-violating file on disk. The 6 edge cases below pin down which empty-
+  // steps shapes are allowed (dry-run preview, inspection-only) vs rejected (file write).
+  describe('STEPS_REQUIRED runtime guard (PDX-483)', () => {
+    const SINGLE_STEP = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
+    it('allows steps:[] + dry_run:true + no output_path (skeleton inspection)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Skeleton Inspect',
+        steps: [],
+        dry_run: true,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'dry-run skeleton inspection must remain allowed');
+      assert.equal(parseText(result)['written'], false);
+    });
+
+    it('allows steps:[] + dry_run:true + output_path provided (dry-run preview wins)', () => {
+      const outPath = path.join(tmpDir, 'DryRunWithPath.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DryRun With Path',
+        steps: [],
+        output_path: outPath,
+        dry_run: true,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'dry-run wins over output_path — no file is written');
+      assert.equal(fs.existsSync(outPath), false, 'file must not be written in dry_run mode');
+    });
+
+    it('allows steps:[] + dry_run:false + no output_path (no persistence target)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'No Output Path',
+        steps: [],
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'no output_path means no file write — TODO-only XML is harmless');
+      assert.equal(parseText(result)['written'], false);
+    });
+
+    it('REJECTS steps:[] + dry_run:false + output_path with STEPS_REQUIRED', () => {
+      const outPath = path.join(tmpDir, 'Empty.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Empty Build',
+        steps: [],
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), true, 'multi-call construction pattern must be rejected');
+      const body = parseText(result);
+      assert.equal(body['error_code'], 'STEPS_REQUIRED');
+      assert.equal(body['retryable'], false);
+      const details = body['details'] as Record<string, unknown>;
+      assert.ok(details, 'error must include details');
+      const suggestion = details['suggestion'];
+      assert.ok(typeof suggestion === 'string', 'details.suggestion must be a string');
+      assert.ok(suggestion.length > 0, 'details.suggestion must be non-empty');
+      assert.ok(
+        suggestion.includes('FULL step tree'),
+        'suggestion must instruct passing the FULL step tree in a single call'
+      );
+      assert.ok(
+        suggestion.includes('dry_run=true'),
+        'suggestion must mention the dry_run=true escape hatch for skeleton inspection'
+      );
+    });
+
+    it('STEPS_REQUIRED rejection writes NO file (assertion: fs.existsSync === false)', () => {
+      const outPath = path.join(tmpDir, 'NeverWritten.testcase');
+      server.call('provar_testcase_generate', {
+        test_case_name: 'Never Written',
+        steps: [],
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(
+        fs.existsSync(outPath),
+        false,
+        'STEPS_REQUIRED rejection must run BEFORE fs.writeFileSync — no skeleton on disk'
+      );
+    });
+
+    it('allows non-empty steps + dry_run:false + output_path (happy path — normal write)', () => {
+      const outPath = path.join(tmpDir, 'HappyPath.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Happy Path',
+        steps: SINGLE_STEP,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), false, 'normal write path must remain unchanged');
+      assert.equal(parseText(result)['written'], true);
+      assert.equal(fs.existsSync(outPath), true, 'happy-path file must be written');
+    });
+
+    // Path-policy ordering check: the guard must fire BEFORE assertPathAllowed
+    // so that a caller in the rejected shape gets STEPS_REQUIRED (the actionable
+    // root-cause error), not PATH_NOT_ALLOWED (which would mislead about the fix).
+    it('STEPS_REQUIRED fires BEFORE path policy when both would reject', () => {
+      const strictServer = new MockMcpServer();
+      registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
+      const result = strictServer.call('provar_testcase_generate', {
+        test_case_name: 'Outside And Empty',
+        steps: [],
+        // Path outside allowedPaths AND empty steps — STEPS_REQUIRED must win
+        // because its suggestion is the actionable one (path is moot if no steps).
+        output_path: path.join(os.tmpdir(), 'outside-and-empty.testcase'),
+        dry_run: false,
+        overwrite: false,
+      });
+      assert.equal(isError(result), true);
+      assert.equal(
+        parseText(result)['error_code'],
+        'STEPS_REQUIRED',
+        'STEPS_REQUIRED must fire before assertPathAllowed — the empty-payload root cause is what the LLM needs to see'
+      );
+    });
+  });
+
   describe('path policy', () => {
+    // Uses a non-empty steps[] to bypass the PDX-483 STEPS_REQUIRED guard so
+    // the assertion targets the PATH_NOT_ALLOWED branch specifically.
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
     it('returns PATH_NOT_ALLOWED when output_path is outside allowedPaths', () => {
       const strictServer = new MockMcpServer();
       registerTestCaseGenerate(strictServer as never, { allowedPaths: [tmpDir] });
 
       const result = strictServer.call('provar_testcase_generate', {
         test_case_name: 'Evil',
-        steps: [],
+        steps: SMOKE_STEPS,
         output_path: path.join(os.tmpdir(), 'evil.testcase'),
         dry_run: false,
         overwrite: false,
