@@ -158,6 +158,7 @@
         "src/mcp/rules/*.json",
         "docs/NITROX_COMPONENT_CATALOG.md",
         "docs/NITROX_CATALOG_SOURCE.json",
+        "docs/PROVAR_TOOL_GUIDE.md",
         "**/tsconfig.json",
         "messages/**"
       ],

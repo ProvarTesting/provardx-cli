@@ -43,6 +43,30 @@ interface ViolationSummary {
   sample_message: string;
 }
 
+function countAllProjectViolations(result: ProjectValidationResult): number {
+  // Note: ValidatedTestCase does not carry best_practices_violations at the project
+  // layer (intentional — bp surfaces via the testcase tool). The count here covers
+  // every violation visible at project/plan/suite/child_suite level plus per-tc
+  // structural issues, which is what the stop-decision safety hedge needs.
+  let total = result.project_violations.length;
+  for (const plan of result.plans) {
+    total += plan.violations.length;
+    for (const suite of plan.suites) {
+      total += suite.violations.length;
+      for (const tc of suite.test_cases) {
+        total += tc.issues.length;
+      }
+      for (const cs of suite.child_suites) {
+        total += cs.violations.length;
+      }
+    }
+    for (const utc of plan.unplanned_test_cases) {
+      total += utc.issues.length;
+    }
+  }
+  return total;
+}
+
 function buildPlanSummary(plan: ValidatedPlan): PlanSummary {
   const test_case_count = plan.suites.reduce((n, s) => n + s.test_cases.length, 0) + plan.unplanned_test_cases.length;
   return {
@@ -287,14 +311,17 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
         }
 
         const currentViolations = result.project_violations as unknown as DiffableViolation[];
+        const allLevelViolationCount = countAllProjectViolations(result);
 
-        // Load baseline BEFORE saving to prevent eviction of the requested baseline
+        // Read baseline and history regardless of save_results — save_results controls
+        // whether the CURRENT run is persisted, not whether existing runs can be read.
+        // Load baseline BEFORE saving to prevent eviction of the requested baseline.
         const baseline =
-          save_results !== false && baseline_run_id !== undefined && baseline_run_id !== ''
+          baseline_run_id !== undefined && baseline_run_id !== ''
             ? loadBaselineViolations(storageDir, baseline_run_id)
             : null;
 
-        const hasBaseline = save_results !== false ? hasAnyRun(storageDir) : false;
+        const hasBaseline = hasAnyRun(storageDir);
 
         if (save_results !== false) {
           try {
@@ -324,7 +351,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
             result.summary.test_cases_valid,
             result.summary.total_test_cases
           );
-          const recommended_next_action = calcNextAction(completeness_score, true, currentViolations.length);
+          const recommended_next_action = calcNextAction(completeness_score, true, allLevelViolationCount);
           const diffResponse = {
             requestId,
             ...(save_results !== false ? { run_id: runId } : {}),
@@ -342,7 +369,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           result.summary.test_cases_valid,
           result.summary.total_test_cases
         );
-        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
+        const recommended_next_action = calcNextAction(completeness_score, hasBaseline, allLevelViolationCount);
 
         const usePlanDetails = include_plan_details || detail === 'full';
         const shaped = shapeResponse(result, usePlanDetails, max_uncovered, max_violations);

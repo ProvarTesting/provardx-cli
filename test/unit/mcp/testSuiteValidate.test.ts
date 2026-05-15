@@ -425,14 +425,22 @@ describe('provar_testsuite_validate', () => {
       assert.ok(['stop', 'inspect_failures', 'fix_and_revalidate'].includes(action), `Unexpected action: ${action}`);
     });
 
-    it('recommended_next_action is "stop" when completeness_score is 100', () => {
+    it('recommended_next_action is NOT "stop" when test cases have BP violations (B2)', () => {
+      // TC_VALID is structurally valid (issues.length=0) but has BP violations
+      // (e.g. STRUCT-SUMMARY-001 — no <summary> tag). collectAllViolations must
+      // include tc.best_practices_violations so the stop-decision safety hedge
+      // sees the remaining work; otherwise stop fires while BP issues remain.
       const result = server.call('provar_testsuite_validate', {
         suite_name: 'StopSuite',
         test_cases: [TC_VALID],
       });
       const body = parseText(result);
       assert.equal(body['completeness_score'], 100);
-      assert.equal(body['recommended_next_action'], 'stop');
+      assert.notEqual(
+        body['recommended_next_action'],
+        'stop',
+        `Expected NOT stop while BP violations remain, got: ${String(body['recommended_next_action'])}`
+      );
     });
   });
 

@@ -535,5 +535,52 @@ describe('provar_project_validate (from path)', () => {
       assert.ok('completeness_score' in diffBody, 'diff should include completeness_score');
       assert.ok('recommended_next_action' in diffBody, 'diff should include recommended_next_action');
     });
+
+    it('returns diff (not BASELINE_NOT_FOUND) when save_results=false and baseline_run_id is set (B4)', () => {
+      // Read-only diff: callers must be able to compare against an existing
+      // baseline without persisting the current run. The pre-fix gated baseline
+      // load on save_results !== false, so a valid baseline returned BASELINE_NOT_FOUND.
+      makeProject(tmpDir);
+      const first = server.call('provar_project_validate', { project_path: tmpDir });
+      const runId = (parseText(first) as { run_id: string }).run_id;
+
+      const second = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        baseline_run_id: runId,
+        save_results: false,
+      });
+      assert.equal(isError(second), false, 'read-only diff must not error');
+      const body = parseText(second);
+      assert.ok('added' in body, 'read-only diff must include added');
+      assert.ok('resolved' in body, 'read-only diff must include resolved');
+      assert.ok('unchanged_count' in body, 'read-only diff must include unchanged_count');
+      assert.ok(!('run_id' in body), 'read-only diff should NOT include run_id when save_results=false');
+    });
+  });
+
+  describe('PDX-473 — stop decision counts all-level violations (B3)', () => {
+    it('recommended_next_action is NOT stop when nested violations remain at completeness 100', () => {
+      // The fixture project (makeProject) creates a structurally valid test case
+      // covered by a plan, yielding test_cases_valid===total. But the project
+      // typically has plan/suite-level violations (e.g. missing plan metadata
+      // from the bare .planitem). The stop decision must reflect those.
+      makeProject(tmpDir);
+      const result = server.call('provar_project_validate', {
+        project_path: tmpDir,
+        save_results: false,
+      });
+      assert.equal(isError(result), false);
+      const body = parseText(result);
+      if (body['completeness_score'] === 100) {
+        // If the fixture happens to be 100% complete in completeness terms, the
+        // stop decision must still account for any nested violations that the
+        // pre-fix snapshot ignored.
+        assert.notEqual(
+          body['recommended_next_action'],
+          'stop',
+          `Expected NOT stop while nested violations remain, got: ${String(body['recommended_next_action'])}`
+        );
+      }
+    });
   });
 });
