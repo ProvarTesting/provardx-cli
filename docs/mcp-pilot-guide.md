@@ -443,7 +443,15 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 
 **Goal:** Confirm the AI authors a multi-scenario test case by passing the full step tree to `provar_testcase_generate` in **one** call — not by generating an empty skeleton and looping `provar_testcase_step_edit` per step.
 
-**Background:** A regression in 1.5.0 (PDX-479) traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
+**Background:** A previously observed regression traced to authoring guidance that steered LLMs toward a per-step construction pattern. Multi-call construction drops scenario numbers (e.g. Scenario 1 → Scenario 3, no Scenario 2), flattens asserts that should be nested inside `UiWithScreen` clauses, and produces inconsistent assert API IDs across the case. This scenario exists so the regression class is exercised in pilot evaluation and cannot recur silently.
+
+**Defense in depth.** Three layers protect against the multi-call construction pattern:
+
+1. **Prompt and resource guidance** — authoring prompts and the MCP step-reference resource describe single-call construction as the contract.
+2. **Tool-description contract** — `provar_testcase_generate` and `provar_testcase_step_edit` descriptions explicitly mark generate as constructor-only and step_edit as amendment-only, so the LLM reads the contract at every call site (including compact schema mode).
+3. **Runtime guard** — `provar_testcase_generate` rejects the exact shape that would produce a skeleton-only file: `steps:[]` + `dry_run:false` + `output_path`. The rejection returns `STEPS_REQUIRED` with `details.suggestion` telling the LLM to pass the full step tree in one call. Empty-steps shapes that don't write a file (dry-run preview, no `output_path`) remain allowed.
+
+If a pilot LLM falls into the multi-call pattern despite the description contract, the runtime guard converts the failure into an actionable error rather than a silently broken file on disk.
 
 **Title-level contract:** the chip-level `title` fields for the two tools — `Generate Test Case (full steps in one call)` and `Amend Existing Test Case Step` — carry the construct-vs-amend split at the tool-picker surface. MCP clients that render only the title (Claude Desktop tool-picker chips, Cursor audit pane, inline tool-call references in chat threads) still expose the contract to the agent before any description is read.
 
@@ -471,7 +479,7 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 - A call to `provar_testcase_generate` with `steps: []` followed by `provar_testcase_step_edit` calls
 - The generated case skips a scenario number, mixes assert API IDs for similar assertions, or emits asserts as flat siblings rather than nested inside the screen wrapper
 
-If any FAIL indicator appears, file against PDX-479 (or its successor) with the prompt and the generated XML attached.
+If any FAIL indicator appears, report it to the Provar team with the prompt and the generated XML attached.
 
 ---
 

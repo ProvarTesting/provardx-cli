@@ -767,10 +767,22 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 
 **Error codes**
 
-| Code               | Meaning                                                               |
-| ------------------ | --------------------------------------------------------------------- |
-| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`) |
-| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                    |
+| Code               | Meaning                                                                                                                                                                              |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `TESTCASE_INVALID` | Generated XML failed structural validation (see `details.validation`)                                                                                                                |
+| `FILE_EXISTS`      | `output_path` already exists and `overwrite=false`                                                                                                                                   |
+| `STEPS_REQUIRED`   | Called with `steps:[]` + `dry_run:false` + `output_path` — constructing a test case requires the full step tree on the write path. `details.suggestion` tells the caller how to fix. |
+
+**`STEPS_REQUIRED`.** The rejected shape is `steps:[]` + `dry_run:false` + `output_path`. Constructing a test case requires the full step tree in a single call; passing an empty array on the write path would produce a skeleton-only file. All other empty-steps shapes remain allowed:
+
+| `steps.length` | `dry_run`     | `output_path` | Result                                                  |
+| -------------- | ------------- | ------------- | ------------------------------------------------------- |
+| 0              | `true`        | any           | Allowed — preserves skeleton inspection / IDE preview   |
+| 0              | `false`       | absent        | Allowed — no file would be written anyway               |
+| 0              | `false`       | **present**   | **Rejected** with `STEPS_REQUIRED` (no file is written) |
+| ≥ 1            | true or false | any           | Allowed — normal happy path                             |
+
+`details.suggestion` instructs the caller to pass the FULL step tree in a single call, clarifies that `provar_testcase_step_edit` is for amendment-only, and notes the `dry_run=true` escape hatch for skeleton inspection.
 
 ---
 
@@ -2106,7 +2118,7 @@ Version metadata for the bundled NitroX component catalog and JSON schemas. Retu
 }
 ```
 
-`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or pre-PDX-464 release).
+`commitSha` and `fetchedAt` are `null` when the release build could not reach the internal source (fallback catalog in use). `schemasUpdated` is `true` when both `FactComponent.schema` and `FactPackage.schema` were successfully fetched from the same internal revision and bundled into this release; `false` when the schema fetch failed and the previously committed schemas are in use; `null` when the catalog source was not generated (dev build or an older release that predates this metadata).
 
 ---
 

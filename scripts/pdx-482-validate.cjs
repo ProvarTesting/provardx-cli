@@ -1,20 +1,31 @@
-// PDX-482 / PDX-484 validation: confirm the construct/amend contract is reachable
-// at the MCP protocol surface in BOTH standard and compact schema modes, AND in
-// the `title:` field that some clients render exclusively (Claude Desktop chips,
-// Cursor audit pane, inline tool-call refs).
+// PDX-482 / PDX-483 / PDX-484 validation: confirm the construct/amend contract
+// is reachable at every MCP protocol surface the LLM sees, and that the runtime
+// guard rejects the multi-call construction shape.
 //
-// The LLM reads tools/list before every tool call, so every assertion here is
-// on bytes the LLM literally sees at the call site. Compact mode coverage is
-// critical because the adversarial review identified that PROVAR_MCP_SCHEMA_MODE=compact
-// silently swapped the description for a contract-free one-liner. Title-level
-// coverage was added by PDX-484: the title field is independent of schema mode,
-// but we assert it in both passes to surface drift early either way.
+// PDX-482 — description contract (standard + compact schema modes): assertions
+// on tools/list description bodies. Compact mode coverage is critical because
+// the adversarial review identified that PROVAR_MCP_SCHEMA_MODE=compact silently
+// swapped the description for a contract-free one-liner.
+//
+// PDX-483 — runtime guard: drives a real tools/call with the rejected shape
+// (steps:[]+dry_run:false+output_path) and asserts the response is a structured
+// STEPS_REQUIRED error with a non-empty details.suggestion. This catches a
+// regression class that the tools/list assertions cannot reach: the passive
+// contract surviving in the description while the active guard silently
+// regresses (e.g. a refactor reorders the handler so writes happen before the
+// check).
+//
+// PDX-484 — title contract: assertions on the `title:` field that some clients
+// render exclusively (Claude Desktop chips, Cursor audit pane, inline tool-call
+// refs). Titles are schema-mode-independent but we assert in both passes to
+// surface drift early either way.
 //
 //   yarn compile
 //   node scripts/pdx-482-validate.cjs
 
 'use strict';
 
+const fs = require('fs');
 const { spawn } = require('child_process');
 const os = require('os');
 const path = require('path');
@@ -285,13 +296,156 @@ function compactAssertions(toolList, record) {
   titleAssertions(toolList, record);
 }
 
+// ── PDX-483 runtime guard: tools/call assertion ─────────────────────────────
+// Drives a real tools/call(provar_testcase_generate, ...) with the rejected
+// shape (steps:[] + dry_run:false + output_path) and asserts the response is
+// a structured STEPS_REQUIRED error. This is the only check that catches a
+// silent regression where the passive description survives but the active
+// runtime guard is removed or reordered after a side effect.
+function runRuntimeGuardValidation() {
+  return new Promise((resolve, reject) => {
+    const server = spawn(process.execPath, [entry, 'mcp', 'start', '--allowed-paths', TMP, '--no-update-check'], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: { ...process.env },
+    });
+
+    let nextId = 1;
+    const pending = new Map();
+    let buf = '';
+
+    server.stdout.on('data', (chunk) => {
+      buf += chunk.toString('utf-8');
+      let nl;
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line);
+          const cb = pending.get(msg.id);
+          if (cb) {
+            pending.delete(msg.id);
+            cb(msg);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
+    const rpc = (method, params) => {
+      const id = nextId++;
+      const req = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+      return new Promise((rpcResolve, rpcReject) => {
+        pending.set(id, rpcResolve);
+        setTimeout(() => {
+          if (pending.has(id)) {
+            pending.delete(id);
+            rpcReject(new Error(`Timeout waiting for ${method}`));
+          }
+        }, 10000);
+        server.stdin.write(req);
+      });
+    };
+
+    const results = [];
+    const record = (label, ok, detail) => {
+      results.push({ label: `[runtime-guard] ${label}`, ok, detail });
+    };
+
+    (async () => {
+      await rpc('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'pdx-483-validate', version: '1.0.0' },
+      });
+
+      // Use a unique tmp path so a leftover file from a prior run can't mask the assertion.
+      const outPath = path.join(TMP, `pdx483-validate-${Date.now()}.testcase`);
+      try {
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+      } catch {
+        /* best-effort */
+      }
+
+      const callRes = await rpc('tools/call', {
+        name: 'provar_testcase_generate',
+        arguments: {
+          test_case_name: 'PDX-483 validate',
+          steps: [],
+          dry_run: false,
+          output_path: outPath,
+        },
+      });
+
+      // MCP tools/call returns { result: { content: [{ type, text }], isError? } }.
+      // The tool's error body is JSON-encoded in content[0].text.
+      const result = callRes.result;
+      record(
+        'tools/call returned a result (no protocol-level error)',
+        !!result && !callRes.error,
+        callRes.error ? JSON.stringify(callRes.error).slice(0, 120) : 'protocol OK'
+      );
+      record(
+        'result.isError === true (tool-level rejection)',
+        result?.isError === true,
+        `isError: ${String(result?.isError)} — rejection must surface at content level`
+      );
+
+      let body = null;
+      try {
+        body = JSON.parse(result?.content?.[0]?.text ?? '{}');
+      } catch (parseErr) {
+        record('content[0].text parses as JSON', false, parseErr.message);
+      }
+      record(
+        'error_code === "STEPS_REQUIRED"',
+        body?.error_code === 'STEPS_REQUIRED',
+        `error_code: ${body?.error_code} — must match the documented code from docs/mcp.md`
+      );
+      record(
+        'retryable === false',
+        body?.retryable === false,
+        'STEPS_REQUIRED is a contract violation — retrying with the same payload would never succeed'
+      );
+      record(
+        'details.suggestion is a non-empty string',
+        typeof body?.details?.suggestion === 'string' && body.details.suggestion.length > 0,
+        'details.suggestion must tell the LLM how to self-correct (canonical multi-call rejection text)'
+      );
+      record(
+        'details.suggestion mentions "FULL step tree"',
+        typeof body?.details?.suggestion === 'string' && body.details.suggestion.includes('FULL step tree'),
+        'suggestion must point the LLM at the single-call pattern'
+      );
+      record(
+        'details.suggestion mentions dry_run=true escape hatch',
+        typeof body?.details?.suggestion === 'string' && body.details.suggestion.includes('dry_run=true'),
+        'suggestion must mention dry_run=true for legitimate skeleton-inspection callers'
+      );
+      record(
+        'no file written at output_path (zero side effects)',
+        !fs.existsSync(outPath),
+        'STEPS_REQUIRED must run BEFORE fs.writeFileSync — no skeleton on disk'
+      );
+
+      server.stdin.end();
+      resolve(results);
+    })().catch((err) => {
+      server.kill();
+      reject(err);
+    });
+  });
+}
+
 (async () => {
   const standardResults = await runValidation('standard', {}, standardAssertions);
   // Explicitly null out the env var on the standard pass to ensure no leakage.
   // For compact, set PROVAR_MCP_SCHEMA_MODE=compact via the spawn env.
   const compactResults = await runValidation('compact', { PROVAR_MCP_SCHEMA_MODE: 'compact' }, compactAssertions);
+  const runtimeGuardResults = await runRuntimeGuardValidation();
 
-  const allResults = [...standardResults, ...compactResults];
+  const allResults = [...standardResults, ...compactResults, ...runtimeGuardResults];
 
   let pass = 0;
   let fail = 0;
@@ -303,7 +457,7 @@ function compactAssertions(toolList, record) {
       fail++;
     }
   }
-  console.log(`\nPDX-482 validation: ${pass} passed, ${fail} failed`);
+  console.log(`\nPDX-482/PDX-483 validation: ${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);
 })().catch((err) => {
   console.error('Validation script error:', err);
