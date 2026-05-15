@@ -170,7 +170,13 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
       title: 'Generate Test Case',
       description: desc(
         TOOL_DESCRIPTION,
-        'Generate a Provar XML test case skeleton with UUID guids and steps structure.'
+        // PDX-482: the compact form must also carry the construction contract,
+        // otherwise PROVAR_MCP_SCHEMA_MODE=compact is a regression highway —
+        // the LLM would see a contract-free one-liner and could fall back to
+        // the multi-call pattern that caused PDX-479.
+        'Generate a Provar test case in ONE call with the FULL steps[] tree. ' +
+          'Do NOT call with steps=[] then append via provar_testcase_step_edit ' +
+          '(step_edit is for AMENDING existing test cases, not for CONSTRUCTING new ones).'
       ),
       inputSchema: {
         test_case_name: z.string().describe(desc('Test case name (human-readable label)', 'string, test case name')),

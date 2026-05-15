@@ -127,11 +127,22 @@ describe('provar_testcase_step_edit description', () => {
   it('description warns about the structural defects from multi-call construction', () => {
     const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
     assert.ok(reg, 'tool should be registered');
+    // Adversarial review (PDX-482 hardening): require ALL three defects, not
+    // just one. An OR-clause would allow silent dilution where a future cleanup
+    // removes two of the three defects but leaves one and the test still passes.
+    // Listing the full consequence chain is what gives the LLM the "why" needed
+    // to apply judgement when guidance is ambiguous.
     assert.ok(
-      reg.description.includes('dropped scenarios') ||
-        reg.description.includes('flat asserts') ||
-        reg.description.includes('inconsistent step types'),
-      'description must spell out the structural defects (PDX-479) caused by multi-call construction so the LLM understands the consequence'
+      reg.description.includes('dropped scenarios'),
+      'description must call out "dropped scenarios" (the symptom that first surfaced PDX-479)'
+    );
+    assert.ok(
+      reg.description.includes('flat asserts'),
+      'description must call out "flat asserts" (the second observable defect)'
+    );
+    assert.ok(
+      reg.description.includes('inconsistent step types'),
+      'description must call out "inconsistent step types" (the third observable defect)'
     );
   });
 });

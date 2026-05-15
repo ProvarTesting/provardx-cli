@@ -115,9 +115,14 @@ describe('provar_testcase_generate description', () => {
       reg.description.includes('AMENDING'),
       'description must explicitly say provar_testcase_step_edit is for AMENDING (caps for emphasis at the call site)'
     );
+    // Use a literal substring match (not a regex) — the previous regex
+    // /step_edit[^.]*not for CONSTRUCTING|CONSTRUCTING[^.]*not/i had a
+    // false-positive: the second alternative would pass on hostile text like
+    // "constructing is the only way... not via generate". Locking on the
+    // exact canonical phrasing prevents that drift.
     assert.ok(
-      /step_edit[^.]*not for CONSTRUCTING|CONSTRUCTING[^.]*not/i.test(reg.description),
-      'description must explicitly reject CONSTRUCTING via step_edit'
+      reg.description.includes('not for CONSTRUCTING one from scratch'),
+      'description must explicitly say step_edit is "not for CONSTRUCTING one from scratch" (literal canonical phrase)'
     );
   });
 
@@ -128,6 +133,64 @@ describe('provar_testcase_generate description', () => {
       reg.description.includes('stop and assemble') || reg.description.includes('stop, and assemble'),
       'description must tell agents to stop and assemble the full step list before calling — the most common mistake'
     );
+  });
+
+  // ── PDX-482 hardening: leading-position assertion (adversarial review fix) ──
+  // The contract must appear EARLY in the description because LLMs weight
+  // earlier tokens more heavily and many MCP clients truncate descriptions.
+  // Without this guard, a future refactor could move the contract to the end
+  // of the joined array and every other assertion would still pass.
+  it('Construction contract appears in the first 200 characters of the description', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    const pos = reg.description.indexOf('Construction pattern');
+    assert.ok(pos >= 0, 'description must contain "Construction pattern"');
+    assert.ok(
+      pos < 200,
+      `"Construction pattern" must appear in the first 200 chars (found at ${pos}) — LLMs weight leading tokens more`
+    );
+  });
+
+  // ── PDX-482 hardening: compact-mode coverage (adversarial review fix) ──────
+  // PROVAR_MCP_SCHEMA_MODE=compact swaps the entire description for a short
+  // one-liner. Without this guard, compact mode is a regression highway:
+  // the LLM would see a contract-free description and could fall back to the
+  // multi-call pattern that caused PDX-479.
+  describe('compact-mode (PROVAR_MCP_SCHEMA_MODE=compact)', () => {
+    const ORIGINAL_MODE = process.env['PROVAR_MCP_SCHEMA_MODE'];
+    let compactServer: MockMcpServer;
+
+    beforeEach(() => {
+      process.env['PROVAR_MCP_SCHEMA_MODE'] = 'compact';
+      compactServer = new MockMcpServer();
+      registerTestCaseGenerate(compactServer as never, { allowedPaths: [tmpDir] });
+    });
+
+    afterEach(() => {
+      if (ORIGINAL_MODE === undefined) {
+        delete process.env['PROVAR_MCP_SCHEMA_MODE'];
+      } else {
+        process.env['PROVAR_MCP_SCHEMA_MODE'] = ORIGINAL_MODE;
+      }
+    });
+
+    it('compact description still carries the single-call construction contract', () => {
+      const reg = compactServer.registrations.find((r) => r.name === 'provar_testcase_generate');
+      assert.ok(reg, 'tool should be registered in compact mode');
+      assert.ok(
+        reg.description.includes('ONE call'),
+        'compact description must say "ONE call" — otherwise compact mode silently strips the contract (PDX-479 regression highway)'
+      );
+      assert.ok(reg.description.includes('FULL steps'), 'compact description must mention the FULL steps[] tree');
+      assert.ok(
+        reg.description.includes('AMENDING') || reg.description.includes('amend'),
+        'compact description must mark step_edit as amendment-only'
+      );
+      assert.ok(
+        !reg.description.includes('UUID guids and steps structure'),
+        'old compact form (contract-free) must not be in use anymore'
+      );
+    });
   });
 });
 
