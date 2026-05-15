@@ -1,19 +1,24 @@
-// PDX-482 / PDX-483 validation: confirm the construct/amend contract is reachable
-// at the MCP protocol surface and that the PDX-483 runtime guard rejects the
-// PDX-479 multi-call pattern shape.
+// PDX-482 / PDX-483 / PDX-484 validation: confirm the construct/amend contract
+// is reachable at every MCP protocol surface the LLM sees, and that the runtime
+// guard rejects the multi-call construction shape.
 //
-// PDX-482 (standard + compact modes): assertions on tools/list — every byte the
-// LLM literally sees at the call site. Compact mode coverage is critical because
+// PDX-482 — description contract (standard + compact schema modes): assertions
+// on tools/list description bodies. Compact mode coverage is critical because
 // the adversarial review identified that PROVAR_MCP_SCHEMA_MODE=compact silently
 // swapped the description for a contract-free one-liner.
 //
-// PDX-483 (runtime-guard mode): drives a real tools/call with the rejected shape
+// PDX-483 — runtime guard: drives a real tools/call with the rejected shape
 // (steps:[]+dry_run:false+output_path) and asserts the response is a structured
 // STEPS_REQUIRED error with a non-empty details.suggestion. This catches a
 // regression class that the tools/list assertions cannot reach: the passive
 // contract surviving in the description while the active guard silently
 // regresses (e.g. a refactor reorders the handler so writes happen before the
 // check).
+//
+// PDX-484 — title contract: assertions on the `title:` field that some clients
+// render exclusively (Claude Desktop chips, Cursor audit pane, inline tool-call
+// refs). Titles are schema-mode-independent but we assert in both passes to
+// surface drift early either way.
 //
 //   yarn compile
 //   node scripts/pdx-482-validate.cjs
@@ -103,6 +108,43 @@ function runValidation(mode, extraEnv, runAssertions) {
       reject(err);
     });
   });
+}
+
+// ── PDX-484: title-level construct-vs-amend contract ───────────────────────
+// Title field is independent of schema mode, but we assert it in both passes
+// to catch drift early regardless of which mode a future refactor breaks.
+function titleAssertions(toolList, record) {
+  const gen = toolList.find((t) => t.name === 'provar_testcase_generate');
+  if (!gen) {
+    record('provar_testcase_generate has a title', false, 'tool not found');
+  } else {
+    const t = gen.title ?? '';
+    record(
+      'generate.title carries "one call" or "single call" (PDX-484)',
+      t.includes('one call') || t.includes('single call'),
+      `title: ${JSON.stringify(t)}`
+    );
+    record('generate.title mentions steps (PDX-484)', /step/i.test(t), 'chip-level payload shape must be visible');
+    record('generate.title length ≤ 50 chars (PDX-484)', t.length <= 50, `length: ${t.length}`);
+  }
+
+  const edit = toolList.find((t) => t.name === 'provar_testcase_step_edit');
+  if (!edit) {
+    record('provar_testcase_step_edit has a title', false, 'tool not found');
+  } else {
+    const t = edit.title ?? '';
+    record(
+      'step_edit.title contains "Amend" or "amendment" (PDX-484)',
+      /amend/i.test(t),
+      `title: ${JSON.stringify(t)}`
+    );
+    record(
+      'step_edit.title signals "existing" test case only (PDX-484)',
+      /exist/i.test(t),
+      'chip-level signal that this tool does not construct new cases'
+    );
+    record('step_edit.title length ≤ 50 chars (PDX-484)', t.length <= 50, `length: ${t.length}`);
+  }
 }
 
 // ── Assertions for standard mode (full TOOL_DESCRIPTION) ────────────────────
@@ -197,6 +239,9 @@ function standardAssertions(toolList, record) {
       'consequence is explicit so the contract is judgement-friendly'
     );
   }
+
+  // PDX-484: title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 // ── Assertions for compact mode (short one-liner) ───────────────────────────
@@ -246,6 +291,9 @@ function compactAssertions(toolList, record) {
       'rejection must survive compact mode'
     );
   }
+
+  // PDX-484: title-level contract — runs in both modes to surface drift.
+  titleAssertions(toolList, record);
 }
 
 // ── PDX-483 runtime guard: tools/call assertion ─────────────────────────────

@@ -86,7 +86,11 @@ export function registerTestCaseStepEdit(server: McpServer, config: ServerConfig
   server.registerTool(
     'provar_testcase_step_edit',
     {
-      title: 'Edit Test Case Step',
+      // PDX-484: carry the AMENDMENT-ONLY contract into the `title:` field.
+      // "Amend" mirrors the AMENDMENT-ONLY framing in the description body
+      // and "Existing" signals that the tool does not construct new test cases.
+      // Length: 29 chars — well within the chip-render comfort threshold.
+      title: 'Amend Existing Test Case Step',
       description: desc(
         [
           // ── Usage contract (READ FIRST — PDX-482) ─────────────────────────────

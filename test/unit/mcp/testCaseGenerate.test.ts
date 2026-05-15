@@ -21,7 +21,9 @@ import type { ServerConfig } from '../../../src/mcp/server.js';
 type ToolHandler = (args: Record<string, unknown>) => unknown;
 
 class MockMcpServer {
-  public registrations: Array<{ name: string; description: string }> = [];
+  // PDX-484: capture `title` alongside `description` so tests can assert on the
+  // title-level contract. Many MCP clients render only the title field.
+  public registrations: Array<{ name: string; description: string; title: string }> = [];
   private handlers = new Map<string, ToolHandler>();
 
   public tool(name: string, _description: string, _schema: unknown, handler: ToolHandler): void {
@@ -30,8 +32,16 @@ class MockMcpServer {
 
   public registerTool(name: string, config: unknown, handler: ToolHandler): void {
     this.handlers.set(name, handler);
-    const desc = (config as Record<string, unknown>)['description'];
-    if (typeof desc === 'string') this.registrations.push({ name, description: desc });
+    const cfg = config as Record<string, unknown>;
+    const desc = cfg['description'];
+    const title = cfg['title'];
+    if (typeof desc === 'string') {
+      this.registrations.push({
+        name,
+        description: desc,
+        title: typeof title === 'string' ? title : '',
+      });
+    }
   }
 
   public call(name: string, args: Record<string, unknown>): ReturnType<ToolHandler> {
@@ -148,6 +158,35 @@ describe('provar_testcase_generate description', () => {
     assert.ok(
       pos < 200,
       `"Construction pattern" must appear in the first 200 chars (found at ${pos}) — LLMs weight leading tokens more`
+    );
+  });
+
+  // ── PDX-484: title-level construct-vs-amend contract ──────────────────────
+  // Many MCP clients (Claude Desktop tool-picker chips, Cursor audit pane,
+  // inline tool-call references in chat threads) render only the `title`
+  // field. Without the contract in the title an agent that reads only that
+  // surface gets zero PDX-479 protection. These assertions lock the title to
+  // the canonical phrasing chosen during the PDX-484 cross-client pilot.
+
+  it('title carries the single-call construction contract (PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.title.includes('one call') || reg.title.includes('single call'),
+      'title must contain "one call" or "single call" so the contract is visible in tool-picker chips'
+    );
+    assert.ok(
+      /step/i.test(reg.title),
+      'title must mention steps so the LLM sees the payload shape at the chip-level surface'
+    );
+  });
+
+  it('title fits the cross-client chip-render comfort threshold (≤50 chars, PDX-484)', () => {
+    const reg = server.registrations.find((r) => r.name === 'provar_testcase_generate');
+    assert.ok(reg, 'tool should be registered');
+    assert.ok(
+      reg.title.length <= 50,
+      `title length ${reg.title.length} exceeds 50 chars — Cursor and other clients may truncate`
     );
   });
 
