@@ -140,7 +140,11 @@ function record(label, ok, detail) {
   let fail = 0;
   for (const r of results) {
     console.log(`${r.ok ? '[PASS]' : '[FAIL]'} ${r.label} — ${r.detail}`);
-    r.ok ? pass++ : fail++;
+    if (r.ok) {
+      pass++;
+    } else {
+      fail++;
+    }
   }
   console.log(`\nPDX-481 validation: ${pass} passed, ${fail} failed`);
 

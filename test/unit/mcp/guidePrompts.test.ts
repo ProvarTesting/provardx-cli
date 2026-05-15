@@ -102,9 +102,12 @@ describe('guidePrompts — author-test flow (PDX-481 regression guard)', () => {
       !text.includes('repeat per step'),
       'author-test flow must not say "repeat per step" — that pattern caused PDX-479'
     );
+    // Unconditional check — the old OR-clause "|| text.includes('amend')" short-circuited to pass
+    // (because "amend" appears repeatedly elsewhere in the flow), so it provided no real protection
+    // against the "repeat as needed" phrasing being reintroduced.
     assert.ok(
-      !text.includes('repeat as needed') || text.includes('amend'),
-      'author-test flow must not say "repeat as needed" without also clarifying step_edit is for amendments only'
+      !text.includes('repeat as needed'),
+      'author-test flow must not say "repeat as needed" — that pattern caused PDX-479'
     );
   });
 
@@ -126,12 +129,17 @@ describe('guidePrompts — orchestration general flow (PDX-481 regression guard)
       !text.includes('provar_testcase_generate OR provar_testcase_step_edit'),
       'prerequisite graph must not equate generate and step_edit — they have different purposes'
     );
+    // Bounded regex tied to the exact annotation punctuation used in the prompt body —
+    // "provar_testcase_generate (construct …" / "provar_testcase_step_edit (amend …".
+    // Bounding the gap to ≤8 chars (i.e. the single " (" that should appear before the
+    // annotation) avoids the loose-`[^\n]*` false-positive where unrelated tokens between
+    // the two words on the same line would still match.
     assert.ok(
-      /provar_testcase_generate[^\n]*construct|construct[^\n]*provar_testcase_generate/i.test(text),
+      /provar_testcase_generate\s*\(construct/i.test(text),
       'prerequisite graph must annotate provar_testcase_generate as the construct entry point'
     );
     assert.ok(
-      /provar_testcase_step_edit[^\n]*amend|amend[^\n]*provar_testcase_step_edit/i.test(text),
+      /provar_testcase_step_edit\s*\(amend/i.test(text),
       'prerequisite graph must annotate provar_testcase_step_edit as the amend entry point'
     );
   });
