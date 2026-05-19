@@ -20,6 +20,7 @@ import {
   filterTestRunOutput,
   setSfResultsPathForTesting,
 } from '../../../src/mcp/tools/automationTools.js';
+import { WARNING_CODES, formatWarning } from '../../../src/mcp/utils/warningCodes.js';
 
 // ── Minimal mock server ───────────────────────────────────────────────────────
 
@@ -231,6 +232,108 @@ describe('automationTools', () => {
         setSfResultsPathForTesting(undefined);
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
+    });
+
+    // ── RUN-001 zero-tests guard (PDX-486) ──────────────────────────────────
+
+    describe('RUN-001 zero-tests-executed warning', () => {
+      const expectedWarning = formatWarning(
+        WARNING_CODES.RUN_001,
+        'Test run exited successfully but zero tests were executed. ' +
+          'Check the testCase / testCases (note spelling) field in provardx-properties.json.'
+      );
+
+      it('fires when exit is 0 and JUnit step count is 0 (empty <testsuite>)', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-zero-'));
+        // Valid JUnit XML but containing zero <testcase> elements — the canonical
+        // signal that the test selector (e.g. a misspelled testCase field) matched nothing.
+        const emptySuiteXml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="EmptySuite"/>`;
+        fs.writeFileSync(path.join(tmpDir, 'results.xml'), emptySuiteXml, 'utf-8');
+        setSfResultsPathForTesting(tmpDir);
+
+        try {
+          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          const result = server.call('provar_automation_testrun', { flags: [] });
+          assert.ok(!isError(result), 'tool should still report success — RUN-001 is additive');
+          const body = parseBody(result);
+          assert.equal(body.exitCode, 0);
+          assert.ok(Array.isArray(body.warnings), 'warnings[] should be present');
+          const warnings = body.warnings as string[];
+          assert.equal(warnings.length, 1);
+          assert.equal(warnings[0], expectedWarning, 'warning string must match formatWarning output exactly');
+          // Sanity-check the format envelope without inline strings:
+          assert.ok(warnings[0].startsWith(`WARNING [${WARNING_CODES.RUN_001}]:`));
+        } finally {
+          setSfResultsPathForTesting(undefined);
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+
+      it('does NOT fire when exit is 0 and step count >= 1', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-some-'));
+        const oneCaseXml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="MyTest">
+  <testcase name="Real Step"/>
+</testsuite>`;
+        fs.writeFileSync(path.join(tmpDir, 'results.xml'), oneCaseXml, 'utf-8');
+        setSfResultsPathForTesting(tmpDir);
+
+        try {
+          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          const result = server.call('provar_automation_testrun', { flags: [] });
+          const body = parseBody(result);
+          assert.equal(body.exitCode, 0);
+          const steps = body.steps as unknown[] | undefined;
+          assert.ok(steps && steps.length === 1, 'steps should reflect the one parsed testcase');
+          assert.equal(body.warnings, undefined, 'warnings[] must be absent when at least one test ran');
+        } finally {
+          setSfResultsPathForTesting(undefined);
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+
+      it('does NOT fire when exit is non-zero (genuine failure path)', () => {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-fail-'));
+        // Even if zero steps were extracted, a non-zero exit is a real failure, not a typo.
+        const emptySuiteXml = `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="EmptySuite"/>`;
+        fs.writeFileSync(path.join(tmpDir, 'results.xml'), emptySuiteXml, 'utf-8');
+        setSfResultsPathForTesting(tmpDir);
+
+        try {
+          spawnStub.returns(makeSpawnResult('', 'compilation error', 1));
+          const result = server.call('provar_automation_testrun', { flags: [] });
+          assert.ok(isError(result), 'should report error on non-zero exit');
+          const body = parseBody(result);
+          assert.equal(body.error_code, 'AUTOMATION_TESTRUN_FAILED');
+          // Failure path uses the error body shape — RUN-001 lives on the success-path response only.
+          assert.equal(body.warnings, undefined, 'warnings[] must not be set on the failure path');
+        } finally {
+          setSfResultsPathForTesting(undefined);
+          fs.rmSync(tmpDir, { recursive: true, force: true });
+        }
+      });
+
+      it('does NOT fire when results dir cannot be located (stay silent — config_load issue, not a typo)', () => {
+        // Explicitly disable the results path override so introspection returns "not resolved".
+        // RUN-001 must stay silent here so the agent isn't misdirected toward a typo when the
+        // real issue is "config_load was never called" (or the results dir is outside allowed paths).
+        // The existing failure-path details.warning channel covers the config_load case on errors;
+        // on the success path with no resolvable results dir we simply don't emit RUN-001 — silence
+        // is correct because we genuinely don't know whether tests ran or not.
+        setSfResultsPathForTesting(null);
+
+        try {
+          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          const result = server.call('provar_automation_testrun', { flags: [] });
+          const body = parseBody(result);
+          assert.equal(body.exitCode, 0);
+          assert.equal(body.warnings, undefined, 'no RUN-001 when results dir is unresolved');
+        } finally {
+          setSfResultsPathForTesting(undefined);
+        }
+      });
     });
   });
 

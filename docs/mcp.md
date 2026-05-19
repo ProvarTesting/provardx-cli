@@ -1395,7 +1395,7 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning] }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning][, warnings] }`
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
@@ -1410,7 +1410,10 @@ After each run, the tool scans the results directory for JUnit XML files and add
 
 Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
 
+**Zero-tests guard (RUN-001):** when the sf command exits 0 but the JUnit report contains zero executed test cases, the response includes a `warnings[]` array containing a [`RUN-001`](#warning-codes) message. This is almost always a typo such as `testCase` vs `testCases` (or some other unknown key) in `provardx-properties.json` — the run silently selected nothing. The warning is additive and never flips `exitCode` or sets `isError`; the failure surface remains driven by the underlying `sf` exit code.
+
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
+**Warning codes:** `RUN-001` (zero tests executed despite success)
 
 ---
 
