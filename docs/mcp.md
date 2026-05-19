@@ -1386,11 +1386,16 @@ After each run, the tool scans the results directory for JUnit XML files and add
 ```json
 "steps": [
   { "testItemId": "1", "title": "TC-Login-001-LoginAndVerify.testcase", "status": "pass" },
-  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "Execution failed: Element not found" }
+  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "TimeoutException: page did not load", "error_category": "TIMEOUT", "retryable": true }
 ]
 ```
 
 Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
+
+Failed steps may include two optional classification fields:
+
+- `error_category` — one of `INFRASTRUCTURE`, `ASSERTION`, `LOCATOR`, `TIMEOUT`, `OTHER`, set when the failure text matches a known pattern.
+- `retryable` — `true` when `error_category` is `INFRASTRUCTURE` or `TIMEOUT` (transient causes), `false` for `ASSERTION`/`LOCATOR`/`OTHER`. Absent when no pattern matched.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 
@@ -1535,21 +1540,25 @@ Use `mode="failures"` when you only need the list of failing test case names wit
 
 **`FailureReport` fields (mode=rca only):**
 
-| Field                 | Description                                              |
-| --------------------- | -------------------------------------------------------- |
-| `test_case`           | Test case filename from JUnit `<testcase name>`          |
-| `error_class`         | Extracted exception class name                           |
-| `error_message`       | First 500 chars of failure/error text                    |
-| `root_cause_category` | One of 12 categories (see table below)                   |
-| `root_cause_summary`  | Human-readable cause description                         |
-| `recommendation`      | Suggested fix action                                     |
-| `page_object`         | Extracted from `Page Object: ...` pattern, or `null`     |
-| `operation`           | Extracted from `operation: ...` pattern, or `null`       |
-| `report_html`         | Path to per-test HTML report if found, else `null`       |
-| `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null` |
-| `pre_existing`        | `true` if the same test failed in a prior Increment run  |
+| Field                 | Description                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `test_case`           | Test case filename from JUnit `<testcase name>`                                                                                                        |
+| `error_class`         | Extracted exception class name                                                                                                                         |
+| `error_message`       | First 500 chars of failure/error text                                                                                                                  |
+| `root_cause_category` | One of 12 categories (see table below)                                                                                                                 |
+| `root_cause_summary`  | Human-readable cause description                                                                                                                       |
+| `recommendation`      | Suggested fix action                                                                                                                                   |
+| `page_object`         | Extracted from `Page Object: ...` pattern, or `null`                                                                                                   |
+| `operation`           | Extracted from `operation: ...` pattern, or `null`                                                                                                     |
+| `report_html`         | Path to per-test HTML report if found, else `null`                                                                                                     |
+| `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null`                                                                                               |
+| `pre_existing`        | `true` if the same test failed in a prior Increment run                                                                                                |
+| `error_category`      | Optional. One of `INFRASTRUCTURE` \| `ASSERTION` \| `LOCATOR` \| `TIMEOUT` \| `OTHER`. Absent when no known pattern matched.                           |
+| `retryable`           | Optional. `true` when `error_category` is `INFRASTRUCTURE` or `TIMEOUT` (transient causes); `false` otherwise. Absent when `error_category` is absent. |
 
 **Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `SALESFORCE_VALIDATION`, `SALESFORCE_PICKLIST`, `SALESFORCE_REFERENCE`, `SALESFORCE_ACCESS`, `SALESFORCE_TRIGGER`, `UNKNOWN`
+
+**Error category vs. root cause category:** `root_cause_category` is fine-grained (17 buckets) and drives the human-readable `recommendation`. `error_category` is coarse-grained (5 buckets) and drives automated retry policy via `retryable`. The two are independent classifiers over the same failure text — both may be set on the same failure.
 
 Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 

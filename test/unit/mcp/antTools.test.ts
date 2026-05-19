@@ -847,4 +847,55 @@ describe('parseJUnitResults', () => {
     assert.ok(result.steps[0].errorMessage?.includes('Execution failed'));
     assert.ok(result.steps[0].errorMessage?.includes('stack trace here'));
   });
+
+  // ── PDX-490: error_category + retryable on step results ─────────────────────
+
+  function writeFailureJunit(dir: string, failureBody: string): void {
+    const xml = `<?xml version="1.0"?><testsuite><testcase name="T1"><failure message="fail">${failureBody}</failure></testcase></testsuite>`;
+    fs.writeFileSync(path.join(dir, 'JUnit.xml'), xml);
+  }
+
+  it('populates error_category=INFRASTRUCTURE and retryable=true for Connection reset', () => {
+    writeFailureJunit(junitTmpDir, 'Connection reset by peer while reading response');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].error_category, 'INFRASTRUCTURE');
+    assert.equal(result.steps[0].retryable, true);
+  });
+
+  it('populates error_category=LOCATOR and retryable=false for NoSuchElementException', () => {
+    writeFailureJunit(junitTmpDir, 'NoSuchElementException: Unable to locate element');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].error_category, 'LOCATOR');
+    assert.equal(result.steps[0].retryable, false);
+  });
+
+  it('populates error_category=TIMEOUT and retryable=true for TimeoutException', () => {
+    writeFailureJunit(junitTmpDir, 'TimeoutException: operation did not complete');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].error_category, 'TIMEOUT');
+    assert.equal(result.steps[0].retryable, true);
+  });
+
+  it('populates error_category=ASSERTION and retryable=false for AssertionException', () => {
+    writeFailureJunit(junitTmpDir, 'AssertionException: expected X but was Y');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].error_category, 'ASSERTION');
+    assert.equal(result.steps[0].retryable, false);
+  });
+
+  it('leaves error_category and retryable undefined when no pattern matches', () => {
+    writeFailureJunit(junitTmpDir, 'something completely unrecognised XYZ_BANANA');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].error_category, undefined);
+    assert.equal(result.steps[0].retryable, undefined);
+  });
+
+  it('does not set error_category or retryable on passing steps', () => {
+    const xml = '<?xml version="1.0"?><testsuite><testcase name="OK"/></testsuite>';
+    fs.writeFileSync(path.join(junitTmpDir, 'JUnit.xml'), xml);
+    const result = parseJUnitResults(junitTmpDir);
+    assert.equal(result.steps[0].status, 'pass');
+    assert.equal(result.steps[0].error_category, undefined);
+    assert.equal(result.steps[0].retryable, undefined);
+  });
 });
