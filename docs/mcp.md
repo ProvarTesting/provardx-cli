@@ -50,6 +50,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar_testplan_add-instance](#provar_testplan_add-instance)
   - [provar_testplan_create-suite](#provar_testplan_create-suite)
   - [provar_testplan_remove-instance](#provar_testplan_remove-instance)
+- [Data-driven execution](#data-driven-execution)
   - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
     - [provar_nitrox_discover](#provar_nitrox_discover)
     - [provar_nitrox_read](#provar_nitrox_read)
@@ -536,14 +537,14 @@ On **Windows**, path comparisons are performed case-insensitively to account for
 
 Cross-cutting warning codes surfaced by validation, configuration, and run tooling. These complement the per-tool `rule_id` codes (e.g. `TC_001`, `VAR-REF-001`) documented under [Available tools](#available-tools). Subsequent revisions will refine the meanings as the relevant tool surfaces stabilise.
 
-| Code             | Surfaced by                             | Meaning                                                                   |
-| ---------------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| `PROVARHOME-001` | properties / automation tooling         | `provarHome` is missing, blank, or does not point to a Provar install     |
-| `DATA-001`       | `provar_testcase_validate`              | `<dataTable>` iteration is silently ignored in CLI standalone execution   |
-| `PARALLEL-001`   | automation / run tooling                | Parallel-mode cache mismatch between properties and active runtime config |
-| `SCHEMA-001`     | strict properties / config validators   | Unknown or misspelled key in a JSON / properties schema (typo guard)      |
-| `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection           |
-| `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                    |
+| Code             | Surfaced by                             | Meaning                                                                                                                                           |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROVARHOME-001` | properties / automation tooling         | `provarHome` is missing, blank, or does not point to a Provar install                                                                             |
+| `DATA-001`       | `provar_testcase_validate`              | `<dataTable>` iteration is silently ignored when a test case runs in direct `testCase`-mode (see [Data-driven execution](#data-driven-execution)) |
+| `PARALLEL-001`   | automation / run tooling                | Parallel-mode cache mismatch between properties and active runtime config                                                                         |
+| `SCHEMA-001`     | strict properties / config validators   | Unknown or misspelled key in a JSON / properties schema (typo guard)                                                                              |
+| `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection                                                                                   |
+| `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                                                                                            |
 
 Warnings emitted programmatically follow the shape `WARNING [<CODE>]: <message>` — and when a typo is detected, the message is suffixed with `Did you mean '<suggestion>'?`. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
 
@@ -843,7 +844,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Warning rules:**
 
-- **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
+- **DATA-001** — `testCase` declares a `<dataTable>` element. When the validator is called with `file_path` and the project's `provardx-properties.json` references that test case directly via top-level `testCase` or `testCases` (rather than via a `.testinstance` inside a plan), the warning carries the `WARNING [DATA-001]:` prefix and recommends wiring the test into a plan via `provar_testplan_add-instance`. When `file_path` is not supplied (or the project context cannot be resolved), the warning falls back to a structural advisory recommending `SetValues` (Test scope) steps. The warning is suppressed entirely when a `.testinstance` references the test case, because data-driven iteration works in that mode. See also [Data-driven execution](#data-driven-execution).
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
@@ -1701,6 +1702,38 @@ Remove a `.testinstance` file from a plan suite. Path is validated to stay withi
 **Error codes:** `NOT_A_PROJECT`, `INVALID_INSTANCE`, `INSTANCE_NOT_FOUND`, `PATH_TRAVERSAL`, `PATH_NOT_ALLOWED`
 
 ---
+
+## Data-driven execution
+
+Provar's data-driven execution relies on the `<dataTable>` element inside a `.testcase` XML. The runtime only **iterates rows** when the test case is launched through a test-plan instance (a `.testinstance` file under `plans/`). When the same test case is launched directly via the top-level `testCase` or `testCases` property in `provardx-properties.json`, the runtime ignores the data table entirely — every step referencing a `<value class="variable">` resolves to `null`, and the test typically completes "successfully" against an empty row set.
+
+This produces silent-pass behaviour that is hard to spot from a log: the run exits 0, JUnit shows one test case, and the data-driven assertions never fire. The MCP server detects this configuration mismatch and surfaces a **`DATA-001`** warning so an AI agent can recover before the next run.
+
+**When does `DATA-001` fire?**
+
+| Condition (validator called with `file_path`)                                                | DATA-001 emitted? | Severity |
+| -------------------------------------------------------------------------------------------- | ----------------- | -------- |
+| `<dataTable>` present **and** referenced from a `.testinstance` inside `plans/`              | No                | —        |
+| `<dataTable>` present **and** referenced via top-level `testCase` / `testCases` array        | Yes               | WARNING  |
+| `<dataTable>` present **and** project context cannot be resolved (no active properties file) | Yes (structural)  | WARNING  |
+| No `<dataTable>` element                                                                     | No                | —        |
+
+The plan-mode resolver consults the properties file registered by [`provar_automation_config_load`](#provar_automation_config_load) (`PROVARDX_PROPERTIES_FILE_PATH` in `~/.sf/config.json`), reads `projectPath`, then:
+
+1. Walks `<projectPath>/plans/**/*.testinstance` for any `testCasePath="..."` referencing the test under validation. If found → `plan` mode → DATA-001 suppressed.
+2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the PDX-489 advisory.
+3. Falls back to `unknown` mode when no project context is resolvable — DATA-001 still fires (structural fallback) so authors editing a test case in isolation are still warned.
+
+**Recommended workaround**
+
+When `DATA-001` fires in direct mode, wire the test case into a plan via [`provar_testplan_add-instance`](#provar_testplan_add-instance) and run via the `testPlan` property in `provardx-properties.json` instead of `testCase` / `testCases`. The pattern is:
+
+1. Use [`provar_testplan_create-suite`](#provar_testplan_create-suite) to add a suite under an existing plan if needed.
+2. Use [`provar_testplan_add-instance`](#provar_testplan_add-instance) to create the `.testinstance` linking the test case to the suite.
+3. Update `provardx-properties.json` to reference the plan (and remove the direct `testCase` entry if it no longer applies) before invoking [`provar_automation_testrun`](#provar_automation_testrun).
+4. Re-run [`provar_testcase_validate`](#provar_testcase_validate) on the test case file — DATA-001 should no longer appear.
+
+The constraint is also referenced in the [`provar_testcase_generate`](#provar_testcase_generate) tool description so an agent constructing a new data-driven test case sees the limitation up front, and in [`provar_automation_testrun`](#provar_automation_testrun) so an agent triggering a run is reminded that direct-mode execution will not iterate.
 
 ---
 

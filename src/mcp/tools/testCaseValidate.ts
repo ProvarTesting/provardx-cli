@@ -36,6 +36,8 @@ import {
   resolveValidationDir,
   type DiffableViolation,
 } from '../utils/validationDiff.js';
+import { resolveTestCasePlanMode, type TestCasePlanMode } from '../utils/testCasePlanMode.js';
+import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 import { desc } from './descHelper.js';
 
@@ -75,15 +77,20 @@ function tcStorageDir(): string {
 async function resolveBaseResult(
   source: string,
   apiKey: string | null,
-  requestId: string
+  requestId: string,
+  planMode: TestCasePlanMode = 'unknown'
 ): Promise<TestCaseValidationResult> {
   if (!apiKey) {
-    return { ...validateTestCase(source), validation_source: 'local', validation_warning: ONBOARDING_MESSAGE };
+    return {
+      ...validateTestCase(source, undefined, { planMode }),
+      validation_source: 'local',
+      validation_warning: ONBOARDING_MESSAGE,
+    };
   }
   const baseUrl = getQualityHubBaseUrl();
   try {
     const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
-    const localMeta = validateTestCase(source);
+    const localMeta = validateTestCase(source, undefined, { planMode });
     log('info', 'provar_testcase_validate: quality_hub', { requestId });
     return {
       ...apiResult,
@@ -107,7 +114,11 @@ async function resolveBaseResult(
       warning = UNREACHABLE_WARNING;
       log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
     }
-    return { ...validateTestCase(source), validation_source: 'local_fallback', validation_warning: warning };
+    return {
+      ...validateTestCase(source, undefined, { planMode }),
+      validation_source: 'local_fallback',
+      validation_warning: warning,
+    };
   }
 }
 
@@ -123,7 +134,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     {
       title: 'Validate Test Case',
       description: desc(
-        'Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.',
+        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
         'Validate a Provar XML test case: structure, UUIDs, steps, quality scoring; run_id for baseline diff.'
       ),
       inputSchema: {
@@ -181,7 +192,10 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const apiKey = resolveApiKey();
-        const baseResult = await resolveBaseResult(source, apiKey, requestId);
+        const planMode: TestCasePlanMode = file_path
+          ? resolveTestCasePlanMode({ testCaseFilePath: file_path, allowedPaths: config.allowedPaths }).mode
+          : 'unknown';
+        const baseResult = await resolveBaseResult(source, apiKey, requestId, planMode);
 
         const storageDir = tcStorageDir();
         const context = tcRunContext(file_path, source);
@@ -306,7 +320,11 @@ export function validateTestCaseXml(filePath: string, config: ServerConfig): Tes
   if (!fs.existsSync(resolved)) {
     throw Object.assign(new Error(`File not found: ${resolved}`), { code: 'TESTCASE_FILE_NOT_FOUND' });
   }
-  return validateTestCase(fs.readFileSync(resolved, 'utf-8'));
+  const planMode = resolveTestCasePlanMode({
+    testCaseFilePath: resolved,
+    allowedPaths: config.allowedPaths,
+  }).mode;
+  return validateTestCase(fs.readFileSync(resolved, 'utf-8'), undefined, { planMode });
 }
 
 /** TC_010/TC_011: validate testCase id and guid attributes. */
@@ -348,8 +366,69 @@ function checkTestCaseIdAndGuid(tcId: string | null, tcGuid: string | undefined,
   }
 }
 
+/**
+ * Emit the DATA-001 warning when the test case declares a `<dataTable>`.
+ *
+ * PDX-489: when the validator handler resolves the project's
+ * `provardx-properties.json` and finds the test case is referenced from a
+ * `.testinstance` (plan mode), suppress the warning — data-driven execution
+ * works there. When the project references the test case directly via
+ * top-level `testCase` / `testCases`, emit the PDX-489 advisory. When no
+ * project context is available (plan mode unknown — pure function called
+ * without file resolution), keep the structural advisory so the warning
+ * surface stays backward-compatible.
+ */
+function maybeEmitDataTableWarning(
+  tc: Record<string, unknown>,
+  planMode: TestCasePlanMode,
+  issues: ValidationIssue[]
+): void {
+  const hasDataTable = 'dataTable' in tc && tc['dataTable'] != null;
+  if (!hasDataTable || planMode === 'plan') return;
+  if (planMode === 'direct') {
+    issues.push({
+      rule_id: 'DATA-001',
+      severity: 'WARNING',
+      message: formatWarning(
+        WARNING_CODES.DATA_001,
+        '<dataTable> only iterates when run through a test plan instance. Direct testCase-mode execution will resolve all data-driven variables as null. Add this test to a plan via provar_testplan_add-instance.'
+      ),
+      applies_to: 'testCase',
+      suggestion:
+        'Move this test case under a test plan and reference it through a .testinstance — use provar_testplan_add-instance to wire it up.',
+    });
+    return;
+  }
+  issues.push({
+    rule_id: 'DATA-001',
+    severity: 'WARNING',
+    message:
+      'testCase declares a <dataTable> but CLI standalone execution does not bind CSV column variables — steps using <value class="variable"> references will resolve to null.',
+    applies_to: 'testCase',
+    suggestion:
+      'Use SetValues (Test scope) steps to bind data for standalone CLI execution, or add this test case to a test plan.',
+  });
+}
+
+/**
+ * Validator options threaded through from the MCP handler. `planMode` controls
+ * how DATA-001 (the data-driven `<dataTable>` warning) is surfaced.
+ *
+ * `direct` emits the PDX-489 warning recommending a plan instance. `plan`
+ * suppresses DATA-001 entirely because data-driven execution works under plan
+ * mode. `unknown` (default) emits the structural DATA-001 warning so callers
+ * without project context still receive the original advisory.
+ */
+export interface ValidateTestCaseOptions {
+  planMode?: TestCasePlanMode;
+}
+
 /** Pure function — exported for unit testing */
-export function validateTestCase(xmlContent: string, testName?: string): TestCaseValidationResult {
+export function validateTestCase(
+  xmlContent: string,
+  testName?: string,
+  options: ValidateTestCaseOptions = {}
+): TestCaseValidationResult {
   const issues: ValidationIssue[] = [];
 
   // TC_001: XML declaration
@@ -423,18 +502,7 @@ export function validateTestCase(xmlContent: string, testName?: string): TestCas
     return finalize(issues, tcId, tcName, 0, xmlContent, testName);
   }
 
-  // DATA-001: <dataTable> binding is silently ignored in standalone CLI execution
-  if ('dataTable' in tc && tc['dataTable'] != null) {
-    issues.push({
-      rule_id: 'DATA-001',
-      severity: 'WARNING',
-      message:
-        'testCase declares a <dataTable> but CLI standalone execution does not bind CSV column variables — steps using <value class="variable"> references will resolve to null.',
-      applies_to: 'testCase',
-      suggestion:
-        'Use SetValues (Test scope) steps to bind data for standalone CLI execution, or add this test case to a test plan.',
-    });
-  }
+  maybeEmitDataTableWarning(tc, options.planMode ?? 'unknown', issues);
 
   // Same self-closing guard for <steps/> → fast-xml-parser yields ''
   const rawSteps = tc['steps'];
