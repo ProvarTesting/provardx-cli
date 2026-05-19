@@ -50,6 +50,8 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar_testplan_add-instance](#provar_testplan_add-instance)
   - [provar_testplan_create-suite](#provar_testplan_create-suite)
   - [provar_testplan_remove-instance](#provar_testplan_remove-instance)
+  - [Org metadata access](#org-metadata-access)
+    - [provar_org_describe](#provar_org_describe)
   - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
     - [provar_nitrox_discover](#provar_nitrox_discover)
     - [provar_nitrox_read](#provar_nitrox_read)
@@ -1683,6 +1685,112 @@ Remove a `.testinstance` file from a plan suite. Path is validated to stay withi
 **Error codes:** `NOT_A_PROJECT`, `INVALID_INSTANCE`, `INSTANCE_NOT_FOUND`, `PATH_TRAVERSAL`, `PATH_NOT_ALLOWED`
 
 ---
+
+---
+
+## Org metadata access
+
+Tools that surface Salesforce org metadata to authoring tools without making a live API call. These read from data that has already been written to disk by the Provar IDE — they do **not** trigger metadata downloads themselves and they do **not** require an authenticated session.
+
+> **Distinct from `.provarCaches`:** the runtime cache used by `provar_automation_testrun` lives at `<resultsPath>/.provarCaches/` and is regenerated per run. The cache read by `provar_org_describe` lives in the Provar IDE **workspace** (`<workspace>/.metadata/<connection_name>/`) and is updated when a user opens the project and loads a connection in the IDE.
+
+### `provar_org_describe`
+
+Read cached Salesforce describe data for one connection from the Provar workspace `.metadata` cache. Returns the object list, required-field schema, and a cache age. Use this before calling `provar_testcase_generate` so the generator can produce steps with correctly-typed field values.
+
+**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
+
+**Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that exists:
+
+1. `<parent-of-project>/workspace-<basename>/` — sibling workspace pattern (default for Provar IDE in this workspace layout).
+2. `<parent-of-project>/Provar_Workspaces/workspace-<name-dashes>/` — shared `Provar_Workspaces` directory.
+3. `~/Provar/workspace-<name-dashes>/` — user-home fallback.
+
+`<name-dashes>` is the project's basename with whitespace collapsed to single dashes and lowercased: `"My Project"` → `"my-project"`.
+
+| Input             | Type                    | Required | Default      | Description                                                                                                                                                                    |
+| ----------------- | ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_path`    | string                  | yes      | —            | Absolute path to the Provar test project root (the directory containing `.testproject`). Must be within `--allowed-paths`.                                                     |
+| `connection_name` | string                  | yes      | —            | Connection name as defined in `.testproject` (e.g. `"MyOrg"`). Must match the `.metadata` subdirectory exactly. Path separators in this value are rejected (`PATH_TRAVERSAL`). |
+| `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the connection directory.                                                  |
+| `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                           |
+
+| Output field         | Description                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace_path`     | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists.                                  |
+| `cache_age_ms`       | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                               |
+| `objects[]`          | Array of `{ name, exists, required_fields, field_count }`. `exists` is `true` (cached), `false` (requested but not cached), or `null` (cache miss). |
+| `details.suggestion` | Present **only** on cache miss. Tells the agent how to populate the cache (open Provar IDE) or how to proceed without it (inline hints).            |
+
+**Example — happy path:**
+
+```jsonc
+// Request
+{
+  "project_path": "/Users/me/git/MyProject",
+  "connection_name": "MyOrg",
+  "objects": ["Account", "Contact"],
+  "field_filter": "required"
+}
+
+// Response
+{
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [
+        { "name": "Name", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 24
+    },
+    {
+      "name": "Contact",
+      "exists": true,
+      "required_fields": [
+        { "name": "LastName", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 31
+    }
+  ]
+}
+```
+
+**Example — cache miss:**
+
+```jsonc
+// Response when the .metadata/<connection_name> directory does not exist
+{
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": null,
+  "objects": [{ "name": "Account", "exists": null, "required_fields": [], "field_count": 0 }],
+  "details": {
+    "suggestion": "Open this project in Provar IDE and load the 'MyOrg' connection, or pass field-type hints inline to provar_testcase_generate."
+  }
+}
+```
+
+**On-disk cache schema (one file per object).** The tool reads `.json` first, then `.xml`, then `.object` as a fallback:
+
+```jsonc
+// <workspace>/.metadata/<connection_name>/Account.json
+{
+  "name": "Account",
+  "fields": [
+    { "name": "Name", "type": "string", "defaultValue": null, "nillable": false },
+    { "name": "Phone", "type": "phone", "defaultValue": null, "nillable": true }
+  ]
+}
+```
+
+**Error codes:**
+
+| Code               | Meaning                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `PATH_NOT_ALLOWED` | `project_path` or the resolved workspace path is outside `--allowed-paths`.                    |
+| `PATH_TRAVERSAL`   | `project_path` contains `..` segments, or `connection_name` contains a path separator or `..`. |
 
 ---
 

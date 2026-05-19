@@ -34,6 +34,7 @@ import { registerAllTestPlanTools } from './tools/testPlanTools.js';
 import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
+import { registerAllOrgDescribeTools } from './tools/orgDescribeTools.js';
 import { registerAllPrompts } from './prompts/index.js';
 import {
   createDepthGuardState,
@@ -64,7 +65,7 @@ const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig
     registerAllTestCaseStepTools,
     registerAllTestPlanTools,
   ],
-  inspect: [registerProjectInspect],
+  inspect: [registerProjectInspect, registerAllOrgDescribeTools],
   connection: [registerAllConnectionTools],
   rca: [registerAllRcaTools],
 };
