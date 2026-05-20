@@ -545,7 +545,7 @@ Cross-cutting warning codes surfaced by validation, configuration, and run tooli
 | `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection           |
 | `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                    |
 
-Warnings emitted programmatically follow the shape `WARNING [<CODE>]: <message>` — and when a typo is detected, the message is suffixed with `Did you mean '<suggestion>'?`. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
+Warning-code messages emitted via `formatWarning()` follow the shape `WARNING [<CODE>]: <message>` (optionally suffixed with ` Did you mean '<suggestion>'?` when a typo is detected). Other free-form warnings without a structured code — such as the placeholder warnings emitted by `provar_properties_validate` — remain plain strings. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
 
 ---
 
@@ -1104,7 +1104,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 ### `provar_properties_validate`
 
-Validates a `provardx-properties.json` file against the ProvarDX schema. Checks required fields, valid enum values, and warns about unfilled `${PLACEHOLDER}` values. Accepts either a file path or inline JSON content.
+Validates a `provardx-properties.json` file against the ProvarDX schema. Checks required fields, valid enum values, and warns about unfilled `${PLACEHOLDER}` values. Also surfaces a `SCHEMA-001` warning for any unknown top-level, `metadata.*`, or `environment.*` key, with a "Did you mean ..." suggestion when a canonical key is within Levenshtein distance 2. Accepts either a file path or inline JSON content.
 
 **Input**
 
@@ -1115,12 +1115,17 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 
 **Output**
 
-| Field           | Description                                     |
-| --------------- | ----------------------------------------------- |
-| `is_valid`      | `true` if no errors                             |
-| `error_count`   | Number of validation errors                     |
-| `warning_count` | Number of warnings (e.g. unfilled placeholders) |
-| `issues`        | Array of `{ field, severity, message }`         |
+| Field           | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `is_valid`      | `true` if no errors (warnings alone do not flip `is_valid`) |
+| `error_count`   | Number of validation errors                                 |
+| `warning_count` | Number of warnings (placeholders, unknown keys, etc.)       |
+| `errors`        | Array of `{ field, severity: 'error', message }`            |
+| `warnings`      | Array of `{ field, severity: 'warning', message }`          |
+
+**Warning codes (`warnings` array):**
+
+- `SCHEMA-001` — unknown key at top-level / `metadata.*` / `environment.*`. Example: `WARNING [SCHEMA-001]: Unknown field 'testCases' at top-level. Did you mean 'testCase'?` Unknown keys are **warnings, not errors**, so additive Provar versions do not break older MCP clients. The classic instance is the `testCases` (plural) typo for the canonical `testCase` (singular) — if you see SCHEMA-001 on `testCases`, fix the spelling before running any tests.
 
 **Error codes:** `MISSING_INPUT`, `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
