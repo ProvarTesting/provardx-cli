@@ -32,6 +32,8 @@ interface LocateResult {
   resolution_source: string;
 }
 
+type ErrorCategory = 'INFRASTRUCTURE' | 'ASSERTION' | 'LOCATOR' | 'TIMEOUT' | 'OTHER';
+
 interface FailureReport {
   test_case: string;
   error_class: string | null;
@@ -44,6 +46,48 @@ interface FailureReport {
   report_html: string | null;
   screenshot_dir: string | null;
   pre_existing: boolean;
+  error_category?: ErrorCategory;
+  retryable?: boolean;
+}
+
+/**
+ * Classify a failure message into a structured error category for retry decisions.
+ *
+ * Categories are coarse-grained and intended to drive automated retry policy
+ * downstream (e.g. retry INFRASTRUCTURE/TIMEOUT, never retry ASSERTION/LOCATOR).
+ *
+ * Returns `undefined` when no pattern matches — callers should leave the field unset.
+ */
+export function classifyErrorCategory(errorText: string): ErrorCategory | undefined {
+  // INFRASTRUCTURE — transient network / socket / browser-process failures.
+  if (/Connection reset|Failed to read client socket message|socket hang up|ECONNRESET/i.test(errorText)) {
+    return 'INFRASTRUCTURE';
+  }
+  // LOCATOR — page object selector no longer matches the rendered DOM.
+  if (/NoSuchElementException/i.test(errorText)) return 'LOCATOR';
+  // TIMEOUT — element or operation did not complete in time.
+  if (/TimeoutException/i.test(errorText)) return 'TIMEOUT';
+  // ASSERTION — explicit assertion failure raised by the test or framework.
+  if (/AssertionException/i.test(errorText)) return 'ASSERTION';
+  // OTHER — known exception class but not fitting the four primary buckets.
+  if (
+    /SessionNotCreatedException|WebDriverException|ClassNotFoundException|LicenseException|InvalidPasswordException/i.test(
+      errorText
+    )
+  ) {
+    return 'OTHER';
+  }
+  return undefined;
+}
+
+/**
+ * A failure is retryable only when the underlying cause is transient.
+ * INFRASTRUCTURE (network blips) and TIMEOUT (slow page) can succeed on retry;
+ * ASSERTION / LOCATOR / OTHER are deterministic and should not be retried.
+ */
+export function isRetryable(category: ErrorCategory | undefined): boolean | undefined {
+  if (category === undefined) return undefined;
+  return category === 'INFRASTRUCTURE' || category === 'TIMEOUT';
 }
 
 // ── Root cause classification ─────────────────────────────────────────────────
@@ -667,7 +711,9 @@ function buildFailureReports(
     const poMatch = /Page Object:\s*([\w.]+)/i.exec(failureText);
     const opMatch = /operation:\s*(\w+)/i.exec(failureText);
     const matchingHtml = htmlFiles.find((f) => path.basename(f) === `${tc.name}.html`);
-    reports.push({
+    const error_category = classifyErrorCategory(failureText);
+    const retryable = isRetryable(error_category);
+    const report: FailureReport = {
       test_case: tc.name,
       error_class,
       error_message: failureText.slice(0, 500),
@@ -679,7 +725,10 @@ function buildFailureReports(
       report_html: matchingHtml ?? null,
       screenshot_dir: screenshotDir,
       pre_existing: priorFailed.has(tc.name),
-    });
+    };
+    if (error_category !== undefined) report.error_category = error_category;
+    if (retryable !== undefined) report.retryable = retryable;
+    reports.push(report);
   }
   return reports;
 }
@@ -699,6 +748,10 @@ export function registerTestRunRca(server: McpServer, config: ServerConfig): voi
           'Use mode="failures" to get a lightweight array of failed test cases',
           '([{ testItemId, title, errorMessage }]) without the full RCA classification — useful when you',
           'need failure names quickly without loading the HTML report.',
+          'In mode="rca" (default), each entry in failures[] additionally includes optional error_category',
+          '(INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER) and retryable (boolean) fields when the failure',
+          'text matches a known pattern — INFRASTRUCTURE/TIMEOUT are flagged retryable, others are not.',
+          'These fields are NOT included in mode="failures" output.',
         ].join(' '),
         'Parse a Provar test run JUnit.xml and produce an RCA report with failure classification.'
       ),
