@@ -78,6 +78,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
 - [Performance Tuning](#performance-tuning)
+- [Warning codes](#warning-codes)
 
 ---
 
@@ -528,6 +529,23 @@ All file-system operations (read, write, generate) are restricted to the paths s
 Symlinks are resolved via `fs.realpathSync` before the containment check, so a symlink inside an allowed directory that points outside it cannot bypass the restriction. For tools that accept multiple path inputs (such as `provar_ant_generate`'s `provar_home`, `project_path`, and `results_path`), all path fields are validated before any file operation occurs — not just the output path.
 
 On **Windows**, path comparisons are performed case-insensitively to account for the fact that `fs.realpathSync` does not always canonicalize drive-letter case (e.g. `c:\` vs `C:\`). This means `C:\Projects\my-project` and `c:\projects\my-project` are treated as equivalent when checking against `--allowed-paths`.
+
+---
+
+## Warning codes
+
+Cross-cutting warning codes surfaced by validation, configuration, and run tooling. These complement the per-tool `rule_id` codes (e.g. `TC_001`, `VAR-REF-001`) documented under [Available tools](#available-tools). Subsequent revisions will refine the meanings as the relevant tool surfaces stabilise.
+
+| Code             | Surfaced by                             | Meaning                                                                   |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `PROVARHOME-001` | properties / automation tooling         | `provarHome` is missing, blank, or does not point to a Provar install     |
+| `DATA-001`       | `provar_testcase_validate`              | `<dataTable>` iteration is silently ignored in CLI standalone execution   |
+| `PARALLEL-001`   | automation / run tooling                | Parallel-mode cache mismatch between properties and active runtime config |
+| `SCHEMA-001`     | strict properties / config validators   | Unknown or misspelled key in a JSON / properties schema (typo guard)      |
+| `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection           |
+| `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                    |
+
+Warnings emitted programmatically follow the shape `WARNING [<CODE>]: <message>` — and when a typo is detected, the message is suffixed with `Did you mean '<suggestion>'?`. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
 
 ---
 
