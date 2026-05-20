@@ -748,9 +748,10 @@ export function registerTestRunRca(server: McpServer, config: ServerConfig): voi
           'Use mode="failures" to get a lightweight array of failed test cases',
           '([{ testItemId, title, errorMessage }]) without the full RCA classification — useful when you',
           'need failure names quickly without loading the HTML report.',
-          'Each failure includes optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',
-          'and retryable (boolean) fields when the failure text matches a known pattern — INFRASTRUCTURE/TIMEOUT',
-          'are flagged retryable, others are not.',
+          'In mode="rca" (default), each entry in failures[] additionally includes optional error_category',
+          '(INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER) and retryable (boolean) fields when the failure',
+          'text matches a known pattern — INFRASTRUCTURE/TIMEOUT are flagged retryable, others are not.',
+          'These fields are NOT included in mode="failures" output.',
         ].join(' '),
         'Parse a Provar test run JUnit.xml and produce an RCA report with failure classification.'
       ),

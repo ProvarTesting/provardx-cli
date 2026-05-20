@@ -1545,7 +1545,7 @@ Use `mode="failures"` when you only need the list of failing test case names wit
 | `test_case`           | Test case filename from JUnit `<testcase name>`                                                                                                        |
 | `error_class`         | Extracted exception class name                                                                                                                         |
 | `error_message`       | First 500 chars of failure/error text                                                                                                                  |
-| `root_cause_category` | One of 12 categories (see table below)                                                                                                                 |
+| `root_cause_category` | One of 17 categories (see list below)                                                                                                                  |
 | `root_cause_summary`  | Human-readable cause description                                                                                                                       |
 | `recommendation`      | Suggested fix action                                                                                                                                   |
 | `page_object`         | Extracted from `Page Object: ...` pattern, or `null`                                                                                                   |
