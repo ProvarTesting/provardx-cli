@@ -16,6 +16,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { desc } from './descHelper.js';
 
 // ── Validation helpers ────────────────────────────────────────────────────────
@@ -30,11 +31,117 @@ const TOP_REQUIRED = ['provarHome', 'projectPath', 'resultsPath', 'metadata', 'e
 const METADATA_REQUIRED = ['metadataLevel', 'cachePath'] as const;
 const ENV_REQUIRED = ['webBrowser', 'webBrowserConfig', 'webBrowserProviderName', 'webBrowserDeviceName'] as const;
 
+/**
+ * Canonical key sets for provardx-properties.json. Sourced from the documented schema in
+ * `docs/mcp.md` (provar_properties_set updates schema) and the `propertyFileContent` template
+ * from `@provartesting/provardx-plugins-utils`. Sibling PRs (PDX-488, PDX-494) may extend
+ * these sets — keep them exported and additive.
+ *
+ * NOTE: This set is intentionally lenient on "future Provar additions" — unknown keys emit a
+ * SCHEMA-001 warning (not a hard error) so older MCP clients keep working when new keys ship.
+ */
+export const CANONICAL_TOP_LEVEL_KEYS: readonly string[] = [
+  // Required
+  'provarHome',
+  'projectPath',
+  'resultsPath',
+  'metadata',
+  'environment',
+  // Optional — documented in docs/mcp.md properties_set schema
+  'resultsPathDisposition',
+  'testOutputLevel',
+  'pluginOutputlevel',
+  'stopOnError',
+  'excludeCallable',
+  'testprojectSecrets',
+  'testCase',
+  'testPlan',
+  'connectionOverride',
+  // Optional — present in the standard template (propertyFileContent.js)
+  'smtpPath',
+  'lightningMode',
+  'connectionRefreshType',
+  'testplanFeatures',
+];
+
+export const CANONICAL_METADATA_KEYS: readonly string[] = ['metadataLevel', 'cachePath'];
+
+export const CANONICAL_ENVIRONMENT_KEYS: readonly string[] = [
+  'testEnvironment',
+  'webBrowser',
+  'webBrowserConfig',
+  'webBrowserProviderName',
+  'webBrowserDeviceName',
+];
+
 const VALID_RESULTS_DISPOSITION = ['Increment', 'Replace', 'Fail'];
 const VALID_OUTPUT_LEVELS = ['BASIC', 'DETAILED', 'DIAGNOSTIC'];
 const VALID_PLUGIN_LEVELS = ['SEVERE', 'WARNING', 'INFO', 'FINE', 'FINER', 'FINEST'];
 const VALID_BROWSERS = ['Chrome', 'Safari', 'Edge', 'Edge_Legacy', 'Firefox', 'IE', 'Chrome_Headless'];
 const VALID_METADATA_LEVELS = ['Reuse', 'Reload', 'Refresh'];
+
+/**
+ * Iterative Levenshtein distance — small, no-dependency implementation used solely for
+ * "did you mean ..." suggestions in SCHEMA-001 warnings. Returns the edit distance between
+ * `a` and `b`. Case-sensitive.
+ */
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  let prev: number[] = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curr: number[] = [i];
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr.push(Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost));
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Returns the canonical key whose Levenshtein distance from `key` is <= 2, or `undefined`
+ * if no key is within that threshold. Picks the closest match (smallest distance, then
+ * lexicographic) to keep suggestions stable across runs.
+ */
+function closestCanonicalKey(key: string, canonical: readonly string[]): string | undefined {
+  let best: { key: string; dist: number } | undefined;
+  for (const candidate of canonical) {
+    const dist = levenshtein(key, candidate);
+    if (dist > 2) continue;
+    if (!best || dist < best.dist || (dist === best.dist && candidate < best.key)) {
+      best = { key: candidate, dist };
+    }
+  }
+  return best?.key;
+}
+
+/**
+ * Emit SCHEMA-001 warnings for any keys in `actual` that are not in `canonical`. The
+ * `pathLabel` is the human-readable scope (`top-level`, `metadata`, `environment`).
+ */
+function findUnknownKeys(
+  actual: Record<string, unknown>,
+  canonical: readonly string[],
+  pathLabel: string,
+  fieldPrefix: string
+): ValidationError[] {
+  const results: ValidationError[] = [];
+  const canonicalSet = new Set(canonical);
+  for (const key of Object.keys(actual)) {
+    if (canonicalSet.has(key)) continue;
+    const suggestion = closestCanonicalKey(key, canonical);
+    const message = formatWarning(WARNING_CODES.SCHEMA_001, `Unknown field '${key}' at ${pathLabel}.`, suggestion);
+    results.push({
+      field: fieldPrefix ? `${fieldPrefix}.${key}` : key,
+      message,
+      severity: 'warning',
+    });
+  }
+  return results;
+}
 
 // eslint-disable-next-line complexity
 function validateProperties(props: Record<string, unknown>): ValidationError[] {
@@ -132,6 +239,15 @@ function validateProperties(props: Record<string, unknown>): ValidationError[] {
         severity: 'warning',
       });
     }
+  }
+
+  // SCHEMA-001: unknown keys at any level — warning only so additive Provar versions don't break old clients
+  errors.push(...findUnknownKeys(props, CANONICAL_TOP_LEVEL_KEYS, 'top-level', ''));
+  if (meta && typeof meta === 'object') {
+    errors.push(...findUnknownKeys(meta, CANONICAL_METADATA_KEYS, 'metadata', 'metadata'));
+  }
+  if (env && typeof env === 'object') {
+    errors.push(...findUnknownKeys(env, CANONICAL_ENVIRONMENT_KEYS, 'environment', 'environment'));
   }
 
   return errors;
@@ -624,9 +740,12 @@ export function registerPropertiesValidate(server: McpServer, config: ServerConf
         [
           'Validate a provardx-properties.json file against the ProvarDX schema.',
           'Checks required fields, valid enum values, and warns about unfilled placeholder values.',
+          'Also emits a SCHEMA-001 warning for any unknown top-level, metadata.*, or environment.* key',
+          "(e.g. 'testCases' → did you mean 'testCase'?). Unknown keys are warnings, not errors,",
+          'so additive keys in future Provar versions do not break older MCP clients.',
           'Accepts either a file path or inline JSON content.',
         ].join(' '),
-        'Validate a provardx-properties.json against required fields and enum values.'
+        'Validate a provardx-properties.json; warns on unknown keys (SCHEMA-001) like testCases vs testCase.'
       ),
       inputSchema: {
         file_path: z

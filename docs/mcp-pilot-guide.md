@@ -483,6 +483,37 @@ If any FAIL indicator appears, report it to the Provar team with the prompt and 
 
 ---
 
+### Scenario 13: Org-Aware Test Case Generation
+
+The `provar_org_describe` tool surfaces cached Salesforce describe data from the Provar IDE workspace so the agent knows which fields on each object are required and what their types are — without making a live Salesforce API call. Use it as a hint source before generating data-heavy steps.
+
+**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded, so the `.metadata/<connection_name>/` directory is populated.
+
+**Try this prompt:**
+
+> "Before generating a test case that creates an Account, call `provar_org_describe` against my project at `/path/to/MyProject` for connection `MyOrg` and the `Account` object only. Use the required-field list to populate the create form."
+
+The tool returns the discovered workspace path, a cache age, and per-object required-field metadata. Example call:
+
+```jsonc
+{
+  "project_path": "/Users/you/git/MyProject",
+  "connection_name": "MyOrg",
+  "objects": ["Account"],
+  "field_filter": "required"
+}
+```
+
+**What to look for (PASS):**
+
+- Response includes `workspace_path` resolved to a real `workspace-*` directory.
+- `objects[0].required_fields` contains at least one field with `nillable: false`.
+- The follow-up `provar_testcase_generate` call uses field names from the response.
+
+**Cache-miss behaviour (also PASS):** if the cache directory does not exist the tool returns `details.suggestion` telling the agent how to recover — either open the project in Provar IDE to populate the cache, or pass field-type hints inline.
+
+---
+
 ## Security Model
 
 ### What the server does

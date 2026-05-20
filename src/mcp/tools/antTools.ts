@@ -979,16 +979,57 @@ function finalizeAnt(
 
 // ── JUnit XML step parsing ────────────────────────────────────────────────────
 
+export type JUnitErrorCategory = 'INFRASTRUCTURE' | 'ASSERTION' | 'LOCATOR' | 'TIMEOUT' | 'OTHER';
+
 export interface JUnitStepResult {
   testItemId: string;
   title: string;
   status: 'pass' | 'fail' | 'skip';
   errorMessage?: string;
+  error_category?: JUnitErrorCategory;
+  retryable?: boolean;
+}
+
+/**
+ * Classify a failure message into a coarse-grained category used for retry decisions.
+ * Mirrors the classifier in rcaTools.ts (PDX-490) so a downstream consumer sees the
+ * same labelling whether they consume `provar_automation_testrun.steps[]` or
+ * `provar_testrun_rca.failures[]`.
+ *
+ * Returns `undefined` when no pattern matches.
+ */
+export function classifyStepErrorCategory(errorText: string): JUnitErrorCategory | undefined {
+  if (/Connection reset|Failed to read client socket message|socket hang up|ECONNRESET/i.test(errorText)) {
+    return 'INFRASTRUCTURE';
+  }
+  if (/NoSuchElementException/i.test(errorText)) return 'LOCATOR';
+  if (/TimeoutException/i.test(errorText)) return 'TIMEOUT';
+  if (/AssertionException/i.test(errorText)) return 'ASSERTION';
+  if (
+    /SessionNotCreatedException|WebDriverException|ClassNotFoundException|LicenseException|InvalidPasswordException/i.test(
+      errorText
+    )
+  ) {
+    return 'OTHER';
+  }
+  return undefined;
+}
+
+/** Only transient categories (INFRASTRUCTURE, TIMEOUT) are retryable. */
+export function isStepRetryable(category: JUnitErrorCategory | undefined): boolean | undefined {
+  if (category === undefined) return undefined;
+  return category === 'INFRASTRUCTURE' || category === 'TIMEOUT';
 }
 
 export interface JUnitParseResult {
   steps: JUnitStepResult[];
   warning?: string;
+  /**
+   * True iff at least one JUnit XML file was located AND parsed without throwing.
+   * Distinguishes "we have data and the test selector matched zero cases" (legit RUN-001 signal)
+   * from "we have no data because nothing parsed" (insufficient info — must stay silent).
+   */
+  parsedAny: boolean;
 }
 
 function extractFailureText(el: unknown): string | undefined {
@@ -1043,7 +1084,13 @@ function extractStepsFromJUnit(parsed: Record<string, unknown>): JUnitStepResult
 
       const errorMessage = extractFailureText(tc['failure'] ?? tc['error']);
       const step: JUnitStepResult = { testItemId: String(idx), title, status };
-      if (errorMessage) step.errorMessage = errorMessage;
+      if (errorMessage) {
+        step.errorMessage = errorMessage;
+        const error_category = classifyStepErrorCategory(errorMessage);
+        const retryable = isStepRetryable(error_category);
+        if (error_category !== undefined) step.error_category = error_category;
+        if (retryable !== undefined) step.retryable = retryable;
+      }
       steps.push(step);
     }
   }
@@ -1071,7 +1118,7 @@ function findXmlFiles(dir: string): string[] {
  */
 export function parseJUnitResults(resultsDir: string): JUnitParseResult {
   if (!fs.existsSync(resultsDir)) {
-    return { steps: [], warning: `Results directory not found: ${resultsDir}` };
+    return { steps: [], warning: `Results directory not found: ${resultsDir}`, parsedAny: false };
   }
 
   const xmlFiles = findXmlFiles(resultsDir);
@@ -1079,6 +1126,7 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     return {
       steps: [],
       warning: 'No JUnit XML files found in results directory — structured step output unavailable.',
+      parsedAny: false,
     };
   }
 
@@ -1111,12 +1159,17 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     return {
       steps: [],
       warning: 'JUnit XML files found but could not be parsed — structured step output unavailable.',
+      parsedAny: false,
     };
   }
   if (allSteps.length === 0) {
+    // We did parse at least one file; the file just had zero <testcase> entries (or none we could
+    // recognise as steps). This is the legitimate "selector matched nothing" signal that RUN-001
+    // is built to catch.
     return {
       steps: [],
       warning: 'JUnit XML found but no test steps could be extracted — files may not be standard JUnit format.',
+      parsedAny: true,
     };
   }
 
@@ -1124,7 +1177,7 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     parseFailures > 0
       ? `${parseFailures} JUnit XML file(s) could not be parsed — step data may be incomplete.`
       : undefined;
-  return { steps: allSteps, warning };
+  return { steps: allSteps, warning, parsedAny: true };
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────

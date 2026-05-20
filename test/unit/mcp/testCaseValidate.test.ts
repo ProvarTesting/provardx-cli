@@ -226,16 +226,16 @@ describe('validateTestCase', () => {
   });
 
   describe('DATA-001', () => {
-    it('warns when testCase has a <dataTable> child element', () => {
-      const r = validateTestCase(
-        `<?xml version="1.0" encoding="UTF-8"?>
+    const DATA_TABLE_TC = `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
   <dataTable>mydata.csv</dataTable>
   <steps>
     <apiCall guid="${GUID_S1}" apiId="SetValues" name="Set" testItemId="1"/>
   </steps>
-</testCase>`
-      );
+</testCase>`;
+
+    it('warns (structural) when testCase has a <dataTable> child element and mode is unknown', () => {
+      const r = validateTestCase(DATA_TABLE_TC);
       assert.ok(
         r.issues.some((i) => i.rule_id === 'DATA-001'),
         'Expected DATA-001'
@@ -247,6 +247,42 @@ describe('validateTestCase', () => {
     it('does not fire when no <dataTable> present', () => {
       const r = validateTestCase(VALID_TC);
       assert.ok(!r.issues.some((i) => i.rule_id === 'DATA-001'), 'DATA-001 should not fire for valid test case');
+    });
+
+    it('PDX-489: emits DATA-001 with formatWarning text when planMode is direct', () => {
+      const r = validateTestCase(DATA_TABLE_TC, undefined, { planMode: 'direct' });
+      const issue = r.issues.find((i) => i.rule_id === 'DATA-001');
+      assert.ok(issue, 'Expected DATA-001 to fire in direct mode');
+      assert.ok(
+        issue.message.startsWith('WARNING [DATA-001]:'),
+        `Message must use formatWarning prefix, got: ${issue.message}`
+      );
+      assert.ok(
+        issue.message.includes('only iterates when run through a test plan instance'),
+        `Message must reference the plan-instance fix: ${issue.message}`
+      );
+      assert.ok(
+        issue.message.includes('provar_testplan_add-instance'),
+        `Message must reference provar_testplan_add-instance: ${issue.message}`
+      );
+    });
+
+    it('PDX-489: suppresses DATA-001 when planMode is plan', () => {
+      const r = validateTestCase(DATA_TABLE_TC, undefined, { planMode: 'plan' });
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'DATA-001'),
+        'DATA-001 must not fire when the test case is referenced from a .testinstance'
+      );
+    });
+
+    it('PDX-489: keeps structural DATA-001 when planMode is unknown', () => {
+      const r = validateTestCase(DATA_TABLE_TC, undefined, { planMode: 'unknown' });
+      const issue = r.issues.find((i) => i.rule_id === 'DATA-001');
+      assert.ok(issue, 'Expected DATA-001 to fire in unknown mode');
+      assert.ok(
+        !issue.message.startsWith('WARNING [DATA-001]:'),
+        'Unknown-mode message should NOT use the formatWarning prefix (preserves prior behaviour)'
+      );
     });
   });
 
@@ -1137,6 +1173,117 @@ describe('validateTestCaseXml', () => {
   it('throws when file path is outside allowed paths', () => {
     const outside = path.join(os.tmpdir(), 'outside.testcase');
     assert.throws(() => validateTestCaseXml(outside, makeConfig(tmpDir)));
+  });
+});
+
+// ── PDX-489 handler-level DATA-001 integration ────────────────────────────────
+
+/**
+ * Build a project that wires a dataTable test case directly (via testCase /
+ * testCases array) OR through a .testinstance — and writes ~/.sf/config.json
+ * pointing at the project's provardx-properties.json so the handler can
+ * resolve plan mode without explicit overrides.
+ */
+function buildDataTableProject(
+  tmpRoot: string,
+  references: 'direct-testCase' | 'direct-testCases' | 'plan'
+): { testCasePath: string; allowedPaths: string[] } {
+  const projectPath = path.join(tmpRoot, 'project');
+  fs.mkdirSync(path.join(projectPath, 'tests', 'Module'), { recursive: true });
+  const testCasePath = path.join(projectPath, 'tests', 'Module', 'DataTest.testcase');
+  fs.writeFileSync(
+    testCasePath,
+    `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="550e8400-e29b-41d4-a716-446655440000" registryId="r" name="DataTest">
+  <dataTable>mydata.csv</dataTable>
+  <steps>
+    <apiCall guid="6ba7b810-9dad-4000-8000-00c04fd430c8" apiId="SetValues" name="S" testItemId="1"/>
+  </steps>
+</testCase>`
+  );
+
+  const props: Record<string, unknown> = {
+    projectPath,
+    provarHome: '/tmp/provarHome',
+    resultsPath: 'ANT/Results',
+  };
+
+  if (references === 'direct-testCase') {
+    props.testCase = ['Module/DataTest.testcase'];
+  } else if (references === 'direct-testCases') {
+    props.testCases = ['Module/DataTest.testcase'];
+  } else {
+    fs.mkdirSync(path.join(projectPath, 'plans', 'Plan1', 'Suite1'), { recursive: true });
+    fs.writeFileSync(
+      path.join(projectPath, 'plans', 'Plan1', 'Suite1', 'DataTest.testinstance'),
+      '<testInstance testCasePath="Module/DataTest.testcase"/>'
+    );
+  }
+
+  const propertiesPath = path.join(projectPath, 'provardx-properties.json');
+  fs.writeFileSync(propertiesPath, JSON.stringify(props, null, 2));
+
+  // Wire ~/.sf/config.json so the resolver picks up the properties file.
+  const sfDir = path.join(tmpRoot, '.sf');
+  fs.mkdirSync(sfDir, { recursive: true });
+  fs.writeFileSync(path.join(sfDir, 'config.json'), JSON.stringify({ PROVARDX_PROPERTIES_FILE_PATH: propertiesPath }));
+
+  return { testCasePath, allowedPaths: [tmpRoot] };
+}
+
+describe('PDX-489: DATA-001 handler integration via validateTestCaseXml', () => {
+  let tmpRoot: string;
+  let origHomedir: () => string;
+
+  beforeEach(() => {
+    tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pdx489-handler-'));
+    origHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = (): string => tmpRoot;
+  });
+
+  afterEach(() => {
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it('fires DATA-001 with formatWarning prefix when properties uses top-level testCase', () => {
+    const { testCasePath, allowedPaths } = buildDataTableProject(tmpRoot, 'direct-testCase');
+    const result = validateTestCaseXml(testCasePath, { allowedPaths } as unknown as ServerConfig);
+    const issue = result.issues.find((i) => i.rule_id === 'DATA-001');
+    assert.ok(issue, 'Expected DATA-001 in direct testCase mode');
+    assert.ok(issue.message.startsWith('WARNING [DATA-001]:'), `Expected formatWarning prefix: ${issue.message}`);
+    assert.ok(
+      issue.message.includes('provar_testplan_add-instance'),
+      `Expected guidance to plan-instance: ${issue.message}`
+    );
+  });
+
+  it('fires DATA-001 when properties uses testCases (plural) — typo-tolerant', () => {
+    const { testCasePath, allowedPaths } = buildDataTableProject(tmpRoot, 'direct-testCases');
+    const result = validateTestCaseXml(testCasePath, { allowedPaths } as unknown as ServerConfig);
+    const issue = result.issues.find((i) => i.rule_id === 'DATA-001');
+    assert.ok(issue, 'Expected DATA-001 when testCases array references the test');
+    assert.ok(issue.message.startsWith('WARNING [DATA-001]:'));
+  });
+
+  it('does NOT fire DATA-001 when test case is referenced from a .testinstance', () => {
+    const { testCasePath, allowedPaths } = buildDataTableProject(tmpRoot, 'plan');
+    const result = validateTestCaseXml(testCasePath, { allowedPaths } as unknown as ServerConfig);
+    assert.ok(
+      !result.issues.some((i) => i.rule_id === 'DATA-001'),
+      'DATA-001 must not fire when the test case is wired via a plan instance'
+    );
+  });
+
+  it('does NOT fire DATA-001 when test case has no <dataTable> (direct mode)', () => {
+    // Reuse the direct project but rewrite the test case content without a <dataTable>.
+    const { testCasePath, allowedPaths } = buildDataTableProject(tmpRoot, 'direct-testCase');
+    fs.writeFileSync(testCasePath, VALID_TC);
+    const result = validateTestCaseXml(testCasePath, { allowedPaths } as unknown as ServerConfig);
+    assert.ok(
+      !result.issues.some((i) => i.rule_id === 'DATA-001'),
+      'DATA-001 must not fire when no <dataTable> is present'
+    );
   });
 });
 

@@ -15,6 +15,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
+import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { parseJUnitResults } from './antTools.js';
 import { runSfCommand } from './sfSpawn.js';
 import { desc } from './descHelper.js';
@@ -226,6 +227,38 @@ function readResultsPathFromSfConfig(config: ServerConfig): string | null {
 
 // ── Tool: provar_automation_testrun ───────────────────────────────────────────
 
+/**
+ * JUnit introspection for the testrun response. Returns enough structure that
+ * downstream warning emitters (RUN-001 zero-tests, future JUNIT-001 expected-vs-
+ * actual mismatch) can read a single object instead of re-parsing.
+ */
+type JUnitIntrospection = {
+  steps: ReturnType<typeof parseJUnitResults>['steps'];
+  stepCount: number;
+  parseWarning: string | undefined;
+  resultsPathResolved: boolean;
+  /**
+   * True iff at least one JUnit XML file was located AND parsed without throwing.
+   * Gates RUN-001: a `stepCount === 0` only means "zero tests executed" when we know we
+   * actually have parseable data. With `parsedAny === false` the count is "we don't know",
+   * which must stay silent (details.warning already covers it).
+   */
+  parsedAny: boolean;
+};
+
+function introspectJUnit(config: ServerConfig): JUnitIntrospection {
+  const resultsPath = readResultsPathFromSfConfig(config);
+  if (!resultsPath) {
+    return { steps: [], stepCount: 0, parseWarning: undefined, resultsPathResolved: false, parsedAny: false };
+  }
+  const { steps, warning, parsedAny } = parseJUnitResults(resultsPath);
+  return { steps, stepCount: steps.length, parseWarning: warning, resultsPathResolved: true, parsedAny };
+}
+
+const ZERO_TESTS_MESSAGE =
+  'Test run exited successfully but zero tests were executed. ' +
+  'Check the testCase / testCases (note spelling) field in provardx-properties.json.';
+
 export function registerAutomationTestRun(server: McpServer, config: ServerConfig): void {
   server.registerTool(
     'provar_automation_testrun',
@@ -240,9 +273,12 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
           'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
           'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
+          'Zero-tests guard: if the sf exit code is 0, the results directory was located, and at least one JUnit XML file parsed successfully but contains zero executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json. When no JUnit data is available (dir missing or all XML unparseable), `details.warning` is set instead and RUN-001 stays silent.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
+          'Each failed step in `steps[]` may include optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',
+          'and retryable (boolean) fields when the failure text matches a known pattern — use these to drive automated retry policy.',
         ].join(' '),
-        'Run local Provar tests via sf CLI; requires config_load first.'
+        'Run local Provar tests via sf CLI; requires config_load first. Surfaces RUN-001 on zero-tests-executed.'
       ),
       inputSchema: {
         flags: z
@@ -274,11 +310,10 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
         const result = runSfCommand(['provar', 'automation', 'test', 'run', ...flags], sf_path);
         const { filtered, suppressed } = filterTestRunOutput(result.stdout);
 
-        // Attempt to enrich the response with structured step data from JUnit XML
-        const resultsPath = readResultsPathFromSfConfig(config);
-        const { steps, warning: junitWarning } = resultsPath
-          ? parseJUnitResults(resultsPath)
-          : { steps: [], warning: undefined };
+        // Enrich the response with structured step data + warning hooks from JUnit XML.
+        // Single introspection call keeps the wiring extensible (e.g. future JUNIT-001
+        // expected-vs-actual mismatch can read stepCount from the same struct).
+        const junit = introspectJUnit(config);
 
         if (result.exitCode !== 0) {
           const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(
@@ -288,11 +323,11 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
             ...makeError('AUTOMATION_TESTRUN_FAILED', filteredErr, requestId),
             ...(suppressedErr > 0 ? { output_lines_suppressed: suppressedErr } : {}),
           };
-          if (steps.length > 0) errBody['steps'] = steps;
-          if (!resultsPath || junitWarning) {
+          if (junit.steps.length > 0) errBody['steps'] = junit.steps;
+          if (!junit.resultsPathResolved || junit.parseWarning) {
             errBody['details'] = {
               warning:
-                junitWarning ??
+                junit.parseWarning ??
                 'Could not locate results directory — step-level output unavailable. Run provar_automation_config_load first.',
             };
           }
@@ -306,8 +341,27 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           stderr: result.stderr,
         };
         if (suppressed > 0) response['output_lines_suppressed'] = suppressed;
-        if (steps.length > 0) response['steps'] = steps;
-        if (junitWarning) response['details'] = { warning: junitWarning };
+        if (junit.steps.length > 0) response['steps'] = junit.steps;
+        if (junit.parseWarning) response['details'] = { warning: junit.parseWarning };
+
+        // RUN-001: sf reported success but zero tests actually executed.
+        // Almost always a typo in the testCase / testCases field of provardx-properties.json.
+        // Only fires when:
+        //   1. The results dir was located (resultsPathResolved), AND
+        //   2. At least one JUnit XML file was successfully parsed (parsedAny).
+        // Without (2) `stepCount === 0` just means "we don't have parseable data" — not
+        // "zero tests ran" — and the agent would be misdirected toward a typo when the
+        // real issue is a missing/unparseable results dir. That case is already surfaced
+        // via `details.warning` from the parse layer. With parsedAny === true and zero
+        // extracted steps, we know the selector genuinely matched nothing.
+        if (junit.resultsPathResolved && junit.parsedAny && junit.stepCount === 0) {
+          const warningStr = formatWarning(WARNING_CODES.RUN_001, ZERO_TESTS_MESSAGE);
+          // Append rather than overwrite so future warning emitters (e.g. JUNIT-001 mismatch
+          // in PDX-491) can coexist on the same response without stepping on each other.
+          const existing = response['warnings'] as string[] | undefined;
+          response['warnings'] = existing ? existing.concat(warningStr) : [warningStr];
+        }
+
         return { content: [{ type: 'text' as const, text: JSON.stringify(response) }], structuredContent: response };
       } catch (err) {
         return handleSpawnError(err, requestId, 'provar_automation_testrun');

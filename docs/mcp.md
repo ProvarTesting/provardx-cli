@@ -50,6 +50,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar_testplan_add-instance](#provar_testplan_add-instance)
   - [provar_testplan_create-suite](#provar_testplan_create-suite)
   - [provar_testplan_remove-instance](#provar_testplan_remove-instance)
+  - [Org metadata access](#org-metadata-access)
+    - [provar_org_describe](#provar_org_describe)
+  - [Data-driven execution](#data-driven-execution)
   - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
     - [provar_nitrox_discover](#provar_nitrox_discover)
     - [provar_nitrox_read](#provar_nitrox_read)
@@ -78,6 +81,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Quality scores explained](#quality-scores-explained)
 - [API compatibility — `xml` vs `xml_content`](#api-compatibility--xml-vs-xml_content)
 - [Performance Tuning](#performance-tuning)
+- [Warning codes](#warning-codes)
 
 ---
 
@@ -531,6 +535,23 @@ On **Windows**, path comparisons are performed case-insensitively to account for
 
 ---
 
+## Warning codes
+
+Cross-cutting warning codes surfaced by validation, configuration, and run tooling. These complement the per-tool `rule_id` codes (e.g. `TC_001`, `VAR-REF-001`) documented under [Available tools](#available-tools). Subsequent revisions will refine the meanings as the relevant tool surfaces stabilise.
+
+| Code             | Surfaced by                             | Meaning                                                                                                                                           |
+| ---------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROVARHOME-001` | properties / automation tooling         | `provarHome` is missing, blank, or does not point to a Provar install                                                                             |
+| `DATA-001`       | `provar_testcase_validate`              | `<dataTable>` iteration is silently ignored when a test case runs in direct `testCase`-mode (see [Data-driven execution](#data-driven-execution)) |
+| `PARALLEL-001`   | automation / run tooling                | Parallel-mode cache mismatch between properties and active runtime config                                                                         |
+| `SCHEMA-001`     | strict properties / config validators   | Unknown or misspelled key in a JSON / properties schema (typo guard)                                                                              |
+| `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection                                                                                   |
+| `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                                                                                            |
+
+Warning-code messages emitted via `formatWarning()` follow the shape `WARNING [<CODE>]: <message>` (optionally suffixed with ` Did you mean '<suggestion>'?` when a typo is detected). Other free-form warnings without a structured code — such as the placeholder warnings emitted by `provar_properties_validate` — remain plain strings. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
+
+---
+
 ## Available tools
 
 ### `provardx_ping`
@@ -729,13 +750,19 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 **Argument XML conventions** (automatically applied by the generator):
 
-| Argument key / value pattern         | Emitted XML class                   | API context             |
-| ------------------------------------ | ----------------------------------- | ----------------------- |
-| `target` key                         | `class="uiTarget"`                  | UiWithScreen, UiWithRow |
-| `locator` key                        | `class="uiLocator"`                 | UiDoAction, UiAssert    |
-| Value matches `{VarName}` or `{A.B}` | `class="variable"` + `<path>`       | Any step                |
-| SetValues attributes                 | `class="valueList"/<namedValues>`   | SetValues only          |
-| All other values                     | `class="value" valueClass="string"` | Any step                |
+| Argument key / value pattern                                                                   | Emitted XML class                     | API context             |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------- |
+| `target` key                                                                                   | `class="uiTarget"`                    | UiWithScreen, UiWithRow |
+| `locator` key                                                                                  | `class="uiLocator"`                   | UiDoAction, UiAssert    |
+| Value matches `{VarName}` or `{A.B}`                                                           | `class="variable"` + `<path>`         | Any step                |
+| SetValues attributes                                                                           | `class="valueList"/<namedValues>`     | SetValues only          |
+| Value `YYYY-MM-DDTHH:MM:SS` + optional `.fff` + optional `Z`/`±HH:MM` (ISO-8601, end-anchored) | `class="value" valueClass="datetime"` | Any step                |
+| Value `YYYY-MM-DD` (ISO-8601)                                                                  | `class="value" valueClass="date"`     | Any step                |
+| Value `true` / `false`                                                                         | `class="value" valueClass="boolean"`  | Any step                |
+| Numeric value `^-?\d+(\.\d+)?$` (`42`, `-5`, `3.14`)                                           | `class="value" valueClass="decimal"`  | Any step                |
+| All other values                                                                               | `class="value" valueClass="string"`   | Any step                |
+
+`valueClass` is inferred automatically by `inferSalesforceValueClass(key, val, fieldTypeHint?)`. Detection order: explicit `fieldTypeHint` (wired in a follow-up tool surface — `field_type_hints` param) → ISO-8601 datetime (with optional fractional seconds and timezone, end-anchored) → ISO-8601 date → boolean → decimal → string. Per the canonical Provar reference numbers always emit as `valueClass="decimal"` (there is no separate `integer` valueClass). Provar runtime silently discards date fields emitted as `valueClass="string"`, so always pass date / datetime values in ISO-8601 form.
 
 AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `comparisonType`) — not the `valueList`/namedValues format.
 
@@ -825,7 +852,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Warning rules:**
 
-- **DATA-001** — `testCase` declares a `<dataTable>` element. CLI standalone execution does not bind CSV column variables; steps using variable references will resolve to null. Use `SetValues` (Test scope) steps instead, or add the test to a test plan.
+- **DATA-001** — `testCase` declares a `<dataTable>` element. When the validator is called with `file_path` and the project's `provardx-properties.json` references that test case directly via top-level `testCase` or `testCases` (rather than via a `.testinstance` inside a plan), the warning carries the `WARNING [DATA-001]:` prefix and recommends wiring the test into a plan via `provar_testplan_add-instance`. When `file_path` is not supplied (or the project context cannot be resolved), the warning falls back to a structural advisory recommending `SetValues` (Test scope) steps. The warning is suppressed entirely when a `.testinstance` references the test case, because data-driven iteration works in that mode. See also [Data-driven execution](#data-driven-execution).
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
@@ -1086,7 +1113,7 @@ Updates one or more fields in a `provardx-properties.json` file. Only the suppli
 
 ### `provar_properties_validate`
 
-Validates a `provardx-properties.json` file against the ProvarDX schema. Checks required fields, valid enum values, and warns about unfilled `${PLACEHOLDER}` values. Accepts either a file path or inline JSON content.
+Validates a `provardx-properties.json` file against the ProvarDX schema. Checks required fields, valid enum values, and warns about unfilled `${PLACEHOLDER}` values. Also surfaces a `SCHEMA-001` warning for any unknown top-level, `metadata.*`, or `environment.*` key, with a "Did you mean ..." suggestion when a canonical key is within Levenshtein distance 2. Accepts either a file path or inline JSON content.
 
 **Input**
 
@@ -1097,12 +1124,17 @@ Validates a `provardx-properties.json` file against the ProvarDX schema. Checks 
 
 **Output**
 
-| Field           | Description                                     |
-| --------------- | ----------------------------------------------- |
-| `is_valid`      | `true` if no errors                             |
-| `error_count`   | Number of validation errors                     |
-| `warning_count` | Number of warnings (e.g. unfilled placeholders) |
-| `issues`        | Array of `{ field, severity, message }`         |
+| Field           | Description                                                 |
+| --------------- | ----------------------------------------------------------- |
+| `is_valid`      | `true` if no errors (warnings alone do not flip `is_valid`) |
+| `error_count`   | Number of validation errors                                 |
+| `warning_count` | Number of warnings (placeholders, unknown keys, etc.)       |
+| `errors`        | Array of `{ field, severity: 'error', message }`            |
+| `warnings`      | Array of `{ field, severity: 'warning', message }`          |
+
+**Warning codes (`warnings` array):**
+
+- `SCHEMA-001` — unknown key at top-level / `metadata.*` / `environment.*`. Example: `WARNING [SCHEMA-001]: Unknown field 'testCases' at top-level. Did you mean 'testCase'?` Unknown keys are **warnings, not errors**, so additive Provar versions do not break older MCP clients. The classic instance is the `testCases` (plural) typo for the canonical `testCase` (singular) — if you see SCHEMA-001 on `testCases`, fix the spelling before running any tests.
 
 **Error codes:** `MISSING_INPUT`, `PROPERTIES_FILE_NOT_FOUND`, `MALFORMED_JSON`, `PATH_NOT_ALLOWED`
 
@@ -1377,7 +1409,7 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning] }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning][, warnings] }`
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
@@ -1386,15 +1418,32 @@ After each run, the tool scans the results directory for JUnit XML files and add
 ```json
 "steps": [
   { "testItemId": "1", "title": "TC-Login-001-LoginAndVerify.testcase", "status": "pass" },
-  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "Execution failed: Element not found" }
+  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "TimeoutException: page did not load",
+ "error_category": "TIMEOUT", "retryable": true }
 ]
+
+Each entry represents one test case. status is "pass", "fail", or "skip". If the results directory cannot be located or contains no JUnit XML,
+details.warning explains why and steps is absent.
+
+Failed steps may include two optional classification fields:
+
+- error_category — one of INFRASTRUCTURE, ASSERTION, LOCATOR, TIMEOUT, OTHER, set when the failure text matches a known pattern.
+- retryable — true when error_category is INFRASTRUCTURE or TIMEOUT (transient causes), false for ASSERTION/LOCATOR/OTHER. Absent when no
+pattern matched.
+
+Zero-tests guard (RUN-001): when the sf command exits 0, the results directory was located, and at least one JUnit XML file parsed successfully
+but contains zero executed test cases, the response includes a warnings[] array containing a RUN-001 (#warning-codes) message. This is almost
+always a typo such as testCase vs testCases (or some other unknown key) in provardx-properties.json — the run silently selected nothing. The
+warning is additive and never flips exitCode or sets isError; the failure surface remains driven by the underlying sf exit code.
+
+▎ Why RUN-001 stays silent when no JUnit data is available: if the results directory cannot be located, contains no XML files, or every XML file
+▎  fails to parse, the tool genuinely has no data on which to assert "zero tests ran" — the absence of parsed results is just "we don't know
+▎ what ran". In those cases the response carries details.warning (explaining why structured step data is missing) and RUN-001 is suppressed to
+▎ avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
+
+Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND
+Warning codes: RUN-001 (zero tests executed despite success)
 ```
-
-Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
-
-**Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
-
----
 
 ### `provar_automation_compile`
 
@@ -1535,21 +1584,25 @@ Use `mode="failures"` when you only need the list of failing test case names wit
 
 **`FailureReport` fields (mode=rca only):**
 
-| Field                 | Description                                              |
-| --------------------- | -------------------------------------------------------- |
-| `test_case`           | Test case filename from JUnit `<testcase name>`          |
-| `error_class`         | Extracted exception class name                           |
-| `error_message`       | First 500 chars of failure/error text                    |
-| `root_cause_category` | One of 12 categories (see table below)                   |
-| `root_cause_summary`  | Human-readable cause description                         |
-| `recommendation`      | Suggested fix action                                     |
-| `page_object`         | Extracted from `Page Object: ...` pattern, or `null`     |
-| `operation`           | Extracted from `operation: ...` pattern, or `null`       |
-| `report_html`         | Path to per-test HTML report if found, else `null`       |
-| `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null` |
-| `pre_existing`        | `true` if the same test failed in a prior Increment run  |
+| Field                 | Description                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `test_case`           | Test case filename from JUnit `<testcase name>`                                                                                                        |
+| `error_class`         | Extracted exception class name                                                                                                                         |
+| `error_message`       | First 500 chars of failure/error text                                                                                                                  |
+| `root_cause_category` | One of 17 categories (see list below)                                                                                                                  |
+| `root_cause_summary`  | Human-readable cause description                                                                                                                       |
+| `recommendation`      | Suggested fix action                                                                                                                                   |
+| `page_object`         | Extracted from `Page Object: ...` pattern, or `null`                                                                                                   |
+| `operation`           | Extracted from `operation: ...` pattern, or `null`                                                                                                     |
+| `report_html`         | Path to per-test HTML report if found, else `null`                                                                                                     |
+| `screenshot_dir`      | Path to `Artifacts/` directory if it exists, else `null`                                                                                               |
+| `pre_existing`        | `true` if the same test failed in a prior Increment run                                                                                                |
+| `error_category`      | Optional. One of `INFRASTRUCTURE` \| `ASSERTION` \| `LOCATOR` \| `TIMEOUT` \| `OTHER`. Absent when no known pattern matched.                           |
+| `retryable`           | Optional. `true` when `error_category` is `INFRASTRUCTURE` or `TIMEOUT` (transient causes); `false` otherwise. Absent when `error_category` is absent. |
 
 **Root cause categories:** `DRIVER_VERSION_MISMATCH`, `LOCATOR_STALE`, `TIMEOUT`, `ASSERTION_FAILED`, `CREDENTIAL_FAILURE`, `MISSING_CALLABLE`, `METADATA_CACHE`, `PAGE_OBJECT_COMPILE`, `CONNECTION_REFUSED`, `DATA_SETUP`, `LICENSE_INVALID`, `SALESFORCE_VALIDATION`, `SALESFORCE_PICKLIST`, `SALESFORCE_REFERENCE`, `SALESFORCE_ACCESS`, `SALESFORCE_TRIGGER`, `UNKNOWN`
+
+**Error category vs. root cause category:** `root_cause_category` is fine-grained (17 buckets) and drives the human-readable `recommendation`. `error_category` is coarse-grained (5 buckets) and drives automated retry policy via `retryable`. The two are independent classifiers over the same failure text — both may be set on the same failure.
 
 Salesforce DML error categories (`SALESFORCE_*`) represent test-data failures — they appear in `failures[].root_cause_category` but are **not** included in `infrastructure_issues`.
 
@@ -1683,6 +1736,168 @@ Remove a `.testinstance` file from a plan suite. Path is validated to stay withi
 **Error codes:** `NOT_A_PROJECT`, `INVALID_INSTANCE`, `INSTANCE_NOT_FOUND`, `PATH_TRAVERSAL`, `PATH_NOT_ALLOWED`
 
 ---
+
+## Data-driven execution
+
+Provar's data-driven execution relies on the `<dataTable>` element inside a `.testcase` XML. The runtime only **iterates rows** when the test case is launched through a test-plan instance (a `.testinstance` file under `plans/`). When the same test case is launched directly via the top-level `testCase` or `testCases` property in `provardx-properties.json`, the runtime ignores the data table entirely — every step referencing a `<value class="variable">` resolves to `null`, and the test typically completes "successfully" against an empty row set.
+
+This produces silent-pass behaviour that is hard to spot from a log: the run exits 0, JUnit shows one test case, and the data-driven assertions never fire. The MCP server detects this configuration mismatch and surfaces a **`DATA-001`** warning so an AI agent can recover before the next run.
+
+**When does `DATA-001` fire?**
+
+| Condition (validator called with `file_path`)                                                | DATA-001 emitted? | Severity |
+| -------------------------------------------------------------------------------------------- | ----------------- | -------- |
+| `<dataTable>` present **and** referenced from a `.testinstance` inside `plans/`              | No                | —        |
+| `<dataTable>` present **and** referenced via top-level `testCase` / `testCases` array        | Yes               | WARNING  |
+| `<dataTable>` present **and** project context cannot be resolved (no active properties file) | Yes (structural)  | WARNING  |
+| No `<dataTable>` element                                                                     | No                | —        |
+
+The plan-mode resolver consults the properties file registered by [`provar_automation_config_load`](#provar_automation_config_load) (`PROVARDX_PROPERTIES_FILE_PATH` in `~/.sf/config.json`), reads `projectPath`, then:
+
+1. Walks `<projectPath>/plans/**/*.testinstance` for any `testCasePath="..."` referencing the test under validation. If found → `plan` mode → DATA-001 suppressed.
+2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the PDX-489 advisory.
+3. Falls back to `unknown` mode when no project context is resolvable — DATA-001 still fires (structural fallback) so authors editing a test case in isolation are still warned.
+
+**Recommended workaround**
+
+When `DATA-001` fires in direct mode, wire the test case into a plan via [`provar_testplan_add-instance`](#provar_testplan_add-instance) and run via the `testPlan` property in `provardx-properties.json` instead of `testCase` / `testCases`. The pattern is:
+
+1. Use [`provar_testplan_create-suite`](#provar_testplan_create-suite) to add a suite under an existing plan if needed.
+2. Use [`provar_testplan_add-instance`](#provar_testplan_add-instance) to create the `.testinstance` linking the test case to the suite.
+3. Update `provardx-properties.json` to reference the plan (and remove the direct `testCase` entry if it no longer applies) before invoking [`provar_automation_testrun`](#provar_automation_testrun).
+4. Re-run [`provar_testcase_validate`](#provar_testcase_validate) on the test case file — DATA-001 should no longer appear.
+
+The constraint is also referenced in the [`provar_testcase_generate`](#provar_testcase_generate) tool description so an agent constructing a new data-driven test case sees the limitation up front, and in [`provar_automation_testrun`](#provar_automation_testrun) so an agent triggering a run is reminded that direct-mode execution will not iterate.
+
+---
+
+## Org metadata access
+
+Tools that surface Salesforce org metadata to authoring tools without making a live API call. These read from data that has already been written to disk by the Provar IDE — they do **not** trigger metadata downloads themselves and they do **not** require an authenticated session.
+
+> **Distinct from `.provarCaches`:** the runtime cache used by `provar_automation_testrun` lives at `<resultsPath>/.provarCaches/` and is regenerated per run. The cache read by `provar_org_describe` lives in the Provar IDE **workspace** (`<workspace>/.metadata/<connection_name>/`) and is updated when a user opens the project and loads a connection in the IDE.
+
+### `provar_org_describe`
+
+Read cached Salesforce describe data for one connection from the Provar workspace `.metadata` cache. Returns the object list, required-field schema, and a cache age. Use this before calling `provar_testcase_generate` so the generator can produce steps with correctly-typed field values.
+
+**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
+
+**Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that exists:
+
+1. `<parent-of-project>/workspace-<basename>/` — sibling workspace pattern (default for Provar IDE in this workspace layout).
+2. `<parent-of-project>/Provar_Workspaces/workspace-<name-dashes>/` — shared `Provar_Workspaces` directory.
+3. `~/Provar/workspace-<name-dashes>/` — user-home fallback.
+
+`<name-dashes>` is the project's basename with whitespace collapsed to single dashes and lowercased: `"My Project"` → `"my-project"`.
+
+| Input             | Type                    | Required | Default      | Description                                                                                                                                                                    |
+| ----------------- | ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_path`    | string                  | yes      | —            | Absolute path to the Provar test project root (the directory containing `.testproject`). Must be within `--allowed-paths`.                                                     |
+| `connection_name` | string                  | yes      | —            | Connection name as defined in `.testproject` (e.g. `"MyOrg"`). Must match the `.metadata` subdirectory exactly. Path separators in this value are rejected (`PATH_TRAVERSAL`). |
+| `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the connection directory.                                                  |
+| `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                           |
+
+| Output field              | Description                                                                                                                                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requestId`               | UUID for this invocation. Echoed in MCP server logs for cross-correlation. Consistent with the rest of the MCP tool surface.                                                                                                             |
+| `workspace_path`          | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists (or all candidates were outside `--allowed-paths`).                                                                    |
+| `cache_age_ms`            | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                                                                                                                    |
+| `objects[]`               | Array of `{ name, exists, required_fields, field_count, error_message? }`. `exists` is `true` (cache file present), `false` (requested but not cached), or `null` (cache miss — the whole `.metadata/<connection>` directory is absent). |
+| `objects[].error_message` | Present **only** when a cache file existed but failed to parse (`exists: true, field_count: 0`). Lets the agent distinguish a corrupt / unsupported cache file from a missing one.                                                       |
+| `details.suggestion`      | Present **only** on cache miss. Tells the agent how to populate the cache (open Provar IDE) or how to proceed without it (inline hints).                                                                                                 |
+
+**Example — happy path:**
+
+```jsonc
+// Request
+{
+  "project_path": "/Users/me/git/MyProject",
+  "connection_name": "MyOrg",
+  "objects": ["Account", "Contact"],
+  "field_filter": "required"
+}
+
+// Response
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [
+        { "name": "Name", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 24
+    },
+    {
+      "name": "Contact",
+      "exists": true,
+      "required_fields": [
+        { "name": "LastName", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 31
+    }
+  ]
+}
+```
+
+**Example — cache miss:**
+
+```jsonc
+// Response when the .metadata/<connection_name> directory does not exist
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": null,
+  "objects": [{ "name": "Account", "exists": null, "required_fields": [], "field_count": 0 }],
+  "details": {
+    "suggestion": "Open this project in Provar IDE and load the 'MyOrg' connection, or pass field-type hints inline to provar_testcase_generate."
+  }
+}
+```
+
+**Example — parse error on a cached file:**
+
+```jsonc
+// Response when Account.json exists but is corrupt / unparseable
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [],
+      "field_count": 0,
+      "error_message": "Failed to parse cache file (Account.json): Unexpected token } in JSON at position 42"
+    }
+  ]
+}
+```
+
+**On-disk cache schema (one file per object).** The tool reads `.json` first, then `.xml`, then `.object` as a fallback:
+
+```jsonc
+// <workspace>/.metadata/<connection_name>/Account.json
+{
+  "name": "Account",
+  "fields": [
+    { "name": "Name", "type": "string", "defaultValue": null, "nillable": false },
+    { "name": "Phone", "type": "phone", "defaultValue": null, "nillable": true }
+  ]
+}
+```
+
+**Error codes:**
+
+| Code               | Meaning                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `PATH_NOT_ALLOWED` | `project_path` or the resolved workspace path is outside `--allowed-paths`.                    |
+| `PATH_TRAVERSAL`   | `project_path` contains `..` segments, or `connection_name` contains a path separator or `..`. |
 
 ---
 
