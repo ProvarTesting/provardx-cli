@@ -1024,6 +1024,12 @@ export function isStepRetryable(category: JUnitErrorCategory | undefined): boole
 export interface JUnitParseResult {
   steps: JUnitStepResult[];
   warning?: string;
+  /**
+   * True iff at least one JUnit XML file was located AND parsed without throwing.
+   * Distinguishes "we have data and the test selector matched zero cases" (legit RUN-001 signal)
+   * from "we have no data because nothing parsed" (insufficient info — must stay silent).
+   */
+  parsedAny: boolean;
 }
 
 function extractFailureText(el: unknown): string | undefined {
@@ -1112,7 +1118,7 @@ function findXmlFiles(dir: string): string[] {
  */
 export function parseJUnitResults(resultsDir: string): JUnitParseResult {
   if (!fs.existsSync(resultsDir)) {
-    return { steps: [], warning: `Results directory not found: ${resultsDir}` };
+    return { steps: [], warning: `Results directory not found: ${resultsDir}`, parsedAny: false };
   }
 
   const xmlFiles = findXmlFiles(resultsDir);
@@ -1120,6 +1126,7 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     return {
       steps: [],
       warning: 'No JUnit XML files found in results directory — structured step output unavailable.',
+      parsedAny: false,
     };
   }
 
@@ -1152,12 +1159,17 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     return {
       steps: [],
       warning: 'JUnit XML files found but could not be parsed — structured step output unavailable.',
+      parsedAny: false,
     };
   }
   if (allSteps.length === 0) {
+    // We did parse at least one file; the file just had zero <testcase> entries (or none we could
+    // recognise as steps). This is the legitimate "selector matched nothing" signal that RUN-001
+    // is built to catch.
     return {
       steps: [],
       warning: 'JUnit XML found but no test steps could be extracted — files may not be standard JUnit format.',
+      parsedAny: true,
     };
   }
 
@@ -1165,7 +1177,7 @@ export function parseJUnitResults(resultsDir: string): JUnitParseResult {
     parseFailures > 0
       ? `${parseFailures} JUnit XML file(s) could not be parsed — step data may be incomplete.`
       : undefined;
-  return { steps: allSteps, warning };
+  return { steps: allSteps, warning, parsedAny: true };
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────

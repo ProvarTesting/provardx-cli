@@ -800,12 +800,14 @@ describe('parseJUnitResults', () => {
     const result = parseJUnitResults(path.join(junitTmpDir, 'nonexistent'));
     assert.deepEqual(result.steps, []);
     assert.ok(result.warning?.includes('not found'));
+    assert.equal(result.parsedAny, false, 'parsedAny must be false when dir is missing');
   });
 
   it('returns warning when directory contains no XML files', () => {
     const result = parseJUnitResults(junitTmpDir);
     assert.deepEqual(result.steps, []);
     assert.ok(result.warning?.includes('No JUnit XML'));
+    assert.equal(result.parsedAny, false, 'parsedAny must be false when no XML files exist');
   });
 
   it('extracts steps from a bare <testsuite> JUnit file', () => {
@@ -818,6 +820,7 @@ describe('parseJUnitResults', () => {
     assert.equal(result.steps[1].status, 'fail');
     assert.ok(result.steps[1].errorMessage?.includes('Element not found'));
     assert.equal(result.warning, undefined);
+    assert.equal(result.parsedAny, true, 'parsedAny must be true when at least one file parsed');
   });
 
   it('extracts steps from a <testsuites> wrapper JUnit file', () => {
@@ -836,6 +839,18 @@ describe('parseJUnitResults', () => {
     const result = parseJUnitResults(junitTmpDir);
     assert.deepEqual(result.steps, []);
     assert.ok((result.warning?.length ?? 0) > 0);
+    // parsedAny must be TRUE here: the file was readable and parsed, it just has zero
+    // <testcase> entries. This is the legitimate RUN-001 signal — distinct from "we have
+    // no data at all".
+    assert.equal(result.parsedAny, true, 'parsedAny must be true when XML parsed but had no steps');
+  });
+
+  it('returns parsedAny=false when all XML files fail to parse', () => {
+    fs.writeFileSync(path.join(junitTmpDir, 'broken.xml'), '<this is < not valid xml');
+    const result = parseJUnitResults(junitTmpDir);
+    assert.deepEqual(result.steps, []);
+    assert.ok(result.warning?.includes('could not be parsed'));
+    assert.equal(result.parsedAny, false, 'parsedAny must be false when every XML file throws');
   });
 
   it('combines message attribute and CDATA body in failure text', () => {

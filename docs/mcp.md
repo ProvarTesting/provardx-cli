@@ -1401,7 +1401,7 @@ Triggers a Provar Automation test run using the currently loaded properties file
 | --------- | -------- | -------- | ------------------------------------------------------------------------ |
 | `flags`   | string[] | no       | Raw CLI flags to forward (e.g. `["--project-path", "/path/to/project"]`) |
 
-**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning] }`
+**Output** — `{ requestId, exitCode, stdout, stderr[, output_lines_suppressed][, steps][, details.warning][, warnings] }`
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
@@ -1410,20 +1410,32 @@ After each run, the tool scans the results directory for JUnit XML files and add
 ```json
 "steps": [
   { "testItemId": "1", "title": "TC-Login-001-LoginAndVerify.testcase", "status": "pass" },
-  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "TimeoutException: page did not load", "error_category": "TIMEOUT", "retryable": true }
+  { "testItemId": "2", "title": "TC-Login-002-ForgotPassword.testcase", "status": "fail", "errorMessage": "TimeoutException: page did not load",
+ "error_category": "TIMEOUT", "retryable": true }
 ]
-```
 
-Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
+Each entry represents one test case. status is "pass", "fail", or "skip". If the results directory cannot be located or contains no JUnit XML,
+details.warning explains why and steps is absent.
 
 Failed steps may include two optional classification fields:
 
-- `error_category` — one of `INFRASTRUCTURE`, `ASSERTION`, `LOCATOR`, `TIMEOUT`, `OTHER`, set when the failure text matches a known pattern.
-- `retryable` — `true` when `error_category` is `INFRASTRUCTURE` or `TIMEOUT` (transient causes), `false` for `ASSERTION`/`LOCATOR`/`OTHER`. Absent when no pattern matched.
+- error_category — one of INFRASTRUCTURE, ASSERTION, LOCATOR, TIMEOUT, OTHER, set when the failure text matches a known pattern.
+- retryable — true when error_category is INFRASTRUCTURE or TIMEOUT (transient causes), false for ASSERTION/LOCATOR/OTHER. Absent when no
+pattern matched.
 
-**Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
+Zero-tests guard (RUN-001): when the sf command exits 0, the results directory was located, and at least one JUnit XML file parsed successfully
+but contains zero executed test cases, the response includes a warnings[] array containing a RUN-001 (#warning-codes) message. This is almost
+always a typo such as testCase vs testCases (or some other unknown key) in provardx-properties.json — the run silently selected nothing. The
+warning is additive and never flips exitCode or sets isError; the failure surface remains driven by the underlying sf exit code.
 
----
+▎ Why RUN-001 stays silent when no JUnit data is available: if the results directory cannot be located, contains no XML files, or every XML file
+▎  fails to parse, the tool genuinely has no data on which to assert "zero tests ran" — the absence of parsed results is just "we don't know
+▎ what ran". In those cases the response carries details.warning (explaining why structured step data is missing) and RUN-001 is suppressed to
+▎ avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
+
+Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND
+Warning codes: RUN-001 (zero tests executed despite success)
+```
 
 ### `provar_automation_compile`
 
