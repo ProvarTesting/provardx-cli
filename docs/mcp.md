@@ -1410,7 +1410,9 @@ After each run, the tool scans the results directory for JUnit XML files and add
 
 Each entry represents one test case. `status` is `"pass"`, `"fail"`, or `"skip"`. If the results directory cannot be located or contains no JUnit XML, `details.warning` explains why and `steps` is absent.
 
-**Zero-tests guard (RUN-001):** when the sf command exits 0 but the JUnit report contains zero executed test cases, the response includes a `warnings[]` array containing a [`RUN-001`](#warning-codes) message. This is almost always a typo such as `testCase` vs `testCases` (or some other unknown key) in `provardx-properties.json` — the run silently selected nothing. The warning is additive and never flips `exitCode` or sets `isError`; the failure surface remains driven by the underlying `sf` exit code.
+**Zero-tests guard (RUN-001):** when the sf command exits 0, the results directory was located, **and at least one JUnit XML file parsed successfully** but contains zero executed test cases, the response includes a `warnings[]` array containing a [`RUN-001`](#warning-codes) message. This is almost always a typo such as `testCase` vs `testCases` (or some other unknown key) in `provardx-properties.json` — the run silently selected nothing. The warning is additive and never flips `exitCode` or sets `isError`; the failure surface remains driven by the underlying `sf` exit code.
+
+> **Why RUN-001 stays silent when no JUnit data is available:** if the results directory cannot be located, contains no XML files, or every XML file fails to parse, the tool genuinely has no data on which to assert "zero tests ran" — the absence of parsed results is just "we don't know what ran". In those cases the response carries `details.warning` (explaining why structured step data is missing) and RUN-001 is suppressed to avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
 
 **Error codes:** `AUTOMATION_TESTRUN_FAILED`, `SF_NOT_FOUND`
 **Warning codes:** `RUN-001` (zero tests executed despite success)

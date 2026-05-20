@@ -199,7 +199,10 @@ describe('automationTools', () => {
       }
     });
 
-    it('omits steps[] and adds details.warning when results dir has no XML', () => {
+    it('omits steps[] and adds details.warning when results dir has no XML — RUN-001 stays silent', () => {
+      // PDX-486 follow-up: when the results dir is resolvable but contains zero XML files,
+      // we have no data on which to claim "zero tests executed". parsedAny is false, so
+      // RUN-001 must NOT fire; the missing-data case is surfaced via details.warning only.
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-empty-'));
       setSfResultsPathForTesting(tmpDir);
 
@@ -211,15 +214,22 @@ describe('automationTools', () => {
         assert.ok(body.details, 'details should be present');
         const details = body.details as Record<string, unknown>;
         assert.ok(typeof details.warning === 'string', 'details.warning should be a string');
+        assert.equal(body.warnings, undefined, 'RUN-001 must NOT fire when no XML data is parseable');
       } finally {
         setSfResultsPathForTesting(undefined);
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
     });
 
-    it('omits steps[] and adds details.warning when results dir contains malformed XML', () => {
+    it('omits steps[] and adds details.warning when results dir contains malformed XML — RUN-001 stays silent', () => {
+      // PDX-486 follow-up: if every XML file in the results dir fails to parse, parsedAny
+      // is false. RUN-001 must stay silent — the agent should be steered toward "why is
+      // the JUnit output malformed?" (via details.warning), not toward a properties typo.
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'junit-bad-'));
-      fs.writeFileSync(path.join(tmpDir, 'results.xml'), '<not valid xml < >', 'utf-8');
+      // fast-xml-parser is permissive about *some* malformed text — this input shape (truncated
+      // before any matchable close tag) is one that genuinely throws under the strict isArray
+      // config used in antTools.parseJUnitResults, exercising the parsedAny=false branch.
+      fs.writeFileSync(path.join(tmpDir, 'results.xml'), '<this is < not valid xml', 'utf-8');
       setSfResultsPathForTesting(tmpDir);
 
       try {
@@ -228,6 +238,9 @@ describe('automationTools', () => {
         const body = parseBody(result);
         assert.equal(body.steps, undefined, 'steps should be absent when XML is malformed');
         assert.ok(body.details, 'details should be present with warning');
+        const details = body.details as Record<string, unknown>;
+        assert.ok(typeof details.warning === 'string', 'details.warning should describe the parse failure');
+        assert.equal(body.warnings, undefined, 'RUN-001 must NOT fire when XML data is unparseable');
       } finally {
         setSfResultsPathForTesting(undefined);
         fs.rmSync(tmpDir, { recursive: true, force: true });

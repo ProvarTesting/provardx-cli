@@ -237,15 +237,22 @@ type JUnitIntrospection = {
   stepCount: number;
   parseWarning: string | undefined;
   resultsPathResolved: boolean;
+  /**
+   * True iff at least one JUnit XML file was located AND parsed without throwing.
+   * Gates RUN-001: a `stepCount === 0` only means "zero tests executed" when we know we
+   * actually have parseable data. With `parsedAny === false` the count is "we don't know",
+   * which must stay silent (details.warning already covers it).
+   */
+  parsedAny: boolean;
 };
 
 function introspectJUnit(config: ServerConfig): JUnitIntrospection {
   const resultsPath = readResultsPathFromSfConfig(config);
   if (!resultsPath) {
-    return { steps: [], stepCount: 0, parseWarning: undefined, resultsPathResolved: false };
+    return { steps: [], stepCount: 0, parseWarning: undefined, resultsPathResolved: false, parsedAny: false };
   }
-  const { steps, warning } = parseJUnitResults(resultsPath);
-  return { steps, stepCount: steps.length, parseWarning: warning, resultsPathResolved: true };
+  const { steps, warning, parsedAny } = parseJUnitResults(resultsPath);
+  return { steps, stepCount: steps.length, parseWarning: warning, resultsPathResolved: true, parsedAny };
 }
 
 const ZERO_TESTS_MESSAGE =
@@ -266,7 +273,7 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
           'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
           'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
-          'Zero-tests guard: if the sf exit code is 0 but the JUnit report contains no executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json.',
+          'Zero-tests guard: if the sf exit code is 0, the results directory was located, and at least one JUnit XML file parsed successfully but contains zero executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json. When no JUnit data is available (dir missing or all XML unparseable), `details.warning` is set instead and RUN-001 stays silent.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
         ].join(' '),
         'Run local Provar tests via sf CLI; requires config_load first. Surfaces RUN-001 on zero-tests-executed.'
@@ -337,11 +344,15 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
 
         // RUN-001: sf reported success but zero tests actually executed.
         // Almost always a typo in the testCase / testCases field of provardx-properties.json.
-        // Only fires when the results dir was located (otherwise the absent step count is
-        // just "we don't know what ran", not "zero tests ran" — that case is already
-        // surfaced via details.warning above). Fires regardless of parse warning so the
-        // agent gets the typo hint even when the JUnit XML is degenerate.
-        if (junit.resultsPathResolved && junit.stepCount === 0) {
+        // Only fires when:
+        //   1. The results dir was located (resultsPathResolved), AND
+        //   2. At least one JUnit XML file was successfully parsed (parsedAny).
+        // Without (2) `stepCount === 0` just means "we don't have parseable data" — not
+        // "zero tests ran" — and the agent would be misdirected toward a typo when the
+        // real issue is a missing/unparseable results dir. That case is already surfaced
+        // via `details.warning` from the parse layer. With parsedAny === true and zero
+        // extracted steps, we know the selector genuinely matched nothing.
+        if (junit.resultsPathResolved && junit.parsedAny && junit.stepCount === 0) {
           const warningStr = formatWarning(WARNING_CODES.RUN_001, ZERO_TESTS_MESSAGE);
           // Append rather than overwrite so future warning emitters (e.g. JUNIT-001 mismatch
           // in PDX-491) can coexist on the same response without stepping on each other.
