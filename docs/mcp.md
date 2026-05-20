@@ -50,15 +50,17 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar_testplan_add-instance](#provar_testplan_add-instance)
   - [provar_testplan_create-suite](#provar_testplan_create-suite)
   - [provar_testplan_remove-instance](#provar_testplan_remove-instance)
-- [Data-driven execution](#data-driven-execution)
-- [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
-  - [provar_nitrox_discover](#provar_nitrox_discover)
-  - [provar_nitrox_read](#provar_nitrox_read)
-  - [provar_nitrox_validate](#provar_nitrox_validate)
-  - [provar_nitrox_generate](#provar_nitrox_generate)
-  - [provar_nitrox_patch](#provar_nitrox_patch)
-- [Quality Hub API tools](#quality-hub-api-tools)
-  - [provar_qualityhub_examples_retrieve](#provar_qualityhub_examples_retrieve)
+  - [Org metadata access](#org-metadata-access)
+    - [provar_org_describe](#provar_org_describe)
+  - [Data-driven execution](#data-driven-execution)
+  - [NitroX — Hybrid Model page objects](#nitrox--hybrid-model-page-objects)
+    - [provar_nitrox_discover](#provar_nitrox_discover)
+    - [provar_nitrox_read](#provar_nitrox_read)
+    - [provar_nitrox_validate](#provar_nitrox_validate)
+    - [provar_nitrox_generate](#provar_nitrox_generate)
+    - [provar_nitrox_patch](#provar_nitrox_patch)
+  - [Quality Hub API tools](#quality-hub-api-tools)
+    - [provar_qualityhub_examples_retrieve](#provar_qualityhub_examples_retrieve)
   - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [MCP Prompts](#mcp-prompts)
   - [Migration prompts](#migration-prompts)
@@ -1766,6 +1768,136 @@ When `DATA-001` fires in direct mode, wire the test case into a plan via [`prova
 4. Re-run [`provar_testcase_validate`](#provar_testcase_validate) on the test case file — DATA-001 should no longer appear.
 
 The constraint is also referenced in the [`provar_testcase_generate`](#provar_testcase_generate) tool description so an agent constructing a new data-driven test case sees the limitation up front, and in [`provar_automation_testrun`](#provar_automation_testrun) so an agent triggering a run is reminded that direct-mode execution will not iterate.
+
+---
+
+## Org metadata access
+
+Tools that surface Salesforce org metadata to authoring tools without making a live API call. These read from data that has already been written to disk by the Provar IDE — they do **not** trigger metadata downloads themselves and they do **not** require an authenticated session.
+
+> **Distinct from `.provarCaches`:** the runtime cache used by `provar_automation_testrun` lives at `<resultsPath>/.provarCaches/` and is regenerated per run. The cache read by `provar_org_describe` lives in the Provar IDE **workspace** (`<workspace>/.metadata/<connection_name>/`) and is updated when a user opens the project and loads a connection in the IDE.
+
+### `provar_org_describe`
+
+Read cached Salesforce describe data for one connection from the Provar workspace `.metadata` cache. Returns the object list, required-field schema, and a cache age. Use this before calling `provar_testcase_generate` so the generator can produce steps with correctly-typed field values.
+
+**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
+
+**Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that exists:
+
+1. `<parent-of-project>/workspace-<basename>/` — sibling workspace pattern (default for Provar IDE in this workspace layout).
+2. `<parent-of-project>/Provar_Workspaces/workspace-<name-dashes>/` — shared `Provar_Workspaces` directory.
+3. `~/Provar/workspace-<name-dashes>/` — user-home fallback.
+
+`<name-dashes>` is the project's basename with whitespace collapsed to single dashes and lowercased: `"My Project"` → `"my-project"`.
+
+| Input             | Type                    | Required | Default      | Description                                                                                                                                                                    |
+| ----------------- | ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `project_path`    | string                  | yes      | —            | Absolute path to the Provar test project root (the directory containing `.testproject`). Must be within `--allowed-paths`.                                                     |
+| `connection_name` | string                  | yes      | —            | Connection name as defined in `.testproject` (e.g. `"MyOrg"`). Must match the `.metadata` subdirectory exactly. Path separators in this value are rejected (`PATH_TRAVERSAL`). |
+| `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the connection directory.                                                  |
+| `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                           |
+
+| Output field              | Description                                                                                                                                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requestId`               | UUID for this invocation. Echoed in MCP server logs for cross-correlation. Consistent with the rest of the MCP tool surface.                                                                                                             |
+| `workspace_path`          | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists (or all candidates were outside `--allowed-paths`).                                                                    |
+| `cache_age_ms`            | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                                                                                                                    |
+| `objects[]`               | Array of `{ name, exists, required_fields, field_count, error_message? }`. `exists` is `true` (cache file present), `false` (requested but not cached), or `null` (cache miss — the whole `.metadata/<connection>` directory is absent). |
+| `objects[].error_message` | Present **only** when a cache file existed but failed to parse (`exists: true, field_count: 0`). Lets the agent distinguish a corrupt / unsupported cache file from a missing one.                                                       |
+| `details.suggestion`      | Present **only** on cache miss. Tells the agent how to populate the cache (open Provar IDE) or how to proceed without it (inline hints).                                                                                                 |
+
+**Example — happy path:**
+
+```jsonc
+// Request
+{
+  "project_path": "/Users/me/git/MyProject",
+  "connection_name": "MyOrg",
+  "objects": ["Account", "Contact"],
+  "field_filter": "required"
+}
+
+// Response
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [
+        { "name": "Name", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 24
+    },
+    {
+      "name": "Contact",
+      "exists": true,
+      "required_fields": [
+        { "name": "LastName", "type": "string", "default_value": null, "nillable": false }
+      ],
+      "field_count": 31
+    }
+  ]
+}
+```
+
+**Example — cache miss:**
+
+```jsonc
+// Response when the .metadata/<connection_name> directory does not exist
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": null,
+  "objects": [{ "name": "Account", "exists": null, "required_fields": [], "field_count": 0 }],
+  "details": {
+    "suggestion": "Open this project in Provar IDE and load the 'MyOrg' connection, or pass field-type hints inline to provar_testcase_generate."
+  }
+}
+```
+
+**Example — parse error on a cached file:**
+
+```jsonc
+// Response when Account.json exists but is corrupt / unparseable
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [],
+      "field_count": 0,
+      "error_message": "Failed to parse cache file (Account.json): Unexpected token } in JSON at position 42"
+    }
+  ]
+}
+```
+
+**On-disk cache schema (one file per object).** The tool reads `.json` first, then `.xml`, then `.object` as a fallback:
+
+```jsonc
+// <workspace>/.metadata/<connection_name>/Account.json
+{
+  "name": "Account",
+  "fields": [
+    { "name": "Name", "type": "string", "defaultValue": null, "nillable": false },
+    { "name": "Phone", "type": "phone", "defaultValue": null, "nillable": true }
+  ]
+}
+```
+
+**Error codes:**
+
+| Code               | Meaning                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| `PATH_NOT_ALLOWED` | `project_path` or the resolved workspace path is outside `--allowed-paths`.                    |
+| `PATH_TRAVERSAL`   | `project_path` contains `..` segments, or `connection_name` contains a path separator or `..`. |
 
 ---
 

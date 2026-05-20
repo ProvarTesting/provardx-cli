@@ -461,6 +461,36 @@ async function runTests() {
       test_item_id: '1',
     });
 
+  // ── 54. provar_org_describe — cache miss ─────────────────────────────────
+  // TMP has no workspace at all → cache-miss response with details.suggestion
+  if (inGroup('inspect'))
+    await callTool('provar_org_describe', {
+      project_path: TMP,
+      connection_name: 'SmokeOrg',
+      objects: ['Account'],
+    });
+
+  // ── 55. provar_org_describe — happy path ─────────────────────────────────
+  // Set up a sibling workspace + .metadata/<connection> with one fake object.
+  if (inGroup('inspect')) {
+    const fs = require('fs');
+    const orgProject = path.join(TMP, 'org-describe-smoke-project');
+    fs.mkdirSync(orgProject, { recursive: true });
+    const cxnDir = path.join(TMP, 'workspace-org-describe-smoke-project', '.metadata', 'SmokeOrg');
+    fs.mkdirSync(cxnDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cxnDir, 'Account.json'),
+      JSON.stringify({
+        name: 'Account',
+        fields: [{ name: 'Name', type: 'string', defaultValue: null, nillable: false }],
+      })
+    );
+    await callTool('provar_org_describe', {
+      project_path: orgProject,
+      connection_name: 'SmokeOrg',
+    });
+  }
+
   server.stdin.end();
 }
 
