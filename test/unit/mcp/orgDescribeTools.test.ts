@@ -65,6 +65,31 @@ function writeJsonCache(connectionDir: string, objectName: string, fields: Cache
   );
 }
 
+/**
+ * Write a legacy .object / .xml cache file (CustomObject metadata) with the given fields.
+ * `required` is emitted as the string "true" / "false" — but fast-xml-parser with the
+ * default parseTagValue=true will coerce it to a boolean before reaching the reader.
+ * The implementation must accept BOTH forms, which is what the legacy-format tests assert.
+ */
+function writeXmlCache(
+  connectionDir: string,
+  objectName: string,
+  fields: Array<{ name: string; type: string; required: boolean }>,
+  ext: '.xml' | '.object' = '.xml'
+): void {
+  fs.mkdirSync(connectionDir, { recursive: true });
+  const fieldsXml = fields
+    .map(
+      (f) =>
+        `  <fields>\n    <fullName>${f.name}</fullName>\n    <type>${f.type}</type>\n    <required>${String(
+          f.required
+        )}</required>\n  </fields>`
+    )
+    .join('\n');
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<CustomObject>\n${fieldsXml}\n</CustomObject>\n`;
+  fs.writeFileSync(path.join(connectionDir, `${objectName}${ext}`), xml, 'utf-8');
+}
+
 // ── Test setup ─────────────────────────────────────────────────────────────────
 
 let tmpRoot: string;
@@ -179,7 +204,29 @@ describe('provar_org_describe — workspace discovery', () => {
   });
 
   it('discoverWorkspace returns null when no candidate exists', () => {
-    assert.equal(discoverWorkspace(projectPath), null);
+    assert.equal(discoverWorkspace(projectPath, [tmpRoot]), null);
+  });
+
+  it('discoverWorkspace skips candidates outside allowedPaths without touching the filesystem', () => {
+    // Create a sibling workspace that DOES exist on disk but lies outside the allowed root.
+    // We force this by creating a parallel tmp tree and only allowing tmpRoot.
+    // The sibling pattern resolves to <parent>/workspace-<basename>; the parent of
+    // projectPath is tmpRoot, so the sibling itself is inside the allowed set —
+    // which is what we want for the happy case. To exercise the policy skip we use
+    // a separate "outside" project path whose sibling candidate lives outside.
+    const outsideRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'org-describe-outside-')));
+    try {
+      const outsideProject = path.join(outsideRoot, 'OtherProject');
+      fs.mkdirSync(outsideProject, { recursive: true });
+      const outsideSibling = path.join(outsideRoot, 'workspace-OtherProject');
+      fs.mkdirSync(outsideSibling, { recursive: true });
+
+      // With only tmpRoot allowed, discoverWorkspace MUST NOT return the outside sibling
+      // even though it exists on disk.
+      assert.equal(discoverWorkspace(outsideProject, [tmpRoot]), null);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -401,5 +448,147 @@ describe('provar_org_describe — objects filter', () => {
     const ghost = objects.find((o) => o.name === 'Ghost');
     assert.ok(ghost);
     assert.equal(ghost.exists, false, 'object not in cache → exists=false');
+  });
+});
+
+// ── (h) Legacy cache formats — .xml / .object ────────────────────────────────
+
+describe('provar_org_describe — legacy cache formats', () => {
+  it('(h.1) parses .xml CustomObject metadata and classifies required vs nillable correctly', () => {
+    // Regression guard for the required-flag bug: fast-xml-parser's default
+    // parseTagValue=true coerces "<required>true</required>" to the boolean true.
+    // The reader must treat boolean and string forms identically.
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    const connectionDir = path.join(siblingWorkspace, '.metadata', 'MyOrg');
+    writeXmlCache(
+      connectionDir,
+      'Account',
+      [
+        { name: 'Name', type: 'string', required: true },
+        { name: 'Phone', type: 'phone', required: false },
+      ],
+      '.xml'
+    );
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'MyOrg',
+      objects: ['Account'],
+      field_filter: 'all',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{
+      name: string;
+      exists: boolean | null;
+      required_fields: Array<{ name: string; nillable: boolean }>;
+      field_count: number;
+    }>;
+    assert.equal(objects.length, 1);
+    assert.equal(objects[0].exists, true);
+    assert.equal(objects[0].field_count, 2);
+    const byName = new Map(objects[0].required_fields.map((f) => [f.name, f.nillable]));
+    assert.equal(
+      byName.get('Name'),
+      false,
+      'required field should have nillable=false (NOT misclassified as nillable)'
+    );
+    assert.equal(byName.get('Phone'), true, 'non-required field should have nillable=true');
+  });
+
+  it('(h.2) parses .object CustomObject metadata (legacy Eclipse layout)', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    const connectionDir = path.join(siblingWorkspace, '.metadata', 'MyOrg');
+    writeXmlCache(
+      connectionDir,
+      'Contact',
+      [
+        { name: 'LastName', type: 'string', required: true },
+        { name: 'Email', type: 'email', required: false },
+      ],
+      '.object'
+    );
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'MyOrg',
+      objects: ['Contact'],
+      field_filter: 'required',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{
+      name: string;
+      exists: boolean | null;
+      required_fields: Array<{ name: string }>;
+      field_count: number;
+    }>;
+    assert.equal(objects[0].exists, true);
+    assert.equal(objects[0].field_count, 2, 'field_count counts all parsed fields, regardless of filter');
+    // field_filter='required' → only nillable=false survives
+    const names = objects[0].required_fields.map((f) => f.name);
+    assert.deepEqual(names, ['LastName'], 'only the required field should pass the filter');
+  });
+});
+
+// ── (i) Parse-error reporting ─────────────────────────────────────────────────
+
+describe('provar_org_describe — parse errors', () => {
+  it('(i) returns exists=true with error_message when a cache file is corrupt', () => {
+    // A cache file that EXISTS but does not parse must NOT be reported as exists=false
+    // (that would conflate "not cached" with "corrupt") — the contract is exists=true,
+    // field_count=0, error_message set.
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    const connectionDir = path.join(siblingWorkspace, '.metadata', 'MyOrg');
+    fs.mkdirSync(connectionDir, { recursive: true });
+    fs.writeFileSync(path.join(connectionDir, 'Account.json'), '{ not valid json', 'utf-8');
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'MyOrg',
+      objects: ['Account'],
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{
+      name: string;
+      exists: boolean | null;
+      field_count: number;
+      error_message?: string;
+    }>;
+    assert.equal(objects.length, 1);
+    assert.equal(objects[0].exists, true, 'corrupt cache file is "present" — not missing');
+    assert.equal(objects[0].field_count, 0);
+    const errMsg = objects[0].error_message;
+    assert.ok(errMsg, 'error_message should describe the parse failure');
+    assert.ok(errMsg.includes('Account.json'), `error_message should reference the file name; got: ${errMsg}`);
+  });
+});
+
+// ── (j) Connection-name traversal — bare `..` ─────────────────────────────────
+
+describe('provar_org_describe — connection_name validation', () => {
+  it('(j) rejects bare ".." connection_name with PATH_TRAVERSAL and a clear message', () => {
+    // Regression guard for the broadened error message: the validator rejects `..`
+    // even when no separator is present. The message must mention BOTH conditions.
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    fs.mkdirSync(path.join(siblingWorkspace, '.metadata'), { recursive: true });
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: '..',
+    });
+
+    assert.equal(isError(result), true);
+    const body = parseText(result);
+    assert.equal(body['error_code'], 'PATH_TRAVERSAL');
+    const msg = body['message'] as string;
+    assert.ok(
+      /path separators/i.test(msg) && msg.includes('..'),
+      `error message should mention both path separators and '..'; got: ${msg}`
+    );
   });
 });

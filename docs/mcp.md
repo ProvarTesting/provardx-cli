@@ -1715,12 +1715,14 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 | `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the connection directory.                                                  |
 | `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                           |
 
-| Output field         | Description                                                                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `workspace_path`     | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists.                                  |
-| `cache_age_ms`       | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                               |
-| `objects[]`          | Array of `{ name, exists, required_fields, field_count }`. `exists` is `true` (cached), `false` (requested but not cached), or `null` (cache miss). |
-| `details.suggestion` | Present **only** on cache miss. Tells the agent how to populate the cache (open Provar IDE) or how to proceed without it (inline hints).            |
+| Output field              | Description                                                                                                                                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `requestId`               | UUID for this invocation. Echoed in MCP server logs for cross-correlation. Consistent with the rest of the MCP tool surface.                                                                                                             |
+| `workspace_path`          | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists (or all candidates were outside `--allowed-paths`).                                                                    |
+| `cache_age_ms`            | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                                                                                                                    |
+| `objects[]`               | Array of `{ name, exists, required_fields, field_count, error_message? }`. `exists` is `true` (cache file present), `false` (requested but not cached), or `null` (cache miss — the whole `.metadata/<connection>` directory is absent). |
+| `objects[].error_message` | Present **only** when a cache file existed but failed to parse (`exists: true, field_count: 0`). Lets the agent distinguish a corrupt / unsupported cache file from a missing one.                                                       |
+| `details.suggestion`      | Present **only** on cache miss. Tells the agent how to populate the cache (open Provar IDE) or how to proceed without it (inline hints).                                                                                                 |
 
 **Example — happy path:**
 
@@ -1735,6 +1737,7 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 
 // Response
 {
+  "requestId": "01HEXX...K7P",
   "workspace_path": "/Users/me/git/workspace-MyProject",
   "cache_age_ms": 1839200,
   "objects": [
@@ -1763,12 +1766,33 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 ```jsonc
 // Response when the .metadata/<connection_name> directory does not exist
 {
+  "requestId": "01HEXX...K7P",
   "workspace_path": "/Users/me/git/workspace-MyProject",
   "cache_age_ms": null,
   "objects": [{ "name": "Account", "exists": null, "required_fields": [], "field_count": 0 }],
   "details": {
     "suggestion": "Open this project in Provar IDE and load the 'MyOrg' connection, or pass field-type hints inline to provar_testcase_generate."
   }
+}
+```
+
+**Example — parse error on a cached file:**
+
+```jsonc
+// Response when Account.json exists but is corrupt / unparseable
+{
+  "requestId": "01HEXX...K7P",
+  "workspace_path": "/Users/me/git/workspace-MyProject",
+  "cache_age_ms": 1839200,
+  "objects": [
+    {
+      "name": "Account",
+      "exists": true,
+      "required_fields": [],
+      "field_count": 0,
+      "error_message": "Failed to parse cache file (Account.json): Unexpected token } in JSON at position 42"
+    }
+  ]
 }
 ```
 

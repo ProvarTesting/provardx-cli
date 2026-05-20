@@ -37,6 +37,8 @@ export interface OrgDescribeObject {
   exists: boolean | null;
   required_fields: OrgDescribeField[];
   field_count: number;
+  /** Present only when the cache file existed but failed to parse. */
+  error_message?: string;
 }
 
 export interface OrgDescribeResult {
@@ -98,9 +100,26 @@ export function workspaceCandidates(projectPath: string): string[] {
   ];
 }
 
-/** Returns the first candidate workspace that exists, or null. */
-export function discoverWorkspace(projectPath: string): string | null {
+/**
+ * Returns the first candidate workspace that exists AND is within allowedPaths, or null.
+ *
+ * Path policy is enforced PER CANDIDATE before any filesystem call: a candidate that
+ * sits outside `--allowed-paths` is silently skipped (it is not an error — discovery
+ * just moves on to the next). This means we never call fs.existsSync / fs.statSync
+ * against directories that the operator has explicitly placed off-limits, including
+ * the user-home fallback (~/Provar/...) when home sits outside the policy.
+ *
+ * When allowedPaths is empty (unrestricted mode), assertPathAllowed is a no-op and
+ * all candidates are probed exactly as before.
+ */
+export function discoverWorkspace(projectPath: string, allowedPaths: string[] = []): string | null {
   for (const candidate of workspaceCandidates(projectPath)) {
+    try {
+      assertPathAllowed(candidate, allowedPaths);
+    } catch {
+      // Candidate outside policy — skip without touching the filesystem.
+      continue;
+    }
     try {
       if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
         return candidate;
@@ -142,13 +161,18 @@ function readXmlCacheFile(filePath: string): CachedObject {
   for (const f of fieldsRaw as Array<Record<string, unknown>>) {
     const name = (f['fullName'] ?? f['name']) as string | undefined;
     if (!name) continue;
+    // fast-xml-parser with parseTagValue=true (the default) coerces `<required>true</required>`
+    // into the boolean true; with parseTagValue=false it would stay as the string "true".
+    // Accept BOTH forms so we don't misclassify required fields as nillable on either path.
+    const requiredRaw = f['required'];
+    const isRequired = requiredRaw === true || requiredRaw === 'true';
     fields.push({
       name,
       type: (f['type'] as string | undefined) ?? 'unknown',
       defaultValue: (f['defaultValue'] as string | undefined) ?? null,
       // XML defaults: required = !nillable. In the .object format, "required" is rare,
       // so we default to nillable=true (optional) unless explicitly required.
-      nillable: f['required'] === 'true' ? false : true,
+      nillable: !isRequired,
     });
   }
   return { name: path.basename(filePath, path.extname(filePath)), fields };
@@ -194,8 +218,19 @@ function readObject(connectionDir: string, objectName: string, fieldFilter: 'req
   try {
     cached = path.extname(file) === '.json' ? readJsonCacheFile(file) : readXmlCacheFile(file);
   } catch (e) {
-    log('warn', 'org_describe: failed to parse cache file', { file, error: (e as Error).message });
-    return { name: objectName, exists: false, required_fields: [], field_count: 0 };
+    const errorMessage = (e as Error).message;
+    log('warn', 'org_describe: failed to parse cache file', { file, error: errorMessage });
+    // The cache file is present but unreadable. Report exists=true so the caller
+    // can distinguish "cache corrupt / unsupported format" from "object not cached"
+    // (exists=false). field_count=0 since we have no parsed fields, and error_message
+    // carries the underlying parse failure for diagnostics.
+    return {
+      name: objectName,
+      exists: true,
+      required_fields: [],
+      field_count: 0,
+      error_message: `Failed to parse cache file (${path.basename(file)}): ${errorMessage}`,
+    };
   }
 
   const allFields = cached.fields ?? [];
@@ -258,10 +293,12 @@ function resolveConnectionDir(
   // Reject path-shaped connection names outright. A real connection name from a
   // .testproject is an identifier (e.g. "MyOrg"); any separator or traversal
   // segment is almost certainly a misuse or injection attempt.
-  if (connectionName.includes('/') || connectionName.includes('\\') || connectionName.split(/[/\\]+/).includes('..')) {
+  const hasSeparator = connectionName.includes('/') || connectionName.includes('\\');
+  const hasTraversal = connectionName === '..' || connectionName.split(/[/\\]+/).includes('..');
+  if (hasSeparator || hasTraversal) {
     throw new PathPolicyError(
       'PATH_TRAVERSAL',
-      `Invalid connection_name (contains path separators): ${connectionName}`
+      `Invalid connection_name (must not contain path separators or directory-traversal segments ('..')): ${connectionName}`
     );
   }
 
@@ -383,7 +420,7 @@ export function registerOrgDescribe(server: McpServer, config: ServerConfig): vo
 
       try {
         assertPathAllowed(args.project_path, config.allowedPaths);
-        const workspacePath = discoverWorkspace(args.project_path);
+        const workspacePath = discoverWorkspace(args.project_path, config.allowedPaths);
         const { connectionDir, resolvedWorkspace } = resolveConnectionDir(
           workspacePath,
           args.connection_name,
