@@ -97,10 +97,15 @@ export function resolveTestCasePlanMode(opts: ResolveOptions): ResolvedTestCaseM
 /**
  * Resolve the active properties file path. Prefers an explicit override
  * (used by tests), then `~/.sf/config.json`'s `PROVARDX_PROPERTIES_FILE_PATH`.
+ *
+ * Both the override and the value read from `~/.sf/config.json` are funnelled
+ * through `assertPathAllowed` so a caller cannot trick the resolver into
+ * reading a properties file outside the configured `allowedPaths`. Any policy
+ * violation collapses to `null` to preserve the helper's best-effort contract.
  */
 function readPropertiesFilePath(opts: ResolveOptions): string | null {
   if (opts.propertiesFilePathOverride) {
-    return opts.propertiesFilePathOverride;
+    return enforceAllowed(opts.propertiesFilePathOverride, opts.allowedPaths);
   }
   try {
     const sfConfigPath = opts.sfConfigPathOverride ?? path.join(os.homedir(), '.sf', 'config.json');
@@ -108,10 +113,29 @@ function readPropertiesFilePath(opts: ResolveOptions): string | null {
     const sfConfig = JSON.parse(fs.readFileSync(sfConfigPath, 'utf-8')) as Record<string, unknown>;
     const propsPath = sfConfig['PROVARDX_PROPERTIES_FILE_PATH'] as string | undefined;
     if (!propsPath) return null;
-    if (!fs.existsSync(propsPath)) return null;
-    // Honour allowed-paths for the properties file too.
-    assertPathAllowed(propsPath, opts.allowedPaths);
-    return propsPath;
+    return enforceAllowed(propsPath, opts.allowedPaths);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a candidate properties-file path through `assertPathAllowed`, then
+ * canonicalize via `fs.realpathSync` when the file exists so a symlink
+ * inside an allowed directory cannot redirect the read outside it. Returns
+ * `null` on any policy violation, missing file, or unexpected error — the
+ * caller treats `null` as "mode unknown" and falls back to default behaviour.
+ */
+function enforceAllowed(candidate: string, allowedPaths: string[]): string | null {
+  try {
+    const resolved = path.resolve(candidate);
+    assertPathAllowed(resolved, allowedPaths);
+    if (!fs.existsSync(resolved)) return null;
+    try {
+      return fs.realpathSync(resolved);
+    } catch {
+      return resolved;
+    }
   } catch {
     return null;
   }

@@ -174,4 +174,53 @@ describe('resolveTestCasePlanMode', () => {
     });
     assert.equal(result.mode, 'unknown');
   });
+
+  it('honours assertPathAllowed on propertiesFilePathOverride: override inside allowed paths is consulted', () => {
+    // Security regression guard: a properties-file override path must pass the
+    // path-policy check before the resolver opens it. When the override sits
+    // inside the allowed-paths tree the helper should consult it normally and
+    // return the resolved mode (here: "direct").
+    const { testCasePath, propertiesPath, projectPath } = buildProject({
+      root: tmp,
+      references: 'direct-testCase',
+      wirePlan: false,
+    });
+    const result = resolveTestCasePlanMode({
+      testCaseFilePath: testCasePath,
+      allowedPaths: [tmp],
+      propertiesFilePathOverride: propertiesPath,
+    });
+    assert.equal(result.mode, 'direct');
+    assert.equal(result.projectPath, projectPath);
+  });
+
+  it('honours assertPathAllowed on propertiesFilePathOverride: override outside allowed paths is ignored without throwing', () => {
+    // Security regression guard for the Copilot-flagged path-policy bypass:
+    // the override must be funnelled through assertPathAllowed and a
+    // violation must collapse to 'unknown' rather than reading the file or
+    // throwing — the helper's contract is best-effort silent fallback.
+    const outsideRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pdx489-outside-'));
+    try {
+      const { testCasePath } = buildProject({
+        root: tmp,
+        references: 'direct-testCase',
+        wirePlan: false,
+      });
+      // Write a properties file OUTSIDE the allowed-paths tree.
+      const outsideProps = path.join(outsideRoot, 'provardx-properties.json');
+      fs.writeFileSync(
+        outsideProps,
+        JSON.stringify({ projectPath: outsideRoot, provarHome: '/tmp', resultsPath: 'r' })
+      );
+      const result = resolveTestCasePlanMode({
+        testCaseFilePath: testCasePath,
+        allowedPaths: [tmp],
+        propertiesFilePathOverride: outsideProps,
+      });
+      assert.equal(result.mode, 'unknown');
+      assert.equal(result.propertiesFilePath, undefined, 'must not expose a path it rejected');
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
+  });
 });
