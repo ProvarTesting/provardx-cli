@@ -150,6 +150,11 @@ const TOOL_DESCRIPTION = [
   'Variable references: pass values as "{VarName}" (braces); emitted as class="variable" <path element="VarName"/>.',
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
   'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
+  'valueClass auto-detection: argument values are typed automatically before XML emission. ' +
+    'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "datetime"; ' +
+    '"true"/"false" → "boolean"; numeric string (e.g. "42", "-5", "3.14") → "decimal"; otherwise "string". ' +
+    'Pass dates / booleans / numbers in those formats — Provar runtime silently discards date fields emitted as valueClass="string". ' +
+    'Note: numbers always emit valueClass="decimal" per the canonical Provar reference (there is no separate "integer" valueClass).',
   'Edit page objects: action=Edit targets require a compiled page object for the SF object. ' +
     'If none exists in the project page-objects directory, the locator binding will fail at runtime. ' +
     'For objects without a compiled Edit page object, use inline edit instead: sfIleActivate to activate the field, ' +
@@ -374,6 +379,40 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
 
 // ── XML builder ───────────────────────────────────────────────────────────────
 
+// PDX-493 (H3): infer the Salesforce `valueClass` attribute that should be emitted on a
+// `<value class="value" valueClass="..."/>` element from an argument's key + string value.
+//
+// Detection order:
+//   1. Explicit `fieldTypeHint` (from `field_type_hints` param or `provar_org_describe` cache — wired
+//      in PDX-492 H2b) wins if provided.
+//   2. ISO-8601 datetime → 'datetime'   (e.g. "2026-05-19T10:30:00", with optional fractional seconds
+//      and optional timezone). The regex is end-anchored so trailing garbage (e.g.
+//      "2026-05-19T10:30:00not-a-zone") is rejected as plain 'string'.
+//   3. ISO-8601 date     → 'date'       (e.g. "2026-05-19").
+//   4. Literal 'true' / 'false' → 'boolean'.
+//   5. Numeric string (integer or decimal, optional leading '-') → 'decimal'.
+//      Per `docs/PROVAR_TEST_STEP_REFERENCE.md` (lines 1338, 1428) the canonical Provar
+//      valueClass for numbers is `decimal` — there is no `integer` valueClass in the
+//      reference grammar, so both `42` and `3.14` emit as `valueClass="decimal"`.
+//   6. Else → 'string'.
+//
+// The `key` argument is reserved for future heuristics (e.g. SF naming conventions like *__c)
+// but is intentionally not consulted today — explicit hints + value-shape regexes are the
+// safer signal until org-describe is wired.
+export function inferSalesforceValueClass(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  key: string,
+  val: string,
+  fieldTypeHint?: 'date' | 'datetime' | 'boolean' | 'decimal' | 'string'
+): 'date' | 'datetime' | 'boolean' | 'decimal' | 'string' {
+  if (fieldTypeHint) return fieldTypeHint;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.test(val)) return 'datetime';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) return 'date';
+  if (val === 'true' || val === 'false') return 'boolean';
+  if (/^-?\d+(\.\d+)?$/.test(val)) return 'decimal';
+  return 'string';
+}
+
 // F1/F3: build class="compound" for strings that mix literal text with {VarName} tokens.
 function buildCompoundValue(val: string, indent: string): string {
   const i = `${indent}  `;
@@ -423,7 +462,11 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
   }
-  return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
+  // PDX-493 (H3): infer valueClass for date / datetime / boolean / decimal / string. The
+  // `fieldTypeHint` parameter on `inferSalesforceValueClass` is intentionally not threaded
+  // through here yet — it lands in PDX-492 (H2b) along with the `field_type_hints` tool input.
+  const inferred = inferSalesforceValueClass(key, val);
+  return `${indent}<value class="value" valueClass="${inferred}">${escapeXmlContent(val)}</value>`;
 }
 
 function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      ', apiId = ''): string {

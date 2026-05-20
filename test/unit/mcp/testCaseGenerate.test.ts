@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
-import { registerTestCaseGenerate } from '../../../src/mcp/tools/testCaseGenerate.js';
+import { registerTestCaseGenerate, inferSalesforceValueClass } from '../../../src/mcp/tools/testCaseGenerate.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -696,6 +696,231 @@ describe('provar_testcase_generate', () => {
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(xml.includes('valueClass="string"'), 'Expected lowercase valueClass="string"');
       assert.ok(!xml.includes('valueClass="String"'), 'Must not emit uppercase valueClass="String"');
+    });
+  });
+
+  // PDX-493 (H3): date/datetime/boolean/decimal valueClass dispatch via inferSalesforceValueClass.
+  // Numbers emit `valueClass="decimal"` per canonical reference (PROVAR_TEST_STEP_REFERENCE.md
+  // lines 1338, 1428) — there is no `integer` valueClass in the Provar grammar.
+  describe('PDX-493 — inferSalesforceValueClass helper', () => {
+    it('returns "datetime" for ISO-8601 datetime string', () => {
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00'), 'datetime');
+    });
+
+    it('returns "datetime" for ISO-8601 datetime with fractional seconds + zone', () => {
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00.123Z'), 'datetime');
+    });
+
+    it('returns "datetime" for ISO-8601 datetime with numeric timezone offset', () => {
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00+05:30'), 'datetime');
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00-0800'), 'datetime');
+    });
+
+    it('returns "string" for datetime-looking values with trailing garbage (end-anchored)', () => {
+      // Guards against the un-anchored regex bug: trailing junk after seconds must not
+      // be silently accepted as datetime.
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00not-a-zone'), 'string');
+    });
+
+    it('returns "date" for ISO-8601 date string', () => {
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19'), 'date');
+    });
+
+    it('returns "boolean" for "true"', () => {
+      assert.equal(inferSalesforceValueClass('IsActive', 'true'), 'boolean');
+    });
+
+    it('returns "boolean" for "false"', () => {
+      assert.equal(inferSalesforceValueClass('IsActive', 'false'), 'boolean');
+    });
+
+    it('returns "decimal" for positive integer string', () => {
+      assert.equal(inferSalesforceValueClass('Quantity', '42'), 'decimal');
+    });
+
+    it('returns "decimal" for negative integer string', () => {
+      assert.equal(inferSalesforceValueClass('Delta', '-5'), 'decimal');
+    });
+
+    it('returns "decimal" for positive decimal string', () => {
+      assert.equal(inferSalesforceValueClass('Amount', '3.14'), 'decimal');
+    });
+
+    it('returns "decimal" for negative decimal string', () => {
+      assert.equal(inferSalesforceValueClass('Adjustment', '-12.5'), 'decimal');
+    });
+
+    it('returns "string" for plain text', () => {
+      assert.equal(inferSalesforceValueClass('Name', 'Acme Corp'), 'string');
+    });
+
+    it('returns "decimal" not "date" for a short numeric string like "12"', () => {
+      // Edge case: the date regex requires the full ISO yyyy-mm-dd form, so a bare "12"
+      // is decimal, not date. Guards against false-positive date detection on numeric IDs.
+      assert.equal(inferSalesforceValueClass('Code', '12'), 'decimal');
+    });
+
+    it('returns "string" for date-looking strings that miss the ISO format', () => {
+      // Confirms the regex is strict: month/day shape matters.
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026/05/19'), 'string');
+      assert.equal(inferSalesforceValueClass('CloseDate', '05-19-2026'), 'string');
+    });
+
+    it('explicit fieldTypeHint wins over format detection', () => {
+      // Value looks like a string but the hint says it's a date — hint wins.
+      assert.equal(inferSalesforceValueClass('CloseDate', 'today', 'date'), 'date');
+      // Value looks like a date but the hint says string — hint wins (e.g. an external
+      // ID that happens to look like a date).
+      assert.equal(inferSalesforceValueClass('ExternalId', '2026-05-19', 'string'), 'string');
+      // Value is decimal, hint says boolean — hint wins.
+      assert.equal(inferSalesforceValueClass('IsActive', '1', 'boolean'), 'boolean');
+    });
+  });
+
+  describe('PDX-493 — valueClass emission in generated XML', () => {
+    it('emits valueClass="date" for an ISO-8601 date string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DateField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Opp',
+            attributes: { CloseDate: '2026-05-19' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="date">2026-05-19</value>'),
+        `Expected valueClass="date" for ISO date; got: ${xml}`
+      );
+    });
+
+    it('emits valueClass="datetime" for an ISO-8601 datetime string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DatetimeField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Event',
+            attributes: { StartTime: '2026-05-19T10:30:00' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="datetime">2026-05-19T10:30:00</value>'),
+        `Expected valueClass="datetime" for ISO datetime; got: ${xml}`
+      );
+    });
+
+    it('emits valueClass="boolean" for "true" / "false" literals', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'BoolField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Account',
+            attributes: { IsActive: 'true', IsDeleted: 'false' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="boolean">true</value>'),
+        `Expected valueClass="boolean" for "true"; got: ${xml}`
+      );
+      assert.ok(
+        xml.includes('valueClass="boolean">false</value>'),
+        `Expected valueClass="boolean" for "false"; got: ${xml}`
+      );
+    });
+
+    it('emits valueClass="decimal" for an integer-only string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'IntField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Opp',
+            attributes: { Quantity: '42' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('valueClass="decimal">42</value>'), `Expected valueClass="decimal" for "42"; got: ${xml}`);
+    });
+
+    it('emits valueClass="decimal" for a negative integer string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'NegIntField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Adjustment',
+            attributes: { Delta: '-5' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('valueClass="decimal">-5</value>'), `Expected valueClass="decimal" for "-5"; got: ${xml}`);
+    });
+
+    it('emits valueClass="decimal" for a positive decimal string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DecimalField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Opp',
+            attributes: { Amount: '3.14' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="decimal">3.14</value>'),
+        `Expected valueClass="decimal" for "3.14"; got: ${xml}`
+      );
+    });
+
+    it('emits valueClass="string" for plain text', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'StringField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Account',
+            attributes: { Name: 'Acme Corp' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="string">Acme Corp</value>'),
+        `Expected valueClass="string" for "Acme Corp"; got: ${xml}`
+      );
     });
   });
 
