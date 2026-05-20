@@ -545,7 +545,7 @@ Cross-cutting warning codes surfaced by validation, configuration, and run tooli
 | `RUN-001`        | `provar_automation_testrun` and friends | Test run produced no executable results — check input selection           |
 | `JUNIT-001`      | report / RCA tooling                    | JUnit results file is missing, empty, or not parseable                    |
 
-Warnings emitted programmatically follow the shape `WARNING [<CODE>]: <message>` — and when a typo is detected, the message is suffixed with `Did you mean '<suggestion>'?`. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
+Warning-code messages emitted via `formatWarning()` follow the shape `WARNING [<CODE>]: <message>` (optionally suffixed with ` Did you mean '<suggestion>'?` when a typo is detected). Other free-form warnings without a structured code — such as the placeholder warnings emitted by `provar_properties_validate` — remain plain strings. See `src/mcp/utils/warningCodes.ts` for the canonical enum.
 
 ---
 
