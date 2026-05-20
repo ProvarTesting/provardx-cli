@@ -717,3 +717,89 @@ describe('provar_testrun_rca mode=failures', () => {
     );
   });
 });
+
+// ── PDX-490: error_category + retryable on failures[] ─────────────────────────
+
+describe('provar_testrun_rca error_category and retryable (PDX-490)', () => {
+  function junitWithFailure(testName: string, failureText: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="Suite1" tests="1" failures="1" errors="0" skipped="0" time="2.0">
+    <testcase name="${testName}">
+      <failure message="fail">${failureText}</failure>
+    </testcase>
+  </testsuite>
+</testsuites>`;
+  }
+
+  function getFirstFailure(junit: string, name: string): Record<string, unknown> {
+    const resultsDir = makeResultsDir(path.join(tmpDir, name), junit);
+    const body = parseText(server.call('provar_testrun_rca', { project_path: tmpDir, results_path: resultsDir }));
+    const failures = body['failures'] as Array<Record<string, unknown>>;
+    assert.equal(failures.length, 1, `expected exactly one failure in ${name}`);
+    return failures[0];
+  }
+
+  it('classifies "Connection reset" as INFRASTRUCTURE and retryable=true', () => {
+    const f = getFirstFailure(junitWithFailure('NetTest', 'Connection reset by peer'), 'cat-infra');
+    assert.equal(f['error_category'], 'INFRASTRUCTURE');
+    assert.equal(f['retryable'], true);
+  });
+
+  it('classifies "ECONNRESET" as INFRASTRUCTURE and retryable=true', () => {
+    const f = getFirstFailure(junitWithFailure('NetTest2', 'socket error: ECONNRESET while reading'), 'cat-econnreset');
+    assert.equal(f['error_category'], 'INFRASTRUCTURE');
+    assert.equal(f['retryable'], true);
+  });
+
+  it('classifies NoSuchElementException as LOCATOR and retryable=false', () => {
+    const f = getFirstFailure(
+      junitWithFailure('LocTest', 'NoSuchElementException: Unable to locate element #submit'),
+      'cat-locator'
+    );
+    assert.equal(f['error_category'], 'LOCATOR');
+    assert.equal(f['retryable'], false);
+  });
+
+  it('classifies TimeoutException as TIMEOUT and retryable=true', () => {
+    const f = getFirstFailure(
+      junitWithFailure('TimeoutTest', 'TimeoutException: page did not load in 30s'),
+      'cat-timeout'
+    );
+    assert.equal(f['error_category'], 'TIMEOUT');
+    assert.equal(f['retryable'], true);
+  });
+
+  it('classifies AssertionException as ASSERTION and retryable=false', () => {
+    const f = getFirstFailure(
+      junitWithFailure('AssertTest', 'AssertionException: expected "yes" but got "no"'),
+      'cat-assertion'
+    );
+    assert.equal(f['error_category'], 'ASSERTION');
+    assert.equal(f['retryable'], false);
+  });
+
+  it('a plain "expected X but was Y" assertion text with no exception class is undefined (no match)', () => {
+    const f = getFirstFailure(junitWithFailure('PlainAssert', 'expected 5 but was 3'), 'cat-undef');
+    // No known exception class → error_category should be undefined / absent and retryable absent.
+    assert.equal(f['error_category'], undefined);
+    assert.equal(f['retryable'], undefined);
+  });
+
+  it('classifies WebDriverException (matches errorClassPatterns but not primary buckets) as OTHER and retryable=false', () => {
+    const f = getFirstFailure(junitWithFailure('DriverTest', 'WebDriverException: chrome not reachable'), 'cat-other');
+    assert.equal(f['error_category'], 'OTHER');
+    assert.equal(f['retryable'], false);
+  });
+
+  it('error_class still populated alongside the new fields (additive — no breaking change)', () => {
+    const f = getFirstFailure(junitWithFailure('LocTest2', 'NoSuchElementException: missing button'), 'cat-additive');
+    assert.equal(f['error_class'], 'NoSuchElementException');
+    assert.equal(f['error_category'], 'LOCATOR');
+    assert.equal(f['retryable'], false);
+    // Existing fields must remain intact:
+    assert.equal(f['root_cause_category'], 'LOCATOR_STALE');
+    assert.ok(typeof f['error_message'] === 'string');
+    assert.equal(f['pre_existing'], false);
+  });
+});

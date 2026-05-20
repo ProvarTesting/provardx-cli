@@ -241,6 +241,8 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
           'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
+          'Each failed step in `steps[]` may include optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',
+          'and retryable (boolean) fields when the failure text matches a known pattern — use these to drive automated retry policy.',
         ].join(' '),
         'Run local Provar tests via sf CLI; requires config_load first.'
       ),
