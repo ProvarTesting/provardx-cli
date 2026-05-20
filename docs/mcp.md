@@ -729,19 +729,19 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 **Argument XML conventions** (automatically applied by the generator):
 
-| Argument key / value pattern            | Emitted XML class                     | API context             |
-| --------------------------------------- | ------------------------------------- | ----------------------- |
-| `target` key                            | `class="uiTarget"`                    | UiWithScreen, UiWithRow |
-| `locator` key                           | `class="uiLocator"`                   | UiDoAction, UiAssert    |
-| Value matches `{VarName}` or `{A.B}`    | `class="variable"` + `<path>`         | Any step                |
-| SetValues attributes                    | `class="valueList"/<namedValues>`     | SetValues only          |
-| Value `YYYY-MM-DDTHH:MM:SS…` (ISO-8601) | `class="value" valueClass="datetime"` | Any step                |
-| Value `YYYY-MM-DD` (ISO-8601)           | `class="value" valueClass="date"`     | Any step                |
-| Value `true` / `false`                  | `class="value" valueClass="boolean"`  | Any step                |
-| Value matches `^-?\d+$`                 | `class="value" valueClass="integer"`  | Any step                |
-| All other values                        | `class="value" valueClass="string"`   | Any step                |
+| Argument key / value pattern                                                                   | Emitted XML class                     | API context             |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------- |
+| `target` key                                                                                   | `class="uiTarget"`                    | UiWithScreen, UiWithRow |
+| `locator` key                                                                                  | `class="uiLocator"`                   | UiDoAction, UiAssert    |
+| Value matches `{VarName}` or `{A.B}`                                                           | `class="variable"` + `<path>`         | Any step                |
+| SetValues attributes                                                                           | `class="valueList"/<namedValues>`     | SetValues only          |
+| Value `YYYY-MM-DDTHH:MM:SS` + optional `.fff` + optional `Z`/`±HH:MM` (ISO-8601, end-anchored) | `class="value" valueClass="datetime"` | Any step                |
+| Value `YYYY-MM-DD` (ISO-8601)                                                                  | `class="value" valueClass="date"`     | Any step                |
+| Value `true` / `false`                                                                         | `class="value" valueClass="boolean"`  | Any step                |
+| Numeric value `^-?\d+(\.\d+)?$` (`42`, `-5`, `3.14`)                                           | `class="value" valueClass="decimal"`  | Any step                |
+| All other values                                                                               | `class="value" valueClass="string"`   | Any step                |
 
-`valueClass` is inferred automatically by `inferSalesforceValueClass(key, val, fieldTypeHint?)`. Detection order: explicit `fieldTypeHint` (wired in a follow-up tool surface — `field_type_hints` param) → ISO-8601 datetime → ISO-8601 date → boolean → integer → string. Provar runtime silently discards date fields emitted as `valueClass="string"`, so always pass date / datetime values in ISO-8601 form.
+`valueClass` is inferred automatically by `inferSalesforceValueClass(key, val, fieldTypeHint?)`. Detection order: explicit `fieldTypeHint` (wired in a follow-up tool surface — `field_type_hints` param) → ISO-8601 datetime (with optional fractional seconds and timezone, end-anchored) → ISO-8601 date → boolean → decimal → string. Per the canonical Provar reference numbers always emit as `valueClass="decimal"` (there is no separate `integer` valueClass). Provar runtime silently discards date fields emitted as `valueClass="string"`, so always pass date / datetime values in ISO-8601 form.
 
 AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `comparisonType`) — not the `valueList`/namedValues format.
 

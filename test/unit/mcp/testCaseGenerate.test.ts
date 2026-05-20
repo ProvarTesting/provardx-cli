@@ -699,7 +699,9 @@ describe('provar_testcase_generate', () => {
     });
   });
 
-  // PDX-493 (H3): date/datetime/boolean/integer valueClass dispatch via inferSalesforceValueClass.
+  // PDX-493 (H3): date/datetime/boolean/decimal valueClass dispatch via inferSalesforceValueClass.
+  // Numbers emit `valueClass="decimal"` per canonical reference (PROVAR_TEST_STEP_REFERENCE.md
+  // lines 1338, 1428) — there is no `integer` valueClass in the Provar grammar.
   describe('PDX-493 — inferSalesforceValueClass helper', () => {
     it('returns "datetime" for ISO-8601 datetime string', () => {
       assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00'), 'datetime');
@@ -707,6 +709,17 @@ describe('provar_testcase_generate', () => {
 
     it('returns "datetime" for ISO-8601 datetime with fractional seconds + zone', () => {
       assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00.123Z'), 'datetime');
+    });
+
+    it('returns "datetime" for ISO-8601 datetime with numeric timezone offset', () => {
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00+05:30'), 'datetime');
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00-0800'), 'datetime');
+    });
+
+    it('returns "string" for datetime-looking values with trailing garbage (end-anchored)', () => {
+      // Guards against the un-anchored regex bug: trailing junk after seconds must not
+      // be silently accepted as datetime.
+      assert.equal(inferSalesforceValueClass('CloseDate', '2026-05-19T10:30:00not-a-zone'), 'string');
     });
 
     it('returns "date" for ISO-8601 date string', () => {
@@ -721,22 +734,30 @@ describe('provar_testcase_generate', () => {
       assert.equal(inferSalesforceValueClass('IsActive', 'false'), 'boolean');
     });
 
-    it('returns "integer" for positive integer string', () => {
-      assert.equal(inferSalesforceValueClass('Quantity', '42'), 'integer');
+    it('returns "decimal" for positive integer string', () => {
+      assert.equal(inferSalesforceValueClass('Quantity', '42'), 'decimal');
     });
 
-    it('returns "integer" for negative integer string', () => {
-      assert.equal(inferSalesforceValueClass('Delta', '-5'), 'integer');
+    it('returns "decimal" for negative integer string', () => {
+      assert.equal(inferSalesforceValueClass('Delta', '-5'), 'decimal');
+    });
+
+    it('returns "decimal" for positive decimal string', () => {
+      assert.equal(inferSalesforceValueClass('Amount', '3.14'), 'decimal');
+    });
+
+    it('returns "decimal" for negative decimal string', () => {
+      assert.equal(inferSalesforceValueClass('Adjustment', '-12.5'), 'decimal');
     });
 
     it('returns "string" for plain text', () => {
       assert.equal(inferSalesforceValueClass('Name', 'Acme Corp'), 'string');
     });
 
-    it('returns "integer" not "date" for a short numeric string like "12"', () => {
+    it('returns "decimal" not "date" for a short numeric string like "12"', () => {
       // Edge case: the date regex requires the full ISO yyyy-mm-dd form, so a bare "12"
-      // is integer, not date. Guards against false-positive date detection on numeric IDs.
-      assert.equal(inferSalesforceValueClass('Code', '12'), 'integer');
+      // is decimal, not date. Guards against false-positive date detection on numeric IDs.
+      assert.equal(inferSalesforceValueClass('Code', '12'), 'decimal');
     });
 
     it('returns "string" for date-looking strings that miss the ISO format', () => {
@@ -751,7 +772,7 @@ describe('provar_testcase_generate', () => {
       // Value looks like a date but the hint says string — hint wins (e.g. an external
       // ID that happens to look like a date).
       assert.equal(inferSalesforceValueClass('ExternalId', '2026-05-19', 'string'), 'string');
-      // Value is integer, hint says boolean — hint wins.
+      // Value is decimal, hint says boolean — hint wins.
       assert.equal(inferSalesforceValueClass('IsActive', '1', 'boolean'), 'boolean');
     });
   });
@@ -824,7 +845,7 @@ describe('provar_testcase_generate', () => {
       );
     });
 
-    it('emits valueClass="integer" for an integer-only string', () => {
+    it('emits valueClass="decimal" for an integer-only string', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'IntField',
         steps: [
@@ -839,10 +860,10 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('valueClass="integer">42</value>'), `Expected valueClass="integer" for "42"; got: ${xml}`);
+      assert.ok(xml.includes('valueClass="decimal">42</value>'), `Expected valueClass="decimal" for "42"; got: ${xml}`);
     });
 
-    it('emits valueClass="integer" for a negative integer string', () => {
+    it('emits valueClass="decimal" for a negative integer string', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'NegIntField',
         steps: [
@@ -857,7 +878,28 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('valueClass="integer">-5</value>'), `Expected valueClass="integer" for "-5"; got: ${xml}`);
+      assert.ok(xml.includes('valueClass="decimal">-5</value>'), `Expected valueClass="decimal" for "-5"; got: ${xml}`);
+    });
+
+    it('emits valueClass="decimal" for a positive decimal string', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'DecimalField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create Opp',
+            attributes: { Amount: '3.14' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="decimal">3.14</value>'),
+        `Expected valueClass="decimal" for "3.14"; got: ${xml}`
+      );
     });
 
     it('emits valueClass="string" for plain text', () => {
