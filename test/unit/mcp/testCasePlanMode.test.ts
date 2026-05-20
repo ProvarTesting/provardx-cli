@@ -59,7 +59,12 @@ describe('resolveTestCasePlanMode', () => {
   let tmp: string;
 
   beforeEach(() => {
-    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pdx489-mode-'));
+    // Realpath the tmp root immediately so every derived path uses the canonical form.
+    // Required on macOS where os.tmpdir() returns /var/folders/... but realpathSync
+    // canonicalises through the /var → /private/var symlink. The resolver under test
+    // now calls fs.realpathSync internally, so comparisons against constructed paths
+    // would otherwise diverge from the resolved result on Mac.
+    tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pdx489-mode-')));
   });
 
   afterEach(() => {
