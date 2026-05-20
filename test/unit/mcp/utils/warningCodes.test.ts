@@ -10,15 +10,16 @@ import { describe, it } from 'mocha';
 import { WARNING_CODES, formatWarning } from '../../../../src/mcp/utils/warningCodes.js';
 
 describe('WARNING_CODES', () => {
+  const expected: Record<string, string> = {
+    PROVARHOME_001: 'PROVARHOME-001',
+    DATA_001: 'DATA-001',
+    PARALLEL_001: 'PARALLEL-001',
+    SCHEMA_001: 'SCHEMA-001',
+    RUN_001: 'RUN-001',
+    JUNIT_001: 'JUNIT-001',
+  };
+
   it('maps each key to its expected wire string', () => {
-    const expected: Record<string, string> = {
-      PROVARHOME_001: 'PROVARHOME-001',
-      DATA_001: 'DATA-001',
-      PARALLEL_001: 'PARALLEL-001',
-      SCHEMA_001: 'SCHEMA-001',
-      RUN_001: 'RUN-001',
-      JUNIT_001: 'JUNIT-001',
-    };
     for (const [key, value] of Object.entries(expected)) {
       assert.equal(
         (WARNING_CODES as Record<string, string>)[key],
@@ -26,6 +27,16 @@ describe('WARNING_CODES', () => {
         `WARNING_CODES.${key} should equal '${value}'`
       );
     }
+  });
+
+  // Guards against silent enum drift: a new code added without updating this test,
+  // or an accidentally-removed code, must fail the build.
+  it('contains exactly the expected key set (no additions, no omissions)', () => {
+    assert.deepEqual(Object.keys(WARNING_CODES).sort(), Object.keys(expected).sort());
+  });
+
+  it('contains exactly the expected value set (no additions, no omissions)', () => {
+    assert.deepEqual(Object.values(WARNING_CODES).sort(), Object.values(expected).sort());
   });
 });
 

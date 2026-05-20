@@ -535,4 +535,107 @@ describe('provar_properties_validate', () => {
       'Expected error on metadata.metadataLevel'
     );
   });
+
+  // ── SCHEMA-001: unknown-key detection (PDX-486 VALIDATE-TYPO-A) ──────────────
+
+  describe('SCHEMA-001 unknown-key detection', () => {
+    it('fires for unknown top-level key with did-you-mean suggestion within distance 2', () => {
+      const props = validProps();
+      // Classic typo: testCases (plural) vs canonical testCase
+      props['testCases'] = ['tests/foo.testcase'];
+
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as Array<{ field: string; message: string; severity: string }>;
+      const w = warnings.find((x) => x.field === 'testCases');
+      assert.ok(w, 'Expected SCHEMA-001 warning for testCases');
+      assert.ok(w.message.includes('SCHEMA-001'), 'Warning should reference SCHEMA-001');
+      assert.ok(w.message.includes("Unknown field 'testCases'"), 'Warning should name the offending key');
+      assert.ok(w.message.includes('top-level'), 'Warning should label the scope as top-level');
+      assert.ok(w.message.includes("'testCase'"), `Expected "did you mean 'testCase'" suggestion, got: ${w.message}`);
+    });
+
+    it("fires for unknown metadata.* key (e.g. 'metadataLvel') with suggestion", () => {
+      const props = validProps();
+      (props['metadata'] as Record<string, unknown>)['metadataLvel'] = 'Reuse';
+
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as Array<{ field: string; message: string }>;
+      const w = warnings.find((x) => x.field === 'metadata.metadataLvel');
+      assert.ok(w, 'Expected SCHEMA-001 warning for metadata.metadataLvel');
+      assert.ok(w.message.includes('SCHEMA-001'));
+      assert.ok(w.message.includes('metadata'), 'Warning should label the scope as metadata');
+      assert.ok(w.message.includes("'metadataLevel'"), `Expected suggestion, got: ${w.message}`);
+    });
+
+    it("fires for unknown environment.* key (e.g. 'testEnvironments' → testEnvironment)", () => {
+      const props = validProps();
+      (props['environment'] as Record<string, unknown>)['testEnvironments'] = 'QA';
+
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as Array<{ field: string; message: string }>;
+      const w = warnings.find((x) => x.field === 'environment.testEnvironments');
+      assert.ok(w, 'Expected SCHEMA-001 warning for environment.testEnvironments');
+      assert.ok(w.message.includes('SCHEMA-001'));
+      assert.ok(w.message.includes('environment'));
+      assert.ok(w.message.includes("'testEnvironment'"), `Expected testEnvironment suggestion, got: ${w.message}`);
+    });
+
+    it('does NOT fire SCHEMA-001 for known top-level / metadata / environment keys', () => {
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(validProps()) });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as Array<{ message: string }>;
+      assert.ok(
+        warnings.every((w) => !w.message.includes('SCHEMA-001')),
+        `Expected zero SCHEMA-001 warnings on a valid file, got: ${JSON.stringify(warnings)}`
+      );
+    });
+
+    it('emits SCHEMA-001 with no "Did you mean" when no canonical key is within distance 2', () => {
+      const props = validProps();
+      props['totallyUnrelatedKey'] = 'x';
+
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as Array<{ field: string; message: string }>;
+      const w = warnings.find((x) => x.field === 'totallyUnrelatedKey');
+      assert.ok(w, 'Expected SCHEMA-001 warning for totallyUnrelatedKey');
+      assert.ok(w.message.includes('SCHEMA-001'));
+      assert.ok(!w.message.includes('Did you mean'), `Should not include suggestion, got: ${w.message}`);
+    });
+
+    it('is_valid stays true when the only issues are SCHEMA-001 warnings (no errors)', () => {
+      const props = validProps();
+      props['testCases'] = ['x'];
+
+      const result = server.call('provar_properties_validate', { content: JSON.stringify(props) });
+
+      const body = parseText(result);
+      assert.equal(body['is_valid'], true, 'Unknown keys are warnings only — is_valid must remain true');
+      assert.equal(body['error_count'], 0);
+      assert.ok((body['warning_count'] as number) >= 1);
+    });
+
+    it("loads test/fixtures/properties/testcases-typo.json and reports SCHEMA-001 with 'testCase' suggestion", () => {
+      // Tests run from the repo root via wireit/yarn; resolve relative to cwd to avoid ESM __dirname.
+      const fixturePath = path.resolve(process.cwd(), 'test', 'fixtures', 'properties', 'testcases-typo.json');
+      const content = fs.readFileSync(fixturePath, 'utf-8');
+
+      const result = server.call('provar_properties_validate', { content });
+
+      const body = parseText(result);
+      assert.equal(body['is_valid'], true, 'Fixture should pass structural validation (warnings only)');
+      const warnings = body['warnings'] as Array<{ field: string; message: string }>;
+      const w = warnings.find((x) => x.field === 'testCases');
+      assert.ok(w, 'Expected SCHEMA-001 warning for the testCases typo in the fixture');
+      assert.ok(w.message.includes("Did you mean 'testCase'?"), `Expected suggestion, got: ${w.message}`);
+    });
+  });
 });

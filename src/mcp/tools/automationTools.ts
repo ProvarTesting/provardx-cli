@@ -275,6 +275,8 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
           'Zero-tests guard: if the sf exit code is 0, the results directory was located, and at least one JUnit XML file parsed successfully but contains zero executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json. When no JUnit data is available (dir missing or all XML unparseable), `details.warning` is set instead and RUN-001 stays silent.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
+          'Each failed step in `steps[]` may include optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',
+          'and retryable (boolean) fields when the failure text matches a known pattern — use these to drive automated retry policy.',
         ].join(' '),
         'Run local Provar tests via sf CLI; requires config_load first. Surfaces RUN-001 on zero-tests-executed.'
       ),
