@@ -48,6 +48,35 @@ function resolveApiId(apiId: string): string {
   return SHORTHAND_TO_FQID[apiId] ?? apiId;
 }
 
+// ── PDX-495: UI-action grouping under UiWithScreen substeps clause ───────────
+// The set of fully-qualified API IDs that authors expect to be nested inside a
+// preceding UiWithScreen's <clauses><clause name="substeps"><steps>…</steps></clause>
+// block. When the generator receives a flat list with these IDs trailing a
+// UiWithScreen, the auto-grouping pass moves them inside the substeps clause so
+// the Provar IDE renders the test case correctly (PDX-495). SetValues, ApexConnect,
+// and other non-UI apiCalls stay at the root.
+const UI_ACTION_API_IDS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
+  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
+  'com.provar.plugins.ui.UiDoAction',
+  'com.provar.plugins.ui.UiAssert',
+  'com.provar.plugins.ui.UiRead',
+]);
+
+const UI_WITH_SCREEN_API_IDS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
+  'com.provar.plugins.ui.UiWithScreen',
+]);
+
+function isUiAction(apiId: string): boolean {
+  return UI_ACTION_API_IDS.has(resolveApiId(apiId));
+}
+
+function isUiWithScreen(apiId: string): boolean {
+  return UI_WITH_SCREEN_API_IDS.has(resolveApiId(apiId));
+}
+
 // ── Per-step runtime warnings ─────────────────────────────────────────────────
 
 function buildStepWarnings(steps: Array<{ api_id: string }>): string[] {
@@ -254,6 +283,21 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
             desc(
               'Caller-provided key echoed back for deduplication tracking',
               'string, optional; deduplication key echoed in response'
+            )
+          ),
+        grouping_mode: z
+          .enum(['auto', 'flat', 'single-screen'])
+          .default('auto')
+          .describe(
+            desc(
+              'Controls how UI action steps (UiDoAction, UiAssert, UiRead) are nested under UiWithScreen wrappers. ' +
+                '"auto" (default): when the flat steps[] payload contains a UiWithScreen followed by UI action siblings, ' +
+                'those siblings are auto-grouped inside the UiWithScreen\'s <clause name="substeps"><steps> block ' +
+                '(the structure Provar IDE expects). Non-UI steps (SetValues, ApexConnect, …) stay at the root. ' +
+                '"flat": legacy behaviour — emit every step as a root sibling, no nesting. ' +
+                '"single-screen": wrap all steps in a single synthetic UiWithScreen (matches target_uri=ui:pageobject:target semantics). ' +
+                'If target_uri is "ui:pageobject:target?…" the single-screen wrap takes precedence regardless of this flag.',
+              'enum, optional; default "auto" (group UI actions under UiWithScreen substeps)'
             )
           ),
       },
@@ -512,6 +556,25 @@ function buildFlatStepXml(
   testItemId: number,
   indent: string
 ): string {
+  return buildStepXmlWithChildren(step, testItemId, indent, '', undefined);
+}
+
+// PDX-495: build a single <apiCall> element, optionally with a <clauses>
+// <clause name="substeps"><steps>…</steps></clause></clauses> block containing
+// already-rendered child XML. This is what lets a UiWithScreen wrap its UI
+// action siblings without breaking the existing flat emission path.
+//
+// `childrenXml` is the already-rendered, already-indented inner XML for the
+// substeps clause (joined newline-separated, no leading/trailing whitespace).
+// `substepsTestItemId` is the testItemId for the <clause name="substeps"> slot;
+// omit (undefined) to skip the clauses block entirely (legacy flat behaviour).
+function buildStepXmlWithChildren(
+  step: { api_id: string; name: string; attributes: Record<string, string> },
+  testItemId: number,
+  indent: string,
+  childrenXml: string,
+  substepsTestItemId: number | undefined
+): string {
   const guid = randomUUID();
   const resolvedApiId = resolveApiId(step.api_id);
   const baseIndent = indent + '  ';
@@ -519,32 +582,135 @@ function buildFlatStepXml(
   const argumentsXml = resolvedApiId.includes('SetValues')
     ? buildSetValuesXml(step.attributes, baseIndent)
     : buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
-  if (argumentsXml) {
+
+  const hasClauses = substepsTestItemId !== undefined;
+  const open = `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}" name="${escapeXmlAttr(
+    step.name
+  )}" testItemId="${testItemId}">`;
+  const close = `${indent}</apiCall>`;
+
+  if (!hasClauses && !argumentsXml) {
     return (
       `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
-      ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}">${argumentsXml}</apiCall>`
+      ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}"/>`
     );
   }
-  return (
-    `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}"` +
-    ` name="${escapeXmlAttr(step.name)}" testItemId="${testItemId}"/>`
-  );
+
+  if (!hasClauses) {
+    // Legacy flat shape: keep the inline form so existing string assertions in
+    // call sites and tests (e.g. literal `</apiCall>` placement) still match.
+    return `${open}${argumentsXml}</apiCall>`;
+  }
+
+  // PDX-495 grouped shape: arguments + clauses block with substeps.
+  const clauseIndent = baseIndent;
+  const innerStepsIndent = baseIndent + '  ';
+  const stepsBlock = childrenXml
+    ? `${innerStepsIndent}<steps>\n${childrenXml}\n${innerStepsIndent}</steps>`
+    : `${innerStepsIndent}<steps/>`;
+  const clausesBlock =
+    `${baseIndent}<clauses>\n` +
+    `${clauseIndent}<clause name="substeps" testItemId="${substepsTestItemId}">\n` +
+    `${stepsBlock}\n` +
+    `${clauseIndent}</clause>\n` +
+    `${baseIndent}</clauses>`;
+
+  // argumentsXml when present already includes a leading "\n" and a trailing
+  // newline + parent-indent so the </apiCall> appears on its own line — match
+  // that shape for the grouped emission too.
+  if (argumentsXml) {
+    return `${open}${argumentsXml.replace(/\n[ \t]*$/, '')}\n${clausesBlock}\n${close}`;
+  }
+  return `${open}\n${clausesBlock}\n${close}`;
+}
+
+// PDX-495: post-process the flat steps[] payload into a depth-1 tree where each
+// UiWithScreen owns the trailing run of UI-action siblings. Returns the tree as
+// a list of root-level nodes, each carrying its own children list.
+//
+// Grouping rules (per PDX-495):
+//   - When a UiWithScreen is seen, collect subsequent siblings while they are
+//     UI actions (UiDoAction / UiAssert / UiRead). Stop at: another
+//     UiWithScreen, any non-UI step, or end of list.
+//   - SetValues / ApexConnect / other non-UI apiCalls stay at root.
+type Step = { api_id: string; name: string; attributes: Record<string, string> };
+type StepNode = Step & { children: Step[] };
+
+function groupStepsAuto(steps: Step[]): StepNode[] {
+  const result: StepNode[] = [];
+  let i = 0;
+  while (i < steps.length) {
+    const node: StepNode = { ...steps[i], children: [] };
+    result.push(node);
+    if (isUiWithScreen(steps[i].api_id)) {
+      // Absorb trailing UI-action siblings into this UiWithScreen.
+      let j = i + 1;
+      while (j < steps.length && isUiAction(steps[j].api_id)) {
+        node.children.push(steps[j]);
+        j++;
+      }
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  return result;
+}
+
+// PDX-495: emit a list of grouped step nodes as XML. Assigns testItemIds
+// depth-first: each node consumes one ID; if it has children it ALSO consumes
+// one more ID for the <clause name="substeps"> slot, then its children consume
+// their own IDs in order. Mirrors the numbering convention used by Provar IDE
+// (verified against the Contact_Lead1.testcase reference shape — see PDX-495).
+function emitGroupedSteps(nodes: StepNode[], indent: string, startId: number): { xml: string; nextId: number } {
+  const lines: string[] = [];
+  let id = startId;
+  for (const node of nodes) {
+    const myId = id++;
+    if (node.children.length === 0) {
+      lines.push(buildFlatStepXml(node, myId, indent));
+      continue;
+    }
+    const substepsId = id++;
+    const childIndent = indent + '      '; // matches buildUiWithScreenXml inner step indent
+    const childLines: string[] = [];
+    for (const child of node.children) {
+      childLines.push(buildFlatStepXml(child, id++, childIndent));
+    }
+    lines.push(buildStepXmlWithChildren(node, myId, indent, childLines.join('\n'), substepsId));
+  }
+  return { xml: lines.join('\n'), nextId: id };
 }
 
 function buildTestCaseXml(input: {
   test_case_name: string;
-  steps: Array<{ api_id: string; name: string; attributes: Record<string, string> }>;
+  steps: Step[];
   target_uri?: string;
+  grouping_mode?: 'auto' | 'flat' | 'single-screen';
 }): string {
   const testCaseGuid = randomUUID();
   const registryId = randomUUID();
+  const groupingMode = input.grouping_mode ?? 'auto';
 
   let stepLines: string;
   const isNonSf = !!input.target_uri && input.target_uri.startsWith('ui:');
 
   if (isNonSf && input.target_uri) {
+    // target_uri=ui:pageobject:target?… always wraps all steps in a single
+    // synthetic UiWithScreen — this predates PDX-495 and takes precedence
+    // regardless of grouping_mode (matches "single-screen" semantics).
     stepLines = buildUiWithScreenXml(input.steps, input.target_uri);
+  } else if (groupingMode === 'single-screen' && input.steps.length > 0) {
+    // Explicit single-screen request without a non-SF target_uri: wrap with the
+    // default sf:ui:target semantics so the synthetic wrapper is well-formed.
+    stepLines = buildUiWithScreenXml(input.steps, 'sf:ui:target');
+  } else if (groupingMode === 'auto' && input.steps.some((s) => isUiWithScreen(s.api_id))) {
+    // PDX-495 auto-grouping: nest UI actions inside their preceding UiWithScreen.
+    const tree = groupStepsAuto(input.steps);
+    stepLines = emitGroupedSteps(tree, '    ', 1).xml;
   } else {
+    // Legacy flat behaviour: every step is a root sibling. Preserved by
+    // grouping_mode="flat" and by payloads with no UiWithScreen present.
     const lines = input.steps.map((step, i) => buildFlatStepXml(step, i + 1, '    ')).join('\n');
     stepLines = lines || '    <!-- TODO: Add test steps here -->';
   }
