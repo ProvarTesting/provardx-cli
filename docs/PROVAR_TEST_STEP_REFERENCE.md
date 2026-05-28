@@ -37,6 +37,8 @@
 | UiWithScreen                                     | `com.provar.plugins.forcedotcom.core.ui.UiWithScreen`                    |
 | UiDoAction                                       | `com.provar.plugins.forcedotcom.core.ui.UiDoAction`                      |
 | UiAssert                                         | `com.provar.plugins.forcedotcom.core.ui.UiAssert`                        |
+| UiRead                                           | `com.provar.plugins.forcedotcom.core.ui.UiRead`                          |
+| UiFill                                           | `com.provar.plugins.forcedotcom.core.ui.UiFill`                          |
 | UiWithRow                                        | `com.provar.plugins.forcedotcom.core.ui.UiWithRow`                       |
 | UiHandleAlert                                    | `com.provar.plugins.forcedotcom.core.ui.UiHandleAlert`                   |
 | UiNavigate                                       | `com.provar.plugins.forcedotcom.core.ui.UiNavigate`                      |
@@ -205,7 +207,7 @@ Opens a browser-only UI session. Use this when you have a separate ApexConnect f
 
 ## UI Steps
 
-UI steps must always be nested inside a `UiWithScreen` block. Never place `UiDoAction` or `UiAssert` directly in the top-level `<steps>` list.
+UI steps must always be nested inside a `UiWithScreen` block. Never place any of the 7 UI action types (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`) directly in the top-level `<steps>` list — they must descend from a `UiWithScreen` or `UiWithRow` ancestor through a `<clause name="substeps">` path. Validator rule **UI-NEST-STRUCT-001** fires once per offending step.
 
 ### UiWithScreen
 
@@ -572,6 +574,70 @@ Verifies field values or element state on the current screen. Must always includ
 ```
 
 **Valid `comparisonType` values:** `EqualTo` | `NotEqualTo` | `Contains` | `NotContains` | `StartsWith` | `EndsWith` | `None`
+
+### UiRead
+
+Reads the current value of a field or element on the screen and binds it to a result variable so subsequent steps can reference it. Useful for capturing IDs from the URL bar, the value of a calculated field after Save, or any visible text whose value depends on prior screen state.
+
+> The `locator` argument must use `class="uiLocator"` (validator rule **UI-LOCATOR-001**). In `provar_testcase_generate` the `locator` attribute is converted automatically.
+
+```xml
+<apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiRead"
+         name="UiRead" testItemId="9"
+         title="Read the Account Id">
+  <arguments>
+    <argument id="locator">
+      <value class="uiLocator" uri="sf:ui:locator?name=Id&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DAccount%26field%3DId"/>
+    </argument>
+    <argument id="resultName">
+      <value class="value" valueClass="string">AccountId</value>
+    </argument>
+    <argument id="resultScope">
+      <value class="value" valueClass="string">Test</value>
+    </argument>
+  </arguments>
+</apiCall>
+```
+
+**Locator URI format:** `sf:ui:locator?name=FIELD_NAME&binding=...` — the URL-encoded `binding` parameter is required for Salesforce field references.
+
+### UiFill
+
+Fills multiple fields on a form in a single step using a list of field-value pairs. Equivalent to a sequence of `UiDoAction` (`set`) calls but more compact when populating many fields at once.
+
+> The `locator` argument must use `class="uiLocator"` (validator rule **UI-LOCATOR-001**). In `provar_testcase_generate` the `locator` attribute is converted automatically.
+>
+> **Best practice (rule UI-FILL-VERIFY-001):** follow each `UiFill` with a `UiAssert` to verify the fields actually accepted the values.
+
+```xml
+<apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiFill"
+         name="UiFill" testItemId="11"
+         title="Fill required Lead fields">
+  <arguments>
+    <argument id="locator">
+      <value class="uiLocator" uri="sf:ui:locator?name=LeadForm"/>
+    </argument>
+    <argument id="fieldValues">
+      <value class="valueList" mutable="Mutable">
+        <namedValues>
+          <namedValue name="LastName">
+            <value class="value" valueClass="string">Provar_TestLead</value>
+          </namedValue>
+          <namedValue name="Company">
+            <value class="value" valueClass="string">Provar Test Company</value>
+          </namedValue>
+        </namedValues>
+      </value>
+    </argument>
+    <argument id="captureBefore">
+      <value class="value" valueClass="string">false</value>
+    </argument>
+    <argument id="captureAfter">
+      <value class="value" valueClass="string">false</value>
+    </argument>
+  </arguments>
+</apiCall>
+```
 
 ### UiWithRow
 

@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
+import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS } from './uiActionApiIds.js';
 
 // ── Rule / config interfaces ──────────────────────────────────────────────────
 
@@ -826,22 +827,12 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
 // the screen ancestor are allowed. Anything inside <clause name="hidden"> is
 // exempt (disabled / settings blocks).
 
-const UI_ACTION_APIS = new Set<string>([
-  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
-  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
-  'com.provar.plugins.forcedotcom.core.ui.UiRead',
-  'com.provar.plugins.forcedotcom.core.ui.UiFill',
-  'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
-  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
-  'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert',
-]);
-
-// UiWithRow is both a UI action AND a container — its <clause name="substeps">
-// satisfies the rule for its own descendants.
-const UI_SCREEN_CONTAINERS = new Set<string>([
-  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
-  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
-]);
+// PDX-497: imported from the shared `uiActionApiIds.ts` so the validator and
+// generator (testCaseGenerate.ts) can never drift. UiWithRow is both a UI
+// action AND a container — its <clause name="substeps"> satisfies the rule for
+// its own descendants.
+const UI_ACTION_APIS = UI_ACTION_API_IDS;
+const UI_SCREEN_CONTAINERS = UI_SCREEN_CONTAINER_API_IDS;
 
 /** One frame on the parent stack while walking the parsed tree. */
 interface ParentFrame {
