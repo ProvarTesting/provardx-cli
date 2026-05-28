@@ -7,6 +7,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 ## Table of Contents
 
 - [Starting the server](#starting-the-server)
+- [Configuration reference](#configuration-reference)
+  - [CLI flags](#cli-flags)
+  - [Environment variables](#environment-variables)
 - [Client configuration](#client-configuration)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code](#claude-code)
@@ -148,13 +151,26 @@ sf provar mcp start
 
 The server communicates over **stdio** (standard input / output). It must be started by your MCP client — do not run it interactively in a terminal.
 
-### Flags
+> **Note:** `--json` is intentionally disabled on this command. stdout is reserved for MCP JSON-RPC messages; all internal logging goes to stderr.
 
-| Flag                | Alias | Default                   | Description                                                                                                                                                  |
-| ------------------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--allowed-paths`   | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                            |
-| `--auto-update`     |       | false                     | Automatically installs the latest version at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
-| `--no-update-check` |       | false                     | Skip the startup update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable.                                                         |
+---
+
+## Configuration reference
+
+The single source of truth for every CLI flag and environment variable the MCP server reads at runtime. The deep-dive subsections under [Performance Tuning](#performance-tuning) provide additional context for individual settings but always cross-link back here.
+
+### CLI flags
+
+Both `sf provar mcp start` and the standalone npx entry point (`npx -y @provartesting/provardx-cli@beta mcp start`) accept the same four flags. The only behavioural difference is the default for `--allowed-paths`.
+
+| Flag                | Alias | Default (`sf provar mcp start`) | Default (npx entry point)            | Description                                                                                                                                               |
+| ------------------- | ----- | ------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--allowed-paths`   | `-a`  | Current working directory       | **Required — hard error if omitted** | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                         |
+| `--auto-defects`    |       | `false`                         | `false`                              | Enables the Quality Hub auto-defect creation flow. Internally sets `PROVAR_AUTO_DEFECTS=1` so downstream tools can read it.                               |
+| `--auto-update`     |       | `false`                         | `false`                              | Automatically installs the latest beta at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
+| `--no-update-check` |       | `false`                         | `false`                              | Skip the startup npm-registry update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable (see the env-var table below).           |
+
+> **`--allowed-paths` is CLI-only — there is no environment-variable equivalent.** If you need to inject the value from an env var, expand it shell-side at invocation time (e.g. `--allowed-paths "$PROVAR_PROJECT"` in bash, `--allowed-paths $env:PROVAR_PROJECT` in PowerShell).
 
 ```sh
 # Allow access to a specific project directory
@@ -164,7 +180,22 @@ sf provar mcp start --allowed-paths /workspace/my-provar-project
 sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 ```
 
-> **Note:** `--json` is intentionally disabled on this command. stdout is reserved for MCP JSON-RPC messages; all internal logging goes to stderr.
+### Environment variables
+
+The MCP server reads the following environment variables at startup or during tool invocation. Internal/dev-only variables (license bypass, ALGAS dev credentials) are intentionally not documented here — they remain source-only and are not supported for production use.
+
+| Variable                     | Purpose                                                                                                                                                                                 | Default                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `PROVAR_HOME`                | Provar Automation install root. Used to locate license files (`<PROVAR_HOME>/.licenses/*.properties`) and resolve home-relative tool defaults.                                          | `~/Provar` (`%USERPROFILE%\Provar` on Windows) |
+| `PROVAR_API_KEY`             | API key for Quality Hub validation. Takes priority over any stored key in `~/.provar/credentials.json`. Must start with `pv_k_` — any other value is ignored.                           | None — falls back to stored credentials        |
+| `PROVAR_QUALITY_HUB_URL`     | Override the Quality Hub API base URL. Set when pointing at a non-default Quality Hub environment.                                                                                      | Dev API Gateway URL (`/dev`)                   |
+| `PROVAR_MCP_TOOLS`           | Comma-separated list of tool groups to register at startup. Deep-dive: [Tool group filtering](#tool-group-filtering-provar_mcp_tools).                                                  | All groups registered                          |
+| `PROVAR_MCP_SCHEMA_MODE`     | Set to `compact` to shorten all tool descriptions. Deep-dive: [Compact descriptions](#compact-descriptions-provar_mcp_schema_mode).                                                     | Standard (full) descriptions                   |
+| `PROVAR_MCP_MAX_TOOL_DEPTH`  | Agentic loop guard — max tool calls per MCP session before further calls return `TOOL_BUDGET_EXCEEDED`. Deep-dive: [Agentic loop guard](#agentic-loop-guard-provar_mcp_max_tool_depth). | `50`                                           |
+| `PROVAR_MCP_EMIT_TOKEN_META` | When `true`, appends a `_meta` token-attribution block to every tool response. Deep-dive: [Per-call token attribution](#per-call-token-attribution-provar_mcp_emit_token_meta).         | unset (no `_meta` block)                       |
+| `PROVAR_MCP_VALIDATION_DIR`  | Override the directory where `provar_testcase_validate` writes validation diff artifacts.                                                                                               | `<repo>/.provar-mcp/validation/`               |
+| `PROVAR_NO_UPDATE_CHECK`     | When set (any non-empty value), skips the startup npm-registry update check. Same effect as `--no-update-check`.                                                                        | unset (check runs)                             |
+| `PROVAR_AUTO_DEFECTS`        | When `1`, enables the Quality Hub auto-defect creation flow. Normally set by passing the `--auto-defects` flag rather than directly.                                                    | unset (auto-defects disabled)                  |
 
 ---
 
@@ -465,22 +496,13 @@ sf provar auth rotate
 sf provar auth clear
 ```
 
-### Environment variables
-
-| Variable                 | Purpose                                                    | Default                                           |
-| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
-| `PROVAR_API_KEY`         | API key for Quality Hub validation                         | None — falls back to `~/.provar/credentials.json` |
-| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL                      | Dev API Gateway URL (`/dev`)                      |
-| `PROVAR_MCP_SCHEMA_MODE` | Set to `compact` to shorten all tool descriptions          | Standard (full) descriptions                      |
-| `PROVAR_MCP_TOOLS`       | Comma-separated list of tool groups to register at startup | All groups registered                             |
-
----
-
 ## Agent performance tuning
 
 Two environment variables let you reduce the context budget consumed by the ProvarDX MCP server — useful when working with agents that have a limited context window or a large number of registered tools.
 
 ### Compact descriptions (`PROVAR_MCP_SCHEMA_MODE`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 ```
 PROVAR_MCP_SCHEMA_MODE=compact
@@ -495,6 +517,8 @@ Use this mode if:
 - Your agents already have domain context and don't need verbose descriptions
 
 ### Tool group filtering (`PROVAR_MCP_TOOLS`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 ```
 PROVAR_MCP_TOOLS=nitrox,authoring
@@ -2425,6 +2449,8 @@ These environment variables let you control agentic-loop safety and observabilit
 
 ### Agentic loop guard (`PROVAR_MCP_MAX_TOOL_DEPTH`)
 
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
+
 Limits the number of Provar tool calls an AI agent may make within a single MCP session before the server starts returning errors instead of results.
 
 ```
@@ -2452,6 +2478,8 @@ Once the limit is reached, every further call returns:
 The guard is designed to prevent runaway agentic loops from making hundreds of tool calls without human review. Set it lower (e.g. `10`) for tightly supervised workflows; raise it or omit it for long-running automation pipelines where you trust the agent.
 
 ### Per-call token attribution (`PROVAR_MCP_EMIT_TOKEN_META`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 Appends a `_meta` object to `structuredContent` on every tool response, giving observability tooling a lightweight token-cost signal per call.
 
