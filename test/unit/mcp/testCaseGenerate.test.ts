@@ -2171,8 +2171,10 @@ describe('provar_testcase_generate', () => {
     });
 
     // UiWithRow dual role (b): a lonely UiWithRow at root (no preceding
-    // UiWithScreen) stays at root as its own top-level container.
-    it('lonely UiWithRow at root stays as its own container', () => {
+    // UiWithScreen) is wrapped in a synthetic UiWithScreen so it descends from
+    // a screen ancestor — required by QH UI-NEST-STRUCT-001 (UiWithRow itself
+    // is a UI action that must be nested via a substeps clause).
+    it('lonely UiWithRow at root is wrapped in a synthetic UiWithScreen', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'PDX-497 lonely UiWithRow',
         steps: [
@@ -2189,17 +2191,33 @@ describe('provar_testcase_generate', () => {
       assert.equal(isError(result), false);
       const xml = parseText(result)['xml_content'] as string;
       assert.ok(
-        xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow"'),
-        'UiWithRow must appear in the XML'
+        xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen"'),
+        'synthetic UiWithScreen wrapper must appear in the XML'
       );
-      assert.ok(xml.includes('testItemId="1"'), 'lonely UiWithRow gets testItemId=1 (root-level container)');
-      // No substeps clause, since no following UI actions.
-      assert.ok(!xml.includes('<clause name="substeps"'), 'no substeps clause for lonely UiWithRow with no followers');
+      assert.ok(
+        xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow"'),
+        'UiWithRow must still appear in the XML'
+      );
+      // ID layout: UiWithScreen=1, substeps=2, UiWithRow=3 (leaf — no
+      // followers, no nested substeps clause for the row itself).
+      assert.ok(xml.includes('testItemId="1"'), 'synthetic UiWithScreen gets testItemId=1');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'), 'substeps clause = testItemId=2');
+      assert.ok(xml.includes('testItemId="3"'), 'UiWithRow gets testItemId=3 inside the wrapper');
+      // Round-trip: validator must report zero UI-NEST-STRUCT-001 violations.
+      const r = validateTestCase(xml);
+      const nestViolations = r.issues.filter((i) => i.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(
+        nestViolations.length,
+        0,
+        `round-trip: expected zero UI-NEST-STRUCT-001 violations, got ${nestViolations.length} — ` +
+          `messages: ${nestViolations.map((v) => v.message).join(' | ')}`
+      );
     });
 
     // UiWithRow dual role (c): a UiWithRow at root with following UI action
-    // siblings — those siblings should be absorbed into UiWithRow's substeps.
-    it('UiWithRow at root with following UI actions absorbs them into its substeps', () => {
+    // siblings — the synthetic UiWithScreen wraps the whole group, and the
+    // followers nest under UiWithRow's own substeps clause.
+    it('UiWithRow at root with followers nests under a synthetic UiWithScreen', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'PDX-497 UiWithRow absorbs followers',
         steps: [
@@ -2216,16 +2234,27 @@ describe('provar_testcase_generate', () => {
       });
       assert.equal(isError(result), false);
       const xml = parseText(result)['xml_content'] as string;
-      const substeps = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
-      assert.ok(substeps, 'UiWithRow at root must emit its own substeps clause for followers');
+      // Outer wrapper is the synthetic UiWithScreen; inner container is
+      // UiWithRow which absorbs UiDoAction into its own substeps.
       assert.ok(
-        substeps[1].includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction"'),
-        'UiDoAction must land inside UiWithRow substeps'
+        xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen"'),
+        'synthetic UiWithScreen wrapper must appear'
       );
-      // testItemId numbering: UiWithRow=1, substeps=2, UiDoAction=3.
-      assert.ok(xml.includes('testItemId="1"'));
-      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'));
-      assert.ok(xml.includes('testItemId="3"'));
+      // ID layout: UiWithScreen=1, outer substeps=2, UiWithRow=3, inner substeps=4, UiDoAction=5.
+      assert.ok(xml.includes('testItemId="1"'), 'UiWithScreen=1');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'), 'outer substeps=2');
+      assert.ok(xml.includes('testItemId="3"'), 'UiWithRow=3');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="4"'), 'inner substeps=4');
+      assert.ok(xml.includes('testItemId="5"'), 'UiDoAction=5');
+      // Round-trip: validator must report zero UI-NEST-STRUCT-001 violations.
+      const r = validateTestCase(xml);
+      const nestViolations = r.issues.filter((i) => i.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(
+        nestViolations.length,
+        0,
+        `round-trip: expected zero UI-NEST-STRUCT-001 violations, got ${nestViolations.length} — ` +
+          `messages: ${nestViolations.map((v) => v.message).join(' | ')}`
+      );
     });
 
     // Regression: grouping_mode="flat" must still produce the legacy flat
@@ -2301,6 +2330,39 @@ describe('provar_testcase_generate', () => {
         0,
         `round-trip: expected zero UI-NEST-STRUCT-001 violations, got ${nestViolations.length} — ` +
           `messages: ${nestViolations.map((v) => v.message).join(' | ')}`
+      );
+    });
+
+    // Round-trip consistency for the Copilot-flagged case: a payload with a
+    // UiWithRow at root and no UiWithScreen still produces XML that the
+    // validator accepts (synthetic UiWithScreen wrapper covers UiWithRow's
+    // own UI-action role). Guards against regression of the round-trip gap
+    // that would otherwise surface as TESTCASE_INVALID when
+    // validate_after_edit is left at its default of true.
+    it('round-trip: UiWithRow at root with no UiWithScreen → zero UI-NEST-STRUCT-001 violations', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 UiWithRow round trip',
+        steps: [
+          {
+            api_id: 'UiWithRow',
+            name: 'Row',
+            attributes: { locator: 'sf:ui:locator:row?table=Items' },
+          },
+          { api_id: 'UiDoAction', name: 'Click', attributes: { locator: 'sf:ui:locator?name=Edit' } },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      const r = validateTestCase(xml);
+      const nestViolations = r.issues.filter((i) => i.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(
+        nestViolations.length,
+        0,
+        'round-trip (UiWithRow root): expected zero UI-NEST-STRUCT-001 violations, ' +
+          `got ${nestViolations.length} — messages: ${nestViolations.map((v) => v.message).join(' | ')}`
       );
     });
   });

@@ -85,13 +85,14 @@ function isScreenContainer(apiId: string): boolean {
   return UI_SCREEN_CONTAINER_API_IDS.has(resolveApiId(apiId));
 }
 
-// PDX-497: UiWithRow plays a dual role. When it follows a UiWithScreen in the
-// flat payload, the author wants it pulled under that screen's substeps as a
-// child container (same as any other UI action — it is in UI_ACTION_API_IDS).
-// When it appears at root without a preceding UiWithScreen, the author wants
-// it left at root as its own top-level container (it is in
-// UI_SCREEN_CONTAINER_API_IDS). The auto-grouping algorithm handles both via
-// the recursive `collectGroup` helper below.
+// PDX-497: UiWithRow plays a dual role. As a UI action (in UI_ACTION_API_IDS)
+// it must be nested under a UiWithScreen ancestor via a substeps clause — same
+// rule QH's UI-NEST-STRUCT-001 enforces. As a screen container (in
+// UI_SCREEN_CONTAINER_API_IDS) it owns its OWN substeps clause that satisfies
+// the rule for its descendants. The auto-grouping algorithm in `collectGroup`
+// (below) handles both roles, and `buildTestCaseXml` synthesizes a root
+// UiWithScreen when the payload contains screen containers but no UiWithScreen
+// — without that wrapper, a root-level UiWithRow would itself fail the rule.
 
 // ── Per-step runtime warnings ─────────────────────────────────────────────────
 
@@ -646,8 +647,10 @@ function buildStepXmlWithChildren(
 }
 
 // PDX-495 + PDX-497: post-process the flat steps[] payload into a tree where
-// each screen-container (UiWithScreen, or a root-level UiWithRow with no
-// preceding UiWithScreen) owns the trailing run of UI-action siblings. Returns
+// each screen-container (UiWithScreen at root, or a UiWithRow nested under a
+// UiWithScreen) owns the trailing run of UI-action siblings. `buildTestCaseXml`
+// guarantees a UiWithScreen exists at the root before this runs (synthesizing
+// one when needed), so no screen container ever appears unparented. Returns
 // the tree as a list of root-level nodes, each carrying its own children list.
 //
 // Grouping rules:
@@ -658,8 +661,10 @@ function buildStepXmlWithChildren(
 //   - PDX-497 UiWithRow dual role: when a UiWithRow appears inside that run
 //     (i.e. as a child of a UiWithScreen), it absorbs trailing UI-action
 //     siblings into its OWN substeps clause (it is a screen container). When a
-//     UiWithRow appears at root with no preceding UiWithScreen, it acts as its
-//     own top-level container — same recursive absorption.
+//     UiWithRow would otherwise appear at root with no preceding UiWithScreen,
+//     `buildTestCaseXml` synthesizes a root UiWithScreen wrapper first so the
+//     auto-grouping pass still nests UiWithRow correctly under a screen
+//     ancestor — required by QH's UI-NEST-STRUCT-001 rule.
 //   - SetValues / ApexConnect / other non-UI apiCalls stay at root.
 //
 // The walker uses a shared cursor so a UiWithRow that absorbs trailing UI
@@ -702,10 +707,11 @@ function collectGroup(steps: Step[], cursor: { i: number }, stopOnUiWithScreen: 
     const node: StepNode = { ...step, children: [] };
     result.push(node);
     if (isScreenContainer(step.api_id)) {
-      // UiWithScreen always absorbs; UiWithRow absorbs in either position
-      // (root or as a child of UiWithScreen). The child run itself stops at
-      // the next UiWithScreen so a later UiWithScreen is not pulled in as a
-      // grandchild.
+      // UiWithScreen always absorbs; UiWithRow absorbs when it is a child of
+      // a UiWithScreen (root-level UiWithRow is rewritten into a synthetic
+      // UiWithScreen by `buildTestCaseXml` before this walker runs). The child
+      // run itself stops at the next UiWithScreen so a later UiWithScreen is
+      // not pulled in as a grandchild.
       node.children = collectGroup(steps, cursor, /* stopOnUiWithScreen */ true);
     }
   }
@@ -766,8 +772,23 @@ function buildTestCaseXml(input: {
     stepLines = buildUiWithScreenXml(input.steps, input.target_uri ?? 'sf:ui:target');
   } else if (groupingMode === 'auto' && input.steps.some((s) => isScreenContainer(s.api_id))) {
     // PDX-495 + PDX-497 auto-grouping: nest UI actions inside their preceding
-    // screen container (UiWithScreen, or a lonely root-level UiWithRow).
-    const tree = groupStepsAuto(input.steps);
+    // screen container (UiWithScreen). When the payload contains a screen
+    // container but no UiWithScreen at root (e.g. starts with UiWithRow), QH's
+    // UI-NEST-STRUCT-001 still requires UiWithRow itself to descend from a
+    // UiWithScreen via a substeps clause. Synthesize a root UiWithScreen so the
+    // round-trip generate -> validate stays clean. Mirrors the single-screen
+    // path's synthetic wrapper (target_uri ?? 'sf:ui:target').
+    const stepsForGrouping = input.steps.some((s) => isUiWithScreen(s.api_id))
+      ? input.steps
+      : [
+          {
+            api_id: 'UiWithScreen',
+            name: 'With page',
+            attributes: { target: input.target_uri ?? 'sf:ui:target' },
+          },
+          ...input.steps,
+        ];
+    const tree = groupStepsAuto(stepsForGrouping);
     stepLines = emitGroupedSteps(tree, '    ', 1).xml;
   } else {
     // Legacy flat behaviour: every step is a root sibling. Preserved by
