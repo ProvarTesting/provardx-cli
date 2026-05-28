@@ -10,6 +10,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [Configuration reference](#configuration-reference)
   - [CLI flags](#cli-flags)
   - [Environment variables](#environment-variables)
+  - [Setting these in your MCP client config](#setting-these-in-your-mcp-client-config)
 - [Client configuration](#client-configuration)
   - [Claude Desktop](#claude-desktop)
   - [Claude Code](#claude-code)
@@ -196,6 +197,36 @@ The MCP server reads the following environment variables at startup or during to
 | `PROVAR_MCP_VALIDATION_DIR`  | Override the directory where `provar_testcase_validate` writes validation diff artifacts.                                                                                               | `<repo>/.provar-mcp/validation/`               |
 | `PROVAR_NO_UPDATE_CHECK`     | When set (any non-empty value), skips the startup npm-registry update check. Same effect as `--no-update-check`.                                                                        | unset (check runs)                             |
 | `PROVAR_AUTO_DEFECTS`        | When `1`, enables the Quality Hub auto-defect creation flow. Normally set by passing the `--auto-defects` flag rather than directly.                                                    | unset (auto-defects disabled)                  |
+
+### Setting these in your MCP client config
+
+You do **not** need to start the server from a shell that already has the variables exported. Every MCP client that supports launching servers (Claude Desktop, Claude Code, Cursor, VS Code GitHub Copilot, Agentforce Vibes, and any other client following the spec) accepts an **`"env"` object** alongside `"command"` and `"args"` in the server entry. The client launches the server as a child process with those variables present in its environment — equivalent to having `export VAR=value` set before invoking `sf provar mcp start` manually.
+
+Worked example — `.mcp.json` (Claude Code project scope) or `claude_desktop_config.json` (Claude Desktop) combining CLI flags via `args` and environment variables via `env`:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project", "--auto-update"],
+      "env": {
+        "PROVAR_API_KEY": "pv_k_your_key_here",
+        "PROVAR_MCP_TOOLS": "nitrox,authoring",
+        "PROVAR_MCP_EMIT_TOKEN_META": "true",
+        "PROVAR_MCP_MAX_TOOL_DEPTH": "30"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- All env-var values must be **strings** in JSON. `"true"`, `"false"`, and numeric values like `"30"` are quoted; the server parses them on read.
+- `"env"` is merged with the parent process's environment by the MCP client. Variables you don't list here keep whatever value the client inherits (usually the user's shell environment).
+- If you set `PROVAR_API_KEY` here, it takes priority over any key stored at `~/.provar/credentials.json` by `sf provar auth login`. Convenient for CI runners or for using different keys across different Provar projects without touching the stored credentials.
+- The CLI-only flag `--allowed-paths` still goes in `args`, not `env` — see the [CLI flags](#cli-flags) callout above.
 
 ---
 
