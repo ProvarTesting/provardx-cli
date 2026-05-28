@@ -46,7 +46,19 @@ const SHORTHAND_TO_FQID: Record<string, string> = {
   Sleep: 'com.provar.plugins.bundled.apis.control.Sleep',
   ForEach: 'com.provar.plugins.bundled.apis.control.ForEach',
   CaseCall: 'com.provar.plugins.bundled.apis.control.CaseCall',
+  // NitroX MS variants (Microsoft Dynamics 365 + Power Platform — Provar 3.0.7+)
+  MSDynamics365Connect: 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365',
+  MSDataverseConnect: 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse',
+  MSPowerAppConnect: 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp',
+  MSPowerPageConnect: 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage',
 };
+
+const NITROX_MS_SHORTHANDS: ReadonlySet<string> = new Set([
+  'MSDynamics365Connect',
+  'MSDataverseConnect',
+  'MSPowerAppConnect',
+  'MSPowerPageConnect',
+]);
 
 function resolveApiId(apiId: string): string {
   return SHORTHAND_TO_FQID[apiId] ?? apiId;
@@ -116,6 +128,18 @@ function buildStepWarnings(steps: Array<{ api_id: string }>): string[] {
     );
   }
 
+  const nitroxMsFqids = new Set(
+    Array.from(NITROX_MS_SHORTHANDS, (s) => SHORTHAND_TO_FQID[s]).filter((id): id is string => Boolean(id))
+  );
+  if (resolvedIds.some((id) => nitroxMsFqids.has(id))) {
+    warnings.push(
+      'NitroX MS connect (Dynamics 365 / Dataverse / Power Apps / Power Pages): ' +
+        'variant-specific args (appName, powerAppName, environment, powerPageName) must either be supplied as ' +
+        'literals/variables in attributes OR declared as <generatedParameters> for data-driven tests. ' +
+        'Empty args with no parameter declaration cause runtime null binding.'
+    );
+  }
+
   // D7: Cleanup steps placed after a potential failure point are skipped when stopOnError=false.
   if (resolvedIds.includes(SHORTHAND_TO_FQID['ApexDeleteObject'] ?? '')) {
     warnings.push(
@@ -139,7 +163,9 @@ const StepSchema = z.object({
       'Provar step API ID. Shorthand forms are accepted and auto-expanded to fully-qualified IDs: ' +
         'UiConnect, UiDoAction, UiWithScreen, UiAssert, UiRead, UiFill, UiNavigate, UiWithRow, UiHandleAlert, ' +
         'ApexConnect, ApexSoqlQuery, ApexCreateObject, ApexReadObject, ApexUpdateObject, ApexDeleteObject, ' +
-        'SetValues, AssertValues, StepGroup, Sleep, ForEach, CaseCall. ' +
+        'SetValues, AssertValues, StepGroup, Sleep, ForEach, CaseCall, ' +
+        'MSDynamics365Connect, MSDataverseConnect, MSPowerAppConnect, MSPowerPageConnect ' +
+        '(NitroXConnect:ms-* family for Microsoft Dynamics 365 + Power Platform — Provar 3.0.7+). ' +
         'Or pass the fully-qualified ID directly (com.provar.plugins.*).'
     ),
   name: z.string().describe('Human-readable step name'),
@@ -180,6 +206,9 @@ const TOOL_DESCRIPTION = [
   '  - sf:ui:target (or omit target_uri) → flat Salesforce XML structure (existing behaviour).',
   '  - ui:pageobject:target?pageId=pageobjects.PageClass → wraps all steps in a UiWithScreen element targeting that non-SF page object.',
   'API IDs: shorthand forms (e.g. UiConnect, ApexSoqlQuery) are automatically expanded to fully-qualified IDs required by the Provar runtime.',
+  'Microsoft Dynamics / Power Platform: MSDynamics365Connect, MSDataverseConnect, MSPowerAppConnect, MSPowerPageConnect ' +
+    'expand to NitroXConnect:ms-* variants. Variant-specific args (appName, powerAppName, environment, powerPageName) ' +
+    'may be passed as literals OR declared via <generatedParameters> for data-driven tests.',
   'Step arguments: attributes are emitted as <arguments><argument id="..."><value .../></argument></arguments> — the only format the Provar runtime processes.',
   'Shorthand XML attributes on <apiCall> are silently ignored at runtime; always supply arguments via the attributes map.',
   'ApexSoqlQuery argument IDs: soqlQuery (the SOQL SELECT statement), resultListName (binds result list to a variable), apexConnectionName (named connection), resultScope (optional).',

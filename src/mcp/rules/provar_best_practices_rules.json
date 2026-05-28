@@ -589,6 +589,36 @@
       "source": "Provar API Reference: UiConnect vs ApexConnect"
     },
     {
+      "id": "UI-NITROX-CONNECT-ARGS-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "NitroX MS connect step has invalid arguments",
+      "description": "NitroXConnect:ms-* steps share a common argument set (connectionName, reuseConnectionName, privateBrowsingMode, resultName, resultScope, webBrowser) plus variant-specific args: ms-dynamics365 → appName; ms-powerapp → powerAppName; ms-powerpage → environment, powerPageName; ms-dataverse → none. NitroX MS variants do NOT support ApexConnect-only args (autoCleanup, lightningMode, alreadyOpenBehaviour, etc.) or arguments from sibling variants (e.g. powerAppName on ms-dynamics365).",
+      "appliesTo": ["Step"],
+      "severity": "critical",
+      "weight": 10,
+      "recommendation": "Remove invalid arguments from the NitroX MS connect step. Cross-variant args (e.g. powerAppName on ms-dynamics365) usually indicate the wrong apiId variant — verify which Microsoft product the step targets and update the apiId suffix accordingly.",
+      "check": {
+        "type": "nitroxConnectInvalidArgs",
+        "target": "step"
+      },
+      "source": "Provar 3.0.7 API Reference: NitroXConnect Microsoft variants"
+    },
+    {
+      "id": "UI-NITROX-VARIANT-ARG-001",
+      "category": "ConnectionsAndEnvironments",
+      "name": "NitroX MS connect step missing variant-specific argument",
+      "description": "Variants ms-dynamics365 (appName), ms-powerapp (powerAppName), and ms-powerpage (environment, powerPageName) each have variant-specific arguments. They may be left empty when declared as runtime-bound parameters via <generatedParameters><apiParam name=\"...\"/> (the data-driven test pattern). Otherwise they should be populated to avoid runtime null binding.",
+      "appliesTo": ["Step"],
+      "severity": "minor",
+      "weight": 2,
+      "recommendation": "Either populate the argument with a literal/variable value, or declare it as a runtime parameter under <generatedParameters> for data-driven tests.",
+      "check": {
+        "type": "nitroxVariantArgRequired",
+        "target": "step"
+      },
+      "source": "Provar 3.0.7 API Reference: NitroXConnect Microsoft variants"
+    },
+    {
       "id": "APEX-AUTOCLEANUP-001",
       "category": "ConnectionsAndEnvironments",
       "name": "Prefer autoCleanup over manual ApexDeleteObject steps",

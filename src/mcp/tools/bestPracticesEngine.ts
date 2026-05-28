@@ -179,7 +179,51 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.forcedotcom.core.ui.UiFill',
   'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
   'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert',
+  // Forcedotcom — NitroX MS variants (Microsoft Dynamics 365 + Power Platform, Provar 3.0.7+)
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage',
 ]);
+
+// ── NitroX MS variants — shared tables for UI-NITROX-* rules ─────────────────
+
+const NITROX_MS_BASE = 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect';
+
+const NITROX_MS_VARIANT_REQUIRED_ARGS: Record<string, readonly string[]> = {
+  'ms-dynamics365': ['appName'],
+  'ms-dataverse': [],
+  'ms-powerapp': ['powerAppName'],
+  'ms-powerpage': ['environment', 'powerPageName'],
+};
+
+const NITROX_MS_SHARED_ALLOWED_ARGS: ReadonlySet<string> = new Set([
+  'connectionName',
+  'reuseConnectionName',
+  'privateBrowsingMode',
+  'resultName',
+  'resultScope',
+  'webBrowser',
+]);
+
+const APEX_CONNECT_ONLY_ARGS: ReadonlySet<string> = new Set([
+  'autoCleanup',
+  'enableObjectIdLogging',
+  'quickUiLogin',
+  'closeAllPrimaryTabs',
+  'alreadyOpenBehaviour',
+  'lightningMode',
+  'uiApplicationName',
+  'cleanupConnectionName',
+]);
+
+function getNitroxMsVariant(apiId: string | undefined): string | null {
+  if (!apiId) return null;
+  const prefix = `${NITROX_MS_BASE}:`;
+  if (!apiId.startsWith(prefix)) return null;
+  const variant = apiId.slice(prefix.length);
+  return variant in NITROX_MS_VARIANT_REQUIRED_ARGS ? variant : null;
+}
 
 // ── XML tree types & helpers ──────────────────────────────────────────────────
 
@@ -900,6 +944,148 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
   return violations;
 }
 
+// ── NitroX MS variant validators (UI-NITROX-CONNECT-ARGS-001, UI-NITROX-VARIANT-ARG-001) ───
+
+/**
+ * Return the list of <argument> nodes on an apiCall, navigating through the
+ * <arguments> wrapper that fast-xml-parser preserves. Distinct from the
+ * pre-existing `getArguments` helper above, which reads `call.argument`
+ * directly and does not handle the wrapper.
+ */
+function getCallArguments(call: XmlNode): XmlNode[] {
+  const argsContainer = call['arguments'] as XmlNode | undefined;
+  if (!argsContainer || typeof argsContainer !== 'object') return [];
+  return toArr(argsContainer['argument'] as XmlNode | XmlNode[]);
+}
+
+/** Return the set of <apiParam name="..."> names declared under <generatedParameters>. */
+function getGeneratedParamNames(call: XmlNode): Set<string> {
+  const container = call['generatedParameters'] as XmlNode | undefined;
+  if (!container || typeof container !== 'object') return new Set();
+  const params = toArr(container['apiParam'] as XmlNode | XmlNode[]);
+  const names = new Set<string>();
+  for (const p of params) {
+    const name = p['@_name'] as string | undefined;
+    if (name) names.add(name);
+  }
+  return names;
+}
+
+/** True when the <argument> has a real <value> child (not just an empty self-closing tag). */
+function argumentHasValue(arg: XmlNode): boolean {
+  const value = arg['value'];
+  if (value == null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return true;
+}
+
+/**
+ * UI-NITROX-CONNECT-ARGS-001 — reject ApexConnect-only args and cross-variant args
+ * on NitroX MS connect steps. One violation per offending (step, arg) pair so
+ * de-dup against the Quality Hub API is straightforward.
+ */
+function validateNitroxConnectInvalidArgs(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    const variant = getNitroxMsVariant(apiId);
+    if (!variant) continue;
+
+    const variantArgs = NITROX_MS_VARIANT_REQUIRED_ARGS[variant] ?? [];
+    const ownVariantArgs = new Set<string>(variantArgs);
+    const otherVariantArgs = new Set<string>();
+    for (const [v, args] of Object.entries(NITROX_MS_VARIANT_REQUIRED_ARGS)) {
+      if (v === variant) continue;
+      for (const a of args) otherVariantArgs.add(a);
+    }
+
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+    const tid = call['@_testItemId'] as string | undefined;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+
+    for (const arg of getCallArguments(call)) {
+      const argId = arg['@_id'] as string | undefined;
+      if (!argId) continue;
+
+      if (APEX_CONNECT_ONLY_ARGS.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses ApexConnect-only argument '${argId}' — ` +
+              `not supported on NitroXConnect:${variant}${tidSuffix}`
+          )
+        );
+        continue;
+      }
+      if (otherVariantArgs.has(argId) && !ownVariantArgs.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses argument '${argId}' that belongs to a sibling ` +
+              `variant — check whether the apiId variant suffix is correct${tidSuffix}`
+          )
+        );
+        continue;
+      }
+      if (!NITROX_MS_SHARED_ALLOWED_ARGS.has(argId) && !ownVariantArgs.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses unknown argument '${argId}'${tidSuffix}`
+          )
+        );
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * UI-NITROX-VARIANT-ARG-001 — warn when a variant-specific argument is absent or empty
+ * UNLESS it is declared as a runtime-bound parameter under <generatedParameters>
+ * (the data-driven pattern used in the Provar regression fixture).
+ */
+function validateNitroxVariantArgRequired(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    const variant = getNitroxMsVariant(apiId);
+    if (!variant) continue;
+
+    const required = NITROX_MS_VARIANT_REQUIRED_ARGS[variant] ?? [];
+    if (required.length === 0) continue;
+
+    const argsById = new Map<string, XmlNode>();
+    for (const a of getCallArguments(call)) {
+      const id = a['@_id'] as string | undefined;
+      if (id) argsById.set(id, a);
+    }
+    const generatedParams = getGeneratedParamNames(call);
+
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+    const tid = call['@_testItemId'] as string | undefined;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+
+    for (const reqArg of required) {
+      if (generatedParams.has(reqArg)) continue; // data-driven — explicitly OK
+      const arg = argsById.get(reqArg);
+      if (arg && argumentHasValue(arg)) continue;
+      violations.push(
+        makeViolation(
+          rule,
+          `NitroX MS step '${title}' (variant ${variant}) is missing required argument '${reqArg}' ` +
+            `and no matching <generatedParameters> entry is declared${tidSuffix}`
+        )
+      );
+    }
+  }
+
+  return violations;
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -925,6 +1111,8 @@ type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
 
 const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
   uiActionNestingStructure: validateUiActionNestingStructure,
+  nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,
+  nitroxVariantArgRequired: validateNitroxVariantArgRequired,
 };
 
 // ── XML parser (shared settings) ─────────────────────────────────────────────

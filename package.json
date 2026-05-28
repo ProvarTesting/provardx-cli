@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
-  "version": "1.5.2-beta.2",
+  "version": "1.5.2-beta.3",
   "mcpName": "io.github.ProvarTesting/provar",
   "license": "BSD-3-Clause",
   "plugins": [
@@ -159,6 +159,7 @@
         "docs/NITROX_COMPONENT_CATALOG.md",
         "docs/NITROX_CATALOG_SOURCE.json",
         "docs/PROVAR_TOOL_GUIDE.md",
+        "docs/PROVAR_TEST_STEP_REFERENCE.md",
         "**/tsconfig.json",
         "messages/**"
       ],

@@ -799,6 +799,17 @@ If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap take
 | `apexConnectionName` | Named Salesforce connection                 |
 | `resultScope`        | Optional scope (Test, Local, Global)        |
 
+**Microsoft Dynamics 365 + Power Platform shorthands** (Provar 3.0.7+) — auto-expand to the `NitroXConnect:ms-*` family. See the `provar://docs/step-reference` resource for full argument and `<generatedParameters>` documentation.
+
+| Shorthand              | Fully-qualified apiId                                                 | Variant-specific args          |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------ |
+| `MSDynamics365Connect` | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365` | `appName`                      |
+| `MSDataverseConnect`   | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse`   | _(none)_                       |
+| `MSPowerAppConnect`    | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp`    | `powerAppName`                 |
+| `MSPowerPageConnect`   | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage`   | `environment`, `powerPageName` |
+
+Validation rules: `UI-NITROX-CONNECT-ARGS-001` (critical, bans ApexConnect-only and cross-variant args), `UI-NITROX-VARIANT-ARG-001` (minor, requires variant-specific arg unless declared in `<generatedParameters>`).
+
 **Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
 
 `validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.

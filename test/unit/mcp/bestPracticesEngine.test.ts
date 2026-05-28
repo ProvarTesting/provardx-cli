@@ -419,4 +419,157 @@ describe('runBestPractices', () => {
       });
     }
   });
+
+  // ── UI-NITROX-CONNECT-ARGS-001 / UI-NITROX-VARIANT-ARG-001 — NitroX MS variants ──
+
+  describe('NitroX MS variants (Dynamics 365 + Power Platform)', () => {
+    const TC_GUID = '550e8400-e29b-41d4-a716-446655440100';
+    const STEP_GUID = '550e8400-e29b-41d4-a716-446655440101';
+    const NITROX_BASE = 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect';
+
+    function buildMsXml(args: { variant: string; extraArgs?: string; generatedParams?: string }): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${TC_GUID}" registryId="tc-ms" name="MS Test">
+  <steps>
+    <apiCall guid="${STEP_GUID}" apiId="${NITROX_BASE}:${
+        args.variant
+      }" name="NitroXConnect" testItemId="1" title="MS Connect">
+      <arguments>
+        <argument id="connectionName"><value class="value" valueClass="string">UiConn</value></argument>
+        <argument id="resultName"><value class="value" valueClass="string">MSResult</value></argument>
+        <argument id="resultScope"><value class="value" valueClass="string">Test</value></argument>
+        ${args.extraArgs ?? ''}
+      </arguments>
+      ${args.generatedParams ?? ''}
+    </apiCall>
+  </steps>
+</testCase>`;
+    }
+
+    function ruleViolations(violations: BPViolation[], ruleId: string): BPViolation[] {
+      return violations.filter((v) => v.rule_id === ruleId);
+    }
+
+    it('API-UNKNOWN-001 does not fire for any of the four NitroX MS variants', () => {
+      for (const variant of ['ms-dynamics365', 'ms-dataverse', 'ms-powerapp', 'ms-powerpage']) {
+        const xml = buildMsXml({
+          variant,
+          extraArgs:
+            variant === 'ms-dynamics365'
+              ? '<argument id="appName"><value class="value" valueClass="string">Sales Hub</value></argument>'
+              : variant === 'ms-powerapp'
+              ? '<argument id="powerAppName"><value class="value" valueClass="string">App</value></argument>'
+              : variant === 'ms-powerpage'
+              ? '<argument id="environment"><value class="value" valueClass="string">Prod</value></argument>' +
+                '<argument id="powerPageName"><value class="value" valueClass="string">Page</value></argument>'
+              : '',
+        });
+        const violations = runBestPractices(xml).violations;
+        const apiUnknown = ruleViolations(violations, 'API-UNKNOWN-001');
+        assert.equal(apiUnknown.length, 0, `API-UNKNOWN-001 must not fire for ${variant}`);
+        const variantMissing = ruleViolations(violations, 'UI-NITROX-VARIANT-ARG-001');
+        assert.equal(
+          variantMissing.length,
+          0,
+          `UI-NITROX-VARIANT-ARG-001 must not fire when args populated for ${variant}`
+        );
+      }
+    });
+
+    it('API-UNKNOWN-001 still fires for an unknown variant suffix (e.g. ms-bogus)', () => {
+      const xml = buildMsXml({ variant: 'ms-bogus' });
+      const apiUnknown = ruleViolations(runBestPractices(xml).violations, 'API-UNKNOWN-001');
+      assert.ok(apiUnknown.length > 0, 'API-UNKNOWN-001 must fire for ms-bogus');
+    });
+
+    it('UI-NITROX-CONNECT-ARGS-001 fires when an ApexConnect-only arg (autoCleanup) is used on a NitroX MS step', () => {
+      const xml = buildMsXml({
+        variant: 'ms-dynamics365',
+        extraArgs:
+          '<argument id="appName"><value class="value" valueClass="string">Sales Hub</value></argument>' +
+          '<argument id="autoCleanup"><value class="value" valueClass="boolean">true</value></argument>',
+      });
+      const v = ruleViolations(runBestPractices(xml).violations, 'UI-NITROX-CONNECT-ARGS-001');
+      assert.ok(v.length > 0, 'UI-NITROX-CONNECT-ARGS-001 must fire for autoCleanup');
+      assert.ok(
+        v[0].message.includes('autoCleanup'),
+        `expected message to reference autoCleanup, got: ${v[0].message}`
+      );
+    });
+
+    it('UI-NITROX-CONNECT-ARGS-001 fires when a cross-variant arg (powerAppName) is used on ms-dynamics365', () => {
+      const xml = buildMsXml({
+        variant: 'ms-dynamics365',
+        extraArgs:
+          '<argument id="appName"><value class="value" valueClass="string">Sales</value></argument>' +
+          '<argument id="powerAppName"><value class="value" valueClass="string">WrongApp</value></argument>',
+      });
+      const v = ruleViolations(runBestPractices(xml).violations, 'UI-NITROX-CONNECT-ARGS-001');
+      assert.ok(v.length > 0, 'UI-NITROX-CONNECT-ARGS-001 must fire for cross-variant arg');
+      assert.ok(
+        v[0].message.includes('powerAppName'),
+        `expected message to reference powerAppName, got: ${v[0].message}`
+      );
+    });
+
+    it('UI-NITROX-VARIANT-ARG-001 fires when a required variant arg is missing AND no <generatedParameters> declares it', () => {
+      const xml = buildMsXml({
+        variant: 'ms-powerpage',
+        extraArgs: '<argument id="powerPageName"><value class="value" valueClass="string">Page</value></argument>',
+        // 'environment' deliberately absent + no generatedParameters
+      });
+      const v = ruleViolations(runBestPractices(xml).violations, 'UI-NITROX-VARIANT-ARG-001');
+      assert.ok(v.length > 0, 'UI-NITROX-VARIANT-ARG-001 must fire when environment is missing');
+      assert.ok(
+        v[0].message.includes('environment'),
+        `expected message to reference environment, got: ${v[0].message}`
+      );
+    });
+
+    it('UI-NITROX-VARIANT-ARG-001 does NOT fire when the missing arg is declared as a runtime parameter (data-driven pattern)', () => {
+      const xml = buildMsXml({
+        variant: 'ms-powerpage',
+        extraArgs: '<argument id="environment"/><argument id="powerPageName"/>',
+        generatedParams: `<generatedParameters>
+        <apiParam group="ui" name="environment" title="Environment"><type><textType/></type></apiParam>
+        <apiParam group="ui" name="powerPageName" title="Power Page Name"><type><textType/></type></apiParam>
+      </generatedParameters>`,
+      });
+      const v = ruleViolations(runBestPractices(xml).violations, 'UI-NITROX-VARIANT-ARG-001');
+      assert.equal(
+        v.length,
+        0,
+        `UI-NITROX-VARIANT-ARG-001 must not fire when generatedParameters declares the args; got: ${JSON.stringify(v)}`
+      );
+    });
+
+    it('ms-dataverse has no variant-specific args and validates cleanly without extras', () => {
+      const xml = buildMsXml({ variant: 'ms-dataverse' });
+      const violations = runBestPractices(xml).violations;
+      const nitroxIssues = violations.filter((v) => v.rule_id.startsWith('UI-NITROX-'));
+      assert.equal(
+        nitroxIssues.length,
+        0,
+        `ms-dataverse must validate without NitroX-specific violations; got: ${JSON.stringify(nitroxIssues)}`
+      );
+    });
+
+    it('end-to-end: the canonical four-variant fixture has no NitroX-specific violations (data-driven pattern)', async () => {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const url = await import('node:url');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      const fixturePath = path.join(here, '..', '..', 'fixtures', 'ms-dynamics-connect.testcase');
+      const xml = fs.readFileSync(fixturePath, 'utf-8');
+      const violations = runBestPractices(xml).violations;
+      const nitroxIssues = violations.filter(
+        (v) => v.rule_id.startsWith('UI-NITROX-') || v.rule_id === 'API-UNKNOWN-001'
+      );
+      assert.equal(
+        nitroxIssues.length,
+        0,
+        `canonical fixture must not emit NitroX/UNKNOWN violations; got: ${JSON.stringify(nitroxIssues, null, 2)}`
+      );
+    });
+  });
 });
