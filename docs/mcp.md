@@ -857,6 +857,21 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
+- **UI-NEST-STRUCT-001** (severity `major`, weight 7, category `XMLSchema`) — A UI action step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, or `UiHandleAlert`) is emitted outside a screen ancestor. To pass, every UI action must descend from a `UiWithScreen` or `UiWithRow` `apiCall` through a `<clause name="substeps">` path. Control-flow wrappers (`If`/`ForEach`/`DoWhile`/`WaitFor`/`Switch`) between the screen ancestor and the UI action are allowed; steps inside `<clause name="hidden">` are exempt (disabled / settings blocks). One violation is emitted per offending step, so `(rule_id, test_item_id)` de-duplicates cleanly against the Quality Hub API. Provar IDE cannot bind flat-emitted UI actions to a screen context and they will not render in the editor. Wrap each offending step in the canonical chain:
+  ```xml
+  <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" ...>
+    <arguments>...</arguments>
+    <clauses>
+      <clause name="substeps" testItemId="…">
+        <steps>
+          <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" .../>
+          <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow" ...> ... </apiCall>
+        </steps>
+      </clause>
+    </clauses>
+  </apiCall>
+  ```
+  `UiWithRow` plays a dual role: it is itself a UI action that must be nested, and a container whose `<clause name="substeps">` satisfies the rule for its descendants. Mirrors Quality Hub's `UiActionNestingStructureValidator`.
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
 - **VAR-REF-002** — A `{VarName}` token is embedded inside a larger plain string (e.g. `SELECT Id FROM Account WHERE Id = '{AccountId}'`). Provar does not perform `{…}` interpolation in string values at runtime; the braces are emitted literally. Use `class="compound"` with `<parts>` children to split the literal text and variable references. In `provar_testcase_generate`, pass the value with `{VarName}` placeholders — the generator emits compound XML automatically.
 

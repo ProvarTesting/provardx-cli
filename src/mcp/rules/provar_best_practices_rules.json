@@ -2899,6 +2899,35 @@
       },
       "notes": "Provar internally stores dates as epoch timestamps (milliseconds since 1970-01-01). When valueClass='date' is used, Provar expects a numeric epoch value. String dates cause XML parsing/loading failures. All valid corpus examples use epoch timestamps with valueClass='date': 1637798400000, 1513209600000, etc.",
       "source": "Corpus analysis: All valueClass='date' values are epoch timestamps; string dates cause Provar IDE load failures"
+    },
+    {
+      "id": "UI-NEST-STRUCT-001",
+      "category": "XMLSchema",
+      "name": "UI action steps must be nested inside a UiWithScreen substeps clause",
+      "description": "UiDoAction, UiAssert, UiRead, UiFill, UiNavigate, UiWithRow, and UiHandleAlert steps must descend from a UiWithScreen or UiWithRow ancestor through a <clause name=\"substeps\"> path. Control-flow wrappers (IfThen, ForEach, DoWhile, WaitFor, Switch) between the screen ancestor and the UI action are allowed. Steps inside <clause name=\"hidden\"> are exempt. When emitted flat (e.g. as siblings of UiWithScreen in the root <steps>), Provar IDE cannot bind them to a screen context and they will not render correctly.",
+      "appliesTo": ["Step"],
+      "severity": "major",
+      "weight": 7,
+      "recommendation": "Wrap each UI action inside a parent UiWithScreen using this structure:\n\n  <apiCall apiId=\"com.provar.plugins.forcedotcom.core.ui.UiWithScreen\" ...>\n    <arguments>...</arguments>\n    <clauses>\n      <clause name=\"substeps\" testItemId=\"...\">\n        <steps>\n          <apiCall apiId=\"...UiDoAction\" .../>\n          <apiCall apiId=\"...UiWithRow\" ...> ... </apiCall>\n        </steps>\n      </clause>\n    </clauses>\n  </apiCall>\n\nUiWithRow may contain its own <clauses><clause name=\"substeps\"> with further UI actions inside. Control-flow wrappers (IfThen, ForEach, DoWhile, WaitFor) between the screen ancestor and the UI action are allowed; <clause name=\"hidden\"> is exempt (disabled/settings blocks).",
+      "check": {
+        "type": "uiActionNestingStructure",
+        "target": "step",
+        "uiActionApiIds": [
+          "com.provar.plugins.forcedotcom.core.ui.UiDoAction",
+          "com.provar.plugins.forcedotcom.core.ui.UiAssert",
+          "com.provar.plugins.forcedotcom.core.ui.UiRead",
+          "com.provar.plugins.forcedotcom.core.ui.UiFill",
+          "com.provar.plugins.forcedotcom.core.ui.UiNavigate",
+          "com.provar.plugins.forcedotcom.core.ui.UiWithRow",
+          "com.provar.plugins.forcedotcom.core.ui.UiHandleAlert"
+        ],
+        "screenContainerApiIds": [
+          "com.provar.plugins.forcedotcom.core.ui.UiWithScreen",
+          "com.provar.plugins.forcedotcom.core.ui.UiWithRow"
+        ]
+      },
+      "notes": "Mirrors QH UiActionNestingStructureValidator (lambda/src/validator/best_practices_engine.py). Emits one violation per offending step so that (rule_id, test_item_id) de-dups against the API. UiWithRow plays a dual role: itself a UI action that must be nested, and a container whose substeps clause satisfies the rule for its descendants.",
+      "source": "Field observation: flat-emitted UI actions (sibling of UiWithScreen) fail to render in Provar IDE despite scoring 100/94 in earlier local validation"
     }
   ]
 }
