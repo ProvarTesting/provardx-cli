@@ -17,6 +17,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { validateTestCase } from './testCaseValidate.js';
 import { desc } from './descHelper.js';
+import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
 
 // ── Shorthand → fully-qualified API ID map ────────────────────────────────────
 // Provar runtime requires fully-qualified IDs. Shorthand forms are accepted here
@@ -27,8 +28,11 @@ const SHORTHAND_TO_FQID: Record<string, string> = {
   UiDoAction: 'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
   UiWithScreen: 'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
   UiAssert: 'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  UiRead: 'com.provar.plugins.forcedotcom.core.ui.UiRead',
+  UiFill: 'com.provar.plugins.forcedotcom.core.ui.UiFill',
   UiNavigate: 'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
   UiWithRow: 'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+  UiHandleAlert: 'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert',
   UiScrollToElement: 'com.provar.plugins.forcedotcom.core.ui.UiScrollToElement',
   ApexConnect: 'com.provar.plugins.forcedotcom.core.testapis.ApexConnect',
   ApexSoqlQuery: 'com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery',
@@ -48,34 +52,47 @@ function resolveApiId(apiId: string): string {
   return SHORTHAND_TO_FQID[apiId] ?? apiId;
 }
 
-// ── PDX-495: UI-action grouping under UiWithScreen substeps clause ───────────
+// ── PDX-495 + PDX-497: UI-action grouping under UiWithScreen substeps clause ─
 // The set of fully-qualified API IDs that authors expect to be nested inside a
 // preceding UiWithScreen's <clauses><clause name="substeps"><steps>…</steps></clause>
 // block. When the generator receives a flat list with these IDs trailing a
 // UiWithScreen, the auto-grouping pass moves them inside the substeps clause so
-// the Provar IDE renders the test case correctly (PDX-495). SetValues, ApexConnect,
-// and other non-UI apiCalls stay at the root.
-const UI_ACTION_API_IDS: ReadonlySet<string> = new Set([
-  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
-  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
-  'com.provar.plugins.forcedotcom.core.ui.UiRead',
-  'com.provar.plugins.ui.UiDoAction',
-  'com.provar.plugins.ui.UiAssert',
-  'com.provar.plugins.ui.UiRead',
-]);
-
-const UI_WITH_SCREEN_API_IDS: ReadonlySet<string> = new Set([
-  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
-  'com.provar.plugins.ui.UiWithScreen',
-]);
+// the Provar IDE renders the test case correctly. SetValues, ApexConnect, and
+// other non-UI apiCalls stay at the root.
+//
+// PDX-497: API set imported from the shared `uiActionApiIds.ts` module so the
+// generator and validator can never drift. The single-namespace alignment
+// (`com.provar.plugins.forcedotcom.core.ui.*`) matches what `resolveApiId`
+// produces from every shorthand AND what the validator enforces — the older
+// `com.provar.plugins.ui.*` defensive entries in this file's local set were
+// dead code (no test coverage, no production path emits them).
+const FORCEDOTCOM_UI_WITH_SCREEN = 'com.provar.plugins.forcedotcom.core.ui.UiWithScreen';
 
 function isUiAction(apiId: string): boolean {
   return UI_ACTION_API_IDS.has(resolveApiId(apiId));
 }
 
 function isUiWithScreen(apiId: string): boolean {
-  return UI_WITH_SCREEN_API_IDS.has(resolveApiId(apiId));
+  return resolveApiId(apiId) === FORCEDOTCOM_UI_WITH_SCREEN;
 }
+
+/**
+ * PDX-497: a UI action step whose own container clause satisfies the
+ * UI-NEST-STRUCT-001 rule for its descendants (UiWithScreen, UiWithRow).
+ * Mirrors the validator's `UI_SCREEN_CONTAINERS` set.
+ */
+function isScreenContainer(apiId: string): boolean {
+  return UI_SCREEN_CONTAINER_API_IDS.has(resolveApiId(apiId));
+}
+
+// PDX-497: UiWithRow plays a dual role. As a UI action (in UI_ACTION_API_IDS)
+// it must be nested under a UiWithScreen ancestor via a substeps clause — same
+// rule QH's UI-NEST-STRUCT-001 enforces. As a screen container (in
+// UI_SCREEN_CONTAINER_API_IDS) it owns its OWN substeps clause that satisfies
+// the rule for its descendants. The auto-grouping algorithm in `collectGroup`
+// (below) handles both roles, and `buildTestCaseXml` synthesizes a root
+// UiWithScreen when the payload contains screen containers but no UiWithScreen
+// — without that wrapper, a root-level UiWithRow would itself fail the rule.
 
 // ── Per-step runtime warnings ─────────────────────────────────────────────────
 
@@ -120,7 +137,7 @@ const StepSchema = z.object({
     .string()
     .describe(
       'Provar step API ID. Shorthand forms are accepted and auto-expanded to fully-qualified IDs: ' +
-        'UiConnect, UiDoAction, UiWithScreen, UiAssert, UiNavigate, UiWithRow, ' +
+        'UiConnect, UiDoAction, UiWithScreen, UiAssert, UiRead, UiFill, UiNavigate, UiWithRow, UiHandleAlert, ' +
         'ApexConnect, ApexSoqlQuery, ApexCreateObject, ApexReadObject, ApexUpdateObject, ApexDeleteObject, ' +
         'SetValues, AssertValues, StepGroup, Sleep, ForEach, CaseCall. ' +
         'Or pass the fully-qualified ID directly (com.provar.plugins.*).'
@@ -141,7 +158,7 @@ const StepSchema = z.object({
         '(3) AssertValues: pass assertion arguments as flat key/value pairs; emitted as flat <argument> elements, NOT wrapped in valueList/namedValues. ' +
         '(4) target argument (UiWithScreen / UiWithRow): pass the sf:ui:target or ui:pageobject:target URI; ' +
         '    emitted as class="uiTarget" uri="...". ' +
-        '(5) locator argument (UiDoAction / UiAssert): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
+        '(5) locator argument (UiDoAction / UiAssert / UiRead / UiFill): pass the locator URI; emitted as class="uiLocator" uri="...". ' +
         'All other string values use class="value" valueClass="string".'
     ),
 });
@@ -178,7 +195,7 @@ const TOOL_DESCRIPTION = [
     'If AssertValues uses namedValues-shaped content, validation reports warning ASSERT-001.',
   'Variable references: pass values as "{VarName}" (braces); emitted as class="variable" <path element="VarName"/>.',
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
-  'locator argument (UiDoAction/UiAssert): pass the URI value; emitted as class="uiLocator" uri="...".',
+  'locator argument (UiDoAction/UiAssert/UiRead/UiFill): pass the URI value; emitted as class="uiLocator" uri="...".',
   'valueClass auto-detection: argument values are typed automatically before XML emission. ' +
     'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "datetime"; ' +
     '"true"/"false" → "boolean"; numeric string (e.g. "42", "-5", "3.14") → "decimal"; otherwise "string". ' +
@@ -290,10 +307,13 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           .default('auto')
           .describe(
             desc(
-              'Controls how UI action steps (UiDoAction, UiAssert, UiRead) are nested under UiWithScreen wrappers. ' +
+              'Controls how UI action steps (UiDoAction, UiAssert, UiRead, UiFill, UiNavigate, UiWithRow, UiHandleAlert) ' +
+                'are nested under UiWithScreen wrappers. ' +
                 '"auto" (default): when the flat steps[] payload contains a UiWithScreen followed by UI action siblings, ' +
                 'those siblings are auto-grouped inside the UiWithScreen\'s <clause name="substeps"><steps> block ' +
                 '(the structure Provar IDE expects). Non-UI steps (SetValues, ApexConnect, …) stay at the root. ' +
+                'UiWithRow plays a dual role: when it follows a UiWithScreen it is pulled in as a child container; ' +
+                'when it appears at root without a preceding UiWithScreen it stays at root as its own container. ' +
                 '"flat": legacy behaviour — emit every step as a root sibling, no nesting. ' +
                 '"single-screen": wrap all steps in a single synthetic UiWithScreen (matches target_uri=ui:pageobject:target semantics). ' +
                 'If target_uri is "ui:pageobject:target?…" the single-screen wrap takes precedence regardless of this flag.',
@@ -498,11 +518,13 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
   }
   if (!inNamedValues) {
     // D2: 'target' argument → class="uiTarget" (only for UiWithScreen / UiWithRow).
-    if (key === 'target' && (apiId.includes('UiWithScreen') || apiId.includes('UiWithRow'))) {
+    // PDX-497: dispatched via the shared canonical set rather than substring matching.
+    if (key === 'target' && UI_SCREEN_CONTAINER_API_IDS.has(apiId)) {
       return `${indent}<value class="uiTarget" uri="${escapeXmlAttr(val)}"/>`;
     }
-    // D2: 'locator' argument → class="uiLocator" (only for UiDoAction / UiAssert).
-    if (key === 'locator' && (apiId.includes('UiDoAction') || apiId.includes('UiAssert'))) {
+    // D2: 'locator' argument → class="uiLocator" (only for UI APIs that bear a locator).
+    // PDX-497: covers UiDoAction, UiAssert, UiRead, UiFill via the shared canonical set.
+    if (key === 'locator' && UI_LOCATOR_BEARING_API_IDS.has(apiId)) {
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
   }
@@ -624,44 +646,85 @@ function buildStepXmlWithChildren(
   return `${open}\n${clausesBlock}\n${close}`;
 }
 
-// PDX-495: post-process the flat steps[] payload into a depth-1 tree where each
-// UiWithScreen owns the trailing run of UI-action siblings. Returns the tree as
-// a list of root-level nodes, each carrying its own children list.
+// PDX-495 + PDX-497: post-process the flat steps[] payload into a tree where
+// each screen-container (UiWithScreen at root, or a UiWithRow nested under a
+// UiWithScreen) owns the trailing run of UI-action siblings. `buildTestCaseXml`
+// guarantees a UiWithScreen exists at the root before this runs (synthesizing
+// one when needed), so no screen container ever appears unparented. Returns
+// the tree as a list of root-level nodes, each carrying its own children list.
 //
-// Grouping rules (per PDX-495):
+// Grouping rules:
 //   - When a UiWithScreen is seen, collect subsequent siblings while they are
-//     UI actions (UiDoAction / UiAssert / UiRead). Stop at: another
-//     UiWithScreen, any non-UI step, or end of list.
+//     UI actions (UiDoAction / UiAssert / UiRead / UiFill / UiNavigate /
+//     UiWithRow / UiHandleAlert). Stop at: another UiWithScreen, any non-UI
+//     step, or end of list.
+//   - PDX-497 UiWithRow dual role: when a UiWithRow appears inside that run
+//     (i.e. as a child of a UiWithScreen), it absorbs trailing UI-action
+//     siblings into its OWN substeps clause (it is a screen container). When a
+//     UiWithRow would otherwise appear at root with no preceding UiWithScreen,
+//     `buildTestCaseXml` synthesizes a root UiWithScreen wrapper first so the
+//     auto-grouping pass still nests UiWithRow correctly under a screen
+//     ancestor — required by QH's UI-NEST-STRUCT-001 rule.
 //   - SetValues / ApexConnect / other non-UI apiCalls stay at root.
+//
+// The walker uses a shared cursor so a UiWithRow that absorbs trailing UI
+// actions advances the outer loop past those siblings — preventing the same
+// step from being claimed by two containers.
 type Step = { api_id: string; name: string; attributes: Record<string, string> };
-type StepNode = Step & { children: Step[] };
+interface StepNode extends Step {
+  children: StepNode[];
+}
 
 function groupStepsAuto(steps: Step[]): StepNode[] {
+  const cursor = { i: 0 };
+  return collectGroup(steps, cursor, /* stopOnUiWithScreen */ false);
+}
+
+/**
+ * Walk a contiguous run of steps starting at `cursor.i`. Stops at end of list,
+ * or — when `stopOnUiWithScreen` is true — at the next UiWithScreen (which
+ * belongs to the caller).
+ *
+ * For each step:
+ * - UiWithScreen → consume one node, then recursively absorb a child run of
+ * UI-action siblings (with `stopOnUiWithScreen=true`).
+ * - UiWithRow → consume one node, then recursively absorb a child run of
+ * UI-action siblings (UiWithRow is itself a UI action that can also host
+ * substeps — same recursive behaviour as UiWithScreen for its children).
+ * - Any other UI action → consume one node, no children.
+ * - Non-UI step → consume one node, no children. When called from a child
+ * run this breaks the run (handled by the parent loop's `isUiAction` gate).
+ */
+function collectGroup(steps: Step[], cursor: { i: number }, stopOnUiWithScreen: boolean): StepNode[] {
   const result: StepNode[] = [];
-  let i = 0;
-  while (i < steps.length) {
-    const node: StepNode = { ...steps[i], children: [] };
+  while (cursor.i < steps.length) {
+    const step = steps[cursor.i];
+    if (stopOnUiWithScreen && isUiWithScreen(step.api_id)) break;
+    // Inside a parent's child run, a non-UI step ends the run; the parent's
+    // caller will see it next.
+    if (stopOnUiWithScreen && !isUiAction(step.api_id)) break;
+    cursor.i++;
+    const node: StepNode = { ...step, children: [] };
     result.push(node);
-    if (isUiWithScreen(steps[i].api_id)) {
-      // Absorb trailing UI-action siblings into this UiWithScreen.
-      let j = i + 1;
-      while (j < steps.length && isUiAction(steps[j].api_id)) {
-        node.children.push(steps[j]);
-        j++;
-      }
-      i = j;
-    } else {
-      i++;
+    if (isScreenContainer(step.api_id)) {
+      // UiWithScreen always absorbs; UiWithRow absorbs when it is a child of
+      // a UiWithScreen (root-level UiWithRow is rewritten into a synthetic
+      // UiWithScreen by `buildTestCaseXml` before this walker runs). The child
+      // run itself stops at the next UiWithScreen so a later UiWithScreen is
+      // not pulled in as a grandchild.
+      node.children = collectGroup(steps, cursor, /* stopOnUiWithScreen */ true);
     }
   }
   return result;
 }
 
-// PDX-495: emit a list of grouped step nodes as XML. Assigns testItemIds
-// depth-first: each node consumes one ID; if it has children it ALSO consumes
-// one more ID for the <clause name="substeps"> slot, then its children consume
-// their own IDs in order. Mirrors the numbering convention used by Provar IDE
-// (verified against the Contact_Lead1.testcase reference shape — see PDX-495).
+// PDX-495 + PDX-497: emit a list of grouped step nodes as XML. Assigns
+// testItemIds depth-first: each node consumes one ID; if it has children it
+// ALSO consumes one more ID for the <clause name="substeps"> slot, then its
+// children consume their own IDs in order (recursing into grandchildren when
+// a child node is itself a container, e.g. UiWithRow inside UiWithScreen).
+// Mirrors the numbering convention used by Provar IDE (verified against the
+// Contact_Lead1.testcase reference shape — see PDX-495).
 function emitGroupedSteps(nodes: StepNode[], indent: string, startId: number): { xml: string; nextId: number } {
   const lines: string[] = [];
   let id = startId;
@@ -673,11 +736,12 @@ function emitGroupedSteps(nodes: StepNode[], indent: string, startId: number): {
     }
     const substepsId = id++;
     const childIndent = indent + '      '; // matches buildUiWithScreenXml inner step indent
-    const childLines: string[] = [];
-    for (const child of node.children) {
-      childLines.push(buildFlatStepXml(child, id++, childIndent));
-    }
-    lines.push(buildStepXmlWithChildren(node, myId, indent, childLines.join('\n'), substepsId));
+    // PDX-497: recurse — children may themselves be containers (e.g. UiWithRow
+    // inside UiWithScreen). The recursive call assigns child + grandchild IDs
+    // and returns the XML for the full subtree.
+    const { xml: childrenXml, nextId } = emitGroupedSteps(node.children, childIndent, id);
+    id = nextId;
+    lines.push(buildStepXmlWithChildren(node, myId, indent, childrenXml, substepsId));
   }
   return { xml: lines.join('\n'), nextId: id };
 }
@@ -706,9 +770,25 @@ function buildTestCaseXml(input: {
     // falling back to the bare `sf:ui:target` default so the synthetic wrapper
     // is well-formed even when target_uri is omitted.
     stepLines = buildUiWithScreenXml(input.steps, input.target_uri ?? 'sf:ui:target');
-  } else if (groupingMode === 'auto' && input.steps.some((s) => isUiWithScreen(s.api_id))) {
-    // PDX-495 auto-grouping: nest UI actions inside their preceding UiWithScreen.
-    const tree = groupStepsAuto(input.steps);
+  } else if (groupingMode === 'auto' && input.steps.some((s) => isScreenContainer(s.api_id))) {
+    // PDX-495 + PDX-497 auto-grouping: nest UI actions inside their preceding
+    // screen container (UiWithScreen). When the payload contains a screen
+    // container but no UiWithScreen at root (e.g. starts with UiWithRow), QH's
+    // UI-NEST-STRUCT-001 still requires UiWithRow itself to descend from a
+    // UiWithScreen via a substeps clause. Synthesize a root UiWithScreen so the
+    // round-trip generate -> validate stays clean. Mirrors the single-screen
+    // path's synthetic wrapper (target_uri ?? 'sf:ui:target').
+    const stepsForGrouping = input.steps.some((s) => isUiWithScreen(s.api_id))
+      ? input.steps
+      : [
+          {
+            api_id: 'UiWithScreen',
+            name: 'With page',
+            attributes: { target: input.target_uri ?? 'sf:ui:target' },
+          },
+          ...input.steps,
+        ];
+    const tree = groupStepsAuto(stepsForGrouping);
     stepLines = emitGroupedSteps(tree, '    ', 1).xml;
   } else {
     // Legacy flat behaviour: every step is a root sibling. Preserved by
