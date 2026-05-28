@@ -96,6 +96,8 @@ That's it for the core flows. The MCP server runs entirely via `npx` — **no se
 
 ### Optional — Salesforce CLI (`sf`) for QH / Automation / org tools
 
+> **Heads up:** `npx -y @provartesting/provardx-cli` auto-installs the package itself, but it does **not** install Salesforce CLI. Although `@provartesting/provardx-cli` can function as an sf plugin, npx does not pull in `@salesforce/cli` as a transitive dependency.
+
 Install **Salesforce CLI ≥ 2.x** _only_ if you plan to use one of the following tool families:
 
 | Tool family           | Tools                                                                                                                                                                                                                                                                         | Why sf is needed                                        |
@@ -104,7 +106,12 @@ Install **Salesforce CLI ≥ 2.x** _only_ if you plan to use one of the followin
 | `provar_automation_*` | `provar_automation_setup`, `provar_automation_config_load`, `provar_automation_metadata_download`, `provar_automation_compile`, `provar_automation_testrun`                                                                                                                   | Shell out to `sf provar automation ...` commands.       |
 | `provar_org_describe` | `provar_org_describe`                                                                                                                                                                                                                                                         | Reads Salesforce orgs authenticated via `sf org login`. |
 
-If you install sf for these tools, also run **`sf plugins install @provartesting/provardx-cli`** so the `sf provar` subcommands are available. The MCP server itself does not require this plugin install — it loads from the npx cache.
+If you need these tools, you have **two separate installs** to do in addition to the npx-cached MCP server package:
+
+1. **Install Salesforce CLI** — `npm install -g @salesforce/cli` on any OS, or the [Windows / macOS installers](https://developer.salesforce.com/tools/salesforcecli).
+2. **Register the Provar plugin under sf** — `sf plugins install @provartesting/provardx-cli`. This is independent of the npx install: sf maintains its own plugin directory (`%LOCALAPPDATA%\sf\` on Windows, `~/.local/share/sf/` on Linux/macOS) and the QH/Automation tools shell out to `sf provar ...` subcommands, which sf can only resolve if it finds the plugin in its own directory.
+
+The MCP server itself never needs the sf-plugin copy; it loads from the npx cache. The sf-plugin copy exists purely so that the spawned `sf` child processes can find the `provar` topic.
 
 ## Quick start
 
