@@ -702,8 +702,10 @@ function buildTestCaseXml(input: {
     stepLines = buildUiWithScreenXml(input.steps, input.target_uri);
   } else if (groupingMode === 'single-screen' && input.steps.length > 0) {
     // Explicit single-screen request without a non-SF target_uri: wrap with the
-    // default sf:ui:target semantics so the synthetic wrapper is well-formed.
-    stepLines = buildUiWithScreenXml(input.steps, 'sf:ui:target');
+    // caller-supplied target_uri when provided (e.g. `sf:ui:target?object=Lead&action=New`),
+    // falling back to the bare `sf:ui:target` default so the synthetic wrapper
+    // is well-formed even when target_uri is omitted.
+    stepLines = buildUiWithScreenXml(input.steps, input.target_uri ?? 'sf:ui:target');
   } else if (groupingMode === 'auto' && input.steps.some((s) => isUiWithScreen(s.api_id))) {
     // PDX-495 auto-grouping: nest UI actions inside their preceding UiWithScreen.
     const tree = groupStepsAuto(input.steps);

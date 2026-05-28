@@ -1835,6 +1835,50 @@ describe('provar_testcase_generate', () => {
       assert.ok(xml.includes('<clause name="substeps"'), 'wrapper must contain a substeps clause');
     });
 
+    // PDX-495 (Copilot review): single-screen mode must honour the caller's
+    // target_uri instead of always hardcoding `sf:ui:target`. The docs and
+    // schema description both promise that the wrapper target is "sf:ui:target
+    // (or the URI passed via target_uri)".
+    it('grouping_mode="single-screen": honours caller-supplied target_uri (sf:ui:target?…)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen With Target',
+        grouping_mode: 'single-screen',
+        target_uri: 'sf:ui:target?object=Lead&action=New',
+        steps: [{ api_id: 'UiDoAction', name: 'Click', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // Wrapper target argument carries the full URI (with &amp; XML-escaping).
+      assert.ok(
+        xml.includes('uri="sf:ui:target?object=Lead&amp;action=New"'),
+        'wrapper must use the caller-supplied target_uri, not the hardcoded default'
+      );
+      // Sanity: bare default URI must NOT appear as the wrapper target value.
+      assert.ok(
+        !xml.includes('uri="sf:ui:target"'),
+        'hardcoded sf:ui:target default must not be emitted when target_uri is provided'
+      );
+    });
+
+    // Regression: with no target_uri at all, single-screen still falls back to
+    // the bare `sf:ui:target` default so the wrapper remains well-formed.
+    it('grouping_mode="single-screen": falls back to sf:ui:target when target_uri omitted', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen No Target',
+        grouping_mode: 'single-screen',
+        steps: [{ api_id: 'UiDoAction', name: 'Click', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('uri="sf:ui:target"'), 'omitted target_uri keeps the bare default');
+    });
+
     it('UiWithScreen with no UI-action followers stays flat (no empty substeps clause emitted)', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Lonely Screen',
