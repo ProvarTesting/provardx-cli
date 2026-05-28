@@ -12,12 +12,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [Environment variables](#environment-variables)
   - [Setting these in your MCP client config](#setting-these-in-your-mcp-client-config)
 - [Client configuration](#client-configuration)
-  - [Claude Desktop](#claude-desktop)
-  - [Claude Code](#claude-code)
-  - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
-  - [Cursor](#cursor)
-  - [Agentforce Vibes](#agentforce-vibes)
-  - [Other MCP-compatible clients](#other-mcp-compatible-clients)
+  - [The standard config (recommended)](#the-standard-config-recommended)
+  - [Find your config file by operating system](#find-your-config-file-by-operating-system)
+  - [Client-specific notes](#client-specific-notes)
 - [Path security](#path-security)
 - [Available tools](#available-tools)
   - [provardx_ping](#provardx_ping)
@@ -232,213 +229,307 @@ Notes:
 
 ## Client configuration
 
-### Claude Code
+The MCP server is launched as a child process by your AI client (Claude Code, Claude Desktop, Cursor, VS Code GitHub Copilot, Agentforce Vibes, etc.). **All clients use the same config shape** — a JSON file with `command`, `args`, and optional `env`. The only thing that varies is **where the file lives** on disk.
 
-Claude Code can be configured via the `claude` CLI command or by editing a JSON config file. Both approaches work whether you're using the Claude Code terminal, the VS Code extension, or the Claude Code Desktop app.
+### The standard config (recommended)
 
-#### Via terminal (one-time setup)
+Use `npx` as the command. This is the most portable invocation:
 
-Run one of the following in a terminal, choosing your preferred scope:
+- `npx -y` **auto-installs `@provartesting/provardx-cli` on first run** and caches it for subsequent calls — no separate `sf plugins install` step needed.
+- It does **not** require `sf` to be on PATH, which sidesteps the most common failure mode in GUI clients (Claude Desktop, Cursor, VS Code) that don't inherit your interactive shell environment.
+- It works identically across Windows, macOS, and Linux.
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/path/to/your/provar/project",
+        "--auto-update"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+**Multiple project roots:** repeat the `--allowed-paths` flag, one entry per directory:
+
+```json
+"args": [
+  "-y", "@provartesting/provardx-cli", "mcp", "start",
+  "--allowed-paths", "/path/to/project-a",
+  "--allowed-paths", "/path/to/project-b",
+  "--auto-update"
+]
+```
+
+**Environment variables** (e.g. `PROVAR_API_KEY`, `PROVAR_MCP_TOOLS`, `PROVAR_MCP_EMIT_TOKEN_META`) go in the `"env"` object — see [Setting these in your MCP client config](#setting-these-in-your-mcp-client-config) above for the full pattern.
+
+### Find your config file by operating system
+
+The config file location depends on both your operating system and your MCP client. Click your OS to expand.
+
+<details>
+<summary><b>Windows</b></summary>
+
+| Client                               | Config file location                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `%USERPROFILE%\.claude.json`                                                                                                          |
+| Claude Code (project-scoped, shared) | `<workspace>\.mcp.json` — commit to source control                                                                                    |
+| Claude Desktop (direct installer)    | `%APPDATA%\Claude\claude_desktop_config.json`                                                                                         |
+| Claude Desktop (Microsoft Store)     | `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` — ⚠️ see Store-sandbox note below |
+| GitHub Copilot (VS Code)             | `<workspace>\.vscode\mcp.json`                                                                                                        |
+| Cursor (workspace)                   | `<workspace>\.cursor\mcp.json`                                                                                                        |
+| Cursor (global)                      | `%USERPROFILE%\.cursor\mcp.json`                                                                                                      |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json`                                        |
+
+**Worked example** (windows-style paths, multiple project roots, auto-update on, token-meta enabled):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\provar-manager-regression",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\Provar Manager\\test-manager",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\provardx-cli",
+        "--auto-update"
+      ],
+      "env": {
+        "PROVAR_MCP_EMIT_TOKEN_META": "true"
+      }
+    }
+  }
+}
+```
+
+**Windows specifics:**
+
+- JSON path separators must be **escaped backslashes** (`\\`) or forward slashes (`/`). Single backslash is a JSON escape character and will produce a parse error.
+- Paths containing spaces (like `Provar Manager`) work — JSON quoting handles them. No extra quoting needed inside the args string.
+- **Microsoft Store version of Claude Desktop:** the Store edition runs in an app sandbox that can block child-process spawning, causing the MCP server to disconnect immediately with `Server disconnected` errors. Prefer the **direct installer** from claude.ai/download. If you must use the Store version, run Claude Desktop as administrator.
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+| Client                               | Config file location                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `~/.claude.json`                                                                               |
+| Claude Code (project-scoped, shared) | `<workspace>/.mcp.json` — commit to source control                                             |
+| Claude Desktop                       | `~/Library/Application Support/Claude/claude_desktop_config.json`                              |
+| GitHub Copilot (VS Code)             | `<workspace>/.vscode/mcp.json`                                                                 |
+| Cursor (workspace)                   | `<workspace>/.cursor/mcp.json`                                                                 |
+| Cursor (global)                      | `~/.cursor/mcp.json`                                                                           |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json` |
+
+**Worked example:**
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/Users/you/git/provar-project-a",
+        "--allowed-paths",
+        "/Users/you/git/provar-project-b",
+        "--auto-update"
+      ],
+      "env": {
+        "PROVAR_MCP_EMIT_TOKEN_META": "true"
+      }
+    }
+  }
+}
+```
+
+**macOS specifics:**
+
+- **Claude Desktop restart:** **Cmd+Q** to fully quit Claude Desktop after saving — closing the window only minimizes it and leaves the old server attached. Then reopen.
+- **`Settings → Developer → Edit Config`** in the Claude Desktop menu bar opens the config file directly without you needing to navigate `~/Library/...` manually.
+
+</details>
+
+<details>
+<summary><b>Linux</b></summary>
+
+| Client                               | Config file location                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `~/.claude.json`                                                                               |
+| Claude Code (project-scoped, shared) | `<workspace>/.mcp.json` — commit to source control                                             |
+| Claude Desktop                       | Not officially supported on Linux by Anthropic. Use Claude Code instead.                       |
+| GitHub Copilot (VS Code)             | `<workspace>/.vscode/mcp.json`                                                                 |
+| Cursor (workspace)                   | `<workspace>/.cursor/mcp.json`                                                                 |
+| Cursor (global)                      | `~/.cursor/mcp.json`                                                                           |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json` |
+
+**Worked example:**
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/home/you/git/provar-project",
+        "--auto-update"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+</details>
+
+### Client-specific notes
+
+The config shape above (npx + `@provartesting/provardx-cli` + `mcp start`) works as-is across all clients. The notes below cover each client's particular config-file conventions, restart procedures, and known gotchas.
+
+<details>
+<summary><b>Claude Code (terminal &amp; VS Code extension)</b></summary>
+
+Claude Code can be configured via the `claude` CLI command or by editing the JSON config file directly. The CLI is just a typing shortcut — it writes to the same files documented in the per-OS tables above.
+
+**Via the `claude` CLI (one-time setup):**
 
 ```sh
 # User-scoped — registers once and works across all your projects
-claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 
 # Project-scoped, shared — run from your project root; writes .mcp.json there; commit to source control
-claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s project -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 
 # Project-scoped, private — stored in .claude/settings.local.json; not committed
-claude mcp add provar -s local -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s local -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 ```
 
-#### Via config file (manual / VS Code)
+**Via the JSON config file:** edit the location for your scope (see [per-OS table](#find-your-config-file-by-operating-system) above) and paste the [standard config](#the-standard-config-recommended) under `mcpServers.provar`. The Claude Code terminal and the VS Code Claude Code extension share the same config files, so changes propagate everywhere.
 
-Create or edit `.mcp.json` at your project root for project-scoped configuration shared with your team:
+**Verification:** ask Claude to call `provardx_ping` with a message. A clean response like `{ "pong": "...", "ts": "...", "server": "provar-mcp@1.5.2-beta.4" }` confirms the server is connected.
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+</details>
 
-For user-scoped (global) configuration that applies across all projects, add the same `provar` entry under `mcpServers` in `~/.claude.json`.
+<details>
+<summary><b>Claude Desktop (macOS / Windows app)</b></summary>
 
-#### `sf` not found? Use `npx`
+Claude Desktop is configured only via the JSON config file — there is no `claude` CLI helper for the Desktop app. The fastest way to open the config file is from inside the app itself.
 
-GUI environments (VS Code, Claude Code Desktop, Claude Desktop) often start with a restricted PATH that doesn't include the `sf` binary. Using `npx` as the command resolves this — it finds `@salesforce/cli` from your npm cache without requiring `sf` to be on PATH.
+**Edit the config:**
 
-**Via terminal:**
+1. Open **Claude menu → Settings → Developer → Edit Config**. The file opens directly without you needing to navigate Finder / Explorer manually.
+2. Paste the [standard config](#the-standard-config-recommended) under `mcpServers.provar` and save.
+3. **Fully quit and relaunch** Claude Desktop. **Cmd+Q on macOS** — closing the window only minimizes; the server stays attached to the old config until full quit. On Windows, right-click the system-tray icon → **Quit**.
 
-```sh
-claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allowed-paths /path/to/your/provar/project
-```
+**Platform notes:**
 
-**Via config file:**
+- **macOS:** config file lives at `~/Library/Application Support/Claude/claude_desktop_config.json`.
+- **Windows (direct installer):** `%APPDATA%\Claude\claude_desktop_config.json`.
+- **Windows (Microsoft Store):** the Store edition runs in an app sandbox that often blocks child-process spawning, causing the MCP server to disconnect immediately with `Server disconnected` errors. **Use the direct installer from claude.ai/download instead.** If you must use the Store version, run Claude Desktop as administrator.
+- **Linux:** Claude Desktop is not officially supported on Linux. Use Claude Code instead.
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "npx",
-      "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+**Verification:** ask Claude Desktop to call `provardx_ping` with a message. A clean response like `{ "pong": "...", "ts": "...", "server": "provar-mcp@1.5.2-beta.4" }` confirms the server is connected.
 
-> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
+</details>
 
-### Claude Desktop
+<details>
+<summary><b>GitHub Copilot</b></summary>
 
-Edit the Claude Desktop MCP configuration file. Open it via **Claude menu → Settings → Developer → Edit Config**, or navigate to it directly:
+#### VS Code (primary integration)
 
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows (direct installer):** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Windows (Microsoft Store):** `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`
-
-> **Windows Store version:** The Store edition of Claude Desktop runs in an app sandbox that can block child process spawning, causing the MCP server to disconnect immediately with "Server disconnected" errors. Use the **direct installer** from claude.ai/download instead. If you must use the Store version, run Claude Desktop as administrator.
-
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
-
-Fully quit and relaunch Claude Desktop after saving (Cmd+Q on macOS, not just close the window). The Provar tools will appear in the tool list.
-
-> **`sf` not found?** Claude Desktop launches with a restricted PATH on macOS and Windows. If the server fails to start, use `npx` instead:
->
-> ```json
-> {
->   "mcpServers": {
->     "provar": {
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you may also try `sf.cmd` as the command if npx is not available.
-
-### GitHub Copilot (VS Code)
-
-Create or edit `.vscode/mcp.json` in your workspace root (commit this to source control to share with your team):
+Create or edit `.vscode/mcp.json` in your workspace root and commit it to source control to share with your team. Note that VS Code uses the key **`"servers"`** (not `"mcpServers"`):
 
 ```json
 {
   "servers": {
     "provar": {
       "type": "stdio",
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "${workspaceFolder}",
+        "--auto-update"
+      ],
+      "env": {}
     }
   }
 }
 ```
 
-After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will appear in the available tools.
+The `${workspaceFolder}` variable expands to the absolute path of the open workspace root, so the same config works for everyone on the team without per-machine path edits.
 
-> **`sf` not found?** VS Code may not inherit your shell PATH. Use `npx` instead:
->
-> ```json
-> {
->   "servers": {
->     "provar": {
->       "type": "stdio",
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you can also try `sf.cmd` as the command.
+After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will appear in the available tools list.
 
 > **`TypeError: Cannot read properties of undefined (reading 'prototype')` on Windows?**
-> VS Code's MCP server process inherits the _system_ PATH, which may differ from your shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — see [Prerequisites](#prerequisites).
+> VS Code's MCP server process inherits the _system_ PATH, which may differ from your terminal shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — Node 25+ is not supported. See [Prerequisites](#prerequisites).
 >
 > Fix: remove or downgrade the system-wide Node.js to LTS 22, or use the `env` field in `.vscode/mcp.json` to override the PATH:
 >
 > ```json
-> {
->   "servers": {
->     "provar": {
->       "type": "stdio",
->       "command": "sf",
->       "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"],
->       "env": {
->         "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
->       }
->     }
->   }
+> "env": {
+>   "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
 > }
 > ```
 >
-> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use). Run `node --version` from a VS Code terminal to confirm which version it sees.
+> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use).
 
-### Cursor
+#### Generic (any other Copilot surface)
 
-Cursor supports project-level and global MCP configuration.
+Surfaces other than VS Code (e.g. GitHub.com Agent mode, future Copilot CLI integrations) follow the standard MCP server spec. Use the [recommended npx config](#the-standard-config-recommended) above as-is.
 
-**Project-level** (`.cursor/mcp.json` in your workspace root — share via source control):
+</details>
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+<details>
+<summary><b>Cursor</b></summary>
 
-**Global** (`~/.cursor/mcp.json` — applies across all projects):
+Cursor supports both project-level and global MCP configuration via JSON files. The schema matches Claude Code's `mcpServers` key:
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+- **Workspace** — `<workspace>/.cursor/mcp.json` (commit to source control)
+- **Global** — `~/.cursor/mcp.json` (`%USERPROFILE%\.cursor\mcp.json` on Windows)
 
-After saving, restart Cursor. The Provar tools will appear under **Settings → MCP**.
+Paste the [standard config](#the-standard-config-recommended) into either file under `mcpServers.provar`. After saving, restart Cursor (full quit, not just window close). The Provar tools appear under **Settings → MCP**.
 
-> **`sf` not found?** Use `npx` as the command instead:
->
-> ```json
-> {
->   "mcpServers": {
->     "provar": {
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you can also try `sf.cmd` if `npx` is unavailable.
+</details>
 
-### Agentforce Vibes
+<details>
+<summary><b>Agentforce Vibes</b></summary>
 
-[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). It stores MCP server configuration in `a4d_mcp_settings.json`, which you can open via **Settings → Configure MCP Servers** inside the extension.
-
-Add a `provar` entry under `mcpServers`:
+[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). Open the extension's **Settings → Configure MCP Servers** to edit `a4d_mcp_settings.json`, then add a `provar` entry:
 
 ```json
 {
@@ -447,25 +538,32 @@ Add a `provar` entry under `mcpServers`:
       "disabled": false,
       "type": "stdio",
       "timeout": 600,
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "${workspaceFolder}",
+        "--auto-update"
+      ],
+      "env": {}
     }
   }
 }
 ```
 
-> **Windows:** Use `sf.cmd` instead of `sf` if the extension cannot find the command.
-
 > **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
 
-### Other MCP-compatible clients
+</details>
 
-Any client that supports the **stdio transport** can connect to the Provar MCP server. The general pattern is:
+<details>
+<summary><b>Other MCP-compatible clients</b></summary>
 
-- **command:** `sf` (or full path to the SF CLI binary, e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`)
-- **args:** `["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]`
+Any client that follows the **stdio transport** of the [MCP spec](https://modelcontextprotocol.io) can connect to the Provar MCP server. The standard config above works as-is. Adjust the top-level key (some clients use `"mcpServers"`, VS Code Copilot uses `"servers"`, others may differ) to match your client's documented schema.
 
-Replace `/path/to/your/provar/project` with the actual root of your Provar Automation project on disk.
+</details>
 
 ---
 
