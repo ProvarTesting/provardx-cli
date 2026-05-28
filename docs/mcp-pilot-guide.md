@@ -59,6 +59,8 @@ sf provar mcp start --help
 
 ### 3. Configure your AI client
 
+> _For the full list of server flags and environment variables, see the [Configuration reference](./mcp.md#configuration-reference) in the MCP docs._
+
 #### Claude Desktop
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
