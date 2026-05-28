@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import { registerTestCaseGenerate, inferSalesforceValueClass } from '../../../src/mcp/tools/testCaseGenerate.js';
+import { validateTestCase } from '../../../src/mcp/tools/testCaseValidate.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
@@ -2022,6 +2023,285 @@ describe('provar_testcase_generate', () => {
         assert.ok(generated.includes(`testItemId="${id}"`), `generated missing testItemId="${id}"`);
         assert.ok(fixture.includes(`testItemId="${id}"`), `fixture missing testItemId="${id}"`);
       }
+    });
+  });
+
+  // ── PDX-497: align UI-action API set across generator and validator ────────
+  // Before PDX-497, the generator's auto-grouping covered only 3 APIs
+  // (UiDoAction, UiAssert, UiRead) while the validator's UI-NEST-STRUCT-001
+  // rule covered all 7 (adding UiFill, UiNavigate, UiWithRow, UiHandleAlert).
+  // A caller asking the generator to emit one of the missing four at root got
+  // a flat output that the validator then false-failed. The tests below pin
+  // both halves of the fix: (a) generator auto-groups all 7 APIs, (b) the
+  // round-trip (generate → validate) reports zero UI-NEST-STRUCT-001
+  // violations for a flat caller input.
+  describe('PDX-497 — UI-action API set alignment (auto-grouping covers all 7 APIs)', () => {
+    const newApis: Array<{ shorthand: string; fqid: string }> = [
+      { shorthand: 'UiFill', fqid: 'com.provar.plugins.forcedotcom.core.ui.UiFill' },
+      { shorthand: 'UiNavigate', fqid: 'com.provar.plugins.forcedotcom.core.ui.UiNavigate' },
+      { shorthand: 'UiWithRow', fqid: 'com.provar.plugins.forcedotcom.core.ui.UiWithRow' },
+      { shorthand: 'UiHandleAlert', fqid: 'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert' },
+    ];
+
+    // Parametrised: one case per new API. Each is added at root after a
+    // UiWithScreen and must end up inside the screen's substeps clause.
+    for (const { shorthand, fqid } of newApis) {
+      it(`auto-groups ${shorthand} under a preceding UiWithScreen`, () => {
+        const result = server.call('provar_testcase_generate', {
+          test_case_name: `PDX-497 ${shorthand}`,
+          steps: [
+            {
+              api_id: 'UiWithScreen',
+              name: 'On SF screen',
+              attributes: { target: 'sf:ui:target?object=Lead&page=list' },
+            },
+            { api_id: shorthand, name: `Do ${shorthand}`, attributes: {} },
+          ],
+          dry_run: true,
+          overwrite: false,
+          validate_after_edit: false,
+        });
+        assert.equal(isError(result), false);
+        const xml = parseText(result)['xml_content'] as string;
+        // Inside the substeps clause of the UiWithScreen.
+        const substeps = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
+        assert.ok(substeps, `expected substeps clause for ${shorthand}`);
+        assert.ok(
+          substeps[1].includes(`apiId="${fqid}"`),
+          `${shorthand} (${fqid}) must be inside substeps, not at root`
+        );
+        // Confirm no remaining occurrence at root after stripping clauses.
+        const afterStrip = xml.replace(/<clauses>[\s\S]*?<\/clauses>/g, '');
+        assert.ok(!afterStrip.includes(fqid), `no ${shorthand} should remain at root after stripping clauses`);
+      });
+    }
+
+    // UiRead and UiFill `locator` argument is emitted as class="uiLocator",
+    // not a plain valueClass="string". Matches the existing UiDoAction/UiAssert
+    // behaviour. Tests buildArgumentValue's locator dispatch via the shared
+    // UI_LOCATOR_BEARING_API_IDS set.
+    it('UiRead locator argument is emitted as class="uiLocator"', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 UiRead locator',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'Screen',
+            attributes: { target: 'sf:ui:target?object=Lead' },
+          },
+          {
+            api_id: 'UiRead',
+            name: 'Read field',
+            attributes: { locator: 'sf:ui:locator?name=Name' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('<value class="uiLocator" uri="sf:ui:locator?name=Name"/>'),
+        'UiRead locator must use class="uiLocator" (not plain valueClass="string")'
+      );
+    });
+
+    it('UiFill locator argument is emitted as class="uiLocator"', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 UiFill locator',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'Screen',
+            attributes: { target: 'sf:ui:target?object=Lead' },
+          },
+          {
+            api_id: 'UiFill',
+            name: 'Fill form',
+            attributes: { locator: 'sf:ui:locator?name=Form' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('<value class="uiLocator" uri="sf:ui:locator?name=Form"/>'),
+        'UiFill locator must use class="uiLocator"'
+      );
+    });
+
+    // UiWithRow dual role (a): when a UiWithRow follows a UiWithScreen, it is
+    // pulled into the UiWithScreen's substeps as a child container.
+    it('UiWithRow following UiWithScreen is pulled in as a child container', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 UiWithRow as child',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'Account record page',
+            attributes: { target: 'sf:ui:target?object=Account&action=View' },
+          },
+          {
+            api_id: 'UiWithRow',
+            name: 'With contact row',
+            attributes: { locator: 'sf:ui:locator:row?table=Contacts' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // UiWithRow must live inside the UiWithScreen's substeps, not at root.
+      const screenSubsteps = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
+      assert.ok(screenSubsteps, 'expected UiWithScreen substeps clause');
+      assert.ok(
+        screenSubsteps[1].includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow"'),
+        'UiWithRow must be inside UiWithScreen substeps'
+      );
+      // testItemId numbering: UiWithScreen=1, substeps=2, UiWithRow=3.
+      assert.ok(xml.includes('testItemId="1"'));
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'));
+      assert.ok(xml.includes('testItemId="3"'));
+    });
+
+    // UiWithRow dual role (b): a lonely UiWithRow at root (no preceding
+    // UiWithScreen) stays at root as its own top-level container.
+    it('lonely UiWithRow at root stays as its own container', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 lonely UiWithRow',
+        steps: [
+          {
+            api_id: 'UiWithRow',
+            name: 'With contact row',
+            attributes: { locator: 'sf:ui:locator:row?table=Contacts' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow"'),
+        'UiWithRow must appear in the XML'
+      );
+      assert.ok(xml.includes('testItemId="1"'), 'lonely UiWithRow gets testItemId=1 (root-level container)');
+      // No substeps clause, since no following UI actions.
+      assert.ok(!xml.includes('<clause name="substeps"'), 'no substeps clause for lonely UiWithRow with no followers');
+    });
+
+    // UiWithRow dual role (c): a UiWithRow at root with following UI action
+    // siblings — those siblings should be absorbed into UiWithRow's substeps.
+    it('UiWithRow at root with following UI actions absorbs them into its substeps', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 UiWithRow absorbs followers',
+        steps: [
+          {
+            api_id: 'UiWithRow',
+            name: 'With contact row',
+            attributes: { locator: 'sf:ui:locator:row?table=Contacts' },
+          },
+          { api_id: 'UiDoAction', name: 'Click delete', attributes: { locator: 'sf:ui:locator?name=Delete' } },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      const substeps = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
+      assert.ok(substeps, 'UiWithRow at root must emit its own substeps clause for followers');
+      assert.ok(
+        substeps[1].includes('apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction"'),
+        'UiDoAction must land inside UiWithRow substeps'
+      );
+      // testItemId numbering: UiWithRow=1, substeps=2, UiDoAction=3.
+      assert.ok(xml.includes('testItemId="1"'));
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'));
+      assert.ok(xml.includes('testItemId="3"'));
+    });
+
+    // Regression: grouping_mode="flat" must still produce the legacy flat
+    // shape even for the expanded UI-action set. The opt-out must remain a
+    // true escape hatch.
+    it('grouping_mode="flat" disables auto-grouping for all 7 UI actions', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 flat opt-out',
+        grouping_mode: 'flat',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'Screen',
+            attributes: { target: 'sf:ui:target?object=Lead' },
+          },
+          { api_id: 'UiFill', name: 'Fill', attributes: {} },
+          { api_id: 'UiNavigate', name: 'Nav', attributes: {} },
+          { api_id: 'UiWithRow', name: 'Row', attributes: {} },
+          { api_id: 'UiHandleAlert', name: 'Alert', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(!xml.includes('<clause name="substeps"'), 'flat mode must NOT emit a substeps clause');
+      // Sequential testItemIds 1..5 (no substeps slot consumed).
+      for (let i = 1; i <= 5; i++) {
+        assert.ok(xml.includes(`testItemId="${i}"`), `flat mode must keep testItemId="${i}"`);
+      }
+    });
+
+    // Round-trip consistency: generator + validator agree on the UI-action
+    // API set. A flat caller payload covering all 7 APIs runs through the
+    // generator → the validator's UI-NEST-STRUCT-001 reports zero violations.
+    // This is the canonical proof of PDX-497.
+    it('round-trip: flat input with all 7 UI APIs → validator reports zero UI-NEST-STRUCT-001 violations', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'PDX-497 round trip',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'Screen',
+            attributes: { target: 'sf:ui:target?object=Lead&action=New' },
+          },
+          { api_id: 'UiDoAction', name: 'Click', attributes: { locator: 'sf:ui:locator?name=Save' } },
+          { api_id: 'UiAssert', name: 'Assert', attributes: { fieldLocator: 'sf:ui:locator?name=Status' } },
+          { api_id: 'UiRead', name: 'Read', attributes: { locator: 'sf:ui:locator?name=Id' } },
+          { api_id: 'UiFill', name: 'Fill', attributes: { locator: 'sf:ui:locator?name=Form' } },
+          { api_id: 'UiNavigate', name: 'Navigate', attributes: {} },
+          {
+            api_id: 'UiWithRow',
+            name: 'Row',
+            attributes: { locator: 'sf:ui:locator:row?table=Items' },
+          },
+          { api_id: 'UiHandleAlert', name: 'Handle alert', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+
+      // Run the local validator (which calls runBestPractices internally) and
+      // assert zero UI-NEST-STRUCT-001 violations. Any non-zero count proves
+      // generator/validator drift on the API set — the bug PDX-497 fixed.
+      const r = validateTestCase(xml);
+      const nestViolations = r.issues.filter((i) => i.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(
+        nestViolations.length,
+        0,
+        `round-trip: expected zero UI-NEST-STRUCT-001 violations, got ${nestViolations.length} — ` +
+          `messages: ${nestViolations.map((v) => v.message).join(' | ')}`
+      );
     });
   });
 });

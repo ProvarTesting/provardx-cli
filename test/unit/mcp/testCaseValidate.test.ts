@@ -591,6 +591,119 @@ describe('validateTestCase', () => {
         'Expected UI-LOCATOR-001 for UiAssert'
       );
     });
+
+    // PDX-497: UI-LOCATOR-001 now covers the full locator-bearing API set —
+    // UiDoAction, UiAssert, UiRead, UiFill. Prior to PDX-497 the validator used
+    // a narrow substring match for UiDoAction/UiAssert only, so UiRead/UiFill
+    // could carry a plain-string locator and silently fail at Provar runtime.
+    it('also fires for UiRead steps with wrong locator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiRead" name="Read field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001 for UiRead'
+      );
+    });
+
+    it('does not fire for UiRead with correct uiLocator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiRead" name="Read field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Name"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should not fire for UiRead with correct uiLocator class'
+      );
+    });
+
+    it('also fires for UiFill steps with wrong locator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001 for UiFill'
+      );
+    });
+
+    it('does not fire for UiFill with correct uiLocator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Name"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should not fire for UiFill with correct uiLocator class'
+      );
+    });
+
+    // PDX-497: UiNavigate is a UI action but does NOT carry a `locator`
+    // argument (its target is a URL/screen, not a locator). UI-LOCATOR-001
+    // must not fire even when a (misplaced) locator is present — this is a
+    // structural rule that only applies to APIs in the locator-bearing set.
+    it('does not fire for UiNavigate even when locator argument is present', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiNavigate" name="Navigate" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 must not fire for UiNavigate (not a locator-bearing API)'
+      );
+    });
   });
 
   describe('SETVALUES-STRUCTURE-001', () => {

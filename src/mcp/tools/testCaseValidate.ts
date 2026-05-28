@@ -40,6 +40,7 @@ import { resolveTestCasePlanMode, type TestCasePlanMode } from '../utils/testCas
 import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 import { desc } from './descHelper.js';
+import { UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
@@ -670,13 +671,16 @@ function validateApiCallArgs(
   // UI-TARGET-001 (mirrors quality-hub-agents UI-SCREEN-TARGET-001):
   // UiWithScreen / UiWithRow target argument must use class="uiTarget", not a plain string.
   // A plain string causes: "Can not set IUiTargetValue field ... to java.lang.String"
-  if (apiId.includes('UiWithScreen') || apiId.includes('UiWithRow')) {
+  // PDX-497: dispatched via the shared canonical set.
+  if (UI_SCREEN_CONTAINER_API_IDS.has(apiId)) {
     checkUiTarget(call, apiId, stepName, issues);
   }
 
   // UI-LOCATOR-001 (local rule, no direct backend equivalent):
-  // UiDoAction / UiAssert locator argument must use class="uiLocator".
-  if (apiId.includes('UiDoAction') || apiId.includes('UiAssert')) {
+  // UI action steps that carry a `locator` argument (UiDoAction, UiAssert,
+  // UiRead, UiFill) must use class="uiLocator". PDX-497: dispatched via the
+  // shared canonical set so generator + validator stay aligned.
+  if (UI_LOCATOR_BEARING_API_IDS.has(apiId)) {
     const locatorArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'locator');
     if (locatorArg) {
       const locatorNode = locatorArg['value'] as Record<string, unknown> | undefined;
