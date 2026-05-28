@@ -1619,4 +1619,409 @@ describe('provar_testcase_generate', () => {
       assert.ok(xml.includes('testItemId="4"'), 'second nested step must have testItemId="4"');
     });
   });
+
+  // ── PDX-495: UI-action grouping under UiWithScreen substeps clause ────────
+  // The 1.5.2 generator emitted UiDoAction / UiAssert / UiRead steps as root
+  // siblings of their preceding UiWithScreen — so Provar IDE rendered the test
+  // case as a flat list of unrelated steps instead of nesting the UI actions
+  // inside their parent screen. PDX-495 introduces an auto-grouping pass that
+  // moves trailing UI-action siblings inside the UiWithScreen's
+  // <clause name="substeps"><steps>…</steps></clause> block. The flag
+  // grouping_mode="flat" restores the legacy behaviour for callers that
+  // already groomed their payload.
+  describe('PDX-495 — UI-action grouping under UiWithScreen substeps clause', () => {
+    it('single-screen group: UiDoAction siblings end up inside substeps clause', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen Group',
+        steps: [
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF Leads list view',
+            attributes: { target: 'sf:ui:target?object=Lead&page=list' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Click New',
+            attributes: { locator: 'ui:locator?name=New' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Click Save',
+            attributes: { locator: 'ui:locator?name=Save' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+
+      // UiWithScreen must own a <clause name="substeps">…<steps>…</steps>…</clause> block.
+      assert.ok(xml.includes('<clause name="substeps"'), 'expected substeps clause inside UiWithScreen');
+
+      // Both UiDoActions must live inside that block — not as siblings of UiWithScreen.
+      // Quick proof: cut out the substeps block and assert the UiDoActions are inside it.
+      const substepsMatch = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
+      assert.ok(substepsMatch, 'substeps clause must be present');
+      const substepsContent = substepsMatch[1];
+      assert.ok(/UiDoAction[\s\S]*Click New/.test(substepsContent), 'Click New must be inside substeps');
+      assert.ok(/UiDoAction[\s\S]*Click Save/.test(substepsContent), 'Click Save must be inside substeps');
+
+      // After cutting the substeps block, no UiDoAction should remain at root level.
+      const afterStrip = xml.replace(/<clauses>[\s\S]*?<\/clauses>/g, '');
+      assert.ok(!afterStrip.includes('UiDoAction'), 'no UiDoAction should remain at root after stripping clauses');
+
+      // testItemId numbering: UiWithScreen=1, substeps=2, UiDoAction=3, UiDoAction=4.
+      assert.ok(/testItemId="1"[\s\S]*UiWithScreen|UiWithScreen[\s\S]*testItemId="1"/.test(xml));
+      assert.ok(xml.includes('<clause name="substeps" testItemId="2"'), 'substeps clause must have testItemId=2');
+      assert.ok(xml.includes('testItemId="3"'), 'first UiDoAction must have testItemId=3');
+      assert.ok(xml.includes('testItemId="4"'), 'second UiDoAction must have testItemId=4');
+    });
+
+    it('multi-screen group: matches Contact_Lead1 shape (3 UiWithScreen, 6 UiDoAction, 2 UiAssert + SetValues + ApexConnect)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Contact_Lead',
+        steps: [
+          {
+            api_id: 'SetValues',
+            name: 'Set test data variables',
+            attributes: { leadLastName: 'Provar_TestLead', leadCompany: 'Provar Test Company' },
+          },
+          {
+            api_id: 'ApexConnect',
+            name: 'Salesforce Connect: DogfoodingOrg',
+            attributes: { connectionName: 'DogfoodingOrg' },
+          },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF Leads list view',
+            attributes: { target: 'sf:ui:target?object=Lead&page=list' },
+          },
+          { api_id: 'UiDoAction', name: 'Click the New button', attributes: { locator: 'ui:locator?name=New' } },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF New Lead form',
+            attributes: { target: 'sf:ui:target?object=Lead&action=New' },
+          },
+          { api_id: 'UiDoAction', name: 'Set Last Name', attributes: { locator: 'ui:locator?name=LastName' } },
+          { api_id: 'UiDoAction', name: 'Set Company', attributes: { locator: 'ui:locator?name=Company' } },
+          { api_id: 'UiDoAction', name: 'Click Save', attributes: { locator: 'ui:locator?name=SaveEdit' } },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF Lead record page',
+            attributes: { target: 'sf:ui:target?object=Lead&action=View' },
+          },
+          { api_id: 'UiAssert', name: 'Assert Last Name', attributes: { fieldLocator: 'ui:locator?name=LastName' } },
+          { api_id: 'UiAssert', name: 'Assert Company', attributes: { fieldLocator: 'ui:locator?name=Company' } },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+
+      // Three substeps clauses with the right testItemIds (matching Contact_Lead1.testcase).
+      assert.ok(xml.includes('<clause name="substeps" testItemId="4"'), 'first screen substeps testItemId=4');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="7"'), 'second screen substeps testItemId=7');
+      assert.ok(xml.includes('<clause name="substeps" testItemId="12"'), 'third screen substeps testItemId=12');
+
+      // Full sequential ID coverage 1..14.
+      for (let i = 1; i <= 14; i++) {
+        assert.ok(xml.includes(`testItemId="${i}"`), `testItemId="${i}" must be present`);
+      }
+      assert.ok(!xml.includes('testItemId="15"'), 'no testItemIds beyond 14');
+
+      // After stripping every <clauses>…</clauses> block, only SetValues + ApexConnect + 3 UiWithScreen
+      // should remain at the root — no UI actions or asserts orphaned outside their screen.
+      const afterStrip = xml.replace(/<clauses>[\s\S]*?<\/clauses>/g, '');
+      assert.ok(!afterStrip.includes('UiDoAction'), 'no UiDoAction at root after stripping clauses');
+      assert.ok(!afterStrip.includes('UiAssert'), 'no UiAssert at root after stripping clauses');
+      assert.ok(afterStrip.includes('SetValues'), 'SetValues stays at root');
+      assert.ok(afterStrip.includes('ApexConnect'), 'ApexConnect stays at root');
+    });
+
+    it('mixed: SetValues + ApexConnect stay at root, UI actions nest under their screen', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Mixed',
+        steps: [
+          { api_id: 'SetValues', name: 'Set data', attributes: { Name: 'Acme' } },
+          { api_id: 'ApexConnect', name: 'Connect', attributes: { connectionName: 'Org1' } },
+          {
+            api_id: 'UiWithScreen',
+            name: 'Account list',
+            attributes: { target: 'sf:ui:target?object=Account' },
+          },
+          { api_id: 'UiDoAction', name: 'Click New', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // testItemId numbering: SetValues=1, ApexConnect=2, UiWithScreen=3, substeps=4, UiDoAction=5.
+      assert.ok(xml.includes('testItemId="1"'));
+      assert.ok(xml.includes('testItemId="2"'));
+      assert.ok(xml.includes('testItemId="3"'));
+      assert.ok(xml.includes('<clause name="substeps" testItemId="4"'));
+      assert.ok(xml.includes('testItemId="5"'));
+      // UiDoAction must be inside the substeps clause, not outside.
+      const afterStrip = xml.replace(/<clauses>[\s\S]*?<\/clauses>/g, '');
+      assert.ok(!afterStrip.includes('UiDoAction'));
+    });
+
+    it('auto-detect from a flat caller: caller passes flat steps[], output is nested', () => {
+      // The caller has no idea about grouping_mode — defaults to "auto".
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Auto Detect',
+        steps: [
+          { api_id: 'UiWithScreen', name: 'Screen 1', attributes: { target: 'sf:ui:target?x=1' } },
+          { api_id: 'UiDoAction', name: 'Action 1', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Action 2', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<clause name="substeps"'), 'auto mode must nest UI actions even without explicit flag');
+    });
+
+    it('grouping_mode="flat": same input produces legacy flat shape (no substeps clause)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Flat Mode',
+        grouping_mode: 'flat',
+        steps: [
+          { api_id: 'UiWithScreen', name: 'Screen 1', attributes: { target: 'sf:ui:target?x=1' } },
+          { api_id: 'UiDoAction', name: 'Action 1', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Action 2', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(!xml.includes('<clause name="substeps"'), 'flat mode must NOT emit a substeps clause');
+      // Sequential testItemIds 1, 2, 3.
+      assert.ok(xml.includes('testItemId="1"'));
+      assert.ok(xml.includes('testItemId="2"'));
+      assert.ok(xml.includes('testItemId="3"'));
+    });
+
+    it('grouping_mode="single-screen": wraps everything in one synthetic UiWithScreen', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen Mode',
+        grouping_mode: 'single-screen',
+        steps: [
+          { api_id: 'UiDoAction', name: 'Click 1', attributes: {} },
+          { api_id: 'UiDoAction', name: 'Click 2', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // One outer UiWithScreen wrapping all steps.
+      const screenCount = (xml.match(/apiId="[^"]*UiWithScreen"/g) ?? []).length;
+      assert.equal(screenCount, 1, 'single-screen mode must produce exactly one UiWithScreen wrapper');
+      assert.ok(xml.includes('<clause name="substeps"'), 'wrapper must contain a substeps clause');
+    });
+
+    // PDX-495 (Copilot review): single-screen mode must honour the caller's
+    // target_uri instead of always hardcoding `sf:ui:target`. The docs and
+    // schema description both promise that the wrapper target is "sf:ui:target
+    // (or the URI passed via target_uri)".
+    it('grouping_mode="single-screen": honours caller-supplied target_uri (sf:ui:target?…)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen With Target',
+        grouping_mode: 'single-screen',
+        target_uri: 'sf:ui:target?object=Lead&action=New',
+        steps: [{ api_id: 'UiDoAction', name: 'Click', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // Wrapper target argument carries the full URI (with &amp; XML-escaping).
+      assert.ok(
+        xml.includes('uri="sf:ui:target?object=Lead&amp;action=New"'),
+        'wrapper must use the caller-supplied target_uri, not the hardcoded default'
+      );
+      // Sanity: bare default URI must NOT appear as the wrapper target value.
+      assert.ok(
+        !xml.includes('uri="sf:ui:target"'),
+        'hardcoded sf:ui:target default must not be emitted when target_uri is provided'
+      );
+    });
+
+    // Regression: with no target_uri at all, single-screen still falls back to
+    // the bare `sf:ui:target` default so the wrapper remains well-formed.
+    it('grouping_mode="single-screen": falls back to sf:ui:target when target_uri omitted', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Single Screen No Target',
+        grouping_mode: 'single-screen',
+        steps: [{ api_id: 'UiDoAction', name: 'Click', attributes: {} }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('uri="sf:ui:target"'), 'omitted target_uri keeps the bare default');
+    });
+
+    it('UiWithScreen with no UI-action followers stays flat (no empty substeps clause emitted)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Lonely Screen',
+        steps: [{ api_id: 'UiWithScreen', name: 'Just a screen', attributes: { target: 'sf:ui:target?x=1' } }],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // Lonely UiWithScreen — no children, so no substeps clause emitted.
+      assert.ok(!xml.includes('<clause name="substeps"'), 'no substeps clause without UI-action followers');
+      assert.ok(xml.includes('testItemId="1"'), 'UiWithScreen still gets testItemId=1');
+    });
+
+    it('non-UI step breaks the grouping run: only preceding UI actions are absorbed', () => {
+      // ApexConnect appears after a UI action — it must break the run so the
+      // post-ApexConnect steps stay at root, not nested under the earlier UiWithScreen.
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Broken Run',
+        steps: [
+          { api_id: 'UiWithScreen', name: 'Screen', attributes: { target: 'sf:ui:target?x=1' } },
+          { api_id: 'UiDoAction', name: 'Action 1', attributes: {} },
+          { api_id: 'ApexConnect', name: 'Connect', attributes: { connectionName: 'Org' } },
+          { api_id: 'UiDoAction', name: 'Action 2', attributes: {} },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+      assert.equal(isError(result), false);
+      const xml = parseText(result)['xml_content'] as string;
+      // Only Action 1 should be inside the substeps clause; Action 2 stays at root.
+      const substepsMatch = /<clause name="substeps"[^>]*>([\s\S]*?)<\/clause>/.exec(xml);
+      assert.ok(substepsMatch, 'substeps clause must be present for the first screen');
+      assert.ok(substepsMatch[1].includes('Action 1'), 'Action 1 must be inside substeps');
+      assert.ok(!substepsMatch[1].includes('Action 2'), 'Action 2 must NOT be inside the screen substeps');
+      // Action 2 must still appear in the XML somewhere.
+      assert.ok(xml.includes('Action 2'), 'Action 2 must still be emitted (at root)');
+    });
+
+    it('regression: matches contactLeadNested.testcase.xml fixture shape (guids normalised)', () => {
+      // Tests run from the repo root via wireit/yarn; resolve relative to cwd to avoid ESM __dirname.
+      const fixturePath = path.join(process.cwd(), 'test', 'unit', 'mcp', 'fixtures', 'contactLeadNested.testcase.xml');
+      const fixture = fs.readFileSync(fixturePath, 'utf-8');
+
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Contact_Lead',
+        steps: [
+          {
+            api_id: 'SetValues',
+            name: 'Set test data variables',
+            attributes: { leadLastName: 'Provar_TestLead', leadCompany: 'Provar Test Company' },
+          },
+          {
+            api_id: 'ApexConnect',
+            name: 'Salesforce Connect: DogfoodingOrg (Sales app)',
+            attributes: { connectionName: 'DogfoodingOrg' },
+          },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF Leads list view - click New',
+            attributes: { target: 'sf:ui:target?object=Lead&page=list' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Click the New button',
+            attributes: { locator: 'ui:locator?name=New' },
+          },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF New Lead form - fill required fields and Save',
+            attributes: { target: 'sf:ui:target?object=Lead&action=New' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Set the Last Name field',
+            attributes: { locator: 'ui:locator?name=LastName' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Set the Company field',
+            attributes: { locator: 'ui:locator?name=Company' },
+          },
+          {
+            api_id: 'UiDoAction',
+            name: 'Click the Save button',
+            attributes: { locator: 'ui:locator?name=SaveEdit' },
+          },
+          {
+            api_id: 'UiWithScreen',
+            name: 'On SF Lead record page - assert detail fields',
+            attributes: { target: 'sf:ui:target?object=Lead&action=View' },
+          },
+          {
+            api_id: 'UiAssert',
+            name: 'Assert Last Name field value',
+            attributes: { fieldLocator: 'ui:locator?name=LastName' },
+          },
+          {
+            api_id: 'UiAssert',
+            name: 'Assert Company field value',
+            attributes: { fieldLocator: 'ui:locator?name=Company' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      assert.equal(isError(result), false);
+      const generated = parseText(result)['xml_content'] as string;
+
+      // Normalisation: replace all guids with a placeholder so the diff is
+      // structural only (guid values are random).
+      const GUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+      const stripGuids = (s: string): string => s.replace(GUID_RE, 'GUID');
+
+      // Both generated output and fixture must contain the same set of structural
+      // markers: 3 substeps clauses with testItemIds 4, 7, 12 and the same
+      // sequence of apiId values.
+      const generatedNorm = stripGuids(generated);
+      const fixtureNorm = stripGuids(fixture);
+
+      for (const marker of [
+        '<clause name="substeps" testItemId="4">',
+        '<clause name="substeps" testItemId="7">',
+        '<clause name="substeps" testItemId="12">',
+        'apiId="com.provar.plugins.bundled.apis.control.SetValues"',
+        'apiId="com.provar.plugins.forcedotcom.core.testapis.ApexConnect"',
+        'apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen"',
+        'apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction"',
+        'apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert"',
+      ]) {
+        assert.ok(generatedNorm.includes(marker), `generated output missing structural marker: ${marker}`);
+        assert.ok(fixtureNorm.includes(marker), `fixture missing structural marker: ${marker}`);
+      }
+
+      // All 14 testItemIds must be present in BOTH outputs (depth-first sequential).
+      for (let id = 1; id <= 14; id++) {
+        assert.ok(generated.includes(`testItemId="${id}"`), `generated missing testItemId="${id}"`);
+        assert.ok(fixture.includes(`testItemId="${id}"`), `fixture missing testItemId="${id}"`);
+      }
+    });
+  });
 });
