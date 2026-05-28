@@ -173,6 +173,7 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
   'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
   'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
   'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
   'com.provar.plugins.forcedotcom.core.ui.UiFill',
   'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
@@ -772,6 +773,142 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
   return makeViolation(rule, msg, Math.min(violations.length, 3));
 }
 
+// ── UI-NEST-STRUCT-001 — UI actions must be nested under a screen ancestor ────
+// Mirrors QH's `UiActionNestingStructureValidator` (best_practices_engine.py).
+// A UI action step is valid if SOMEWHERE in its ancestor chain there is a
+// UiWithScreen or UiWithRow apiCall AND between the step and that ancestor
+// there is at least one <clause name="substeps">. Control-flow wrappers
+// (IfThen, ForEach, DoWhile, WaitFor, Switch, SwitchCase) between the step and
+// the screen ancestor are allowed. Anything inside <clause name="hidden"> is
+// exempt (disabled / settings blocks).
+
+const UI_ACTION_APIS = new Set<string>([
+  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
+  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
+  'com.provar.plugins.forcedotcom.core.ui.UiFill',
+  'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
+  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+  'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert',
+]);
+
+// UiWithRow is both a UI action AND a container — its <clause name="substeps">
+// satisfies the rule for its own descendants.
+const UI_SCREEN_CONTAINERS = new Set<string>([
+  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
+  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+]);
+
+/** One frame on the parent stack while walking the parsed tree. */
+interface ParentFrame {
+  tag: string;
+  /** Attribute map (e.g. `{ apiId: '…UiWithScreen', name: 'substeps' }`). */
+  attrs: Record<string, string>;
+}
+
+/**
+ * Walk ancestors (immediate parent first, root last) and classify the
+ * placement of a UI action step. Returns `null` when the step is validly
+ * nested OR is exempt (inside `<clause name="hidden">`), otherwise a
+ * human-readable failure-mode string.
+ *
+ * Algorithmically identical to the Python `_classify` method so QH and local
+ * runs de-dup cleanly by (rule_id, test_item_id).
+ */
+function classifyUiActionPlacement(parents: ParentFrame[]): string | null {
+  let sawSubstepsClause = false;
+  // Iterate from immediate parent toward the root.
+  for (let i = parents.length - 1; i >= 0; i--) {
+    const frame = parents[i];
+    if (frame.tag === 'clause') {
+      const name = frame.attrs['name'] ?? '';
+      // Skip steps inside hidden clauses (disabled / settings blocks).
+      if (name === 'hidden') return null;
+      if (name === 'substeps') sawSubstepsClause = true;
+    }
+    if (frame.tag === 'apiCall') {
+      const ancestorApi = frame.attrs['apiId'] ?? '';
+      if (UI_SCREEN_CONTAINERS.has(ancestorApi)) {
+        if (sawSubstepsClause) return null;
+        const short = ancestorApi.split('.').pop() ?? ancestorApi;
+        return `nested under '${short}' but not via a <clause name="substeps"> block`;
+      }
+      // Any other apiCall (IfThen, ForEach, DoWhile, WaitFor, Switch, SwitchCase) — keep climbing.
+    }
+  }
+  return (
+    'not nested inside any UiWithScreen or UiWithRow ancestor ' +
+    '(must be a descendant of one via a <clause name="substeps"> path)'
+  );
+}
+
+/** Extract just the XML attributes from a fast-xml-parser node (stripping the @_ prefix). */
+function extractAttrs(node: XmlNode): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k.startsWith('@_') && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) {
+      attrs[k.slice(2)] = String(v);
+    }
+  }
+  return attrs;
+}
+
+/**
+ * Depth-first walk over the parsed tree, invoking `visit` for every <apiCall>
+ * along with the chain of enclosing elements (root first, immediate parent
+ * last). Used by the UI-NEST-STRUCT-001 validator below.
+ */
+function walkApiCalls(tc: XmlNode, visit: (call: XmlNode, parents: ParentFrame[]) => void): void {
+  function descend(node: unknown, parents: ParentFrame[]): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) descend(item, parents);
+      return;
+    }
+    const n = node as XmlNode;
+    for (const [key, val] of Object.entries(n)) {
+      if (key.startsWith('@_') || key === '#text') continue;
+      const children = toArr(val as XmlNode | XmlNode[] | string);
+      for (const child of children) {
+        if (!child || typeof child !== 'object') continue;
+        const frame: ParentFrame = { tag: key, attrs: extractAttrs(child) };
+        if (key === 'apiCall') visit(child, parents);
+        descend(child, [...parents, frame]);
+      }
+    }
+  }
+  descend(tc, [{ tag: 'testCase', attrs: extractAttrs(tc) }]);
+}
+
+/**
+ * UI-NEST-STRUCT-001 — flag every UI action step (UiDoAction, UiAssert, UiRead,
+ * UiFill, UiNavigate, UiWithRow, UiHandleAlert) that is not nested under a
+ * UiWithScreen or UiWithRow ancestor via a `<clause name="substeps">` path.
+ *
+ * Emits ONE BPViolation per offending step (no consolidation) so that
+ * (rule_id, test_item_id) de-dups cleanly against the Quality Hub API.
+ */
+function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  walkApiCalls(tc, (call, parents) => {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || !UI_ACTION_APIS.has(apiId)) return;
+    const verdict = classifyUiActionPlacement(parents);
+    if (!verdict) return;
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? 'Unknown';
+    const tid = call['@_testItemId'] as string | undefined;
+    const shortApi = apiId.split('.').pop() ?? apiId;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+    const message =
+      `${shortApi} '${title}' is ${verdict} - must be nested inside a parent ` +
+      `UiWithScreen's <clauses><clause name="substeps"><steps> block${tidSuffix}`;
+    violations.push(makeViolation(rule, message));
+  });
+
+  return violations;
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -789,6 +926,14 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   uniqueResultNames: validateUniqueResultNames,
   uiWithScreenTarget: validateUiWithScreenTarget,
   // 'regex' is dispatched separately (needs metadata)
+  // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
+};
+
+/** Validators that may emit multiple violations from a single check (one per offending element). */
+type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
+
+const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
+  uiActionNestingStructure: validateUiActionNestingStructure,
 };
 
 // ── XML parser (shared settings) ─────────────────────────────────────────────
@@ -835,19 +980,25 @@ export function runBestPractices(xmlContent: string, metadata: BPMetadata = {}):
     // Weight-0 rules are purely informational — skip from scoring
     if (rule.weight === 0) continue;
 
-    let violation: BPViolation | null;
-
     if (checkType === 'regex') {
       rulesEvaluated++;
-      violation = validateRegex(tc, rule, metadata);
-    } else {
-      const fn = VALIDATOR_REGISTRY[checkType];
-      if (!fn) continue; // unimplemented validator → silently pass
-      rulesEvaluated++;
-      violation = fn(tc, rule);
+      const v = validateRegex(tc, rule, metadata);
+      if (v) violations.push(v);
+      continue;
     }
 
-    if (violation) violations.push(violation);
+    const multiFn = MULTI_VALIDATOR_REGISTRY[checkType];
+    if (multiFn) {
+      rulesEvaluated++;
+      for (const v of multiFn(tc, rule)) violations.push(v);
+      continue;
+    }
+
+    const fn = VALIDATOR_REGISTRY[checkType];
+    if (!fn) continue; // unimplemented validator → silently pass
+    rulesEvaluated++;
+    const v = fn(tc, rule);
+    if (v) violations.push(v);
   }
 
   const quality_score = calculateBPScore(violations);

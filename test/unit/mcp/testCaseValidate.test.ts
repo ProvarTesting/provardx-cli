@@ -926,6 +926,43 @@ describe('validateTestCase', () => {
       );
     });
   });
+
+  // ── UI-NEST-STRUCT-001 — fixture integration: Contact_Lead reporter artifacts ──
+  describe('UI-NEST-STRUCT-001 fixture integration', () => {
+    // Tests run from the repo root via wireit/yarn; resolve relative to cwd to avoid ESM __dirname.
+    const fixturesDir = path.resolve(process.cwd(), 'test', 'fixtures', 'testcases');
+
+    it('Contact_Lead_flat.testcase (BAD reporter artifact) fires UI-NEST-STRUCT-001 for the exact expected testItemIds', () => {
+      const xml = fs.readFileSync(path.join(fixturesDir, 'Contact_Lead_flat.testcase'), 'utf-8');
+      const r = validateTestCase(xml);
+      const bps = (r.best_practices_violations ?? []).filter((v) => v.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(bps.length, 10, `Expected 10 UI-NEST-STRUCT-001 violations, got ${bps.length}`);
+      // Each violation embeds its testItemId in the message — extract and compare.
+      const tids = bps
+        .map((v) => /testItemId=(\d+)/.exec(v.message)?.[1])
+        .filter((s): s is string => Boolean(s))
+        .map((s) => parseInt(s, 10))
+        .sort((a, b) => a - b);
+      assert.deepEqual(
+        tids,
+        [5, 8, 9, 10, 13, 14, 15, 16, 17, 18],
+        `Expected testItemIds {5,8,9,10,13,14,15,16,17,18}, got ${JSON.stringify(tids)}`
+      );
+      // Shape assertions on every violation.
+      for (const v of bps) {
+        assert.equal(v.severity, 'major');
+        assert.equal(v.weight, 7);
+        assert.equal(v.category, 'XMLSchema');
+      }
+    });
+
+    it('Contact_Lead_nested.testcase (GOOD reporter artifact) does not fire UI-NEST-STRUCT-001', () => {
+      const xml = fs.readFileSync(path.join(fixturesDir, 'Contact_Lead_nested.testcase'), 'utf-8');
+      const r = validateTestCase(xml);
+      const bp = (r.best_practices_violations ?? []).find((v) => v.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(bp, undefined, `Nested fixture should not trigger UI-NEST-STRUCT-001, got: ${bp?.message}`);
+    });
+  });
 });
 
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────

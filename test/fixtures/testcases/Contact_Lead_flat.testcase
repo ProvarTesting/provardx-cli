@@ -1,0 +1,492 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<testCase guid="d4e2f1a8-3b7c-4e91-9c2d-5f8a1b2c3d4e" id="1" registryId="e7b1c2d3-4f56-4789-abcd-ef9876543210">
+  <summary>Creates a Lead record in Salesforce via the Lightning UI using the DogfoodingOrg connection. Generates unique LastName and Company values, logs in through ApexConnect, navigates to the Leads list view, clicks New, populates the required fields (LastName and Company), clicks Save, then asserts that the resulting Lead record page shows the same LastName and Company values that were entered. autoCleanup=true on ApexConnect handles record teardown after the run.</summary>
+  <steps>
+    <apiCall apiId="com.provar.plugins.bundled.apis.control.SetValues" guid="11111111-aaaa-4111-8111-111111111101" name="Set test data variables" testItemId="1" title="Set test data variables">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValue name="valuePath">
+                <value class="value" valueClass="string">leadLastName</value>
+              </namedValue>
+              <namedValue name="value">
+                <value class="compound">
+                  <parts>
+                    <value valueClass="string">Provar_TestLead_</value>
+                    <funcCall id="UniqueId">
+                      <argument id="length">
+                        <value class="value" valueClass="decimal">6</value>
+                      </argument>
+                    </funcCall>
+                  </parts>
+                </value>
+              </namedValue>
+              <namedValue name="valueScope">
+                <value class="value" valueClass="string">Test</value>
+              </namedValue>
+            </namedValues>
+            <namedValues mutable="Mutable">
+              <namedValue name="valuePath">
+                <value class="value" valueClass="string">leadCompany</value>
+              </namedValue>
+              <namedValue name="value">
+                <value class="compound">
+                  <parts>
+                    <value valueClass="string">Provar Test Company </value>
+                    <funcCall id="UniqueId">
+                      <argument id="length">
+                        <value class="value" valueClass="decimal">6</value>
+                      </argument>
+                    </funcCall>
+                  </parts>
+                </value>
+              </namedValue>
+              <namedValue name="valueScope">
+                <value class="value" valueClass="string">Test</value>
+              </namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow" guid="c4425aad-21a7-41c0-b0fa-0effe53fef03" name="UiWithRow" testItemId="18" title="With Row">
+      <arguments>
+        <argument id="uiConnectionName">
+          <value class="value" valueClass="string">UiConnection</value>
+        </argument>
+        <argument id="locator"/>
+        <argument id="uiRowLocator">
+          <value class="value" valueClass="string">1</value>
+        </argument>
+        <argument id="locatorDescription">
+          <value class="value" valueClass="string">With Row</value>
+        </argument>
+        <argument id="failIfNotFound">
+          <value class="value" valueClass="boolean">true</value>
+        </argument>
+        <argument id="debugRowLocator"/>
+        <argument id="resultName">
+          <value class="value" valueClass="string">Row</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Local</value>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="19"/>
+      </clauses>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" guid="2f759504-678e-4c32-aaec-9eed7fe646d5" name="UiFill" testItemId="17" title="UI Fill">
+      <arguments>
+        <argument id="values"/>
+        <argument id="ignoreFields"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiHandleAlert" guid="782ca2c6-437b-4fb9-8e63-7796c8f2e76a" name="UiHandleAlert" testItemId="16" title="Handle UI Alerts">
+      <arguments>
+        <argument id="alerts">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValue name="expectedMessage"/>
+              <namedValue name="comparisonType">
+                <value class="value" valueClass="string">EqualTo</value>
+              </namedValue>
+              <namedValue name="caseSensitive">
+                <value class="value" valueClass="boolean">true</value>
+              </namedValue>
+              <namedValue name="isNormalise">
+                <value class="value" valueClass="boolean">false</value>
+              </namedValue>
+              <namedValue name="isRegex">
+                <value class="value" valueClass="boolean">false</value>
+              </namedValue>
+              <namedValue name="response">
+                <value class="value" valueClass="string">OK</value>
+              </namedValue>
+              <namedValue name="beforeWait"/>
+              <namedValue name="afterWait"/>
+              <namedValue name="autoRetry"/>
+            </namedValues>
+          </value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiNavigate" guid="66e59ab8-e393-45f6-a534-aab1478b4ea3" name="UiNavigate" testItemId="15" title="Navigate: Refresh">
+      <arguments>
+        <argument id="navigate">
+          <value class="value" valueClass="string">Refresh</value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.testapis.ApexConnect" guid="22222222-aaaa-4222-8222-222222222202" name="Salesforce Connect: DogfoodingOrg (Sales app)" testItemId="2" title="Salesforce Connect: DogfoodingOrg (Test)">
+      <arguments>
+        <argument id="connectionName">
+          <value class="value" valueClass="string">DogfoodingOrg</value>
+        </argument>
+        <argument id="resultName">
+          <value class="value" valueClass="string">DogfoodingOrg</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="uiApplicationName">
+          <value class="value" valueClass="string">LightningSales</value>
+        </argument>
+        <argument id="quickUiLogin">
+          <value class="value" valueClass="boolean">true</value>
+        </argument>
+        <argument id="closeAllPrimaryTabs">
+          <value class="value" valueClass="boolean">true</value>
+        </argument>
+        <argument id="alreadyOpenBehaviour">
+          <value class="value" valueClass="string">Reuse</value>
+        </argument>
+        <argument id="enableObjectIdLogging">
+          <value class="value" valueClass="boolean">true</value>
+        </argument>
+        <argument id="autoCleanup">
+          <value class="value" valueClass="boolean">true</value>
+        </argument>
+        <argument id="lightningMode">
+          <value class="value" valueClass="string">default</value>
+        </argument>
+        <argument id="connectionId">
+          <value class="value" valueClass="id">dc6b587f-d62b-4b7d-9a34-ab6abe501c11</value>
+        </argument>
+        <argument id="reuseConnectionName"/>
+        <argument id="privateBrowsingMode"/>
+        <argument id="cleanupConnectionName"/>
+        <argument id="logFileLocation"/>
+        <argument id="username"/>
+        <argument id="password"/>
+        <argument id="securityToken"/>
+        <argument id="environment"/>
+        <argument id="webBrowser"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" guid="33333333-aaaa-4333-8333-333333333303" name="On SF Leads list view - click New" testItemId="3" title="On SF Leads list view - click New">
+      <arguments>
+        <argument id="uiConnectionName">
+          <value class="value" valueClass="string">DogfoodingOrg</value>
+        </argument>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Lead&amp;page=list"/>
+        </argument>
+        <argument id="navigate">
+          <value class="value" valueClass="string">Always</value>
+        </argument>
+        <argument id="targetDescription">
+          <value class="value" valueClass="string">On SF Leads list view - click New</value>
+        </argument>
+        <argument id="windowSelection">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="windowSize">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="closeWindow"/>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="sfUiTargetVfIndex">
+          <value class="value" valueClass="string">1</value>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="4">
+          <steps/>
+        </clause>
+      </clauses>
+      <generatedParameters>
+        <apiParam group="target" name="sfUiTargetVfIndex" title="Page Index">
+          <summary>The VF page index. This is by default 1 and is used when there is same VF embedded multiple times</summary>
+          <type>
+            <numericType/>
+          </type>
+        </apiParam>
+      </generatedParameters>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" guid="44444444-aaaa-4444-8444-444444444404" name="Click the New button" testItemId="5" title="Click the New button">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">ui:locator?name=New</value>
+        </argument>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=click</value>
+        </argument>
+        <argument id="interactionDescription">
+          <value class="value" valueClass="string">Click the New button</value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="locatorParams"/>
+        <argument id="beforeWait"/>
+        <argument id="afterWait"/>
+        <argument id="autoRetry"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" guid="55555555-aaaa-4555-8555-555555555505" name="On SF New Lead form - fill required fields and Save" testItemId="6" title="On SF New Lead form - fill required fields and Save">
+      <arguments>
+        <argument id="uiConnectionName">
+          <value class="value" valueClass="string">DogfoodingOrg</value>
+        </argument>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Lead&amp;action=New"/>
+        </argument>
+        <argument id="navigate">
+          <value class="value" valueClass="string">Dont</value>
+        </argument>
+        <argument id="sfUiTargetResultName">
+          <value class="value" valueClass="string">LeadId</value>
+        </argument>
+        <argument id="targetDescription">
+          <value class="value" valueClass="string">On SF New Lead form - fill required fields and Save</value>
+        </argument>
+        <argument id="windowSelection">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="windowSize">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="closeWindow"/>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="7">
+          <steps/>
+        </clause>
+      </clauses>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" guid="66666666-aaaa-4666-8666-666666666601" name="Set the Last Name field" testItemId="8" title="Set the Last Name field">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">ui:locator?name=LastName</value>
+        </argument>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=set</value>
+        </argument>
+        <argument id="value">
+          <value class="variable">
+            <path element="leadLastName"/>
+          </value>
+        </argument>
+        <argument id="interactionDescription">
+          <value class="value" valueClass="string">Set the Last Name field to {leadLastName}</value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="locatorParams"/>
+        <argument id="beforeWait"/>
+        <argument id="afterWait"/>
+        <argument id="autoRetry"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" guid="66666666-aaaa-4666-8666-666666666602" name="Set the Company field" testItemId="9" title="Set the Company field">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">ui:locator?name=Company</value>
+        </argument>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=set</value>
+        </argument>
+        <argument id="value">
+          <value class="variable">
+            <path element="leadCompany"/>
+          </value>
+        </argument>
+        <argument id="interactionDescription">
+          <value class="value" valueClass="string">Set the Company field to {leadCompany}</value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="locatorParams"/>
+        <argument id="beforeWait"/>
+        <argument id="afterWait"/>
+        <argument id="autoRetry"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" guid="77777777-aaaa-4777-8777-777777777707" name="Click the Save button" testItemId="10" title="Click the Save button">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">ui:locator?name=SaveEdit</value>
+        </argument>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=click</value>
+        </argument>
+        <argument id="interactionDescription">
+          <value class="value" valueClass="string">Click the Save button</value>
+        </argument>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="beforeWait"/>
+        <argument id="afterWait"/>
+        <argument id="autoRetry"/>
+        <argument id="locatorParams"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" guid="88888888-aaaa-4888-8888-888888888808" name="On SF Lead record page - assert detail fields" testItemId="11" title="On SF Lead record page - assert detail fields">
+      <arguments>
+        <argument id="uiConnectionName">
+          <value class="value" valueClass="string">DogfoodingOrg</value>
+        </argument>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Lead&amp;action=View"/>
+        </argument>
+        <argument id="navigate">
+          <value class="value" valueClass="string">Dont</value>
+        </argument>
+        <argument id="sfUiTargetObjectId">
+          <value class="variable">
+            <path element="LeadId"/>
+          </value>
+        </argument>
+        <argument id="targetDescription">
+          <value class="value" valueClass="string">On SF Lead record page - assert detail fields</value>
+        </argument>
+        <argument id="windowSelection">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="windowSize">
+          <value class="value" valueClass="string">Default</value>
+        </argument>
+        <argument id="closeWindow"/>
+        <argument id="captureBefore">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="12">
+          <steps/>
+        </clause>
+      </clauses>
+      <generatedParameters>
+        <apiParam group="target" name="sfUiTargetObjectId" title="Object Id">
+          <summary>The Id of the SF Object to be Viewed or Edited.</summary>
+          <type>
+            <textType/>
+          </type>
+        </apiParam>
+      </generatedParameters>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" guid="99999999-aaaa-4999-8999-999999999901" name="Assert Last Name field value" testItemId="13" title="Assert Last Name field value">
+      <arguments>
+        <argument id="assertionType">
+          <value class="value" valueClass="string">Field</value>
+        </argument>
+        <argument id="fieldLocator">
+          <value class="value" valueClass="string">ui:locator?name=LastName</value>
+        </argument>
+        <argument id="attributeName">
+          <value class="value" valueClass="string">value</value>
+        </argument>
+        <argument id="comparisonType">
+          <value class="value" valueClass="string">EqualTo</value>
+        </argument>
+        <argument id="expectedValue">
+          <value class="variable">
+            <path element="leadLastName"/>
+          </value>
+        </argument>
+        <argument id="fieldAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="columnAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="pageAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="beforeWait"/>
+        <argument id="autoRetry"/>
+        <argument id="resultName"/>
+        <argument id="locatorParams"/>
+      </arguments>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" guid="99999999-aaaa-4999-8999-999999999902" name="Assert Company field value" testItemId="14" title="Assert Company field value">
+      <arguments>
+        <argument id="assertionType">
+          <value class="value" valueClass="string">Field</value>
+        </argument>
+        <argument id="fieldLocator">
+          <value class="value" valueClass="string">ui:locator?name=Company</value>
+        </argument>
+        <argument id="attributeName">
+          <value class="value" valueClass="string">value</value>
+        </argument>
+        <argument id="comparisonType">
+          <value class="value" valueClass="string">EqualTo</value>
+        </argument>
+        <argument id="expectedValue">
+          <value class="variable">
+            <path element="leadCompany"/>
+          </value>
+        </argument>
+        <argument id="fieldAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="columnAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="pageAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="boolean">false</value>
+        </argument>
+        <argument id="beforeWait"/>
+        <argument id="autoRetry"/>
+        <argument id="locatorParams"/>
+        <argument id="resultName"/>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>
