@@ -6,7 +6,6 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ## Table of Contents
 
-- [Starting the server](#starting-the-server)
 - [Configuration reference](#configuration-reference)
   - [CLI flags](#cli-flags)
   - [Environment variables](#environment-variables)
@@ -109,19 +108,7 @@ If you install sf for these tools, also run **`sf plugins install @provartesting
 
 ## Quick start
 
-The MCP server runs via `npx`, which auto-installs `@provartesting/provardx-cli` on first run. No prior `sf plugins install` is needed for the core flows.
-
-**Claude Code** (one-time, works across all your projects):
-
-```sh
-claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
-```
-
-**Claude Desktop** — edit your config file, then restart the app:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows (direct installer): `%APPDATA%\Claude\claude_desktop_config.json`
-- Windows (Microsoft Store): see [Client configuration → Windows](#find-your-config-file-by-operating-system) for the Store-edition sandbox warning.
+The MCP server runs via `npx` — no separate package install needed, no `sf` CLI required for the core flows. Add this entry to your AI client's MCP config file:
 
 ```json
 {
@@ -143,7 +130,14 @@ claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --
 }
 ```
 
-**Verify it's working** — ask your AI assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
+**Where does this go?** It depends on your AI client and operating system. See [Client configuration → Find your config file by operating system](#find-your-config-file-by-operating-system) for the exact path. Common entries at a glance:
+
+- **Claude Code:** `~/.claude.json` (global) or `<project>/.mcp.json` (project-scoped, shared)
+- **Claude Desktop:** opened via **Claude menu → Settings → Developer → Edit Config**
+- **Cursor:** `~/.cursor/mcp.json` (global) or `<project>/.cursor/mcp.json` (workspace)
+- **GitHub Copilot (VS Code):** `<workspace>/.vscode/mcp.json` — note the top-level key is **`"servers"`**, not `"mcpServers"`
+
+After saving, **fully restart** your AI client (`Cmd+Q` on macOS, Quit from the system tray on Windows — closing the window is not enough for Claude Desktop). Then verify by asking your assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
 
 **(Optional) Authenticate Quality Hub for full validation** — adds 170+ remote rules to `provar_testcase_validate`. Set `PROVAR_API_KEY` in your MCP config's `"env"` block (see [Configuration reference → Environment variables](#environment-variables)) or, if you have `sf` installed, run `sf provar auth login` to fetch a key interactively. The server works without this — validation falls back to a curated local rule set.
 
@@ -154,18 +148,6 @@ claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --
 The MCP server requires **Provar Automation IDE** to be installed on the same machine with an activated license. At startup the server reads `~/Provar/.licenses/*.properties` and verifies that at least one license is in the `Activated` state and was last verified online within the past 48 hours.
 
 If the license check fails, the server exits with a clear error message explaining the reason (not found, stale, or expired). Open Provar Automation IDE to refresh the license online, then retry.
-
----
-
-## Starting the server
-
-```sh
-sf provar mcp start
-```
-
-The server communicates over **stdio** (standard input / output). It must be started by your MCP client — do not run it interactively in a terminal.
-
-> **Note:** `--json` is intentionally disabled on this command. stdout is reserved for MCP JSON-RPC messages; all internal logging goes to stderr.
 
 ---
 
