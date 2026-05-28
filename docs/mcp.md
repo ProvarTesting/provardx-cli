@@ -88,48 +88,64 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ## Prerequisites
 
+### Required for all uses
+
 - **Node.js 18–24** (LTS 22 recommended). Node 25+ is not supported — a transitive dependency (`buffer-equal-constant-time`) crashes on startup. Check with `node --version`.
-- **Salesforce CLI** (`sf`) ≥ 2.x
-- **Provar Automation IDE** ≥ 3.x installed with an activated license (see [License requirement](#license-requirement) below)
+- **Provar Automation IDE** ≥ 3.x installed with an activated license (see [License requirement](#license-requirement) below).
+
+That's it for the core flows. The MCP server runs entirely via `npx` — **no separate npm package install is required**, and **no Salesforce CLI is needed** for NitroX, validation, generation, properties, ant, inspect, or connection tools.
+
+### Optional — Salesforce CLI (`sf`) for QH / Automation / org tools
+
+Install **Salesforce CLI ≥ 2.x** _only_ if you plan to use one of the following tool families:
+
+| Tool family           | Tools                                                                                                                                                                                                                                                                         | Why sf is needed                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `provar_qualityhub_*` | `provar_qualityhub_connect`, `provar_qualityhub_display`, `provar_qualityhub_testrun`, `provar_qualityhub_testrun_report`, `provar_qualityhub_testrun_abort`, `provar_qualityhub_testcase_retrieve`, `provar_qualityhub_defect_create`, `provar_qualityhub_examples_retrieve` | Shell out to `sf provar quality-hub ...` commands.      |
+| `provar_automation_*` | `provar_automation_setup`, `provar_automation_config_load`, `provar_automation_metadata_download`, `provar_automation_compile`, `provar_automation_testrun`                                                                                                                   | Shell out to `sf provar automation ...` commands.       |
+| `provar_org_describe` | `provar_org_describe`                                                                                                                                                                                                                                                         | Reads Salesforce orgs authenticated via `sf org login`. |
+
+If you install sf for these tools, also run **`sf plugins install @provartesting/provardx-cli`** so the `sf provar` subcommands are available. The MCP server itself does not require this plugin install — it loads from the npx cache.
 
 ## Quick start
 
-```sh
-# 1. Install the plugin
-sf plugins install @provartesting/provardx-cli
-
-# 2. (Optional) Authenticate for full 170+ rule validation
-sf provar auth login
-
-# 3. Connect your AI assistant — pick one client below
-```
+The MCP server runs via `npx`, which auto-installs `@provartesting/provardx-cli` on first run. No prior `sf plugins install` is needed for the core flows.
 
 **Claude Code** (one-time, works across all your projects):
 
 ```sh
-claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 ```
 
 **Claude Desktop** — edit your config file, then restart the app:
 
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows (direct installer): `%APPDATA%\Claude\claude_desktop_config.json`
-- Windows (Microsoft Store): `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` _(see note below about Store sandbox limitations)_
+- Windows (Microsoft Store): see [Client configuration → Windows](#find-your-config-file-by-operating-system) for the Store-edition sandbox warning.
 
 ```json
 {
   "mcpServers": {
     "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/path/to/your/provar/project",
+        "--auto-update"
+      ]
     }
   }
 }
 ```
 
-> **Windows (Claude Desktop):** If `sf` is not found, use `sf.cmd` as the command instead.
-
 **Verify it's working** — ask your AI assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
+
+**(Optional) Authenticate Quality Hub for full validation** — adds 170+ remote rules to `provar_testcase_validate`. Set `PROVAR_API_KEY` in your MCP config's `"env"` block (see [Configuration reference → Environment variables](#environment-variables)) or, if you have `sf` installed, run `sf provar auth login` to fetch a key interactively. The server works without this — validation falls back to a curated local rule set.
 
 ---
 
