@@ -514,6 +514,25 @@ The tool returns the discovered workspace path, a cache age, and per-object requ
 
 ---
 
+### Scenario 14: Microsoft Dynamics & Power Platform Connect Step (Provar 3.0.7+)
+
+The four `NitroXConnect:ms-*` variants — `MSDynamics365Connect`, `MSDataverseConnect`, `MSPowerAppConnect`, `MSPowerPageConnect` — are first-class shorthands in `provar_testcase_generate` and recognised by the validator. This scenario exercises the round trip: generate a Dynamics 365 connect step with one literal-arg and one runtime-bound (data-driven) variant, then validate the output.
+
+**Try this prompt:**
+
+> "Generate a test case named `MSDynamicsSmoke` with two steps: (1) an `MSDynamics365Connect` step named `Dynamics Connect` with attributes `connectionName=DynamicsOrg`, `resultName=DynamicsSession`, `resultScope=Test`, `appName=Sales Hub` — populate appName literally; (2) an `MSPowerPageConnect` step named `Portal Connect` with attributes `connectionName=PortalOrg`, `resultName=PortalSession`, `resultScope=Test`, and leave `environment` + `powerPageName` for the runtime parameter binding. Then validate the generated XML."
+
+**What to look for (PASS):**
+
+- Generation succeeds without `STEPS_REQUIRED`.
+- The `warnings` field includes the NitroX MS data-driven advisory.
+- Validation returns `is_valid: true` for the literal-args step.
+- For the Power Pages step, you should see the missing-arg warning unless the agent additionally adds the `<generatedParameters>` declaration — pilot the agent on how to fix.
+
+**Negative path (also PASS):** If the agent puts `autoCleanup=true` on any `MS*Connect` step, the validator returns `UI-NITROX-CONNECT-ARGS-001` (critical). If the agent puts `powerAppName` on `MSDynamics365Connect`, the same rule fires with a cross-variant hint.
+
+---
+
 ## Security Model
 
 ### What the server does

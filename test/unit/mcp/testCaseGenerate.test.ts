@@ -2024,4 +2024,92 @@ describe('provar_testcase_generate', () => {
       }
     });
   });
+
+  // ── NitroX MS variants (Microsoft Dynamics 365 + Power Platform) ─────────────
+
+  describe('NitroX MS variant shorthand expansion', () => {
+    const NITROX_BASE = 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect';
+    const SHORTHAND_TO_FQID: Record<string, string> = {
+      MSDynamics365Connect: `${NITROX_BASE}:ms-dynamics365`,
+      MSDataverseConnect: `${NITROX_BASE}:ms-dataverse`,
+      MSPowerAppConnect: `${NITROX_BASE}:ms-powerapp`,
+      MSPowerPageConnect: `${NITROX_BASE}:ms-powerpage`,
+    };
+
+    for (const [shorthand, fqid] of Object.entries(SHORTHAND_TO_FQID)) {
+      it(`expands ${shorthand} shorthand to ${fqid}`, () => {
+        const result = server.call('provar_testcase_generate', {
+          test_case_name: `${shorthand} Test`,
+          steps: [
+            {
+              api_id: shorthand,
+              name: 'MS Connect',
+              attributes: { connectionName: 'UiConn', resultName: 'MSResult', resultScope: 'Test' },
+            },
+          ],
+          dry_run: true,
+          overwrite: false,
+        });
+
+        const xml = parseText(result)['xml_content'] as string;
+        assert.ok(xml.includes(`apiId="${fqid}"`), `expected XML to contain apiId="${fqid}"; got: ${xml}`);
+      });
+    }
+
+    it('emits the NitroX MS per-step warning when an MS variant is included', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'MS Warning Test',
+        steps: [
+          {
+            api_id: 'MSDynamics365Connect',
+            name: 'Dynamics Connect',
+            attributes: {
+              connectionName: 'UiConn',
+              resultName: 'DynamicsResult',
+              resultScope: 'Test',
+              appName: 'Sales Hub',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const body = parseText(result);
+      const warnings = body['warnings'] as string[] | undefined;
+      assert.ok(Array.isArray(warnings), 'expected warnings array');
+      const hasNitroxWarning = warnings.some((w) => w.includes('NitroX MS') || w.includes('generatedParameters'));
+      assert.ok(hasNitroxWarning, `expected NitroX MS warning in warnings list; got: ${JSON.stringify(warnings)}`);
+    });
+
+    it('round-trip: MSPowerPageConnect with populated variant args validates clean', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Power Page Test',
+        steps: [
+          {
+            api_id: 'MSPowerPageConnect',
+            name: 'Power Page Connect',
+            attributes: {
+              connectionName: 'UiConn',
+              resultName: 'PortalResult',
+              resultScope: 'Test',
+              environment: 'Production',
+              powerPageName: 'CustomerPortal',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const body = parseText(result);
+      const validation = body['validation'] as Record<string, unknown> | undefined;
+      assert.ok(validation, 'expected validation field in response');
+      assert.equal(
+        validation['is_valid'],
+        true,
+        `generated MSPowerPageConnect XML should be valid; got: ${JSON.stringify(validation)}`
+      );
+    });
+  });
 });
