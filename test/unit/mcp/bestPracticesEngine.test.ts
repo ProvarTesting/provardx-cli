@@ -377,5 +377,46 @@ describe('runBestPractices', () => {
       // single-violation pattern used by API-UNKNOWN-001 etc.).
       for (const v of vs) assert.equal(v.count, undefined);
     });
+
+    // ─ Regression: every UI action in the apply set must also be a known API ───
+    // (PR #192 Copilot review): UiRead is enforced by UI-NEST-STRUCT-001 and so
+    // must also appear in VALID_API_IDS, otherwise a properly-nested UiRead would
+    // pass UI-NEST-STRUCT-001 while still being flagged by API-UNKNOWN-001 —
+    // a contradictory finding pair the local validator must never emit.
+    for (const shortApi of ['UiDoAction', 'UiAssert', 'UiRead', 'UiFill', 'UiNavigate', 'UiWithRow', 'UiHandleAlert']) {
+      it(`emits no API-UNKNOWN-001 for a properly-nested ${shortApi} (no contradictory findings)`, () => {
+        const apiId = `com.provar.plugins.forcedotcom.core.ui.${shortApi}`;
+        const inner =
+          shortApi === 'UiWithRow'
+            ? `<apiCall guid="${GUID_X}" apiId="${apiId}" name="Row" testItemId="3" title="Row"><clauses><clause name="substeps" testItemId="4"><steps><apiCall guid="${GUID_DO3}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Inner" testItemId="5" title="Inner"/></steps></clause></clauses></apiCall>`
+            : `<apiCall guid="${GUID_DO3}" apiId="${apiId}" name="${shortApi}" testItemId="3" title="${shortApi}"/>`;
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TC3}" registryId="tc-nest-known-${shortApi}" name="Nest Known ${shortApi}">
+  <steps>
+    <apiCall guid="${GUID_UWS3}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            ${inner}
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+        const violations = runBestPractices(xml).violations;
+        assert.equal(
+          nestViolations(violations).length,
+          0,
+          `UI-NEST-STRUCT-001 must pass for a properly-nested ${shortApi}`
+        );
+        const apiUnknown = violations.filter((v) => v.rule_id === 'API-UNKNOWN-001');
+        assert.equal(
+          apiUnknown.length,
+          0,
+          `API-UNKNOWN-001 must not fire for ${shortApi} — apiId=${apiId} missing from VALID_API_IDS would be a contradictory finding`
+        );
+      });
+    }
   });
 });

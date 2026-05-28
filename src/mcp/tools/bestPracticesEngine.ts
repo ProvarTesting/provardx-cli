@@ -173,6 +173,7 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
   'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
   'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
   'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
   'com.provar.plugins.forcedotcom.core.ui.UiFill',
   'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
