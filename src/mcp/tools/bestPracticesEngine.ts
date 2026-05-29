@@ -935,9 +935,14 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
     const tid = call['@_testItemId'] as string | undefined;
     const shortApi = apiId.split('.').pop() ?? apiId;
     const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+    const requiredContainer = verdict.includes('UiWithRow')
+      ? 'UiWithRow'
+      : verdict.includes('UiWithScreen')
+        ? 'UiWithScreen'
+        : 'UiWithScreen';
     const message =
       `${shortApi} '${title}' is ${verdict} - must be nested inside a parent ` +
-      `UiWithScreen's <clauses><clause name="substeps"><steps> block${tidSuffix}`;
+      `${requiredContainer}'s <clauses><clause name="substeps"><steps> block${tidSuffix}`;
     violations.push(makeViolation(rule, message));
   });
 
