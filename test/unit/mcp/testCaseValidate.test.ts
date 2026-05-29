@@ -591,6 +591,119 @@ describe('validateTestCase', () => {
         'Expected UI-LOCATOR-001 for UiAssert'
       );
     });
+
+    // PDX-497: UI-LOCATOR-001 now covers the full locator-bearing API set —
+    // UiDoAction, UiAssert, UiRead, UiFill. Prior to PDX-497 the validator used
+    // a narrow substring match for UiDoAction/UiAssert only, so UiRead/UiFill
+    // could carry a plain-string locator and silently fail at Provar runtime.
+    it('also fires for UiRead steps with wrong locator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiRead" name="Read field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001 for UiRead'
+      );
+    });
+
+    it('does not fire for UiRead with correct uiLocator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiRead" name="Read field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Name"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should not fire for UiRead with correct uiLocator class'
+      );
+    });
+
+    it('also fires for UiFill steps with wrong locator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'Expected UI-LOCATOR-001 for UiFill'
+      );
+    });
+
+    it('does not fire for UiFill with correct uiLocator class', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill field" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Name"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 should not fire for UiFill with correct uiLocator class'
+      );
+    });
+
+    // PDX-497: UiNavigate is a UI action but does NOT carry a `locator`
+    // argument (its target is a URL/screen, not a locator). UI-LOCATOR-001
+    // must not fire even when a (misplaced) locator is present — this is a
+    // structural rule that only applies to APIs in the locator-bearing set.
+    it('does not fire for UiNavigate even when locator argument is present', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiNavigate" name="Navigate" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="value" valueClass="string">sf:ui:locator:label?label=Name</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-LOCATOR-001'),
+        'UI-LOCATOR-001 must not fire for UiNavigate (not a locator-bearing API)'
+      );
+    });
   });
 
   describe('SETVALUES-STRUCTURE-001', () => {
@@ -924,6 +1037,43 @@ describe('validateTestCase', () => {
         !r.issues.some((i) => i.rule_id === 'VAR-REF-002'),
         'VAR-REF-002 must not fire when class="compound" is used correctly'
       );
+    });
+  });
+
+  // ── UI-NEST-STRUCT-001 — fixture integration: Contact_Lead reporter artifacts ──
+  describe('UI-NEST-STRUCT-001 fixture integration', () => {
+    // Tests run from the repo root via wireit/yarn; resolve relative to cwd to avoid ESM __dirname.
+    const fixturesDir = path.resolve(process.cwd(), 'test', 'fixtures', 'testcases');
+
+    it('Contact_Lead_flat.testcase (BAD reporter artifact) fires UI-NEST-STRUCT-001 for the exact expected testItemIds', () => {
+      const xml = fs.readFileSync(path.join(fixturesDir, 'Contact_Lead_flat.testcase'), 'utf-8');
+      const r = validateTestCase(xml);
+      const bps = (r.best_practices_violations ?? []).filter((v) => v.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(bps.length, 10, `Expected 10 UI-NEST-STRUCT-001 violations, got ${bps.length}`);
+      // Each violation embeds its testItemId in the message — extract and compare.
+      const tids = bps
+        .map((v) => /testItemId=(\d+)/.exec(v.message)?.[1])
+        .filter((s): s is string => Boolean(s))
+        .map((s) => parseInt(s, 10))
+        .sort((a, b) => a - b);
+      assert.deepEqual(
+        tids,
+        [5, 8, 9, 10, 13, 14, 15, 16, 17, 18],
+        `Expected testItemIds {5,8,9,10,13,14,15,16,17,18}, got ${JSON.stringify(tids)}`
+      );
+      // Shape assertions on every violation.
+      for (const v of bps) {
+        assert.equal(v.severity, 'major');
+        assert.equal(v.weight, 7);
+        assert.equal(v.category, 'XMLSchema');
+      }
+    });
+
+    it('Contact_Lead_nested.testcase (GOOD reporter artifact) does not fire UI-NEST-STRUCT-001', () => {
+      const xml = fs.readFileSync(path.join(fixturesDir, 'Contact_Lead_nested.testcase'), 'utf-8');
+      const r = validateTestCase(xml);
+      const bp = (r.best_practices_violations ?? []).find((v) => v.rule_id === 'UI-NEST-STRUCT-001');
+      assert.equal(bp, undefined, `Nested fixture should not trigger UI-NEST-STRUCT-001, got: ${bp?.message}`);
     });
   });
 });

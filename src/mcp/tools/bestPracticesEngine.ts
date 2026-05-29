@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
+import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS } from './uiActionApiIds.js';
 
 // ── Rule / config interfaces ──────────────────────────────────────────────────
 
@@ -173,11 +174,56 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
   'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
   'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
   'com.provar.plugins.forcedotcom.core.ui.UiNavigate',
   'com.provar.plugins.forcedotcom.core.ui.UiFill',
   'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
   'com.provar.plugins.forcedotcom.core.ui.UiHandleAlert',
+  // Forcedotcom — NitroX MS variants (Microsoft Dynamics 365 + Power Platform, Provar 3.0.7+)
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp',
+  'com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage',
 ]);
+
+// ── NitroX MS variants — shared tables for UI-NITROX-* rules ─────────────────
+
+const NITROX_MS_BASE = 'com.provar.plugins.forcedotcom.core.ui.NitroXConnect';
+
+const NITROX_MS_VARIANT_REQUIRED_ARGS: Record<string, readonly string[]> = {
+  'ms-dynamics365': ['appName'],
+  'ms-dataverse': [],
+  'ms-powerapp': ['powerAppName'],
+  'ms-powerpage': ['environment', 'powerPageName'],
+};
+
+const NITROX_MS_SHARED_ALLOWED_ARGS: ReadonlySet<string> = new Set([
+  'connectionName',
+  'reuseConnectionName',
+  'privateBrowsingMode',
+  'resultName',
+  'resultScope',
+  'webBrowser',
+]);
+
+const APEX_CONNECT_ONLY_ARGS: ReadonlySet<string> = new Set([
+  'autoCleanup',
+  'enableObjectIdLogging',
+  'quickUiLogin',
+  'closeAllPrimaryTabs',
+  'alreadyOpenBehaviour',
+  'lightningMode',
+  'uiApplicationName',
+  'cleanupConnectionName',
+]);
+
+function getNitroxMsVariant(apiId: string | undefined): string | null {
+  if (!apiId) return null;
+  const prefix = `${NITROX_MS_BASE}:`;
+  if (!apiId.startsWith(prefix)) return null;
+  const variant = apiId.slice(prefix.length);
+  return variant in NITROX_MS_VARIANT_REQUIRED_ARGS ? variant : null;
+}
 
 // ── XML tree types & helpers ──────────────────────────────────────────────────
 
@@ -772,6 +818,279 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
   return makeViolation(rule, msg, Math.min(violations.length, 3));
 }
 
+// ── UI-NEST-STRUCT-001 — UI actions must be nested under a screen ancestor ────
+// Mirrors QH's `UiActionNestingStructureValidator` (best_practices_engine.py).
+// A UI action step is valid if SOMEWHERE in its ancestor chain there is a
+// UiWithScreen or UiWithRow apiCall AND between the step and that ancestor
+// there is at least one <clause name="substeps">. Control-flow wrappers
+// (IfThen, ForEach, DoWhile, WaitFor, Switch, SwitchCase) between the step and
+// the screen ancestor are allowed. Anything inside <clause name="hidden"> is
+// exempt (disabled / settings blocks).
+
+// PDX-497: imported from the shared `uiActionApiIds.ts` so the validator and
+// generator (testCaseGenerate.ts) can never drift. UiWithRow is both a UI
+// action AND a container — its <clause name="substeps"> satisfies the rule for
+// its own descendants.
+const UI_ACTION_APIS = UI_ACTION_API_IDS;
+const UI_SCREEN_CONTAINERS = UI_SCREEN_CONTAINER_API_IDS;
+
+/** One frame on the parent stack while walking the parsed tree. */
+interface ParentFrame {
+  tag: string;
+  /** Attribute map (e.g. `{ apiId: '…UiWithScreen', name: 'substeps' }`). */
+  attrs: Record<string, string>;
+}
+
+/**
+ * Walk ancestors (immediate parent first, root last) and classify the
+ * placement of a UI action step. Returns `null` when the step is validly
+ * nested OR is exempt (inside `<clause name="hidden">`), otherwise a
+ * human-readable failure-mode string.
+ *
+ * Algorithmically identical to the Python `_classify` method so QH and local
+ * runs de-dup cleanly by (rule_id, test_item_id).
+ */
+function classifyUiActionPlacement(parents: ParentFrame[]): string | null {
+  let sawSubstepsClause = false;
+  // Iterate from immediate parent toward the root.
+  for (let i = parents.length - 1; i >= 0; i--) {
+    const frame = parents[i];
+    if (frame.tag === 'clause') {
+      const name = frame.attrs['name'] ?? '';
+      // Skip steps inside hidden clauses (disabled / settings blocks).
+      if (name === 'hidden') return null;
+      if (name === 'substeps') sawSubstepsClause = true;
+    }
+    if (frame.tag === 'apiCall') {
+      const ancestorApi = frame.attrs['apiId'] ?? '';
+      if (UI_SCREEN_CONTAINERS.has(ancestorApi)) {
+        if (sawSubstepsClause) return null;
+        const short = ancestorApi.split('.').pop() ?? ancestorApi;
+        return `nested under '${short}' but not via a <clause name="substeps"> block`;
+      }
+      // Any other apiCall (IfThen, ForEach, DoWhile, WaitFor, Switch, SwitchCase) — keep climbing.
+    }
+  }
+  return (
+    'not nested inside any UiWithScreen or UiWithRow ancestor ' +
+    '(must be a descendant of one via a <clause name="substeps"> path)'
+  );
+}
+
+/** Extract just the XML attributes from a fast-xml-parser node (stripping the @_ prefix). */
+function extractAttrs(node: XmlNode): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(node)) {
+    if (k.startsWith('@_') && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')) {
+      attrs[k.slice(2)] = String(v);
+    }
+  }
+  return attrs;
+}
+
+/**
+ * Depth-first walk over the parsed tree, invoking `visit` for every <apiCall>
+ * along with the chain of enclosing elements (root first, immediate parent
+ * last). Used by the UI-NEST-STRUCT-001 validator below.
+ */
+function walkApiCalls(tc: XmlNode, visit: (call: XmlNode, parents: ParentFrame[]) => void): void {
+  function descend(node: unknown, parents: ParentFrame[]): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const item of node) descend(item, parents);
+      return;
+    }
+    const n = node as XmlNode;
+    for (const [key, val] of Object.entries(n)) {
+      if (key.startsWith('@_') || key === '#text') continue;
+      const children = toArr(val as XmlNode | XmlNode[] | string);
+      for (const child of children) {
+        if (!child || typeof child !== 'object') continue;
+        const frame: ParentFrame = { tag: key, attrs: extractAttrs(child) };
+        if (key === 'apiCall') visit(child, parents);
+        descend(child, [...parents, frame]);
+      }
+    }
+  }
+  descend(tc, [{ tag: 'testCase', attrs: extractAttrs(tc) }]);
+}
+
+/**
+ * UI-NEST-STRUCT-001 — flag every UI action step (UiDoAction, UiAssert, UiRead,
+ * UiFill, UiNavigate, UiWithRow, UiHandleAlert) that is not nested under a
+ * UiWithScreen or UiWithRow ancestor via a `<clause name="substeps">` path.
+ *
+ * Emits ONE BPViolation per offending step (no consolidation) so that
+ * (rule_id, test_item_id) de-dups cleanly against the Quality Hub API.
+ */
+function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  walkApiCalls(tc, (call, parents) => {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || !UI_ACTION_APIS.has(apiId)) return;
+    const verdict = classifyUiActionPlacement(parents);
+    if (!verdict) return;
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? 'Unknown';
+    const tid = call['@_testItemId'] as string | undefined;
+    const shortApi = apiId.split('.').pop() ?? apiId;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+    const requiredContainer = verdict.includes('UiWithRow')
+      ? 'UiWithRow'
+      : verdict.includes('UiWithScreen')
+        ? 'UiWithScreen'
+        : 'UiWithScreen';
+    const message =
+      `${shortApi} '${title}' is ${verdict} - must be nested inside a parent ` +
+      `${requiredContainer}'s <clauses><clause name="substeps"><steps> block${tidSuffix}`;
+    violations.push(makeViolation(rule, message));
+  });
+
+  return violations;
+}
+
+// ── NitroX MS variant validators (UI-NITROX-CONNECT-ARGS-001, UI-NITROX-VARIANT-ARG-001) ───
+
+/**
+ * Return the list of <argument> nodes on an apiCall, navigating through the
+ * <arguments> wrapper that fast-xml-parser preserves. Distinct from the
+ * pre-existing `getArguments` helper above, which reads `call.argument`
+ * directly and does not handle the wrapper.
+ */
+function getCallArguments(call: XmlNode): XmlNode[] {
+  const argsContainer = call['arguments'] as XmlNode | undefined;
+  if (!argsContainer || typeof argsContainer !== 'object') return [];
+  return toArr(argsContainer['argument'] as XmlNode | XmlNode[]);
+}
+
+/** Return the set of <apiParam name="..."> names declared under <generatedParameters>. */
+function getGeneratedParamNames(call: XmlNode): Set<string> {
+  const container = call['generatedParameters'] as XmlNode | undefined;
+  if (!container || typeof container !== 'object') return new Set();
+  const params = toArr(container['apiParam'] as XmlNode | XmlNode[]);
+  const names = new Set<string>();
+  for (const p of params) {
+    const name = p['@_name'] as string | undefined;
+    if (name) names.add(name);
+  }
+  return names;
+}
+
+/** True when the <argument> has a real <value> child (not just an empty self-closing tag). */
+function argumentHasValue(arg: XmlNode): boolean {
+  const value = arg['value'];
+  if (value == null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  return true;
+}
+
+/**
+ * UI-NITROX-CONNECT-ARGS-001 — reject ApexConnect-only args and cross-variant args
+ * on NitroX MS connect steps. One violation per offending (step, arg) pair so
+ * de-dup against the Quality Hub API is straightforward.
+ */
+function validateNitroxConnectInvalidArgs(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    const variant = getNitroxMsVariant(apiId);
+    if (!variant) continue;
+
+    const variantArgs = NITROX_MS_VARIANT_REQUIRED_ARGS[variant] ?? [];
+    const ownVariantArgs = new Set<string>(variantArgs);
+    const otherVariantArgs = new Set<string>();
+    for (const [v, args] of Object.entries(NITROX_MS_VARIANT_REQUIRED_ARGS)) {
+      if (v === variant) continue;
+      for (const a of args) otherVariantArgs.add(a);
+    }
+
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+    const tid = call['@_testItemId'] as string | undefined;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+
+    for (const arg of getCallArguments(call)) {
+      const argId = arg['@_id'] as string | undefined;
+      if (!argId) continue;
+
+      if (APEX_CONNECT_ONLY_ARGS.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses ApexConnect-only argument '${argId}' — ` +
+              `not supported on NitroXConnect:${variant}${tidSuffix}`
+          )
+        );
+        continue;
+      }
+      if (otherVariantArgs.has(argId) && !ownVariantArgs.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses argument '${argId}' that belongs to a sibling ` +
+              `variant — check whether the apiId variant suffix is correct${tidSuffix}`
+          )
+        );
+        continue;
+      }
+      if (!NITROX_MS_SHARED_ALLOWED_ARGS.has(argId) && !ownVariantArgs.has(argId)) {
+        violations.push(
+          makeViolation(
+            rule,
+            `NitroX MS step '${title}' (variant ${variant}) uses unknown argument '${argId}'${tidSuffix}`
+          )
+        );
+      }
+    }
+  }
+
+  return violations;
+}
+
+/**
+ * UI-NITROX-VARIANT-ARG-001 — warn when a variant-specific argument is absent or empty
+ * UNLESS it is declared as a runtime-bound parameter under <generatedParameters>
+ * (the data-driven pattern used in the Provar regression fixture).
+ */
+function validateNitroxVariantArgRequired(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    const variant = getNitroxMsVariant(apiId);
+    if (!variant) continue;
+
+    const required = NITROX_MS_VARIANT_REQUIRED_ARGS[variant] ?? [];
+    if (required.length === 0) continue;
+
+    const argsById = new Map<string, XmlNode>();
+    for (const a of getCallArguments(call)) {
+      const id = a['@_id'] as string | undefined;
+      if (id) argsById.set(id, a);
+    }
+    const generatedParams = getGeneratedParamNames(call);
+
+    const title = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+    const tid = call['@_testItemId'] as string | undefined;
+    const tidSuffix = tid ? ` (testItemId=${tid})` : '';
+
+    for (const reqArg of required) {
+      if (generatedParams.has(reqArg)) continue; // data-driven — explicitly OK
+      const arg = argsById.get(reqArg);
+      if (arg && argumentHasValue(arg)) continue;
+      violations.push(
+        makeViolation(
+          rule,
+          `NitroX MS step '${title}' (variant ${variant}) is missing required argument '${reqArg}' ` +
+            `and no matching <generatedParameters> entry is declared${tidSuffix}`
+        )
+      );
+    }
+  }
+
+  return violations;
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -789,6 +1108,16 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   uniqueResultNames: validateUniqueResultNames,
   uiWithScreenTarget: validateUiWithScreenTarget,
   // 'regex' is dispatched separately (needs metadata)
+  // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
+};
+
+/** Validators that may emit multiple violations from a single check (one per offending element). */
+type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
+
+const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
+  uiActionNestingStructure: validateUiActionNestingStructure,
+  nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,
+  nitroxVariantArgRequired: validateNitroxVariantArgRequired,
 };
 
 // ── XML parser (shared settings) ─────────────────────────────────────────────
@@ -835,19 +1164,25 @@ export function runBestPractices(xmlContent: string, metadata: BPMetadata = {}):
     // Weight-0 rules are purely informational — skip from scoring
     if (rule.weight === 0) continue;
 
-    let violation: BPViolation | null;
-
     if (checkType === 'regex') {
       rulesEvaluated++;
-      violation = validateRegex(tc, rule, metadata);
-    } else {
-      const fn = VALIDATOR_REGISTRY[checkType];
-      if (!fn) continue; // unimplemented validator → silently pass
-      rulesEvaluated++;
-      violation = fn(tc, rule);
+      const v = validateRegex(tc, rule, metadata);
+      if (v) violations.push(v);
+      continue;
     }
 
-    if (violation) violations.push(violation);
+    const multiFn = MULTI_VALIDATOR_REGISTRY[checkType];
+    if (multiFn) {
+      rulesEvaluated++;
+      for (const v of multiFn(tc, rule)) violations.push(v);
+      continue;
+    }
+
+    const fn = VALIDATOR_REGISTRY[checkType];
+    if (!fn) continue; // unimplemented validator → silently pass
+    rulesEvaluated++;
+    const v = fn(tc, rule);
+    if (v) violations.push(v);
   }
 
   const quality_score = calculateBPScore(violations);

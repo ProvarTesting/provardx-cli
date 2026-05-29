@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<testCase guid="39a2adda-fedf-4f1f-bfe4-b302fab9524f" id="1" registryId="ms-dynamics-connect">
+  <summary/>
+  <steps>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365" guid="77a77e6e-38c6-4c69-80a9-584bc27647cf" name="NitroXConnect" testItemId="1" title="MS Dynamics 365 Connect:  (UiConnection)">
+      <arguments>
+        <argument id="connectionName">
+          <value class="value" valueClass="string">UiConnection</value>
+        </argument>
+        <argument id="reuseConnectionName"/>
+        <argument id="privateBrowsingMode"/>
+        <argument id="resultName">
+          <value class="value" valueClass="string">MSDynamics365Connection</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="webBrowser"/>
+        <argument id="appName"/>
+      </arguments>
+      <generatedParameters>
+        <apiParam group="ui" name="appName" title="App Name">
+          <type>
+            <textType/>
+          </type>
+        </apiParam>
+      </generatedParameters>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse" guid="34fff419-f219-4cca-b2f8-4643ea1a49d8" name="NitroXConnect" testItemId="2" title="MS Dataverse Connect: UiConnection">
+      <arguments>
+        <argument id="connectionName">
+          <value class="value" valueClass="string">UiConnection</value>
+        </argument>
+        <argument id="reuseConnectionName"/>
+        <argument id="privateBrowsingMode"/>
+        <argument id="resultName">
+          <value class="value" valueClass="string">MSDataverseConnection</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="webBrowser"/>
+      </arguments>
+      <generatedParameters/>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp" guid="556b9ffa-458a-40f3-9734-db01b53e3446" name="NitroXConnect" testItemId="3" title="MS Power App Connect:  (UiConnection)">
+      <arguments>
+        <argument id="connectionName">
+          <value class="value" valueClass="string">UiConnection</value>
+        </argument>
+        <argument id="reuseConnectionName"/>
+        <argument id="privateBrowsingMode"/>
+        <argument id="resultName">
+          <value class="value" valueClass="string">MSPowerAppConnection</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="webBrowser"/>
+        <argument id="powerAppName"/>
+      </arguments>
+      <generatedParameters>
+        <apiParam group="ui" name="powerAppName" title="Power App Name">
+          <type>
+            <textType/>
+          </type>
+        </apiParam>
+      </generatedParameters>
+    </apiCall>
+    <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage" guid="1f7e4c0b-0863-409c-ae3e-b281fabbbd48" name="NitroXConnect" testItemId="4" title="MS Power Page Connect:  (UiConnection)">
+      <arguments>
+        <argument id="connectionName">
+          <value class="value" valueClass="string">UiConnection</value>
+        </argument>
+        <argument id="reuseConnectionName"/>
+        <argument id="privateBrowsingMode"/>
+        <argument id="resultName">
+          <value class="value" valueClass="string">MSPowerPageConnection</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="webBrowser"/>
+        <argument id="environment"/>
+        <argument id="powerPageName"/>
+      </arguments>
+      <generatedParameters>
+        <apiParam group="ui" name="environment" title="Environment">
+          <type>
+            <textType/>
+          </type>
+        </apiParam>
+        <apiParam group="ui" name="powerPageName" title="Power Page Name">
+          <type>
+            <textType/>
+          </type>
+        </apiParam>
+      </generatedParameters>
+    </apiCall>
+  </steps>
+</testCase>

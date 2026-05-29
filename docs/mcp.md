@@ -6,14 +6,14 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ## Table of Contents
 
-- [Starting the server](#starting-the-server)
+- [Configuration reference](#configuration-reference)
+  - [CLI flags](#cli-flags)
+  - [Environment variables](#environment-variables)
+  - [Setting these in your MCP client config](#setting-these-in-your-mcp-client-config)
 - [Client configuration](#client-configuration)
-  - [Claude Desktop](#claude-desktop)
-  - [Claude Code](#claude-code)
-  - [GitHub Copilot (VS Code)](#github-copilot-vs-code)
-  - [Cursor](#cursor)
-  - [Agentforce Vibes](#agentforce-vibes)
-  - [Other MCP-compatible clients](#other-mcp-compatible-clients)
+  - [The standard config (recommended)](#the-standard-config-recommended)
+  - [Find your config file by operating system](#find-your-config-file-by-operating-system)
+  - [Client-specific notes](#client-specific-notes)
 - [Path security](#path-security)
 - [Available tools](#available-tools)
   - [provardx_ping](#provardx_ping)
@@ -87,48 +87,68 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 
 ## Prerequisites
 
+### Required for all uses
+
 - **Node.js 18–24** (LTS 22 recommended). Node 25+ is not supported — a transitive dependency (`buffer-equal-constant-time`) crashes on startup. Check with `node --version`.
-- **Salesforce CLI** (`sf`) ≥ 2.x
-- **Provar Automation IDE** ≥ 3.x installed with an activated license (see [License requirement](#license-requirement) below)
+- **Provar Automation IDE** ≥ 3.x installed with an activated license (see [License requirement](#license-requirement) below).
+
+That's it for the core flows. The MCP server runs entirely via `npx` — **no separate npm package install is required**, and **no Salesforce CLI is needed** for NitroX, validation, generation, properties, ant, inspect, or connection tools.
+
+### Optional — Salesforce CLI (`sf`) for QH / Automation / org tools
+
+> **Heads up:** `npx -y @provartesting/provardx-cli` auto-installs the package itself, but it does **not** install Salesforce CLI. Although `@provartesting/provardx-cli` can function as an sf plugin, npx does not pull in `@salesforce/cli` as a transitive dependency.
+
+Install **Salesforce CLI ≥ 2.x** _only_ if you plan to use one of the following tool families:
+
+| Tool family       | Tools (label and tool ID)                                                                                                                                                                                                                                                                                                                                                                                                                                         | Why sf is needed                                        |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Quality Hub       | **Connect to Quality Hub** (`provar_qualityhub_connect`), **Display Quality Hub Info** (`provar_qualityhub_display`), **Trigger Quality Hub Test Run** (`provar_qualityhub_testrun`), **Poll Quality Hub Test Run** (`provar_qualityhub_testrun_report`), **Abort Quality Hub Test Run** (`provar_qualityhub_testrun_abort`), **Retrieve Quality Hub Test Cases** (`provar_qualityhub_testcase_retrieve`), **Create Defects** (`provar_qualityhub_defect_create`) | Shell out to `sf provar quality-hub ...` commands.      |
+| Provar Automation | **Install Provar Automation** (`provar_automation_setup`), **Load Automation Config** (`provar_automation_config_load`), **Download Salesforce Metadata** (`provar_automation_metadata_download`), **Compile Test Assets** (`provar_automation_compile`), **Run Tests** (`provar_automation_testrun`)                                                                                                                                                             | Shell out to `sf provar automation ...` commands.       |
+| Org metadata      | **Describe Org Objects From Workspace Cache** (`provar_org_describe`)                                                                                                                                                                                                                                                                                                                                                                                             | Reads Salesforce orgs authenticated via `sf org login`. |
+
+> **Note:** `provar_qualityhub_examples_retrieve` ("Retrieve Corpus Examples") lives in the `qualityhub` tool group but talks to Quality Hub directly over HTTPS — it does **not** shell to `sf` and works without Salesforce CLI installed.
+
+If you need these tools, you have **two separate installs** to do in addition to the npx-cached MCP server package:
+
+1. **Install Salesforce CLI** — `npm install -g @salesforce/cli` on any OS, or the [Windows / macOS installers](https://developer.salesforce.com/tools/salesforcecli).
+2. **Register the Provar plugin under sf** — `sf plugins install @provartesting/provardx-cli`. This is independent of the npx install: sf maintains its own plugin directory (`%LOCALAPPDATA%\sf\` on Windows, `~/.local/share/sf/` on Linux/macOS) and the QH/Automation tools shell out to `sf provar ...` subcommands, which sf can only resolve if it finds the plugin in its own directory.
+
+The MCP server itself never needs the sf-plugin copy; it loads from the npx cache. The sf-plugin copy exists purely so that the spawned `sf` child processes can find the `provar` topic.
 
 ## Quick start
 
-```sh
-# 1. Install the plugin
-sf plugins install @provartesting/provardx-cli
-
-# 2. (Optional) Authenticate for full 170+ rule validation
-sf provar auth login
-
-# 3. Connect your AI assistant — pick one client below
-```
-
-**Claude Code** (one-time, works across all your projects):
-
-```sh
-claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
-```
-
-**Claude Desktop** — edit your config file, then restart the app:
-
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows (direct installer): `%APPDATA%\Claude\claude_desktop_config.json`
-- Windows (Microsoft Store): `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` _(see note below about Store sandbox limitations)_
+The MCP server runs via `npx` — no separate package install needed, no `sf` CLI required for the core flows. Add this entry to your AI client's MCP config file:
 
 ```json
 {
   "mcpServers": {
     "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/path/to/your/provar/project",
+        "--auto-update"
+      ]
     }
   }
 }
 ```
 
-> **Windows (Claude Desktop):** If `sf` is not found, use `sf.cmd` as the command instead.
+**Where does this go?** It depends on your AI client and operating system. See [Client configuration → Find your config file by operating system](#find-your-config-file-by-operating-system) for the exact path. Common entries at a glance:
 
-**Verify it's working** — ask your AI assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
+- **Claude Code:** `~/.claude.json` (global) or `<project>/.mcp.json` (project-scoped, shared)
+- **Claude Desktop:** opened via **Claude menu → Settings → Developer → Edit Config**
+- **Cursor:** `~/.cursor/mcp.json` (global) or `<project>/.cursor/mcp.json` (workspace)
+- **GitHub Copilot (VS Code):** `<workspace>/.vscode/mcp.json` — note the top-level key is **`"servers"`**, not `"mcpServers"`
+
+After saving, **fully restart** your AI client (`Cmd+Q` on macOS, Quit from the system tray on Windows — closing the window is not enough for Claude Desktop). Then verify by asking your assistant: _"Call provardx_ping with message hello"_. You should get `{ "pong": "hello", "ts": "...", "server": "provar-mcp@..." }` back.
+
+**(Optional) Authenticate Quality Hub for full validation** — adds 170+ remote rules to `provar_testcase_validate`. Set `PROVAR_API_KEY` in your MCP config's `"env"` block (see [Configuration reference → Environment variables](#environment-variables)) or, if you have `sf` installed, run `sf provar auth login` to fetch a key interactively. The server works without this — validation falls back to a curated local rule set.
 
 ---
 
@@ -140,21 +160,22 @@ If the license check fails, the server exits with a clear error message explaini
 
 ---
 
-## Starting the server
+## Configuration reference
 
-```sh
-sf provar mcp start
-```
+The single source of truth for every CLI flag and environment variable the MCP server reads at runtime. The deep-dive subsections under [Performance Tuning](#performance-tuning) provide additional context for individual settings but always cross-link back here.
 
-The server communicates over **stdio** (standard input / output). It must be started by your MCP client — do not run it interactively in a terminal.
+### CLI flags
 
-### Flags
+Both `sf provar mcp start` and the standalone npx entry point (`npx -y @provartesting/provardx-cli@beta mcp start`) accept the same four flags. The only behavioural difference is the default for `--allowed-paths`.
 
-| Flag                | Alias | Default                   | Description                                                                                                                                                  |
-| ------------------- | ----- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--allowed-paths`   | `-a`  | Current working directory | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                            |
-| `--auto-update`     |       | false                     | Automatically installs the latest version at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
-| `--no-update-check` |       | false                     | Skip the startup update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable.                                                         |
+| Flag                | Alias | Default (`sf provar mcp start`) | Default (npx entry point)            | Description                                                                                                                                               |
+| ------------------- | ----- | ------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--allowed-paths`   | `-a`  | Current working directory       | **Required — hard error if omitted** | Base directories that file-system tools are permitted to read and write. Repeat the flag to allow multiple paths.                                         |
+| `--auto-defects`    |       | `false`                         | `false`                              | Enables the Quality Hub auto-defect creation flow. Internally sets `PROVAR_AUTO_DEFECTS=1` so downstream tools can read it.                               |
+| `--auto-update`     |       | `false`                         | `false`                              | Automatically installs the latest beta at startup and exits so the client reconnects with the new version. Skipped if running from a development symlink. |
+| `--no-update-check` |       | `false`                         | `false`                              | Skip the startup npm-registry update check. Also controlled by the `PROVAR_NO_UPDATE_CHECK` environment variable (see the env-var table below).           |
+
+> **`--allowed-paths` is CLI-only — there is no environment-variable equivalent.** If you need to inject the value from an env var, expand it shell-side at invocation time (e.g. `--allowed-paths "$PROVAR_PROJECT"` in bash, `--allowed-paths $env:PROVAR_PROJECT` in PowerShell).
 
 ```sh
 # Allow access to a specific project directory
@@ -164,219 +185,358 @@ sf provar mcp start --allowed-paths /workspace/my-provar-project
 sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 ```
 
-> **Note:** `--json` is intentionally disabled on this command. stdout is reserved for MCP JSON-RPC messages; all internal logging goes to stderr.
+### Environment variables
+
+The MCP server reads the following environment variables at startup or during tool invocation. Internal/dev-only variables (license bypass, ALGAS dev credentials) are intentionally not documented here — they remain source-only and are not supported for production use.
+
+| Variable                     | Purpose                                                                                                                                                                                 | Default                                        |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `PROVAR_HOME`                | Provar Automation install root. Used to locate license files (`<PROVAR_HOME>/.licenses/*.properties`) and resolve home-relative tool defaults.                                          | `~/Provar` (`%USERPROFILE%\Provar` on Windows) |
+| `PROVAR_API_KEY`             | API key for Quality Hub validation. Takes priority over any stored key in `~/.provar/credentials.json`. Must start with `pv_k_` — any other value is ignored.                           | None — falls back to stored credentials        |
+| `PROVAR_QUALITY_HUB_URL`     | Override the Quality Hub API base URL. Set when pointing at a non-default Quality Hub environment.                                                                                      | Dev API Gateway URL (`/dev`)                   |
+| `PROVAR_MCP_TOOLS`           | Comma-separated list of tool groups to register at startup. Deep-dive: [Tool group filtering](#tool-group-filtering-provar_mcp_tools).                                                  | All groups registered                          |
+| `PROVAR_MCP_SCHEMA_MODE`     | Set to `compact` to shorten all tool descriptions. Deep-dive: [Compact descriptions](#compact-descriptions-provar_mcp_schema_mode).                                                     | Standard (full) descriptions                   |
+| `PROVAR_MCP_MAX_TOOL_DEPTH`  | Agentic loop guard — max tool calls per MCP session before further calls return `TOOL_BUDGET_EXCEEDED`. Deep-dive: [Agentic loop guard](#agentic-loop-guard-provar_mcp_max_tool_depth). | `50`                                           |
+| `PROVAR_MCP_EMIT_TOKEN_META` | When `true`, appends a `_meta` token-attribution block to every tool response. Deep-dive: [Per-call token attribution](#per-call-token-attribution-provar_mcp_emit_token_meta).         | unset (no `_meta` block)                       |
+| `PROVAR_MCP_VALIDATION_DIR`  | Override the directory where `provar_testcase_validate` writes validation diff artifacts.                                                                                               | `<repo>/.provar-mcp/validation/`               |
+| `PROVAR_NO_UPDATE_CHECK`     | When set (any non-empty value), skips the startup npm-registry update check. Same effect as `--no-update-check`.                                                                        | unset (check runs)                             |
+| `PROVAR_AUTO_DEFECTS`        | When `1`, enables the Quality Hub auto-defect creation flow. Normally set by passing the `--auto-defects` flag rather than directly.                                                    | unset (auto-defects disabled)                  |
+
+### Setting these in your MCP client config
+
+You do **not** need to start the server from a shell that already has the variables exported. Every MCP client that supports launching servers (Claude Desktop, Claude Code, Cursor, VS Code GitHub Copilot, Agentforce Vibes, and any other client following the spec) accepts an **`"env"` object** alongside `"command"` and `"args"` in the server entry. The client launches the server as a child process with those variables present in its environment — equivalent to having `export VAR=value` set before invoking `sf provar mcp start` manually.
+
+Worked example — `.mcp.json` (Claude Code project scope) or `claude_desktop_config.json` (Claude Desktop) combining CLI flags via `args` and environment variables via `env`:
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "command": "sf",
+      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project", "--auto-update"],
+      "env": {
+        "PROVAR_API_KEY": "pv_k_your_key_here",
+        "PROVAR_MCP_TOOLS": "nitrox,authoring",
+        "PROVAR_MCP_EMIT_TOKEN_META": "true",
+        "PROVAR_MCP_MAX_TOOL_DEPTH": "30"
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- All env-var values must be **strings** in JSON. `"true"`, `"false"`, and numeric values like `"30"` are quoted; the server parses them on read.
+- `"env"` is merged with the parent process's environment by the MCP client. Variables you don't list here keep whatever value the client inherits (usually the user's shell environment).
+- If you set `PROVAR_API_KEY` here, it takes priority over any key stored at `~/.provar/credentials.json` by `sf provar auth login`. Convenient for CI runners or for using different keys across different Provar projects without touching the stored credentials.
+- The CLI-only flag `--allowed-paths` still goes in `args`, not `env` — see the [CLI flags](#cli-flags) callout above.
 
 ---
 
 ## Client configuration
 
-### Claude Code
+The MCP server is launched as a child process by your AI client (Claude Code, Claude Desktop, Cursor, VS Code GitHub Copilot, Agentforce Vibes, etc.). **All clients use the same config shape** — a JSON file with `command`, `args`, and optional `env`. The only thing that varies is **where the file lives** on disk.
 
-Claude Code can be configured via the `claude` CLI command or by editing a JSON config file. Both approaches work whether you're using the Claude Code terminal, the VS Code extension, or the Claude Code Desktop app.
+### The standard config (recommended)
 
-#### Via terminal (one-time setup)
+Use `npx` as the command. This is the most portable invocation:
 
-Run one of the following in a terminal, choosing your preferred scope:
+- `npx -y` **auto-installs `@provartesting/provardx-cli` on first run** and caches it for subsequent calls — no separate `sf plugins install` step needed.
+- It does **not** require `sf` to be on PATH, which sidesteps the most common failure mode in GUI clients (Claude Desktop, Cursor, VS Code) that don't inherit your interactive shell environment.
+- It works identically across Windows, macOS, and Linux.
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/path/to/your/provar/project",
+        "--auto-update"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+**Multiple project roots:** repeat the `--allowed-paths` flag, one entry per directory:
+
+```json
+"args": [
+  "-y", "@provartesting/provardx-cli", "mcp", "start",
+  "--allowed-paths", "/path/to/project-a",
+  "--allowed-paths", "/path/to/project-b",
+  "--auto-update"
+]
+```
+
+**Environment variables** (e.g. `PROVAR_API_KEY`, `PROVAR_MCP_TOOLS`, `PROVAR_MCP_EMIT_TOKEN_META`) go in the `"env"` object — see [Setting these in your MCP client config](#setting-these-in-your-mcp-client-config) above for the full pattern.
+
+### Find your config file by operating system
+
+The config file location depends on both your operating system and your MCP client. Click your OS to expand.
+
+<details>
+<summary><b>Windows</b></summary>
+
+| Client                               | Config file location                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `%USERPROFILE%\.claude.json`                                                                                                          |
+| Claude Code (project-scoped, shared) | `<workspace>\.mcp.json` — commit to source control                                                                                    |
+| Claude Desktop (direct installer)    | `%APPDATA%\Claude\claude_desktop_config.json`                                                                                         |
+| Claude Desktop (Microsoft Store)     | `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json` — ⚠️ see Store-sandbox note below |
+| GitHub Copilot (VS Code)             | `<workspace>\.vscode\mcp.json`                                                                                                        |
+| Cursor (workspace)                   | `<workspace>\.cursor\mcp.json`                                                                                                        |
+| Cursor (global)                      | `%USERPROFILE%\.cursor\mcp.json`                                                                                                      |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json`                                        |
+
+**Worked example** (windows-style paths, multiple project roots, auto-update on, token-meta enabled):
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\provar-manager-regression",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\Provar Manager\\test-manager",
+        "--allowed-paths",
+        "C:\\Users\\you\\git\\provardx-cli",
+        "--auto-update"
+      ],
+      "env": {
+        "PROVAR_MCP_EMIT_TOKEN_META": "true"
+      }
+    }
+  }
+}
+```
+
+**Windows specifics:**
+
+- JSON path separators must be **escaped backslashes** (`\\`) or forward slashes (`/`). Single backslash is a JSON escape character and will produce a parse error.
+- Paths containing spaces (like `Provar Manager`) work — JSON quoting handles them. No extra quoting needed inside the args string.
+- **Microsoft Store version of Claude Desktop:** the Store edition runs in an app sandbox that can block child-process spawning, causing the MCP server to disconnect immediately with `Server disconnected` errors. Prefer the **direct installer** from claude.ai/download. If you must use the Store version, run Claude Desktop as administrator.
+
+</details>
+
+<details>
+<summary><b>macOS</b></summary>
+
+| Client                               | Config file location                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `~/.claude.json`                                                                               |
+| Claude Code (project-scoped, shared) | `<workspace>/.mcp.json` — commit to source control                                             |
+| Claude Desktop                       | `~/Library/Application Support/Claude/claude_desktop_config.json`                              |
+| GitHub Copilot (VS Code)             | `<workspace>/.vscode/mcp.json`                                                                 |
+| Cursor (workspace)                   | `<workspace>/.cursor/mcp.json`                                                                 |
+| Cursor (global)                      | `~/.cursor/mcp.json`                                                                           |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json` |
+
+**Worked example:**
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/Users/you/git/provar-project-a",
+        "--allowed-paths",
+        "/Users/you/git/provar-project-b",
+        "--auto-update"
+      ],
+      "env": {
+        "PROVAR_MCP_EMIT_TOKEN_META": "true"
+      }
+    }
+  }
+}
+```
+
+**macOS specifics:**
+
+- **Claude Desktop restart:** **Cmd+Q** to fully quit Claude Desktop after saving — closing the window only minimizes it and leaves the old server attached. Then reopen.
+- **`Settings → Developer → Edit Config`** in the Claude Desktop menu bar opens the config file directly without you needing to navigate `~/Library/...` manually.
+
+</details>
+
+<details>
+<summary><b>Linux</b></summary>
+
+| Client                               | Config file location                                                                           |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Claude Code (user-scoped, global)    | `~/.claude.json`                                                                               |
+| Claude Code (project-scoped, shared) | `<workspace>/.mcp.json` — commit to source control                                             |
+| Claude Desktop                       | Not officially supported on Linux by Anthropic. Use Claude Code instead.                       |
+| GitHub Copilot (VS Code)             | `<workspace>/.vscode/mcp.json`                                                                 |
+| Cursor (workspace)                   | `<workspace>/.cursor/mcp.json`                                                                 |
+| Cursor (global)                      | `~/.cursor/mcp.json`                                                                           |
+| Agentforce Vibes                     | Open the extension's **Settings → Configure MCP Servers**, which edits `a4d_mcp_settings.json` |
+
+**Worked example:**
+
+```json
+{
+  "mcpServers": {
+    "provar": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "/home/you/git/provar-project",
+        "--auto-update"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+</details>
+
+### Client-specific notes
+
+The config shape above (npx + `@provartesting/provardx-cli` + `mcp start`) works as-is across all clients. The notes below cover each client's particular config-file conventions, restart procedures, and known gotchas.
+
+<details>
+<summary><b>Claude Code (terminal &amp; VS Code extension)</b></summary>
+
+Claude Code can be configured via the `claude` CLI command or by editing the JSON config file directly. The CLI is just a typing shortcut — it writes to the same files documented in the per-OS tables above.
+
+**Via the `claude` CLI (one-time setup):**
 
 ```sh
 # User-scoped — registers once and works across all your projects
-claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s user -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 
 # Project-scoped, shared — run from your project root; writes .mcp.json there; commit to source control
-claude mcp add provar -s project -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s project -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 
 # Project-scoped, private — stored in .claude/settings.local.json; not committed
-claude mcp add provar -s local -- sf provar mcp start --allowed-paths /path/to/your/provar/project
+claude mcp add provar -s local -- npx -y @provartesting/provardx-cli mcp start --allowed-paths /path/to/your/provar/project --auto-update
 ```
 
-#### Via config file (manual / VS Code)
+**Via the JSON config file:** edit the location for your scope (see [per-OS table](#find-your-config-file-by-operating-system) above) and paste the [standard config](#the-standard-config-recommended) under `mcpServers.provar`. The Claude Code terminal and the VS Code Claude Code extension share the same config files, so changes propagate everywhere.
 
-Create or edit `.mcp.json` at your project root for project-scoped configuration shared with your team:
+**Verification:** ask Claude to call `provardx_ping` with a message. A clean response like `{ "pong": "...", "ts": "...", "server": "provar-mcp@1.5.2-beta.4" }` confirms the server is connected.
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+</details>
 
-For user-scoped (global) configuration that applies across all projects, add the same `provar` entry under `mcpServers` in `~/.claude.json`.
+<details>
+<summary><b>Claude Desktop (macOS / Windows app)</b></summary>
 
-#### `sf` not found? Use `npx`
+Claude Desktop is configured only via the JSON config file — there is no `claude` CLI helper for the Desktop app. The fastest way to open the config file is from inside the app itself.
 
-GUI environments (VS Code, Claude Code Desktop, Claude Desktop) often start with a restricted PATH that doesn't include the `sf` binary. Using `npx` as the command resolves this — it finds `@salesforce/cli` from your npm cache without requiring `sf` to be on PATH.
+**Edit the config:**
 
-**Via terminal:**
+1. Open **Claude menu → Settings → Developer → Edit Config**. The file opens directly without you needing to navigate Finder / Explorer manually.
+2. Paste the [standard config](#the-standard-config-recommended) under `mcpServers.provar` and save.
+3. **Fully quit and relaunch** Claude Desktop. **Cmd+Q on macOS** — closing the window only minimizes; the server stays attached to the old config until full quit. On Windows, right-click the system-tray icon → **Quit**.
 
-```sh
-claude mcp add provar -s user -- npx -y @salesforce/cli provar mcp start --allowed-paths /path/to/your/provar/project
-```
+**Platform notes:**
 
-**Via config file:**
+- **macOS:** config file lives at `~/Library/Application Support/Claude/claude_desktop_config.json`.
+- **Windows (direct installer):** `%APPDATA%\Claude\claude_desktop_config.json`.
+- **Windows (Microsoft Store):** the Store edition runs in an app sandbox that often blocks child-process spawning, causing the MCP server to disconnect immediately with `Server disconnected` errors. **Use the direct installer from claude.ai/download instead.** If you must use the Store version, run Claude Desktop as administrator.
+- **Linux:** Claude Desktop is not officially supported on Linux. Use Claude Code instead.
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "npx",
-      "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+**Verification:** ask Claude Desktop to call `provardx_ping` with a message. A clean response like `{ "pong": "...", "ts": "...", "server": "provar-mcp@1.5.2-beta.4" }` confirms the server is connected.
 
-> The Provar plugin must still be installed first via `sf plugins install @provartesting/provardx-cli`. The npx invocation shares the same plugin directory as the globally installed `sf` binary.
+</details>
 
-### Claude Desktop
+<details>
+<summary><b>GitHub Copilot</b></summary>
 
-Edit the Claude Desktop MCP configuration file. Open it via **Claude menu → Settings → Developer → Edit Config**, or navigate to it directly:
+#### VS Code (primary integration)
 
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows (direct installer):** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Windows (Microsoft Store):** `%LOCALAPPDATA%\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\claude_desktop_config.json`
-
-> **Windows Store version:** The Store edition of Claude Desktop runs in an app sandbox that can block child process spawning, causing the MCP server to disconnect immediately with "Server disconnected" errors. Use the **direct installer** from claude.ai/download instead. If you must use the Store version, run Claude Desktop as administrator.
-
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
-
-Fully quit and relaunch Claude Desktop after saving (Cmd+Q on macOS, not just close the window). The Provar tools will appear in the tool list.
-
-> **`sf` not found?** Claude Desktop launches with a restricted PATH on macOS and Windows. If the server fails to start, use `npx` instead:
->
-> ```json
-> {
->   "mcpServers": {
->     "provar": {
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you may also try `sf.cmd` as the command if npx is not available.
-
-### GitHub Copilot (VS Code)
-
-Create or edit `.vscode/mcp.json` in your workspace root (commit this to source control to share with your team):
+Create or edit `.vscode/mcp.json` in your workspace root and commit it to source control to share with your team. Note that VS Code uses the key **`"servers"`** (not `"mcpServers"`):
 
 ```json
 {
   "servers": {
     "provar": {
       "type": "stdio",
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "${workspaceFolder}",
+        "--auto-update"
+      ],
+      "env": {}
     }
   }
 }
 ```
 
-After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will appear in the available tools.
+The `${workspaceFolder}` variable expands to the absolute path of the open workspace root, so the same config works for everyone on the team without per-machine path edits.
 
-> **`sf` not found?** VS Code may not inherit your shell PATH. Use `npx` instead:
->
-> ```json
-> {
->   "servers": {
->     "provar": {
->       "type": "stdio",
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you can also try `sf.cmd` as the command.
+After saving, open the **GitHub Copilot Chat** panel and select **Agent** mode. The Provar tools will appear in the available tools list.
 
 > **`TypeError: Cannot read properties of undefined (reading 'prototype')` on Windows?**
-> VS Code's MCP server process inherits the _system_ PATH, which may differ from your shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — see [Prerequisites](#prerequisites).
+> VS Code's MCP server process inherits the _system_ PATH, which may differ from your terminal shell. If you have Node.js 25+ installed at `C:\Program Files\nodejs\` (e.g. from the Windows installer) and use `nvm`/`fnm` for a lower version in your terminal, VS Code will pick Node 25 and crash — Node 25+ is not supported. See [Prerequisites](#prerequisites).
 >
 > Fix: remove or downgrade the system-wide Node.js to LTS 22, or use the `env` field in `.vscode/mcp.json` to override the PATH:
 >
 > ```json
-> {
->   "servers": {
->     "provar": {
->       "type": "stdio",
->       "command": "sf",
->       "args": ["provar", "mcp", "start", "--allowed-paths", "${workspaceFolder}"],
->       "env": {
->         "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
->       }
->     }
->   }
+> "env": {
+>   "PATH": "C:\\Users\\<you>\\AppData\\Roaming\\fnm\\aliases\\default;${env:PATH}"
 > }
 > ```
 >
-> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use). Run `node --version` from a VS Code terminal to confirm which version it sees.
+> Replace the `fnm` path with the output of `fnm which 22` (or whichever LTS you use).
 
-### Cursor
+#### Generic (any other Copilot surface)
 
-Cursor supports project-level and global MCP configuration.
+Surfaces other than VS Code (e.g. GitHub.com Agent mode, future Copilot CLI integrations) follow the standard MCP server spec. Use the [recommended npx config](#the-standard-config-recommended) above as-is.
 
-**Project-level** (`.cursor/mcp.json` in your workspace root — share via source control):
+</details>
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+<details>
+<summary><b>Cursor</b></summary>
 
-**Global** (`~/.cursor/mcp.json` — applies across all projects):
+Cursor supports both project-level and global MCP configuration via JSON files. The schema matches Claude Code's `mcpServers` key:
 
-```json
-{
-  "mcpServers": {
-    "provar": {
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
-    }
-  }
-}
-```
+- **Workspace** — `<workspace>/.cursor/mcp.json` (commit to source control)
+- **Global** — `~/.cursor/mcp.json` (`%USERPROFILE%\.cursor\mcp.json` on Windows)
 
-After saving, restart Cursor. The Provar tools will appear under **Settings → MCP**.
+Paste the [standard config](#the-standard-config-recommended) into either file under `mcpServers.provar`. After saving, restart Cursor (full quit, not just window close). The Provar tools appear under **Settings → MCP**.
 
-> **`sf` not found?** Use `npx` as the command instead:
->
-> ```json
-> {
->   "mcpServers": {
->     "provar": {
->       "command": "npx",
->       "args": ["-y", "@salesforce/cli", "provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
->     }
->   }
-> }
-> ```
->
-> On Windows, you can also try `sf.cmd` if `npx` is unavailable.
+</details>
 
-### Agentforce Vibes
+<details>
+<summary><b>Agentforce Vibes</b></summary>
 
-[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). It stores MCP server configuration in `a4d_mcp_settings.json`, which you can open via **Settings → Configure MCP Servers** inside the extension.
-
-Add a `provar` entry under `mcpServers`:
+[Agentforce Vibes](https://marketplace.visualstudio.com/items?itemName=salesforce.salesforcedx-einstein-gpt) is Salesforce's AI pair-programming extension for VS Code (extension ID `salesforce.salesforcedx-einstein-gpt`). Open the extension's **Settings → Configure MCP Servers** to edit `a4d_mcp_settings.json`, then add a `provar` entry:
 
 ```json
 {
@@ -385,25 +545,32 @@ Add a `provar` entry under `mcpServers`:
       "disabled": false,
       "type": "stdio",
       "timeout": 600,
-      "command": "sf",
-      "args": ["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]
+      "command": "npx",
+      "args": [
+        "-y",
+        "@provartesting/provardx-cli",
+        "mcp",
+        "start",
+        "--allowed-paths",
+        "${workspaceFolder}",
+        "--auto-update"
+      ],
+      "env": {}
     }
   }
 }
 ```
 
-> **Windows:** Use `sf.cmd` instead of `sf` if the extension cannot find the command.
-
 > **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
 
-### Other MCP-compatible clients
+</details>
 
-Any client that supports the **stdio transport** can connect to the Provar MCP server. The general pattern is:
+<details>
+<summary><b>Other MCP-compatible clients</b></summary>
 
-- **command:** `sf` (or full path to the SF CLI binary, e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`)
-- **args:** `["provar", "mcp", "start", "--allowed-paths", "/path/to/your/provar/project"]`
+Any client that follows the **stdio transport** of the [MCP spec](https://modelcontextprotocol.io) can connect to the Provar MCP server. The standard config above works as-is. Adjust the top-level key (some clients use `"mcpServers"`, VS Code Copilot uses `"servers"`, others may differ) to match your client's documented schema.
 
-Replace `/path/to/your/provar/project` with the actual root of your Provar Automation project on disk.
+</details>
 
 ---
 
@@ -465,22 +632,13 @@ sf provar auth rotate
 sf provar auth clear
 ```
 
-### Environment variables
-
-| Variable                 | Purpose                                                    | Default                                           |
-| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------- |
-| `PROVAR_API_KEY`         | API key for Quality Hub validation                         | None — falls back to `~/.provar/credentials.json` |
-| `PROVAR_QUALITY_HUB_URL` | Override the Quality Hub API base URL                      | Dev API Gateway URL (`/dev`)                      |
-| `PROVAR_MCP_SCHEMA_MODE` | Set to `compact` to shorten all tool descriptions          | Standard (full) descriptions                      |
-| `PROVAR_MCP_TOOLS`       | Comma-separated list of tool groups to register at startup | All groups registered                             |
-
----
-
 ## Agent performance tuning
 
 Two environment variables let you reduce the context budget consumed by the ProvarDX MCP server — useful when working with agents that have a limited context window or a large number of registered tools.
 
 ### Compact descriptions (`PROVAR_MCP_SCHEMA_MODE`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 ```
 PROVAR_MCP_SCHEMA_MODE=compact
@@ -495,6 +653,8 @@ Use this mode if:
 - Your agents already have domain context and don't need verbose descriptions
 
 ### Tool group filtering (`PROVAR_MCP_TOOLS`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 ```
 PROVAR_MCP_TOOLS=nitrox,authoring
@@ -750,17 +910,17 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 **Argument XML conventions** (automatically applied by the generator):
 
-| Argument key / value pattern                                                                   | Emitted XML class                     | API context             |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------- | ----------------------- |
-| `target` key                                                                                   | `class="uiTarget"`                    | UiWithScreen, UiWithRow |
-| `locator` key                                                                                  | `class="uiLocator"`                   | UiDoAction, UiAssert    |
-| Value matches `{VarName}` or `{A.B}`                                                           | `class="variable"` + `<path>`         | Any step                |
-| SetValues attributes                                                                           | `class="valueList"/<namedValues>`     | SetValues only          |
-| Value `YYYY-MM-DDTHH:MM:SS` + optional `.fff` + optional `Z`/`±HH:MM` (ISO-8601, end-anchored) | `class="value" valueClass="datetime"` | Any step                |
-| Value `YYYY-MM-DD` (ISO-8601)                                                                  | `class="value" valueClass="date"`     | Any step                |
-| Value `true` / `false`                                                                         | `class="value" valueClass="boolean"`  | Any step                |
-| Numeric value `^-?\d+(\.\d+)?$` (`42`, `-5`, `3.14`)                                           | `class="value" valueClass="decimal"`  | Any step                |
-| All other values                                                                               | `class="value" valueClass="string"`   | Any step                |
+| Argument key / value pattern                                                                   | Emitted XML class                     | API context                          |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------ |
+| `target` key                                                                                   | `class="uiTarget"`                    | UiWithScreen, UiWithRow              |
+| `locator` key                                                                                  | `class="uiLocator"`                   | UiDoAction, UiAssert, UiRead, UiFill |
+| Value matches `{VarName}` or `{A.B}`                                                           | `class="variable"` + `<path>`         | Any step                             |
+| SetValues attributes                                                                           | `class="valueList"/<namedValues>`     | SetValues only                       |
+| Value `YYYY-MM-DDTHH:MM:SS` + optional `.fff` + optional `Z`/`±HH:MM` (ISO-8601, end-anchored) | `class="value" valueClass="datetime"` | Any step                             |
+| Value `YYYY-MM-DD` (ISO-8601)                                                                  | `class="value" valueClass="date"`     | Any step                             |
+| Value `true` / `false`                                                                         | `class="value" valueClass="boolean"`  | Any step                             |
+| Numeric value `^-?\d+(\.\d+)?$` (`42`, `-5`, `3.14`)                                           | `class="value" valueClass="decimal"`  | Any step                             |
+| All other values                                                                               | `class="value" valueClass="string"`   | Any step                             |
 
 `valueClass` is inferred automatically by `inferSalesforceValueClass(key, val, fieldTypeHint?)`. Detection order: explicit `fieldTypeHint` (wired in a follow-up tool surface — `field_type_hints` param) → ISO-8601 datetime (with optional fractional seconds and timezone, end-anchored) → ISO-8601 date → boolean → decimal → string. Per the canonical Provar reference numbers always emit as `valueClass="decimal"` (there is no separate `integer` valueClass). Provar runtime silently discards date fields emitted as `valueClass="string"`, so always pass date / datetime values in ISO-8601 form.
 
@@ -768,16 +928,27 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 
 **Input**
 
-| Parameter             | Type                                     | Required | Description                                                                                                               |
-| --------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                             |
-| `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                          |
-| `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.     |
-| `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                       |
-| `overwrite`           | boolean                                  | no       | Overwrite existing file (default: `false`)                                                                                |
-| `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                        |
-| `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip. |
-| `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                            |
+| Parameter             | Type                                     | Required | Description                                                                                                                                                                             |
+| --------------------- | ---------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_case_name`      | string                                   | yes      | Human-readable test case name                                                                                                                                                           |
+| `steps`               | array of `{ api_id, name, attributes? }` | no       | Step definitions                                                                                                                                                                        |
+| `target_uri`          | string                                   | no       | Page object URI. `ui:pageobject:target?pageId=pageobjects.X` triggers `UiWithScreen` nesting; `sf:` or absent → flat.                                                                   |
+| `grouping_mode`       | `auto` \| `flat` \| `single-screen`      | no       | Controls how UI action siblings (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`) are nested under a preceding `UiWithScreen`. Default `auto`. |
+| `output_path`         | string                                   | no       | File path to write (must be within `allowed-paths`)                                                                                                                                     |
+| `overwrite`           | boolean                                  | no       | Overwrite existing file (default: `false`)                                                                                                                                              |
+| `dry_run`             | boolean                                  | no       | Return XML without writing to disk                                                                                                                                                      |
+| `validate_after_edit` | boolean                                  | no       | Run structural validation after generation (default: `true`). Returns `TESTCASE_INVALID` if invalid. Set `false` to skip.                                                               |
+| `idempotency_key`     | string                                   | no       | Prevents duplicate generation for the same key                                                                                                                                          |
+
+**`grouping_mode` — auto-nesting UI actions under `UiWithScreen`.** Provar IDE renders a test case correctly only when UI action steps (the 7-API set: `UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`) live inside their owning `UiWithScreen`'s `<clauses><clause name="substeps"><steps>…</steps></clause></clauses>` block. When the caller passes a flat `steps[]` payload, the generator auto-groups trailing UI-action siblings into that block. This API set matches the validator's `UI-NEST-STRUCT-001` rule exactly, so generator output never false-fails validation.
+
+| Mode             | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `auto` (default) | When a `UiWithScreen` is followed by UI action siblings (any of `UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`), those siblings are absorbed into the screen's `<clause name="substeps">` block. The grouping run stops at the next `UiWithScreen`, any non-UI step (`SetValues`, `ApexConnect`, …), or end of list. `UiWithRow` plays a dual role: when it follows a `UiWithScreen` it is pulled in as a child container and absorbs its own following UI actions. When the payload contains screen containers but no `UiWithScreen` at root (e.g. starts with `UiWithRow`), the generator synthesizes a root `UiWithScreen` wrapper (`target` = `target_uri` or `sf:ui:target`) so the output still satisfies `UI-NEST-STRUCT-001` — without that wrapper, the root `UiWithRow` itself would fail validation. `testItemId`s are assigned depth-first: parent screen, then its substeps slot, then its children. Numbering remains sequential and gap-free. |
+| `flat`           | Legacy behaviour: every step is emitted as a root sibling, no `<clauses>` block is generated. Use this for payloads that are already structured correctly by the caller, or when debugging the pre-PDX-495 shape.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `single-screen`  | Wraps every step in one synthetic `UiWithScreen` whose `target` is `sf:ui:target` (or the URI passed via `target_uri`). Matches the existing `ui:pageobject:target` semantics. Use for tests that all live on a single screen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap takes precedence regardless of `grouping_mode` — this is the pre-existing non-SF nesting behaviour.
 
 **`ApexSoqlQuery` argument IDs** (common source of runtime errors — wrong names are silently accepted but fail at runtime):
 
@@ -787,6 +958,17 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 | `resultListName`     | Variable name that receives the result list |
 | `apexConnectionName` | Named Salesforce connection                 |
 | `resultScope`        | Optional scope (Test, Local, Global)        |
+
+**Microsoft Dynamics 365 + Power Platform shorthands** (Provar 3.0.7+) — auto-expand to the `NitroXConnect:ms-*` family. See the `provar://docs/step-reference` resource for full argument and `<generatedParameters>` documentation.
+
+| Shorthand              | Fully-qualified apiId                                                 | Variant-specific args          |
+| ---------------------- | --------------------------------------------------------------------- | ------------------------------ |
+| `MSDynamics365Connect` | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365` | `appName`                      |
+| `MSDataverseConnect`   | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse`   | _(none)_                       |
+| `MSPowerAppConnect`    | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp`    | `powerAppName`                 |
+| `MSPowerPageConnect`   | `com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage`   | `environment`, `powerPageName` |
+
+Validation rules: `UI-NITROX-CONNECT-ARGS-001` (critical, bans ApexConnect-only and cross-variant args), `UI-NITROX-VARIANT-ARG-001` (minor, requires variant-specific arg unless declared in `<generatedParameters>`).
 
 **Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
 
@@ -855,8 +1037,23 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **DATA-001** — `testCase` declares a `<dataTable>` element. When the validator is called with `file_path` and the project's `provardx-properties.json` references that test case directly via top-level `testCase` or `testCases` (rather than via a `.testinstance` inside a plan), the warning carries the `WARNING [DATA-001]:` prefix and recommends wiring the test into a plan via `provar_testplan_add-instance`. When `file_path` is not supplied (or the project context cannot be resolved), the warning falls back to a structural advisory recommending `SetValues` (Test scope) steps. The warning is suppressed entirely when a `.testinstance` references the test case, because data-driven iteration works in that mode. See also [Data-driven execution](#data-driven-execution).
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
-- **UI-LOCATOR-001** — A UiDoAction or UiAssert `locator` argument uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
+- **UI-LOCATOR-001** — A locator-bearing UI step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`) has a `locator` argument that uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
+- **UI-NEST-STRUCT-001** (severity `major`, weight 7, category `XMLSchema`) — A UI action step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, or `UiHandleAlert`) is emitted outside a screen ancestor. To pass, every UI action must descend from a `UiWithScreen` or `UiWithRow` `apiCall` through a `<clause name="substeps">` path. Control-flow wrappers (`If`/`ForEach`/`DoWhile`/`WaitFor`/`Switch`) between the screen ancestor and the UI action are allowed; steps inside `<clause name="hidden">` are exempt (disabled / settings blocks). One violation is emitted per offending step, so `(rule_id, test_item_id)` de-duplicates cleanly against the Quality Hub API. Provar IDE cannot bind flat-emitted UI actions to a screen context and they will not render in the editor. Wrap each offending step in the canonical chain:
+  ```xml
+  <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" ...>
+    <arguments>...</arguments>
+    <clauses>
+      <clause name="substeps" testItemId="…">
+        <steps>
+          <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" .../>
+          <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithRow" ...> ... </apiCall>
+        </steps>
+      </clause>
+    </clauses>
+  </apiCall>
+  ```
+  `UiWithRow` plays a dual role: it is itself a UI action that must be nested, and a container whose `<clause name="substeps">` satisfies the rule for its descendants. Mirrors Quality Hub's `UiActionNestingStructureValidator`.
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
 - **VAR-REF-002** — A `{VarName}` token is embedded inside a larger plain string (e.g. `SELECT Id FROM Account WHERE Id = '{AccountId}'`). Provar does not perform `{…}` interpolation in string values at runtime; the braces are emitted literally. Use `class="compound"` with `<parts>` children to split the literal text and variable references. In `provar_testcase_generate`, pass the value with `{VarName}` placeholders — the generator emits compound XML automatically.
 
@@ -2388,6 +2585,8 @@ These environment variables let you control agentic-loop safety and observabilit
 
 ### Agentic loop guard (`PROVAR_MCP_MAX_TOOL_DEPTH`)
 
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
+
 Limits the number of Provar tool calls an AI agent may make within a single MCP session before the server starts returning errors instead of results.
 
 ```
@@ -2415,6 +2614,8 @@ Once the limit is reached, every further call returns:
 The guard is designed to prevent runaway agentic loops from making hundreds of tool calls without human review. Set it lower (e.g. `10`) for tightly supervised workflows; raise it or omit it for long-running automation pipelines where you trust the agent.
 
 ### Per-call token attribution (`PROVAR_MCP_EMIT_TOKEN_META`)
+
+> _See [Configuration reference → Environment variables](#environment-variables) for the canonical env-var table._
 
 Appends a `_meta` object to `structuredContent` on every tool response, giving observability tooling a lightweight token-cost signal per call.
 

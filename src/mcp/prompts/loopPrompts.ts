@@ -70,8 +70,9 @@ Follow these steps in order:
    formats, then continue.
 
 3. **Map acceptance criteria to steps** — for each acceptance criterion, identify the corresponding Provar
-   step type: field fills → UiDoAction (set), button clicks → UiDoAction (action), field checks →
-   UiAssert, API data setup → ApexCreateObject, API verification → ApexReadObject.
+   step type: field fills → UiDoAction (set) for one field at a time, or UiFill for multiple fields at once;
+   button clicks → UiDoAction (action); field checks → UiAssert; reading a value from the screen into a
+   variable → UiRead; API data setup → ApexCreateObject; API verification → ApexReadObject.
 
 4. **Generate the test case** — produce a valid Provar XML test case that tests the story's acceptance
    criteria. Base the structure entirely on the corpus examples. Follow these rules:
@@ -256,7 +257,7 @@ Follow these steps in order:
    **Structure**
    - [ ] Does the first UiWithScreen use navigate="Always" or "IfNecessary"?
    - [ ] Do Edit/View UiWithScreen steps with navigate="Always" include sfUiTargetObjectId?
-   - [ ] Are all UiDoAction and UiAssert steps inside UiWithScreen substeps clauses?
+   - [ ] Are all UiDoAction, UiAssert, UiRead, UiFill, UiNavigate, UiWithRow, and UiHandleAlert steps inside UiWithScreen substeps clauses?
 
    **Unmapped steps**
    - [ ] Are there any \`<!-- TODO: -->\` comments indicating steps that couldn't be automated?
