@@ -2,7 +2,7 @@
 
 The reusable scaffold for driving a batch of PDX tickets from build → test → validate → merge,
 one ticket per self-paced `/loop` iteration, on top of this repo's documented dev workflow
-(`.claude/commands/git-workflow.md` + `.claude/agents/dev-git-workflow.md`).
+(`.claude/commands/git-workflow.md` + `CLAUDE.md`).
 
 - **This file** = the generic template + how-to + the registry of run prompts.
 - **One file per loop prompt** lives beside it in `docs/loops/` (see [Registry](#registry)).
@@ -40,7 +40,7 @@ Drive <<TICKET RANGE, e.g. PDX-NNN → PDX-MMM>> to merged, one ticket per itera
 <<AUTONOMY: e.g. "fully autonomously">>.
 
 AUTHORITATIVE WORKFLOW: follow .claude/commands/git-workflow.md and
-.claude/agents/dev-git-workflow.md exactly (worktree-per-branch, yarn install in
+CLAUDE.md exactly (worktree-per-branch, yarn install in
 the worktree, commit format, the compile/test/smoke/lint gate, PR template,
 Copilot handling) — WITH these overrides for this loop:
   - <<AUTONOMY OVERRIDE: e.g. "Run unattended: do NOT stop at the workflow's
