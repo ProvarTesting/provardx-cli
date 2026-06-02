@@ -180,6 +180,22 @@ function assertShellSafePath(sfPath: string): void {
 }
 
 /**
+ * Quote a single command-line token for cmd.exe when the whole command is run
+ * through `shell: true`. Tokens containing whitespace or cmd-significant
+ * characters are wrapped in double quotes (embedded `"` doubled per cmd rules);
+ * simple tokens are left as-is. This is what keeps spaced paths — e.g.
+ * `C:\Program Files\sf\client\bin\sf.cmd` or a `--properties-file` value under a
+ * "Provar Manager" directory — from being split by cmd.exe.
+ */
+function quoteWindowsToken(token: string): string {
+  if (token === '') return '""';
+  if (/[\s"&|<>^()]/.test(token)) {
+    return `"${token.replace(/"/g, '""')}"`;
+  }
+  return token;
+}
+
+/**
  * Run `sf <args>` synchronously and return stdout, stderr, and exit code.
  * Throws SfNotFoundError if the `sf` binary cannot be found.
  * Pass `sfPath` to override auto-discovery with an explicit executable path.
@@ -201,7 +217,19 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
     assertShellSafePath(resolvedSfPath);
   }
 
-  const result = sfSpawnHelper.spawnSync(executable, args, {
+  // On Windows, `.cmd`/`.bat`/bare-name executables must run through cmd.exe
+  // (shell:true). Under shell:true Node concatenates executable + args into one
+  // unquoted string, so spaces in the auto-resolved Program Files path, an
+  // explicit sf_path, or any argument value would split the command
+  // (`'C:\Program' is not recognized ...`). Pre-quote the executable and each
+  // argument: Node joins them and wraps the whole line in cmd's outer quotes,
+  // and cmd's `/s` rule strips only that outermost pair, preserving our
+  // per-token quoting. This applies to auto-resolved paths too — not just
+  // user-supplied ones. On non-Windows the args pass through verbatim.
+  const spawnExecutable = useShell ? quoteWindowsToken(executable) : executable;
+  const spawnArgs = useShell ? args.map(quoteWindowsToken) : args;
+
+  const result = sfSpawnHelper.spawnSync(spawnExecutable, spawnArgs, {
     encoding: 'utf-8',
     shell: useShell,
     maxBuffer: MAX_BUFFER,

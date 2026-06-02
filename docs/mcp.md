@@ -2586,6 +2586,8 @@ provar_nitrox_patch      → apply targeted edits to an existing .po.json (RFC 7
 ```
 
 > **Note:** `provar_automation_*` and `provar_qualityhub_*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
+>
+> **Windows paths with spaces are handled automatically.** On Windows the `sf` launcher is a `.cmd` script and must run through `cmd.exe`. The executable path (including auto-discovered `C:\Program Files\sf\...` installs), an explicit `sf_path`, and any argument value (e.g. a `--properties-file` under a `Provar Manager` directory) are quoted before invocation, so spaces no longer split the command. The 8.3 short-name workaround (`C:\PROGRA~1\...`) is no longer needed. A user-supplied `sf_path` containing shell metacharacters (`&`, `|`, `;`, `<`, `>`, backtick, quotes, or line-breaks) is still rejected with `INVALID_SF_PATH`.
 
 ---
 

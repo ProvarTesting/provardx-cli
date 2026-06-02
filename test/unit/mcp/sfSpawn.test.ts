@@ -354,4 +354,53 @@ describe('runSfCommand', () => {
       assert.equal(opts.shell, true);
     });
   });
+
+  describe('Windows shell quoting (spaced executable & args not split)', () => {
+    beforeEach(() => {
+      setSfPlatformForTesting('win32');
+      spawnStub.returns(makeSpawnOk('ok'));
+    });
+
+    it('(a) does not split an auto-resolved Program Files path', () => {
+      const sfCmd = 'C:\\Program Files\\sf\\client\\bin\\sf.cmd';
+      setSfPathCacheForTesting(sfCmd);
+      runSfCommand(['provar', 'automation', 'config-load']);
+      const [exe, , opts] = spawnStub.firstCall.args as [string, string[], { shell: boolean }];
+      // The auto-resolved path is quoted as a single token even though no sf_path was passed.
+      assert.equal(exe, `"${sfCmd}"`, `executable must be quoted as a single token, got: ${exe}`);
+      assert.equal(opts.shell, true);
+    });
+
+    it('(b) does not split an explicit spaced sf_path', () => {
+      const sfCmd = 'C:\\Program Files\\sf\\bin\\sf.cmd';
+      runSfCommand(['--version'], sfCmd);
+      const [exe] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, `"${sfCmd}"`, `explicit sf_path must be quoted, got: ${exe}`);
+    });
+
+    it('(c) does not split an argument value containing a space', () => {
+      setSfPathCacheForTesting('sf');
+      const propsPath = 'C:\\Users\\mrdai\\git\\Provar Manager\\test-manager\\provardx-properties.json';
+      runSfCommand(['provar', 'automation', 'config-load', '--properties-file', propsPath]);
+      const [exe, args] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, 'sf'); // space-free executable stays unquoted
+      assert.deepEqual(args, ['provar', 'automation', 'config-load', '--properties-file', `"${propsPath}"`]);
+    });
+
+    it('leaves simple (space-free) tokens unquoted on win32', () => {
+      setSfPathCacheForTesting('sf');
+      runSfCommand(['provar', 'automation', 'config-load']);
+      const [exe, args] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, 'sf');
+      assert.deepEqual(args, ['provar', 'automation', 'config-load']);
+    });
+
+    it('still rejects a user sf_path with shell metacharacters (spaces are now allowed)', () => {
+      assert.throws(() => runSfCommand(['--version'], 'C:\\sf & evil\\sf.cmd'), /unsafe for shell execution/);
+      // A spaced-but-clean user path is accepted and quoted.
+      spawnStub.returns(makeSpawnOk('ok'));
+      const result = runSfCommand(['--version'], 'C:\\Program Files\\sf\\bin\\sf.cmd');
+      assert.equal(result.exitCode, 0);
+    });
+  });
 });
