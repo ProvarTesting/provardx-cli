@@ -12,6 +12,10 @@ import sinon from 'sinon';
 import {
   sfSpawnHelper,
   SfNotFoundError,
+  ProvarPluginNotFoundError,
+  PROVAR_PLUGIN_INSTALL_HINT,
+  isProvarPluginMissing,
+  probeProvarTopic,
   getSfCommonPaths,
   needsWindowsShell,
   runSfCommand,
@@ -353,5 +357,126 @@ describe('runSfCommand', () => {
       const [, , opts] = spawnStub.secondCall.args as [string, string[], { shell: boolean }];
       assert.equal(opts.shell, true);
     });
+  });
+
+  describe('Windows shell quoting (spaced executable & args not split)', () => {
+    beforeEach(() => {
+      setSfPlatformForTesting('win32');
+      spawnStub.returns(makeSpawnOk('ok'));
+    });
+
+    it('(a) does not split an auto-resolved Program Files path', () => {
+      const sfCmd = 'C:\\Program Files\\sf\\client\\bin\\sf.cmd';
+      setSfPathCacheForTesting(sfCmd);
+      runSfCommand(['provar', 'automation', 'config-load']);
+      const [exe, , opts] = spawnStub.firstCall.args as [string, string[], { shell: boolean }];
+      // The auto-resolved path is quoted as a single token even though no sf_path was passed.
+      assert.equal(exe, `"${sfCmd}"`, `executable must be quoted as a single token, got: ${exe}`);
+      assert.equal(opts.shell, true);
+    });
+
+    it('(b) does not split an explicit spaced sf_path', () => {
+      const sfCmd = 'C:\\Program Files\\sf\\bin\\sf.cmd';
+      runSfCommand(['--version'], sfCmd);
+      const [exe] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, `"${sfCmd}"`, `explicit sf_path must be quoted, got: ${exe}`);
+    });
+
+    it('(c) does not split an argument value containing a space', () => {
+      setSfPathCacheForTesting('sf');
+      const propsPath = 'C:\\Users\\username\\git\\Provar Manager\\test-manager\\provardx-properties.json';
+      runSfCommand(['provar', 'automation', 'config-load', '--properties-file', propsPath]);
+      const [exe, args] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, 'sf'); // space-free executable stays unquoted
+      assert.deepEqual(args, ['provar', 'automation', 'config-load', '--properties-file', `"${propsPath}"`]);
+    });
+
+    it('leaves simple (space-free) tokens unquoted on win32', () => {
+      setSfPathCacheForTesting('sf');
+      runSfCommand(['provar', 'automation', 'config-load']);
+      const [exe, args] = spawnStub.firstCall.args as [string, string[]];
+      assert.equal(exe, 'sf');
+      assert.deepEqual(args, ['provar', 'automation', 'config-load']);
+    });
+
+    it('still rejects a user sf_path with shell metacharacters (spaces are now allowed)', () => {
+      assert.throws(() => runSfCommand(['--version'], 'C:\\sf & evil\\sf.cmd'), /unsafe for shell execution/);
+      // A spaced-but-clean user path is accepted and quoted.
+      spawnStub.returns(makeSpawnOk('ok'));
+      const result = runSfCommand(['--version'], 'C:\\Program Files\\sf\\bin\\sf.cmd');
+      assert.equal(result.exitCode, 0);
+    });
+  });
+});
+
+// ── ProvarPluginNotFoundError ───────────────────────────────────────────────
+
+describe('ProvarPluginNotFoundError', () => {
+  it('has code PROVAR_PLUGIN_NOT_FOUND and remediation in the message', () => {
+    const err = new ProvarPluginNotFoundError();
+    assert.equal(err.code, 'PROVAR_PLUGIN_NOT_FOUND');
+    assert.equal(err.name, 'ProvarPluginNotFoundError');
+    assert.ok(err.message.includes(PROVAR_PLUGIN_INSTALL_HINT));
+    assert.ok(err.message.toLowerCase().includes('provar'));
+  });
+});
+
+// ── isProvarPluginMissing ────────────────────────────────────────────────────
+
+describe('isProvarPluginMissing', () => {
+  it('matches "command provar not found"', () => {
+    assert.equal(isProvarPluginMissing('', 'command provar not found'), true);
+  });
+
+  it('matches a nested provar command not found (stdout)', () => {
+    assert.equal(isProvarPluginMissing('command provar:automation:test:run not found', ''), true);
+  });
+
+  it('matches oclif "provar is not a sf command"', () => {
+    assert.equal(isProvarPluginMissing('', 'Warning: provar is not a sf command.'), true);
+  });
+
+  it('does not match an unrelated failure', () => {
+    assert.equal(isProvarPluginMissing('', 'Error: properties file not found at /proj/x.json'), false);
+  });
+
+  it('does not match a benign sf update warning', () => {
+    assert.equal(
+      isProvarPluginMissing('', 'Warning: @salesforce/cli update available from 2.132.14 to 2.136.8.'),
+      false
+    );
+  });
+});
+
+// ── probeProvarTopic ─────────────────────────────────────────────────────────
+
+describe('probeProvarTopic', () => {
+  let spawnStub: sinon.SinonStub;
+
+  beforeEach(() => {
+    spawnStub = sinon.stub(sfSpawnHelper, 'spawnSync');
+    setSfPathCacheForTesting('sf');
+    setSfPlatformForTesting('linux');
+  });
+
+  afterEach(() => {
+    sinon.restore();
+    setSfPathCacheForTesting(undefined);
+    setSfPlatformForTesting(undefined);
+  });
+
+  it('returns true when `sf provar --help` succeeds', () => {
+    spawnStub.returns(makeSpawnOk('USAGE\n  $ sf provar COMMAND'));
+    assert.equal(probeProvarTopic(), true);
+  });
+
+  it('returns false when the provar topic is missing', () => {
+    spawnStub.returns(makeSpawnFail(1, '', 'command provar not found'));
+    assert.equal(probeProvarTopic(), false);
+  });
+
+  it('returns false (does not throw) when sf itself is not found', () => {
+    setSfPathCacheForTesting(null);
+    assert.equal(probeProvarTopic(), false);
   });
 });

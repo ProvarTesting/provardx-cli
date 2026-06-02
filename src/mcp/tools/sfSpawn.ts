@@ -34,6 +34,56 @@ export class SfNotFoundError extends Error {
   }
 }
 
+/** Remediation command for a missing Provar sf plugin. */
+export const PROVAR_PLUGIN_INSTALL_HINT = 'sf plugins install @provartesting/provardx-cli';
+
+/**
+ * Raised when the `sf` binary is present but the `@provartesting/provardx-cli`
+ * plugin is not installed (the `sf` CLI has no `provar` topic). Mirrors
+ * SfNotFoundError so callers get a dedicated code + actionable remediation
+ * instead of an opaque `AUTOMATION_*_FAILED` carrying "Command provar not found".
+ */
+export class ProvarPluginNotFoundError extends Error {
+  public readonly code = 'PROVAR_PLUGIN_NOT_FOUND';
+  public constructor() {
+    super(
+      'The Provar sf plugin is not installed — the sf CLI has no "provar" topic. ' +
+        `Install it with: ${PROVAR_PLUGIN_INSTALL_HINT}`
+    );
+    this.name = 'ProvarPluginNotFoundError';
+  }
+}
+
+// Patterns sf emits when the `provar` topic/command is unknown (plugin missing).
+const PROVAR_PLUGIN_MISSING_PATTERNS: RegExp[] = [
+  /command\s+provar\S*\s+not\s+found/i, // "command provar not found" / "command provar:automation:... not found"
+  /\bprovar\S*\s+is not a[n]?\s+(?:sf|@salesforce\/cli)\s+command/i, // oclif "provar is not a sf command"
+  /no such (?:command|topic)[^\n]*\bprovar\b/i,
+];
+
+/**
+ * Heuristic: does sf stdout/stderr indicate the `provar` topic/plugin is missing?
+ * Used to translate a generic non-zero sf exit into PROVAR_PLUGIN_NOT_FOUND.
+ */
+export function isProvarPluginMissing(stdout: string, stderr: string): boolean {
+  const haystack = `${stderr ?? ''}\n${stdout ?? ''}`;
+  return PROVAR_PLUGIN_MISSING_PATTERNS.some((re) => re.test(haystack));
+}
+
+/**
+ * Lightweight probe for the `provar` topic. Returns true when `sf provar --help`
+ * succeeds (plugin installed), false when sf is missing or the topic is absent.
+ * Non-throwing so it can be used as a best-effort startup health check.
+ */
+export function probeProvarTopic(sfPath?: string): boolean {
+  try {
+    const result = runSfCommand(['provar', '--help'], sfPath);
+    return result.exitCode === 0 && !isProvarPluginMissing(result.stdout, result.stderr);
+  } catch {
+    return false;
+  }
+}
+
 // ── Shared result type ────────────────────────────────────────────────────────
 
 export interface SpawnResult {
@@ -180,6 +230,22 @@ function assertShellSafePath(sfPath: string): void {
 }
 
 /**
+ * Quote a single command-line token for cmd.exe when the whole command is run
+ * through `shell: true`. Tokens containing whitespace or cmd-significant
+ * characters are wrapped in double quotes (embedded `"` doubled per cmd rules);
+ * simple tokens are left as-is. This is what keeps spaced paths — e.g.
+ * `C:\Program Files\sf\client\bin\sf.cmd` or a `--properties-file` value under a
+ * "Provar Manager" directory — from being split by cmd.exe.
+ */
+function quoteWindowsToken(token: string): string {
+  if (token === '') return '""';
+  if (/[\s"&|<>^()]/.test(token)) {
+    return `"${token.replace(/"/g, '""')}"`;
+  }
+  return token;
+}
+
+/**
  * Run `sf <args>` synchronously and return stdout, stderr, and exit code.
  * Throws SfNotFoundError if the `sf` binary cannot be found.
  * Pass `sfPath` to override auto-discovery with an explicit executable path.
@@ -201,7 +267,19 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
     assertShellSafePath(resolvedSfPath);
   }
 
-  const result = sfSpawnHelper.spawnSync(executable, args, {
+  // On Windows, `.cmd`/`.bat`/bare-name executables must run through cmd.exe
+  // (shell:true). Under shell:true Node concatenates executable + args into one
+  // unquoted string, so spaces in the auto-resolved Program Files path, an
+  // explicit sf_path, or any argument value would split the command
+  // (`'C:\Program' is not recognized ...`). Pre-quote the executable and each
+  // argument: Node joins them and wraps the whole line in cmd's outer quotes,
+  // and cmd's `/s` rule strips only that outermost pair, preserving our
+  // per-token quoting. This applies to auto-resolved paths too — not just
+  // user-supplied ones. On non-Windows the args pass through verbatim.
+  const spawnExecutable = useShell ? quoteWindowsToken(executable) : executable;
+  const spawnArgs = useShell ? args.map(quoteWindowsToken) : args;
+
+  const result = sfSpawnHelper.spawnSync(spawnExecutable, spawnArgs, {
     encoding: 'utf-8',
     shell: useShell,
     maxBuffer: MAX_BUFFER,

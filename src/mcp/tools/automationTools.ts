@@ -17,11 +17,44 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { parseJUnitResults } from './antTools.js';
-import { runSfCommand } from './sfSpawn.js';
+import { runSfCommand, isProvarPluginMissing, PROVAR_PLUGIN_INSTALL_HINT } from './sfSpawn.js';
 import { desc } from './descHelper.js';
 
 // Re-export sf resolution helpers so existing test imports from automationTools continue to work
 export { getSfCommonPaths, needsWindowsShell, setSfPathCacheForTesting, setSfPlatformForTesting } from './sfSpawn.js';
+
+/**
+ * When an automation sf command exits non-zero because the `provar` topic is
+ * missing (the @provartesting/provardx-cli plugin isn't installed), return a
+ * dedicated PROVAR_PLUGIN_NOT_FOUND error with remediation instead of the
+ * opaque AUTOMATION_*_FAILED carrying "Command provar not found". Returns null
+ * when the failure is not a missing-plugin case, so the caller falls through to
+ * its normal error.
+ */
+function provarPluginErrorResponse(
+  result: { stdout: string; stderr: string },
+  requestId: string
+): { isError: true; content: Array<{ type: 'text'; text: string }> } | null {
+  if (!isProvarPluginMissing(result.stdout, result.stderr)) return null;
+  return {
+    isError: true as const,
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(
+          makeError(
+            'PROVAR_PLUGIN_NOT_FOUND',
+            'The Provar sf plugin is not installed — the sf CLI has no "provar" topic. ' +
+              `Install it with: ${PROVAR_PLUGIN_INSTALL_HINT}`,
+            requestId,
+            false,
+            { suggestion: PROVAR_PLUGIN_INSTALL_HINT }
+          )
+        ),
+      },
+    ],
+  };
+}
 
 function handleSpawnError(
   err: unknown,
@@ -96,6 +129,8 @@ export function registerAutomationConfigLoad(server: McpServer, config: ServerCo
         };
 
         if (result.exitCode !== 0) {
+          const pluginErr = provarPluginErrorResponse(result, requestId);
+          if (pluginErr) return pluginErr;
           return {
             isError: true as const,
             content: [
@@ -316,6 +351,8 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
         const junit = introspectJUnit(config);
 
         if (result.exitCode !== 0) {
+          const pluginErr = provarPluginErrorResponse(result, requestId);
+          if (pluginErr) return pluginErr;
           const { filtered: filteredErr, suppressed: suppressedErr } = filterTestRunOutput(
             result.stderr || result.stdout
           );
@@ -416,6 +453,8 @@ export function registerAutomationCompile(server: McpServer): void {
         const response = { requestId, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
 
         if (result.exitCode !== 0) {
+          const pluginErr = provarPluginErrorResponse(result, requestId);
+          if (pluginErr) return pluginErr;
           return {
             isError: true as const,
             content: [
@@ -492,6 +531,8 @@ export function registerAutomationMetadataDownload(server: McpServer): void {
         const message = result.stderr || result.stdout;
 
         if (result.exitCode !== 0) {
+          const pluginErr = provarPluginErrorResponse(result, requestId);
+          if (pluginErr) return pluginErr;
           const isDownloadError = message.includes('[DOWNLOAD_ERROR]');
           const details: Record<string, unknown> | undefined = isDownloadError
             ? { suggestion: DOWNLOAD_ERROR_SUGGESTION }
@@ -685,6 +726,8 @@ export function registerAutomationSetup(server: McpServer): void {
         const result = runSfCommand(['provar', 'automation', 'setup', ...flags], sf_path);
 
         if (result.exitCode !== 0) {
+          const pluginErr = provarPluginErrorResponse(result, requestId);
+          if (pluginErr) return pluginErr;
           return {
             isError: true as const,
             content: [

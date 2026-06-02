@@ -926,6 +926,15 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `comparisonType`) — not the `valueList`/namedValues format.
 
+**`comparisonType` is step-scoped.** `comparisonType` is a single Provar enum (`com.provar.core.model.base.java.ComparisonType`), but each step type accepts only a subset. A value used outside its step's subset is _load-blocking_ — the whole test case fails to load (`IllegalArgumentException: No enum constant …ComparisonType.<value>`).
+
+| Step type                                 | Valid `comparisonType` subset                                                                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AssertValues` (`assertValuesComparison`) | `EqualTo`, `NotEqualTo`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `IsPresent`, `IsEmpty`, `Matches`, `NotMatches`, `Contains`, `NotContains`, `StartsWith`, `NotStartsWith`, `EndsWith`, `NotEndsWith` (16) |
+| UI Assert (`uiAttributeAssertion`)        | `EqualTo`, `Contains`, `StartsWith`, `EndsWith`, `Matches`, `None` (6)                                                                                                                                                                     |
+
+`NotEqualTo` (and the other negation/relational operators) is valid in an `AssertValues` step but **not** in a UI Assert — that mismatch is a common load-blocking error. The full enum and the field-type semantics (encrypted fields read as `null`; rich-text/textarea values arrive wrapped in `<p>…</p>`, so use `Contains`; `Contains` direction is `expectedValue` contains `actualValue`) are documented in the `provar://docs/step-reference` resource.
+
 **Input**
 
 | Parameter             | Type                                     | Required | Description                                                                                                                                                                             |
@@ -1039,6 +1048,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A locator-bearing UI step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`) has a `locator` argument that uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
+- **COMPARISON-TYPE-001** (ERROR) — A `comparisonType` value is used outside the subset its step type allows. `comparisonType` is a single Provar enum but each step type accepts only a subset: **AssertValues** accepts the 16-value set (`EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo, LessThan, LessThanOrEqualTo, IsPresent, IsEmpty, Matches, NotMatches, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith`); a **UI Assert** (`uiAttributeAssertion`) accepts only the 6-value set (`EqualTo, Contains, StartsWith, EndsWith, Matches, None`). A value outside the step's subset (e.g. `NotEqualTo` on a UI Assert) is load-blocking — the whole test case fails to load at runtime with `IllegalArgumentException: No enum constant com.provar.core.model.base.java.ComparisonType.<value>`. This local check runs even offline / in `local_fallback`, so the load-blocker is caught without the Quality Hub back-end. Only literal `comparisonType` values are checked; variable / compound references are skipped. See [`provar://docs/step-reference`](#resources) for the full step-scoped tables.
 - **UI-NEST-STRUCT-001** (severity `major`, weight 7, category `XMLSchema`) — A UI action step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, or `UiHandleAlert`) is emitted outside a screen ancestor. To pass, every UI action must descend from a `UiWithScreen` or `UiWithRow` `apiCall` through a `<clause name="substeps">` path. Control-flow wrappers (`If`/`ForEach`/`DoWhile`/`WaitFor`/`Switch`) between the screen ancestor and the UI action are allowed; steps inside `<clause name="hidden">` are exempt (disabled / settings blocks). One violation is emitted per offending step, so `(rule_id, test_item_id)` de-duplicates cleanly against the Quality Hub API. Provar IDE cannot bind flat-emitted UI actions to a screen context and they will not render in the editor. Wrap each offending step in the canonical chain:
   ```xml
   <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" ...>
@@ -1592,7 +1602,7 @@ Checks in this order:
 
 After a successful setup, update `provarHome` in your `provardx-properties.json` using `provar_properties_set`.
 
-**Error codes:** `AUTOMATION_SETUP_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_SETUP_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1638,7 +1648,7 @@ warning is additive and never flips exitCode or sets isError; the failure surfac
 ▎ what ran". In those cases the response carries details.warning (explaining why structured step data is missing) and RUN-001 is suppressed to
 ▎ avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
 
-Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND
+Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND, PROVAR_PLUGIN_NOT_FOUND
 Warning codes: RUN-001 (zero tests executed despite success)
 ```
 
@@ -1654,7 +1664,7 @@ Compiles PageObject and PageControl Java source files. Invokes `sf provar automa
 
 **Output** — `{ requestId, exitCode, stdout, stderr }`
 
-**Error codes:** `AUTOMATION_COMPILE_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_COMPILE_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1670,7 +1680,7 @@ Downloads Salesforce metadata into the Provar project cache. Invokes `sf provar 
 
 **Output** — `{ requestId, exitCode, stdout, stderr }`
 
-**Error codes:** `AUTOMATION_METADATA_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_METADATA_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1714,7 +1724,7 @@ Invokes `sf provar automation config load --properties-file <path>`, writing the
 | `exitCode`        | Exit code from the sf CLI       |
 | `properties_path` | Echoes back the registered path |
 
-**Error codes:** `AUTOMATION_CONFIG_LOAD_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_CONFIG_LOAD_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -2576,6 +2586,10 @@ provar_nitrox_patch      → apply targeted edits to an existing .po.json (RFC 7
 ```
 
 > **Note:** `provar_automation_*` and `provar_qualityhub_*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
+>
+> **`PROVAR_PLUGIN_NOT_FOUND`** — the `sf` binary is present but the `@provartesting/provardx-cli` plugin is not installed (the `sf` CLI has no `provar` topic). The `provar_automation_*` tools detect this case (sf reports e.g. `Command provar not found`) and return `PROVAR_PLUGIN_NOT_FOUND` with `details.suggestion` instead of the opaque `AUTOMATION_*_FAILED`. Remediation: `sf plugins install @provartesting/provardx-cli`.
+>
+> **Windows paths with spaces are handled automatically.** On Windows the `sf` launcher is a `.cmd` script and must run through `cmd.exe`. The executable path (including auto-discovered `C:\Program Files\sf\...` installs), an explicit `sf_path`, and any argument value (e.g. a `--properties-file` under a `Provar Manager` directory) are quoted before invocation, so spaces no longer split the command. The 8.3 short-name workaround (`C:\PROGRA~1\...`) is no longer needed. A user-supplied `sf_path` containing shell metacharacters (`&`, `|`, `;`, `<`, `>`, backtick, quotes, or line-breaks) is still rejected with `INVALID_SF_PATH`.
 
 ---
 

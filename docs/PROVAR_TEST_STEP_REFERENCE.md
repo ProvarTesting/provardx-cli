@@ -573,7 +573,9 @@ Verifies field values or element state on the current screen. Must always includ
 </apiCall>
 ```
 
-**Valid `comparisonType` values:** `EqualTo` | `NotEqualTo` | `Contains` | `NotContains` | `StartsWith` | `EndsWith` | `None`
+**Valid `comparisonType` values (UI Assert):** `EqualTo` | `Contains` | `StartsWith` | `EndsWith` | `Matches` | `None`
+
+`comparisonType` is a single Provar enum (`com.provar.core.model.base.java.ComparisonType`), but **each step type accepts only a subset of it**. A value used outside its step's subset is _load-blocking_: the whole test case fails to load with `IllegalArgumentException: No enum constant …ComparisonType.<value>`. The set above is the **UI Assert** subset (`uiAttributeAssertion`); it is strictly smaller than the AssertValues subset. In particular `NotEqualTo`, `NotContains`, `NotStartsWith`, `NotEndsWith`, and the relational/presence operators are **valid in AssertValues but not in a UI Assert** — to negate a UI comparison, invert the assertion logic instead. The UI dropdown labels map as: Equals → `EqualTo`, Contains → `Contains`, Starts With → `StartsWith`, Ends With → `EndsWith`, Matches → `Matches`; the no-assert/read-only choices (Ignore / Read) map to the single enum value `None`. For the full AssertValues subset see [AssertValues](#assertvalues).
 
 ### UiRead
 
@@ -1255,6 +1257,16 @@ Variable-to-variable or variable-to-literal comparison. For UI field assertions 
   </arguments>
 </apiCall>
 ```
+
+**Valid `comparisonType` values (AssertValues):** `EqualTo` | `NotEqualTo` | `GreaterThan` | `GreaterThanOrEqualTo` | `LessThan` | `LessThanOrEqualTo` | `IsPresent` | `IsEmpty` | `Matches` | `NotMatches` | `Contains` | `NotContains` | `StartsWith` | `NotStartsWith` | `EndsWith` | `NotEndsWith`
+
+This is the **AssertValues** subset of `com.provar.core.model.base.java.ComparisonType` (`assertValuesComparison`) — wider than the [UI Assert](#uiassert) subset. The negation and relational operators (`NotEqualTo`, `NotContains`, `NotStartsWith`, `NotEndsWith`, `NotMatches`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `IsPresent`, `IsEmpty`) are valid here but **not** on a UI Assert step. Using a value outside this subset is load-blocking (`IllegalArgumentException: No enum constant …ComparisonType.<value>`).
+
+**Comparison semantics and field-type notes:**
+
+- **Direction of `Contains`:** the comparison reads as `expectedValue` _contains_ `actualValue` — i.e. `actualValue` is the substring searched for inside `expectedValue`. Order the arguments accordingly.
+- **Encrypted fields:** a SOQL read of an encrypted field returns `null`, not the cleartext. Assert with `IsEmpty` (or compare against `null`) rather than the expected plaintext; an `EqualTo` against the real value will always fail.
+- **Rich-text / long-textarea fields:** values come back wrapped in HTML block markup (e.g. `<p>…</p>`), so an exact `EqualTo` against the raw text fails. Use `Contains` (with the inner text as `actualValue`) to match the meaningful content.
 
 ---
 

@@ -13,6 +13,10 @@ import {
 } from '../../../src/mcp/tools/testCaseValidate.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 import {
+  ASSERT_VALUES_COMPARISON_TYPES,
+  UI_ASSERT_COMPARISON_TYPES,
+} from '../../../src/mcp/rules/comparisonTypeSets.js';
+import {
   qualityHubClient,
   QualityHubAuthError,
   QualityHubRateLimitError,
@@ -1457,5 +1461,89 @@ describe('provar_testcase_validate description', () => {
       String(srv.capturedDescription).includes('provar://docs/step-reference'),
       'description should include step-reference guidance'
     );
+  });
+});
+
+describe('COMPARISON-TYPE-001: context-aware comparisonType enum validator', () => {
+  const G1 = '6ba7b810-9dad-4000-8000-00c04fd430c8';
+
+  const assertValuesTC = (cmp: string): string =>
+    `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${G1}" apiId="com.provar.plugins.bundled.apis.AssertValues" name="Assert values" testItemId="1">
+      <arguments>
+        <argument id="expectedValue"><value class="variable"><path element="Expected"/></value></argument>
+        <argument id="comparisonType"><value class="value" valueClass="string">${cmp}</value></argument>
+        <argument id="actualValue"><value class="variable"><path element="Actual"/></value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  const uiAssertTC = (cmp: string): string =>
+    `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${G1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="UI Assert" testItemId="1">
+      <arguments>
+        <argument id="fieldAssertions">
+          <value class="valueList" mutable="Mutable">
+            <uiFieldAssertion resultName="Name">
+              <attributeAssertions>
+                <uiAttributeAssertion attributeName="value" comparisonType="${cmp}"/>
+              </attributeAssertions>
+            </uiFieldAssertion>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  const hasComparisonError = (r: ReturnType<typeof validateTestCase>): boolean =>
+    r.issues.some((i) => i.rule_id === 'COMPARISON-TYPE-001' && i.severity === 'ERROR');
+
+  it('passes every valid AssertValues constant (incl. NotEqualTo) on an AssertValues step', () => {
+    for (const cmp of ASSERT_VALUES_COMPARISON_TYPES) {
+      const r = validateTestCase(assertValuesTC(cmp));
+      assert.ok(!hasComparisonError(r), `AssertValues comparisonType="${cmp}" must not fire COMPARISON-TYPE-001`);
+    }
+  });
+
+  it('passes every valid UI Assert constant on a UI Assert step', () => {
+    for (const cmp of UI_ASSERT_COMPARISON_TYPES) {
+      const r = validateTestCase(uiAssertTC(cmp));
+      assert.ok(!hasComparisonError(r), `UI Assert comparisonType="${cmp}" must not fire COMPARISON-TYPE-001`);
+    }
+  });
+
+  it('fires ERROR for NotEqualTo on a UI Assert step (valid for AssertValues, not UI)', () => {
+    // Context-sensitive: the same value passes on AssertValues but is load-blocking on a UI Assert.
+    assert.ok(!hasComparisonError(validateTestCase(assertValuesTC('NotEqualTo'))));
+    const r = validateTestCase(uiAssertTC('NotEqualTo'));
+    assert.ok(hasComparisonError(r), 'NotEqualTo on a UI Assert must fire COMPARISON-TYPE-001');
+    assert.equal(r.is_valid, false, 'a load-blocking comparisonType must make the test case invalid');
+  });
+
+  it('fires ERROR for a constant in neither set (NotEqualToo) on both step types', () => {
+    const av = validateTestCase(assertValuesTC('NotEqualToo'));
+    assert.ok(hasComparisonError(av), 'NotEqualToo on AssertValues must fire COMPARISON-TYPE-001');
+    const ui = validateTestCase(uiAssertTC('NotEqualToo'));
+    assert.ok(hasComparisonError(ui), 'NotEqualToo on a UI Assert must fire COMPARISON-TYPE-001');
+  });
+
+  it('does not fire for a variable-reference comparisonType (cannot be checked statically)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${G1}" apiId="com.provar.plugins.bundled.apis.AssertValues" name="Assert" testItemId="1">
+      <arguments>
+        <argument id="comparisonType"><value class="variable"><path element="DynamicOp"/></value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    assert.ok(!hasComparisonError(validateTestCase(xml)));
   });
 });

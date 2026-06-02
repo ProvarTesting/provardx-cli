@@ -892,7 +892,7 @@
       "appliesTo": ["Step"],
       "severity": "critical",
       "weight": 8,
-      "recommendation": "Add 'comparisonType' argument with valid value: EqualTo, NotEqualTo, Contains, NotContains, StartsWith, EndsWith, GreaterThan, LessThan, Matches, IsNull, NotNull.",
+      "recommendation": "Add 'comparisonType' argument with a value from the AssertValues subset of ComparisonType: EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo, LessThan, LessThanOrEqualTo, IsPresent, IsEmpty, Matches, NotMatches, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith. Note: UI Assert (uiAttributeAssertion) steps accept only the narrower subset EqualTo, Contains, StartsWith, EndsWith, Matches, None; a value used outside its step's subset is load-blocking.",
       "check": {
         "type": "mustContainArgument",
         "apiId": "com.provar.plugins.bundled.apis.AssertValues",
@@ -1506,7 +1506,7 @@
       "id": "ASSERT-VALUES-COMPARISON-001",
       "category": "TestCaseDesign",
       "name": "AssertValues should have meaningful expected values",
-      "description": "AssertValues steps using comparison operators (EqualTo, Contains, GreaterThan, etc.) should specify meaningful expectedValue arguments. Empty or missing expected values defeat the purpose of assertions and provide no validation. Without expected values, assertions cannot verify correct behavior. Comparison types requiring values: EqualTo, NotEqualTo, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith, Matches, NotMatches, GreaterThan, LessThan, GreaterThanOrEqualTo, LessThanOrEqualTo.",
+      "description": "AssertValues steps using comparison operators (EqualTo, Contains, GreaterThan, etc.) should specify meaningful expectedValue arguments. Empty or missing expected values defeat the purpose of assertions and provide no validation. Without expected values, assertions cannot verify correct behavior. The AssertValues subset of ComparisonType is: EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo, LessThan, LessThanOrEqualTo, IsPresent, IsEmpty, Matches, NotMatches, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith. Of these, the value-requiring comparators are EqualTo, NotEqualTo, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith, Matches, NotMatches, GreaterThan, LessThan, GreaterThanOrEqualTo, LessThanOrEqualTo (the presence checks IsPresent and IsEmpty do not need an expectedValue). UI Assert (uiAttributeAssertion) steps use a narrower subset: EqualTo, Contains, StartsWith, EndsWith, Matches, None.",
       "appliesTo": ["Step"],
       "severity": "major",
       "weight": 5,
