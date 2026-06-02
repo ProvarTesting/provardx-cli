@@ -1602,7 +1602,7 @@ Checks in this order:
 
 After a successful setup, update `provarHome` in your `provardx-properties.json` using `provar_properties_set`.
 
-**Error codes:** `AUTOMATION_SETUP_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_SETUP_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1648,7 +1648,7 @@ warning is additive and never flips exitCode or sets isError; the failure surfac
 ▎ what ran". In those cases the response carries details.warning (explaining why structured step data is missing) and RUN-001 is suppressed to
 ▎ avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
 
-Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND
+Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND, PROVAR_PLUGIN_NOT_FOUND
 Warning codes: RUN-001 (zero tests executed despite success)
 ```
 
@@ -1664,7 +1664,7 @@ Compiles PageObject and PageControl Java source files. Invokes `sf provar automa
 
 **Output** — `{ requestId, exitCode, stdout, stderr }`
 
-**Error codes:** `AUTOMATION_COMPILE_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_COMPILE_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1680,7 +1680,7 @@ Downloads Salesforce metadata into the Provar project cache. Invokes `sf provar 
 
 **Output** — `{ requestId, exitCode, stdout, stderr }`
 
-**Error codes:** `AUTOMATION_METADATA_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_METADATA_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -1724,7 +1724,7 @@ Invokes `sf provar automation config load --properties-file <path>`, writing the
 | `exitCode`        | Exit code from the sf CLI       |
 | `properties_path` | Echoes back the registered path |
 
-**Error codes:** `AUTOMATION_CONFIG_LOAD_FAILED`, `SF_NOT_FOUND`
+**Error codes:** `AUTOMATION_CONFIG_LOAD_FAILED`, `SF_NOT_FOUND`, `PROVAR_PLUGIN_NOT_FOUND`
 
 ---
 
@@ -2586,6 +2586,8 @@ provar_nitrox_patch      → apply targeted edits to an existing .po.json (RFC 7
 ```
 
 > **Note:** `provar_automation_*` and `provar_qualityhub_*` tools invoke `sf` CLI subprocesses. The Salesforce CLI must be installed and in `PATH`, or pass `sf_path` pointing to the executable directly (e.g. `~/.nvm/versions/node/v22.0.0/bin/sf`). A missing `sf` binary returns the error code `SF_NOT_FOUND` with an installation hint.
+>
+> **`PROVAR_PLUGIN_NOT_FOUND`** — the `sf` binary is present but the `@provartesting/provardx-cli` plugin is not installed (the `sf` CLI has no `provar` topic). The `provar_automation_*` tools detect this case (sf reports e.g. `Command provar not found`) and return `PROVAR_PLUGIN_NOT_FOUND` with `details.suggestion` instead of the opaque `AUTOMATION_*_FAILED`. Remediation: `sf plugins install @provartesting/provardx-cli`.
 >
 > **Windows paths with spaces are handled automatically.** On Windows the `sf` launcher is a `.cmd` script and must run through `cmd.exe`. The executable path (including auto-discovered `C:\Program Files\sf\...` installs), an explicit `sf_path`, and any argument value (e.g. a `--properties-file` under a `Provar Manager` directory) are quoted before invocation, so spaces no longer split the command. The 8.3 short-name workaround (`C:\PROGRA~1\...`) is no longer needed. A user-supplied `sf_path` containing shell metacharacters (`&`, `|`, `;`, `<`, `>`, backtick, quotes, or line-breaks) is still rejected with `INVALID_SF_PATH`.
 

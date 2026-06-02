@@ -1044,6 +1044,72 @@ describe('filterTestRunOutput', () => {
     assert.ok(filtered.includes('INFO Starting'), 'Real output should remain');
     assert.ok(filtered.includes('INFO Done'), 'Real output should remain');
   });
+
+  // ── PROVAR_PLUGIN_NOT_FOUND (missing provar topic / plugin) ────────────────
+  describe('PROVAR_PLUGIN_NOT_FOUND', () => {
+    const REMEDIATION = 'sf plugins install @provartesting/provardx-cli';
+    let server: MockMcpServer;
+    let spawnStub: sinon.SinonStub;
+
+    beforeEach(async () => {
+      server = new MockMcpServer();
+      spawnStub = sinon.stub(sfSpawnHelper, 'spawnSync');
+      const { registerAllAutomationTools, setSfPathCacheForTesting } = await import(
+        '../../../src/mcp/tools/automationTools.js'
+      );
+      setSfPathCacheForTesting('sf');
+      registerAllAutomationTools(server as unknown as McpServer, { allowedPaths: [] });
+    });
+
+    afterEach(() => {
+      sinon.restore();
+    });
+
+    it('config_load surfaces PROVAR_PLUGIN_NOT_FOUND with remediation when the provar topic is missing', () => {
+      spawnStub.returns(makeSpawnResult('', 'Warning: provar is not a sf command.\nDid you mean a typo?', 1));
+      const result = server.call('provar_automation_config_load', {
+        properties_path: '/proj/provardx-properties.json',
+      });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'PROVAR_PLUGIN_NOT_FOUND');
+      assert.notEqual(body.error_code, 'AUTOMATION_CONFIG_LOAD_FAILED');
+      assert.match(String(body.message), /Provar sf plugin is not installed/);
+      assert.match(String(body.message), /sf plugins install @provartesting\/provardx-cli/);
+      assert.equal((body.details as { suggestion?: string }).suggestion, REMEDIATION);
+    });
+
+    it('detects the "command provar not found" phrasing', () => {
+      spawnStub.returns(makeSpawnResult('', 'command provar not found', 1));
+      const result = server.call('provar_automation_config_load', {
+        properties_path: '/proj/provardx-properties.json',
+      });
+      assert.equal(parseBody(result).error_code, 'PROVAR_PLUGIN_NOT_FOUND');
+    });
+
+    it('does NOT fire for a generic config-load failure (stays AUTOMATION_CONFIG_LOAD_FAILED)', () => {
+      spawnStub.returns(makeSpawnResult('', 'Error: properties file not found at /proj/x.json', 1));
+      const result = server.call('provar_automation_config_load', {
+        properties_path: '/proj/provardx-properties.json',
+      });
+      assert.equal(parseBody(result).error_code, 'AUTOMATION_CONFIG_LOAD_FAILED');
+    });
+
+    it('maps a missing provar topic on testrun too', () => {
+      spawnStub.returns(makeSpawnResult('', 'command provar:automation:test:run not found', 1));
+      const result = server.call('provar_automation_testrun', { flags: [] });
+      assert.equal(parseBody(result).error_code, 'PROVAR_PLUGIN_NOT_FOUND');
+    });
+
+    it('does not fire on a successful command (exit 0)', () => {
+      spawnStub.returns(makeSpawnResult('properties file loaded successfully', '', 0));
+      const result = server.call('provar_automation_config_load', {
+        properties_path: '/proj/provardx-properties.json',
+      });
+      assert.ok(!isError(result));
+      assert.equal(parseBody(result).exitCode, 0);
+    });
+  });
 });
 
 // ── getSfCommonPaths — B2a Windows standalone installer paths ─────────────────
