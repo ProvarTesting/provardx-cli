@@ -384,7 +384,7 @@ describe('runSfCommand', () => {
 
     it('(c) does not split an argument value containing a space', () => {
       setSfPathCacheForTesting('sf');
-      const propsPath = 'C:\\Users\\mrdai\\git\\Provar Manager\\test-manager\\provardx-properties.json';
+      const propsPath = 'C:\\Users\\username\\git\\Provar Manager\\test-manager\\provardx-properties.json';
       runSfCommand(['provar', 'automation', 'config-load', '--properties-file', propsPath]);
       const [exe, args] = spawnStub.firstCall.args as [string, string[]];
       assert.equal(exe, 'sf'); // space-free executable stays unquoted
