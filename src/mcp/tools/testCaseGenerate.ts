@@ -342,7 +342,8 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
                 'those siblings are auto-grouped inside the UiWithScreen\'s <clause name="substeps"><steps> block ' +
                 '(the structure Provar IDE expects). Non-UI steps (SetValues, ApexConnect, …) stay at the root. ' +
                 'UiWithRow plays a dual role: when it follows a UiWithScreen it is pulled in as a child container; ' +
-                'when it appears at root without a preceding UiWithScreen it stays at root as its own container. ' +
+                'when screen containers such as UiWithRow appear without an explicit preceding UiWithScreen, generation may ' +
+                'synthesize a root UiWithScreen wrapper so they are nested under that screen container rather than remaining at root. ' +
                 '"flat": legacy behaviour — emit every step as a root sibling, no nesting. ' +
                 '"single-screen": wrap all steps in a single synthetic UiWithScreen (matches target_uri=ui:pageobject:target semantics). ' +
                 'If target_uri is "ui:pageobject:target?…" the single-screen wrap takes precedence regardless of this flag.',
