@@ -194,6 +194,21 @@ async function runTests() {
   // ── 7. provar_testcase_validate ───────────────────────────────────────────
   if (inGroup('validation')) await callTool('provar_testcase_validate', { content: '<testCase/>' });
 
+  // ── 7b. provar_testcase_validate — COMPARISON-TYPE-001 (load-blocking enum) ─
+  // Drives the context-aware comparisonType enum validator: NotEqualTo is valid
+  // for AssertValues but load-blocking on a UI Assert (uiAttributeAssertion).
+  // The smoke framework counts any JSON-RPC response as PASS; this just keeps the
+  // ERROR-tier code path exercised on every run.
+  if (inGroup('validation'))
+    await callTool('provar_testcase_validate', {
+      content:
+        '<?xml version="1.0" encoding="UTF-8"?><testCase guid="550e8400-e29b-41d4-a716-446655440000" id="1">' +
+        '<steps><apiCall guid="6ba7b810-9dad-4000-8000-00c04fd430c8" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="UI Assert" testItemId="1">' +
+        '<arguments><argument id="fieldAssertions"><value class="valueList"><uiFieldAssertion resultName="Name">' +
+        '<attributeAssertions><uiAttributeAssertion attributeName="value" comparisonType="NotEqualTo"/></attributeAssertions>' +
+        '</uiFieldAssertion></value></argument></arguments></apiCall></steps></testCase>',
+    });
+
   // ── 8. provar_testsuite_validate ──────────────────────────────────────────
   if (inGroup('validation')) await callTool('provar_testsuite_validate', { suite_name: 'SmokeTestSuite' });
 
