@@ -926,6 +926,15 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `comparisonType`) — not the `valueList`/namedValues format.
 
+**`comparisonType` is step-scoped.** `comparisonType` is a single Provar enum (`com.provar.core.model.base.java.ComparisonType`), but each step type accepts only a subset. A value used outside its step's subset is _load-blocking_ — the whole test case fails to load (`IllegalArgumentException: No enum constant …ComparisonType.<value>`).
+
+| Step type                                 | Valid `comparisonType` subset                                                                                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AssertValues` (`assertValuesComparison`) | `EqualTo`, `NotEqualTo`, `GreaterThan`, `GreaterThanOrEqualTo`, `LessThan`, `LessThanOrEqualTo`, `IsPresent`, `IsEmpty`, `Matches`, `NotMatches`, `Contains`, `NotContains`, `StartsWith`, `NotStartsWith`, `EndsWith`, `NotEndsWith` (16) |
+| UI Assert (`uiAttributeAssertion`)        | `EqualTo`, `Contains`, `StartsWith`, `EndsWith`, `Matches`, `None` (6)                                                                                                                                                                     |
+
+`NotEqualTo` (and the other negation/relational operators) is valid in an `AssertValues` step but **not** in a UI Assert — that mismatch is a common load-blocking error. The full enum and the field-type semantics (encrypted fields read as `null`; rich-text/textarea values arrive wrapped in `<p>…</p>`, so use `Contains`; `Contains` direction is `expectedValue` contains `actualValue`) are documented in the `provar://docs/step-reference` resource.
+
 **Input**
 
 | Parameter             | Type                                     | Required | Description                                                                                                                                                                             |
