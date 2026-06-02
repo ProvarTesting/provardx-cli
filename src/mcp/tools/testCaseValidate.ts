@@ -38,6 +38,12 @@ import {
 } from '../utils/validationDiff.js';
 import { resolveTestCasePlanMode, type TestCasePlanMode } from '../utils/testCasePlanMode.js';
 import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
+import {
+  ASSERT_VALUES_COMPARISON_TYPES,
+  UI_ASSERT_COMPARISON_TYPES,
+  ASSERT_VALUES_COMPARISON_TYPE_SET,
+  UI_ASSERT_COMPARISON_TYPE_SET,
+} from '../rules/comparisonTypeSets.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 import { desc } from './descHelper.js';
 import { UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
@@ -518,6 +524,12 @@ export function validateTestCase(
     validateApiCall(call, issues);
   }
 
+  // COMPARISON-TYPE-001: context-aware comparisonType enum check (load-blocking).
+  // Walks the whole test case so nested steps (e.g. a UiAssert inside a
+  // UiWithScreen substeps clause, or an AssertValues inside an If/ForEach) are
+  // covered too, not just top-level apiCalls.
+  validateComparisonTypes(tc, issues);
+
   // VAR-REF-001 / VAR-REF-002: detect {VarName} tokens inside valueClass="string" elements.
   // Provar does not interpolate {…} tokens in plain string values at runtime — they must use
   // class="variable" (pure reference) or class="compound" (embedded in surrounding text).
@@ -742,6 +754,92 @@ function validateApiCallArgs(
         applies_to: 'apiCall',
         suggestion:
           'Use separate expectedValue, actualValue, and comparisonType arguments for variable or Apex result comparisons.',
+      });
+    }
+  }
+}
+
+/** Recursively collect every node stored under `key` anywhere in the tree. */
+function collectNodesByKey(node: unknown, key: string, out: Array<Record<string, unknown>>): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectNodesByKey(item, key, out);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+  const obj = node as Record<string, unknown>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === key) {
+      if (Array.isArray(v)) {
+        for (const item of v) if (item !== null && typeof item === 'object') out.push(item as Record<string, unknown>);
+      } else if (v !== null && typeof v === 'object') {
+        out.push(v as Record<string, unknown>);
+      }
+    }
+    collectNodesByKey(v, key, out);
+  }
+}
+
+/** Extract the literal text of a parsed `<value>` node, or undefined if not a literal. */
+function literalValueText(valueNode: Record<string, unknown> | undefined): string | undefined {
+  if (valueNode == null) return undefined;
+  // Only validate literal string values — skip variable / compound references,
+  // whose runtime value cannot be checked statically.
+  const valClass = valueNode['@_class'] as string | undefined;
+  if (valClass !== undefined && valClass !== 'value') return undefined;
+  const text = valueNode['#text'];
+  if (typeof text === 'string') return text;
+  if (typeof text === 'number') return String(text);
+  return undefined;
+}
+
+/**
+ * COMPARISON-TYPE-001 — context-aware `comparisonType` enum validation.
+ *
+ * `comparisonType` is a single Provar enum, but each step type accepts only a
+ * SUBSET. A value outside its step's subset is load-blocking (the test case
+ * fails to load with `IllegalArgumentException: No enum constant
+ * ...ComparisonType.<value>`), so this is emitted at ERROR tier — not as a
+ * best-practices quality warning — to mirror the runtime failure offline.
+ */
+function validateComparisonTypes(tc: Record<string, unknown>, issues: ValidationIssue[]): void {
+  // AssertValues steps → the 16-value AssertValues subset.
+  const apiCalls: Array<Record<string, unknown>> = [];
+  collectNodesByKey(tc, 'apiCall', apiCalls);
+  for (const call of apiCalls) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || !apiId.includes('AssertValues')) continue;
+    const cmpArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'comparisonType');
+    if (!cmpArg) continue;
+    const cmp = literalValueText(cmpArg['value'] as Record<string, unknown> | undefined);
+    if (cmp === undefined || cmp === '') continue;
+    if (!ASSERT_VALUES_COMPARISON_TYPE_SET.has(cmp)) {
+      const stepName = (call['@_name'] as string | undefined) ?? '(unnamed)';
+      issues.push({
+        rule_id: 'COMPARISON-TYPE-001',
+        severity: 'ERROR',
+        message: `AssertValues step "${stepName}" uses comparisonType="${cmp}", which is not a valid AssertValues comparison — this is load-blocking (IllegalArgumentException: No enum constant com.provar.core.model.base.java.ComparisonType.${cmp}).`,
+        applies_to: 'apiCall',
+        suggestion: `Use one of the AssertValues comparison types: ${ASSERT_VALUES_COMPARISON_TYPES.join(', ')}.`,
+      });
+    }
+  }
+
+  // UI Assert attribute assertions → the narrower 6-value UI subset.
+  const uiAsserts: Array<Record<string, unknown>> = [];
+  collectNodesByKey(tc, 'uiAttributeAssertion', uiAsserts);
+  for (const node of uiAsserts) {
+    const cmp = node['@_comparisonType'] as string | undefined;
+    if (cmp === undefined || cmp === '') continue;
+    if (!UI_ASSERT_COMPARISON_TYPE_SET.has(cmp)) {
+      const attr = (node['@_attributeName'] as string | undefined) ?? '(unknown attribute)';
+      issues.push({
+        rule_id: 'COMPARISON-TYPE-001',
+        severity: 'ERROR',
+        message: `UI Assert attribute assertion (attributeName="${attr}") uses comparisonType="${cmp}", which is not valid for a UI Assert (uiAttributeAssertion) — this is load-blocking (IllegalArgumentException: No enum constant com.provar.core.model.base.java.ComparisonType.${cmp}).`,
+        applies_to: 'apiCall',
+        suggestion: `Use one of the UI Assert comparison types: ${UI_ASSERT_COMPARISON_TYPES.join(
+          ', '
+        )}. The negation/relational operators (e.g. NotEqualTo) are valid only in AssertValues steps; to negate a UI comparison, invert the assertion logic.`,
       });
     }
   }
