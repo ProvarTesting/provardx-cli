@@ -557,6 +557,13 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
     if (key === 'locator' && UI_LOCATOR_BEARING_API_IDS.has(apiId)) {
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
+    // D2: 'interaction' argument → class="uiInteraction" (UiDoAction Action widget).
+    // PDX-506: the IDE step editor binds its Action only from a typed uiInteraction;
+    // a plain string runs green from the CLI but renders the Action field blank.
+    // Gated on the shared UI-action API set so generator + validator stay aligned.
+    if (key === 'interaction' && UI_ACTION_API_IDS.has(apiId)) {
+      return `${indent}<value class="uiInteraction" uri="${escapeXmlAttr(val)}"/>`;
+    }
   }
   // PDX-493 (H3): infer valueClass for date / datetime / boolean / decimal / string. The
   // `fieldTypeHint` parameter on `inferSalesforceValueClass` is intentionally not threaded

@@ -710,6 +710,104 @@ describe('validateTestCase', () => {
     });
   });
 
+  // PDX-506: UiDoAction `interaction` must serialise as class="uiInteraction".
+  // The Cox Demo "Create Test Case (Generated)" file ran green from the CLI but
+  // rendered the IDE Action widget blank because `interaction` was a plain string.
+  describe('UI-INTERACTION-001', () => {
+    // REPRODUCE: the exact broken Cox Demo shape — a plain-string `interaction`.
+    // This assertion FAILS against pre-fix validator code (no rule existed) and
+    // PASSES once UI-INTERACTION-001 is added.
+    it('errors when UiDoAction interaction argument uses class="value" (plain string)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=click</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'Expected UI-INTERACTION-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('uiInteraction'), `Message should mention uiInteraction: ${issue.message}`);
+    });
+
+    // CLEARED: the corrected typed-uiInteraction form must pass with no false positive.
+    it('does not fire when UiDoAction interaction uses class="uiInteraction"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value class="uiInteraction" uri="ui:interaction?name=action"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 should not fire for correct uiInteraction class'
+      );
+    });
+
+    it('fires when UiDoAction interaction <value> has no class attribute', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value>ui:interaction?name=click</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 should fire when <value> has no class attribute'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
+    it('does not fire for a UI action step without an interaction argument', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Save"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 must not fire when no interaction argument is present'
+      );
+    });
+  });
+
   describe('SETVALUES-STRUCTURE-001', () => {
     it('errors when SetValues values argument uses class="value" (plain string)', () => {
       const r = validateTestCase(
