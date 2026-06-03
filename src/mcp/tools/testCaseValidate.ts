@@ -46,7 +46,7 @@ import {
 } from '../rules/comparisonTypeSets.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 import { desc } from './descHelper.js';
-import { UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
+import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
@@ -672,6 +672,30 @@ function checkUiTarget(
   }
 }
 
+// UI-INTERACTION-001 (PDX-506): a UI action step's `interaction` argument must
+// use class="uiInteraction". A plain string runs green from the CLI but renders
+// the Provar IDE Action widget blank. Mirrors checkUiTarget / UI-LOCATOR-001.
+function checkUiInteraction(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const interactionArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'interaction');
+  if (!interactionArg) return;
+  const interactionNode = interactionArg['value'] as Record<string, unknown> | undefined;
+  if (interactionNode == null) return;
+  const valClass = interactionNode['@_class'] as string | undefined;
+  if (valClass !== 'uiInteraction') {
+    issues.push({
+      rule_id: 'UI-INTERACTION-001',
+      severity: 'ERROR',
+      message: `"${stepName}" interaction argument uses class="${
+        valClass ?? '(missing)'
+      }" — must be class="uiInteraction".`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Emit the interaction as: <value class="uiInteraction" uri="ui:interaction?name=action"/>. ' +
+        'In provar_testcase_generate the "interaction" attribute is converted automatically.',
+    });
+  }
+}
+
 function validateApiCallArgs(
   call: Record<string, unknown>,
   apiId: string,
@@ -713,6 +737,16 @@ function validateApiCallArgs(
         }
       }
     }
+  }
+
+  // UI-INTERACTION-001 (PDX-506, local rule, no direct backend equivalent):
+  // A UI action step that carries an `interaction` argument (in practice
+  // UiDoAction) must emit it as class="uiInteraction". A plain string runs
+  // green from the CLI but renders the IDE Action widget blank / raw URI.
+  // Gated on the shared UI-action set so generator + validator stay aligned.
+  // Extracted to keep validateApiCallArgs within the complexity budget.
+  if (UI_ACTION_API_IDS.has(apiId)) {
+    checkUiInteraction(call, stepName, issues);
   }
 
   // SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):

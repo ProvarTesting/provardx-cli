@@ -1041,6 +1041,42 @@ describe('provar_testcase_generate', () => {
       );
     });
 
+    // PDX-506: GENERATOR test — a UiDoAction interaction attribute must round-trip
+    // to typed class="uiInteraction" XML (not a plain string) and validate clean.
+    it('emits class="uiInteraction" uri="..." for the interaction argument', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'UI Interaction Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Click button',
+            attributes: {
+              locator: 'sf:ui:locator:button?label=Save',
+              interaction: 'ui:interaction?name=action',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="uiInteraction"'), 'Expected class="uiInteraction"');
+      assert.ok(xml.includes('uri="ui:interaction?name=action"'), 'Expected uri attribute with interaction value');
+      assert.ok(
+        !xml.includes('valueClass="string">ui:interaction'),
+        'Must NOT emit interaction URI as a plain string value'
+      );
+
+      // Round-trip: the generated XML must pass the validator with no UI-INTERACTION-001.
+      const v = validateTestCase(xml);
+      assert.ok(
+        !v.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'Generated UiDoAction interaction must clear UI-INTERACTION-001'
+      );
+    });
+
     it('uiTarget also applies inside UiWithScreen wrapper when target_uri is non-SF', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Non-SF With Target',
