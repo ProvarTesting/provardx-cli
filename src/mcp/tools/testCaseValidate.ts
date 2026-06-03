@@ -696,6 +696,66 @@ function checkUiInteraction(call: Record<string, unknown>, stepName: string, iss
   }
 }
 
+// Flat-form argument ids that the broken/CLI-only UiAssert shape carries at the
+// top level. The IDE-renderable contract nests these inside a uiFieldAssertion.
+const UI_ASSERT_FLAT_ARG_IDS = ['fieldLocator', 'attributeName', 'comparisonType', 'expectedValue'];
+
+// UI-ASSERT-STRUCTURE-001 (PDX-507, local rule): a UiAssert field assertion must
+// be nested inside fieldAssertions → uiFieldAssertion (with a bare
+// <fieldLocator uri="…"/> element), not emitted as flat top-level arguments.
+// The flat shape runs green from the CLI but renders the IDE Result Assertions
+// tab blank. Confirmed against the real corpus (AllPOCProjects): 0 of 3,778
+// UiAssert steps use a flat fieldLocator argument; ~99% use the nested form.
+// (Named "-STRUCTURE-001" to match the local SETVALUES-STRUCTURE-001 convention
+// and avoid colliding with the best-practice JSON rule UI-ASSERT-STRUCT-001.)
+function checkUiAssertStructure(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const flatArg = getArgList(call).find((a) =>
+    UI_ASSERT_FLAT_ARG_IDS.includes((a['@_id'] as string | undefined) ?? '')
+  );
+  if (!flatArg) return;
+  const offendingId = (flatArg['@_id'] as string | undefined) ?? '';
+  issues.push({
+    rule_id: 'UI-ASSERT-STRUCTURE-001',
+    severity: 'ERROR',
+    message: `UiAssert step "${stepName}" carries a flat "${offendingId}" argument — field assertions must be nested inside fieldAssertions/uiFieldAssertion or the Provar IDE Result Assertions tab renders blank.`,
+    applies_to: 'apiCall',
+    suggestion:
+      'Nest field assertions: <argument id="fieldAssertions"><value class="valueList" mutable="Mutable">' +
+      '<uiFieldAssertion resultName="Field"><fieldLocator uri="ui:locator?name=Field&binding=..."/>' +
+      '<attributeAssertions><uiAttributeAssertion attributeName="value" comparisonType="EqualTo"/></attributeAssertions>' +
+      '</uiFieldAssertion></value></argument> plus empty columnAssertions/pageAssertions. The fieldLocator is a bare ' +
+      'uri element, NOT class="uiLocator". In provar_testcase_generate pass fieldLocator/attributeName/comparisonType/' +
+      'expectedValue as flat attributes — the generator builds this structure automatically.',
+  });
+}
+
+// SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):
+// SetValues values argument must use class="valueList" with <namedValues> children.
+// A plain string value causes an immediate ClassCastException at runtime.
+// Extracted to keep validateApiCallArgs within the complexity budget.
+function checkSetValuesStructure(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
+  if (!valuesArg) return;
+  const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
+  if (valuesNode == null) return;
+  const valClass = valuesNode['@_class'] as string | undefined;
+  if (valClass !== 'valueList') {
+    issues.push({
+      rule_id: 'SETVALUES-STRUCTURE-001',
+      severity: 'ERROR',
+      message: `SetValues step "${stepName}" values argument uses class="${
+        valClass ?? '(missing)'
+      }" — must use class="valueList" with <namedValues> children.`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
+        '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
+        '</namedValues></value>. In provar_testcase_generate pass each variable as a flat key/value pair ' +
+        'in attributes — the generator builds the valueList structure automatically.',
+    });
+  }
+}
+
 function validateApiCallArgs(
   call: Record<string, unknown>,
   apiId: string,
@@ -739,42 +799,18 @@ function validateApiCallArgs(
     }
   }
 
-  // UI-INTERACTION-001 (PDX-506, local rule, no direct backend equivalent):
-  // A UI action step that carries an `interaction` argument (in practice
-  // UiDoAction) must emit it as class="uiInteraction". A plain string runs
-  // green from the CLI but renders the IDE Action widget blank / raw URI.
-  // Gated on the shared UI-action set so generator + validator stay aligned.
-  // Extracted to keep validateApiCallArgs within the complexity budget.
+  // UI-INTERACTION-001 (PDX-506) for any UI action; UI-ASSERT-STRUCTURE-001
+  // (PDX-507) additionally for UiAssert field-assertion structure. Both are
+  // local rules gated on the shared UI-action set and extracted to helpers to
+  // keep validateApiCallArgs within the complexity budget.
   if (UI_ACTION_API_IDS.has(apiId)) {
     checkUiInteraction(call, stepName, issues);
+    if (apiId.endsWith('UiAssert')) checkUiAssertStructure(call, stepName, issues);
   }
 
-  // SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):
-  // SetValues values argument must use class="valueList" with <namedValues> children.
-  // A plain string value causes an immediate ClassCastException at runtime.
+  // SETVALUES-STRUCTURE-001: SetValues values argument must use class="valueList".
   if (apiId.includes('SetValues') && !apiId.includes('AssertValues')) {
-    const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
-    if (valuesArg) {
-      const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
-      if (valuesNode != null) {
-        const valClass = valuesNode['@_class'] as string | undefined;
-        if (valClass !== 'valueList') {
-          issues.push({
-            rule_id: 'SETVALUES-STRUCTURE-001',
-            severity: 'ERROR',
-            message: `SetValues step "${stepName}" values argument uses class="${
-              valClass ?? '(missing)'
-            }" — must use class="valueList" with <namedValues> children.`,
-            applies_to: 'apiCall',
-            suggestion:
-              'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
-              '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
-              '</namedValues></value>. In provar_testcase_generate pass each variable as a flat key/value pair ' +
-              'in attributes — the generator builds the valueList structure automatically.',
-          });
-        }
-      }
-    }
+    checkSetValuesStructure(call, stepName, issues);
   }
 
   // ASSERT-001: AssertValues using UI namedValues format instead of variable format

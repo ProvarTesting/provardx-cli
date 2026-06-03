@@ -304,37 +304,34 @@
           <steps>
             <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" guid="8b5263cf-bb52-4d0f-8b8d-c8c9dd9e0399" name="Assert Last Name field value" testItemId="13" title="Assert Last Name field value">
               <arguments>
-                <argument id="assertionType">
-                  <value class="value" valueClass="string">Field</value>
+                <argument id="resultName">
+                  <value class="value" valueClass="string">Values</value>
                 </argument>
-                <argument id="fieldLocator">
-                  <value class="value" valueClass="string">ui:locator?name=LastName</value>
-                </argument>
-                <argument id="attributeName">
-                  <value class="value" valueClass="string">value</value>
-                </argument>
-                <argument id="comparisonType">
-                  <value class="value" valueClass="string">EqualTo</value>
-                </argument>
-                <argument id="expectedValue">
-                  <value class="variable">
-                    <path element="leadLastName"/>
-                  </value>
+                <argument id="resultScope">
+                  <value class="value" valueClass="string">Test</value>
                 </argument>
                 <argument id="fieldAssertions">
-                  <value class="valueList" mutable="Mutable"/>
+                  <value class="valueList" mutable="Mutable">
+                    <uiFieldAssertion resultName="LastName">
+                      <fieldLocator uri="ui:locator?name=LastName"/>
+                      <attributeAssertions>
+                        <uiAttributeAssertion attributeName="value" comparisonType="EqualTo">
+                          <value class="variable">
+                            <path element="leadLastName"/>
+                          </value>
+                        </uiAttributeAssertion>
+                      </attributeAssertions>
+                    </uiFieldAssertion>
+                  </value>
+                </argument>
+                <argument id="captureAfter">
+                  <value class="value" valueClass="boolean">false</value>
                 </argument>
                 <argument id="columnAssertions">
                   <value class="valueList" mutable="Mutable"/>
                 </argument>
                 <argument id="pageAssertions">
                   <value class="valueList" mutable="Mutable"/>
-                </argument>
-                <argument id="resultScope">
-                  <value class="value" valueClass="string">Test</value>
-                </argument>
-                <argument id="captureAfter">
-                  <value class="value" valueClass="boolean">false</value>
                 </argument>
                 <argument id="beforeWait"/>
                 <argument id="autoRetry"/>
@@ -342,37 +339,34 @@
             </apiCall>
             <apiCall apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" guid="22a54a68-46fa-4ec4-8420-5a7220f0daf0" name="Assert Company field value" testItemId="14" title="Assert Company field value">
               <arguments>
-                <argument id="assertionType">
-                  <value class="value" valueClass="string">Field</value>
+                <argument id="resultName">
+                  <value class="value" valueClass="string">Values</value>
                 </argument>
-                <argument id="fieldLocator">
-                  <value class="value" valueClass="string">ui:locator?name=Company</value>
-                </argument>
-                <argument id="attributeName">
-                  <value class="value" valueClass="string">value</value>
-                </argument>
-                <argument id="comparisonType">
-                  <value class="value" valueClass="string">EqualTo</value>
-                </argument>
-                <argument id="expectedValue">
-                  <value class="variable">
-                    <path element="leadCompany"/>
-                  </value>
+                <argument id="resultScope">
+                  <value class="value" valueClass="string">Test</value>
                 </argument>
                 <argument id="fieldAssertions">
-                  <value class="valueList" mutable="Mutable"/>
+                  <value class="valueList" mutable="Mutable">
+                    <uiFieldAssertion resultName="Company">
+                      <fieldLocator uri="ui:locator?name=Company"/>
+                      <attributeAssertions>
+                        <uiAttributeAssertion attributeName="value" comparisonType="EqualTo">
+                          <value class="variable">
+                            <path element="leadCompany"/>
+                          </value>
+                        </uiAttributeAssertion>
+                      </attributeAssertions>
+                    </uiFieldAssertion>
+                  </value>
+                </argument>
+                <argument id="captureAfter">
+                  <value class="value" valueClass="boolean">false</value>
                 </argument>
                 <argument id="columnAssertions">
                   <value class="valueList" mutable="Mutable"/>
                 </argument>
                 <argument id="pageAssertions">
                   <value class="valueList" mutable="Mutable"/>
-                </argument>
-                <argument id="resultScope">
-                  <value class="value" valueClass="string">Test</value>
-                </argument>
-                <argument id="captureAfter">
-                  <value class="value" valueClass="boolean">false</value>
                 </argument>
                 <argument id="beforeWait"/>
                 <argument id="autoRetry"/>

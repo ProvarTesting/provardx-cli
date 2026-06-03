@@ -808,6 +808,137 @@ describe('validateTestCase', () => {
     });
   });
 
+  // PDX-507: a UiAssert field assertion must be nested inside
+  // fieldAssertions/uiFieldAssertion (bare <fieldLocator uri/>). The flat shape
+  // (top-level fieldLocator/attributeName/comparisonType/expectedValue args) runs
+  // green from the CLI but renders the IDE Result Assertions tab blank. Contract
+  // confirmed against the real corpus (AllPOCProjects): 0/3,778 UiAssert steps
+  // use a flat fieldLocator argument.
+  describe('UI-ASSERT-STRUCTURE-001', () => {
+    // REPRODUCE: the exact broken Cox Demo flat shape. On pre-fix code the rule
+    // did not exist, so provar_testcase_validate did NOT flag this shape and this
+    // test's assertion therefore FAILS on main; it PASSES once the rule is added.
+    it('errors when UiAssert carries a flat fieldLocator argument (Cox Demo shape)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert Priority error" testItemId="1">
+      <arguments>
+        <argument id="resultName">
+          <value class="value" valueClass="string">Values</value>
+        </argument>
+        <argument id="fieldLocator">
+          <value class="value" valueClass="string">ui:locator?name=Priority</value>
+        </argument>
+        <argument id="attributeName">
+          <value class="value" valueClass="string">error</value>
+        </argument>
+        <argument id="comparisonType">
+          <value class="value" valueClass="string">Contains</value>
+        </argument>
+        <argument id="expectedValue">
+          <value class="value" valueClass="string">Priority must be set</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Expected UI-ASSERT-STRUCTURE-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(
+        issue.message.includes('fieldAssertions') || issue.message.includes('uiFieldAssertion'),
+        `Message should mention the nested structure: ${issue.message}`
+      );
+    });
+
+    // CLEARED: the corpus-confirmed nested form must pass with no false positive.
+    it('does not fire for the nested uiFieldAssertion structure', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert Name" testItemId="1">
+      <arguments>
+        <argument id="resultName">
+          <value class="value" valueClass="string">Values</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="fieldAssertions">
+          <value class="valueList" mutable="Mutable">
+            <uiFieldAssertion resultName="Name">
+              <fieldLocator uri="ui:locator?name=Name&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DAccount%26field%3DName"/>
+              <attributeAssertions>
+                <uiAttributeAssertion attributeName="value" comparisonType="EqualTo">
+                  <value class="value" valueClass="string">Test</value>
+                </uiAttributeAssertion>
+              </attributeAssertions>
+            </uiFieldAssertion>
+          </value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+        <argument id="columnAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="pageAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="beforeWait"/>
+        <argument id="autoRetry"/>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'UI-ASSERT-STRUCTURE-001 should not fire for the nested structure'
+      );
+    });
+
+    // CLEARED (anchored to the real fixture): the corrected Contact_Lead_nested
+    // fixture uses the nested form and must pass with no false positive.
+    it('does not fire for the Contact_Lead_nested.testcase fixture', () => {
+      const fixturePath = path.resolve(process.cwd(), 'test', 'fixtures', 'testcases', 'Contact_Lead_nested.testcase');
+      const xml = fs.readFileSync(fixturePath, 'utf-8');
+      const r = validateTestCase(xml);
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Nested fixture should not trigger UI-ASSERT-STRUCTURE-001'
+      );
+    });
+
+    it('does not fire for a non-UiAssert step with a fieldLocator-like argument', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Save"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'UI-ASSERT-STRUCTURE-001 must only apply to UiAssert steps'
+      );
+    });
+  });
+
   describe('SETVALUES-STRUCTURE-001', () => {
     it('errors when SetValues values argument uses class="value" (plain string)', () => {
       const r = validateTestCase(

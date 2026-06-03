@@ -610,6 +610,94 @@ function buildSetValuesXml(attributes: Record<string, string>, baseIndent: strin
   );
 }
 
+// PDX-507: derive the field name for a uiFieldAssertion from a locator URI's
+// `name=` parameter (e.g. ui:locator?name=LastName&binding=… → "LastName").
+function extractFieldName(uri: string): string {
+  const m = /[?&]name=([^&]*)/.exec(uri);
+  if (!m) return 'Field';
+  try {
+    return decodeURIComponent(m[1]) || 'Field';
+  } catch {
+    return m[1] || 'Field';
+  }
+}
+
+// PDX-507: UiAssert — assemble the nested fieldAssertions / uiFieldAssertion
+// structure the Provar IDE Result Assertions tab binds from. The generator
+// previously emitted the flat shape (top-level fieldLocator / attributeName /
+// comparisonType / expectedValue arguments), which runs green from the CLI but
+// renders the Result Assertions tab blank in the IDE. Shape confirmed against
+// the real test corpus (AllPOCProjects): 3,743/3,778 UiAssert steps use this
+// nested form, with a BARE <fieldLocator uri="…"/> element (never class="uiLocator"
+// — see best-practice rule UI-ASSERT-FIELDLOCATOR-002) and no `assertionType`.
+// Only a `fieldLocator` attribute triggers the nested form; a UiAssert that
+// carries a plain `locator` argument keeps the documented locator→uiLocator
+// contract via the flat fallback (buildArgumentValue dispatches it). When no
+// fieldLocator is supplied the step is not a field assertion, so fall back to
+// flat argument emission and leave other UiAssert shapes untouched.
+function buildUiAssertXml(attributes: Record<string, string>, baseIndent: string, apiId: string): string {
+  const a = attributes;
+  const fieldLocator = a['fieldLocator'] ?? '';
+  if (!fieldLocator) return buildArgumentsXml(attributes, baseIndent, apiId);
+
+  const i = (n: number): string => baseIndent + '  '.repeat(n);
+  const resultName = a['resultName'] ?? 'Values';
+  const resultScope = a['resultScope'] ?? 'Test';
+  const captureAfter = a['captureAfter'] ?? 'false';
+  const attributeName = a['attributeName'] ?? 'value';
+  const comparisonType = a['comparisonType'] ?? 'EqualTo';
+  const fieldName = extractFieldName(fieldLocator);
+  const expected = a['expectedValue'];
+
+  // resultName / resultScope / captureAfter are control-plane literals that the
+  // real corpus ALWAYS emits as valueClass="string" — including captureAfter
+  // ("true"/"false"), which is intentionally NOT valueClass="boolean" here.
+  // Routing these through inferSalesforceValueClass would diverge from the
+  // corpus (it would infer boolean), so they are emitted as string literals.
+  const strVal = (v: string): string => `<value class="value" valueClass="string">${escapeXmlContent(v)}</value>`;
+
+  // uiAttributeAssertion — self-closing when there is no expected value. This is
+  // a real corpus form (e.g. ADP_POV "UI Assert - Date Empty" emits
+  // <uiAttributeAssertion attributeName="value" comparisonType="EqualTo"/>);
+  // otherwise it carries a typed <value> child built via buildArgumentValue so
+  // {Var} expands to class="variable".
+  const attrOpen = `${i(5)}<uiAttributeAssertion attributeName="${escapeXmlAttr(
+    attributeName
+  )}" comparisonType="${escapeXmlAttr(comparisonType)}"`;
+  const attrAssertion =
+    expected != null && expected !== ''
+      ? `${attrOpen}>\n${buildArgumentValue('expectedValue', expected, i(6), true)}\n${i(5)}</uiAttributeAssertion>`
+      : `${attrOpen}/>`;
+
+  const fieldAssertion =
+    `${i(4)}<uiFieldAssertion resultName="${escapeXmlAttr(fieldName)}">\n` +
+    `${i(5)}<fieldLocator uri="${escapeXmlAttr(fieldLocator)}"/>\n` +
+    `${i(5)}<attributeAssertions>\n` +
+    `${attrAssertion}\n` +
+    `${i(5)}</attributeAssertions>\n` +
+    `${i(4)}</uiFieldAssertion>`;
+
+  return (
+    `\n${i(0)}<arguments>\n` +
+    `${i(0)}<argument id="resultName">\n${i(1)}${strVal(resultName)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="resultScope">\n${i(1)}${strVal(resultScope)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="fieldAssertions">\n` +
+    `${i(1)}<value class="valueList" mutable="Mutable">\n` +
+    `${fieldAssertion}\n` +
+    `${i(1)}</value>\n` +
+    `${i(0)}</argument>\n` +
+    `${i(0)}<argument id="captureAfter">\n${i(1)}${strVal(captureAfter)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="columnAssertions">\n${i(1)}<value class="valueList" mutable="Mutable"/>\n${i(
+      0
+    )}</argument>\n` +
+    `${i(0)}<argument id="pageAssertions">\n${i(1)}<value class="valueList" mutable="Mutable"/>\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="beforeWait"/>\n` +
+    `${i(0)}<argument id="autoRetry"/>\n` +
+    `${i(0)}</arguments>\n` +
+    `${baseIndent.slice(0, -2)}`
+  );
+}
+
 function buildFlatStepXml(
   step: { api_id: string; name: string; attributes: Record<string, string> },
   testItemId: number,
@@ -638,9 +726,15 @@ function buildStepXmlWithChildren(
   const resolvedApiId = resolveApiId(step.api_id);
   const baseIndent = indent + '  ';
   // Use SetValues structure for any SetValues API (string-match mirrors the validator).
-  const argumentsXml = resolvedApiId.includes('SetValues')
-    ? buildSetValuesXml(step.attributes, baseIndent)
-    : buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
+  // PDX-507: UiAssert uses the nested fieldAssertions/uiFieldAssertion structure.
+  let argumentsXml: string;
+  if (resolvedApiId.includes('SetValues')) {
+    argumentsXml = buildSetValuesXml(step.attributes, baseIndent);
+  } else if (resolvedApiId.endsWith('.UiAssert') || resolvedApiId === 'UiAssert') {
+    argumentsXml = buildUiAssertXml(step.attributes, baseIndent, resolvedApiId);
+  } else {
+    argumentsXml = buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
+  }
 
   const hasClauses = substepsTestItemId !== undefined;
   const open = `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}" name="${escapeXmlAttr(
