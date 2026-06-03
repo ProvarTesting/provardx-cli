@@ -1092,44 +1092,126 @@ function validateNitroxVariantArgRequired(tc: XmlNode, rule: BPRule): BPViolatio
 }
 
 /**
- * mustContainArgument — every apiCall whose apiId matches `check.apiId` must carry
- * a populated `<argument id="check.argument">`. Mirrors the Quality Hub backend
- * `mustContainArgument` check: for the targeted step types a required argument
- * that is absent (or an empty self-closing `<argument/>` with no `<value>`) is a
- * load/exec-blocking defect. Uses the same presence test as the NitroX
- * required-argument validators (`argumentHasValue`) so semantics never drift.
- *
- * apiId matching is exact, also accepting a trailing `:variant` suffix (the
- * NitroX convention) so a variant apiId is never silently skipped. Disabled
- * steps are ignored — they do not execute. One aggregated violation per rule,
- * with `count` = number of offending steps (scored via log2 like its siblings).
+ * Value `class` attributes that, when present on a condition/expression argument,
+ * are themselves meaningful content — comparison and boolean-logic operators that
+ * Provar emits for `If`/`DoWhile`/`WaitFor` conditions (e.g. `{Count(Rows) > 0}`
+ * is stored as `<value class="gt">`). Mirrors the backend operator allow-list.
+ */
+const MEANINGFUL_VALUE_OPERATOR_CLASSES: ReadonlySet<string> = new Set([
+  'gt',
+  'lt',
+  'eq',
+  'ne',
+  'ge',
+  'le',
+  'and',
+  'or',
+  'not',
+]);
+
+/**
+ * True when an `<argument>` carries a *meaningful* value, mirroring the Quality
+ * Hub `MustContainArgumentValidator` content checks exactly. A `variable` value
+ * counts only if it references a `<path>` (or has non-empty text) — a bare
+ * `<value class="variable"/>` is effectively empty; `funcCall` and the comparison
+ * / logic operator classes always count; `compound` counts only if `<parts>` has
+ * children; any other (simple) value counts only if it has non-empty text. An
+ * `<argument>` with no `<value>` child, or an empty `<value/>`, is NOT meaningful
+ * and is treated as a missing required argument.
+ */
+function argumentHasMeaningfulValue(arg: XmlNode): boolean {
+  for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
+    if (value == null) continue;
+    if (typeof value === 'string') {
+      if (value.trim().length > 0) return true;
+      continue;
+    }
+    if (typeof value !== 'object') continue;
+    const v = value;
+    const vClass = (v['@_class'] as string | undefined) ?? '';
+    const text = ((v['#text'] as string | undefined) ?? '').trim();
+
+    if (vClass === 'variable') {
+      if (v['path'] != null || text.length > 0) return true;
+      continue; // bare <value class="variable"/> — not meaningful
+    }
+    if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
+    if (vClass === 'compound') {
+      const parts = v['parts'];
+      if (parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_'))) return true;
+      continue;
+    }
+    if (text.length > 0) return true;
+  }
+  return false;
+}
+
+/** Find an `<argument id=…>` for a call, tolerating both the `<arguments>` wrapper and direct children. */
+function findArgumentById(call: XmlNode, argId: string): XmlNode | undefined {
+  return getCallArguments(call).find((a) => a['@_id'] === argId) ?? getArguments(call).find((a) => a['@_id'] === argId);
+}
+
+/** Human-readable step label for a violation message: `'<title|name>' (testItemId=N)`. */
+function stepLabel(call: XmlNode): string {
+  const label = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+  const tid = call['@_testItemId'] as string | undefined;
+  return `'${label}'${tid ? ` (testItemId=${tid})` : ''}`;
+}
+
+/**
+ * True when `call` satisfies a `mustContainArgument` requirement — either the
+ * argument is present with a meaningful value, or (for `If`/`DoWhile` conditions)
+ * the legacy condition-in-title format is used.
+ */
+function callSatisfiesRequiredArg(call: XmlNode, requiredArg: string, conditionInTitleAllowed: boolean): boolean {
+  const arg = findArgumentById(call, requiredArg);
+  if (arg && argumentHasMeaningfulValue(arg)) return true;
+  if (!arg && conditionInTitleAllowed) {
+    const title = (call['@_title'] as string | undefined) ?? '';
+    if (title.includes('{') && title.includes('}')) return true; // legacy condition-in-title format
+  }
+  return false;
+}
+
+/**
+ * mustContainArgument — every apiCall whose apiId equals `check.apiId` must carry a
+ * populated `<argument id="check.argument">`. Faithful TypeScript port of the
+ * Quality Hub `MustContainArgumentValidator`, so the local (offline) result and
+ * the back-end agree: present-AND-non-empty semantics via
+ * {@link argumentHasMeaningfulValue} (an absent argument OR an empty
+ * `<argument/>`/`<value/>` is a violation); exact apiId match (no substring /
+ * variant widening); the legacy exception where `If`/`DoWhile` may carry the
+ * condition in the step `title` (`If: {expr}`) instead of a `condition` argument;
+ * disabled steps are NOT skipped (a missing required argument is load/exec
+ * blocking regardless of the disabled flag); and one violation per rule (the
+ * back-end returns the first offender), so the weighted-deduction score stays in
+ * parity with the Lambda. The message still names every offending step without
+ * inflating `count`.
  */
 function validateMustContainArgument(tc: XmlNode, rule: BPRule): BPViolation | null {
   const targetApiId = (rule.check['apiId'] as string | undefined) ?? '';
   const requiredArg = (rule.check['argument'] as string | undefined) ?? '';
   if (!targetApiId || !requiredArg) return null;
 
+  const conditionInTitleAllowed =
+    requiredArg === 'condition' &&
+    (targetApiId === 'com.provar.plugins.bundled.apis.If' ||
+      targetApiId === 'com.provar.plugins.bundled.apis.control.DoWhile');
+
   const offending: string[] = [];
   for (const call of getAllApiCalls(tc)) {
-    const apiId = call['@_apiId'] as string | undefined;
-    if (!apiId) continue;
-    if (apiId !== targetApiId && !apiId.startsWith(`${targetApiId}:`)) continue;
-    if (isDisabledCall(call)) continue;
-
-    const arg = getCallArguments(call).find((a) => a['@_id'] === requiredArg);
-    if (arg && argumentHasValue(arg)) continue;
-
-    const label = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
-    const tid = call['@_testItemId'] as string | undefined;
-    offending.push(`'${label}'${tid ? ` (testItemId=${tid})` : ''}`);
+    if (call['@_apiId'] !== targetApiId) continue;
+    if (callSatisfiesRequiredArg(call, requiredArg, conditionInTitleAllowed)) continue;
+    offending.push(stepLabel(call));
   }
 
   if (!offending.length) return null;
-  let msg = `${offending.length} step(s) missing required '${requiredArg}' argument: ${offending
-    .slice(0, 2)
-    .join(', ')}`;
+  const apiName = targetApiId.split('.').pop() ?? targetApiId;
+  let msg = `${apiName} step missing required '${requiredArg}' argument: ${offending.slice(0, 2).join(', ')}`;
   if (offending.length > 2) msg += ` (and ${offending.length - 2} more)`;
-  return makeViolation(rule, msg, offending.length);
+  // Intentionally no `count`: the back-end reports a single violation per rule, so
+  // omitting count keeps the weighted-deduction score in parity with the Lambda.
+  return makeViolation(rule, msg);
 }
 
 // ── Validator dispatch map ────────────────────────────────────────────────────

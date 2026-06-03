@@ -632,22 +632,77 @@ ${stepsXml}
   // ASSERT-COMPARISON-001 — AssertValues must have a 'comparisonType' argument.
   const ASSERT_API = 'com.provar.plugins.bundled.apis.AssertValues';
 
-  it('aggregates multiple offending steps into one violation with a count', () => {
+  it('emits a single violation per rule for multiple offenders and does not inflate count (score parity)', () => {
+    // The Quality Hub back-end returns one violation per rule; omitting `count`
+    // keeps the weighted-deduction score in parity with the Lambda.
     const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${ASSERT_API}" name="Assert A" testItemId="1"/>
     <apiCall guid="${GUID_MCA_S2}" apiId="${ASSERT_API}" name="Assert B" testItemId="2"/>`);
-    const v = find(runBestPractices(xml).violations, 'ASSERT-COMPARISON-001');
-    assert.ok(v, 'Expected ASSERT-COMPARISON-001 to fire');
-    assert.equal(v?.count, 2, 'Expected count to reflect both offending AssertValues steps');
+    const matches = runBestPractices(xml).violations.filter((v) => v.rule_id === 'ASSERT-COMPARISON-001');
+    assert.equal(matches.length, 1, 'Expected exactly one ASSERT-COMPARISON-001 violation');
+    assert.equal(matches[0].count, undefined, 'count must be unset so the score stays in parity with the back-end');
+    assert.ok(matches[0].message.includes('and 0 more') === false);
+    assert.ok(
+      matches[0].message.includes('testItemId=1') && matches[0].message.includes('testItemId=2'),
+      `Message should still name both offenders: ${matches[0].message}`
+    );
   });
 
-  it('does not fire for a disabled step missing the argument', () => {
+  it('fires for a disabled step missing the argument (back-end does not skip disabled steps)', () => {
     const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If disabled" testItemId="1">
       <tags>
         <string>disabled</string>
       </tags>
     </apiCall>`);
     const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
-    assert.ok(!v, `Disabled steps should be skipped, got: ${v?.message}`);
+    assert.ok(v, 'A missing required argument is load-blocking even on a disabled step (matches the back-end)');
+  });
+
+  it('fires when the argument is present but its <value> element is empty (present-and-non-empty semantics)', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If empty value" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="value" valueClass="string"/></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'Expected CONTROL-IF-001 to fire for an empty <value/> (mirrors the back-end)');
+  });
+
+  it('passes when the condition is a variable reference with a <path> child', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If variable" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="variable"><path element="isActive"/></value></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `A variable reference with a <path> is a valid condition, got: ${v?.message}`);
+  });
+
+  it('fires for a bare <value class="variable"/> with no path or text (effectively empty)', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If empty variable" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="variable"/></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'A bare variable value with no path/text is treated as missing (mirrors the back-end)');
+  });
+
+  it('passes when the condition is a comparison-operator value (e.g. class="gt")', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If gt" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="gt"><left/><right/></value></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `A comparison-operator condition is valid, got: ${v?.message}`);
+  });
+
+  it('passes an If with no condition argument when the condition is carried in the title (legacy format)', () => {
+    const xml = buildTc(
+      `    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="Legacy If" title="If: {Count(Rows) > 0}" testItemId="1"/>`
+    );
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `Legacy condition-in-title format should pass, got: ${v?.message}`);
   });
 
   it('does not fire for a different apiId that happens to lack the argument', () => {
