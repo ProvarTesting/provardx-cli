@@ -1077,6 +1077,60 @@ describe('provar_testcase_generate', () => {
       );
     });
 
+    // PDX-507: GENERATOR test — a UiAssert with flat field-assertion attributes
+    // must round-trip to the nested fieldAssertions/uiFieldAssertion structure
+    // (bare <fieldLocator uri/>, NO top-level fieldLocator argument, NO uiLocator)
+    // and validate clean. Shape confirmed against the AllPOCProjects corpus.
+    it('emits the nested fieldAssertions/uiFieldAssertion structure for UiAssert', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'UI Assert Structure Test',
+        steps: [
+          {
+            api_id: 'UiAssert',
+            name: 'Assert Priority error',
+            attributes: {
+              fieldLocator: 'ui:locator?name=Priority',
+              attributeName: 'error',
+              comparisonType: 'Contains',
+              expectedValue: 'Priority must be set',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<argument id="fieldAssertions">'), 'Expected fieldAssertions argument');
+      assert.ok(xml.includes('<uiFieldAssertion resultName="Priority">'), 'Expected nested uiFieldAssertion');
+      assert.ok(
+        xml.includes('<fieldLocator uri="ui:locator?name=Priority"/>'),
+        'Expected bare fieldLocator element with uri attribute'
+      );
+      assert.ok(
+        xml.includes('<uiAttributeAssertion attributeName="error" comparisonType="Contains">'),
+        'Expected uiAttributeAssertion with attributeName + comparisonType'
+      );
+      assert.ok(
+        xml.includes('<argument id="columnAssertions">') && xml.includes('<argument id="pageAssertions">'),
+        'Expected empty columnAssertions/pageAssertions containers'
+      );
+      // Must NOT emit the flat shape or wrap the locator in uiLocator.
+      assert.ok(!xml.includes('<argument id="fieldLocator">'), 'Must NOT emit a flat fieldLocator argument');
+      assert.ok(
+        !xml.includes('class="uiLocator" uri="ui:locator?name=Priority"'),
+        'Must NOT wrap the field locator in class="uiLocator"'
+      );
+
+      // Round-trip: generated XML must clear UI-ASSERT-STRUCTURE-001.
+      const v = validateTestCase(xml);
+      assert.ok(
+        !v.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Generated UiAssert must clear UI-ASSERT-STRUCTURE-001'
+      );
+    });
+
     it('uiTarget also applies inside UiWithScreen wrapper when target_uri is non-SF', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Non-SF With Target',
