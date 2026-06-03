@@ -630,11 +630,14 @@ function extractFieldName(uri: string): string {
 // the real test corpus (AllPOCProjects): 3,743/3,778 UiAssert steps use this
 // nested form, with a BARE <fieldLocator uri="…"/> element (never class="uiLocator"
 // — see best-practice rule UI-ASSERT-FIELDLOCATOR-002) and no `assertionType`.
-// When no fieldLocator is supplied the step is not a field assertion, so fall
-// back to flat argument emission and leave other UiAssert shapes untouched.
+// Only a `fieldLocator` attribute triggers the nested form; a UiAssert that
+// carries a plain `locator` argument keeps the documented locator→uiLocator
+// contract via the flat fallback (buildArgumentValue dispatches it). When no
+// fieldLocator is supplied the step is not a field assertion, so fall back to
+// flat argument emission and leave other UiAssert shapes untouched.
 function buildUiAssertXml(attributes: Record<string, string>, baseIndent: string, apiId: string): string {
   const a = attributes;
-  const fieldLocator = a['fieldLocator'] ?? a['locator'] ?? '';
+  const fieldLocator = a['fieldLocator'] ?? '';
   if (!fieldLocator) return buildArgumentsXml(attributes, baseIndent, apiId);
 
   const i = (n: number): string => baseIndent + '  '.repeat(n);
@@ -646,11 +649,18 @@ function buildUiAssertXml(attributes: Record<string, string>, baseIndent: string
   const fieldName = extractFieldName(fieldLocator);
   const expected = a['expectedValue'];
 
+  // resultName / resultScope / captureAfter are control-plane literals that the
+  // real corpus ALWAYS emits as valueClass="string" — including captureAfter
+  // ("true"/"false"), which is intentionally NOT valueClass="boolean" here.
+  // Routing these through inferSalesforceValueClass would diverge from the
+  // corpus (it would infer boolean), so they are emitted as string literals.
   const strVal = (v: string): string => `<value class="value" valueClass="string">${escapeXmlContent(v)}</value>`;
 
-  // uiAttributeAssertion — self-closing when there is no expected value
-  // (matches corpus "assert empty" forms); otherwise carries a typed <value>
-  // child built via buildArgumentValue so {Var} expands to class="variable".
+  // uiAttributeAssertion — self-closing when there is no expected value. This is
+  // a real corpus form (e.g. ADP_POV "UI Assert - Date Empty" emits
+  // <uiAttributeAssertion attributeName="value" comparisonType="EqualTo"/>);
+  // otherwise it carries a typed <value> child built via buildArgumentValue so
+  // {Var} expands to class="variable".
   const attrOpen = `${i(5)}<uiAttributeAssertion attributeName="${escapeXmlAttr(
     attributeName
   )}" comparisonType="${escapeXmlAttr(comparisonType)}"`;

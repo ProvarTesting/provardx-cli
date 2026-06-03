@@ -815,8 +815,9 @@ describe('validateTestCase', () => {
   // confirmed against the real corpus (AllPOCProjects): 0/3,778 UiAssert steps
   // use a flat fieldLocator argument.
   describe('UI-ASSERT-STRUCTURE-001', () => {
-    // REPRODUCE: the exact broken Cox Demo flat shape. FAILS against pre-fix
-    // validator code (rule did not exist) and PASSES after.
+    // REPRODUCE: the exact broken Cox Demo flat shape. On pre-fix code the rule
+    // did not exist, so provar_testcase_validate did NOT flag this shape and this
+    // test's assertion therefore FAILS on main; it PASSES once the rule is added.
     it('errors when UiAssert carries a flat fieldLocator argument (Cox Demo shape)', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?>
