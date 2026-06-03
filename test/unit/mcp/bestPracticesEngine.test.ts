@@ -573,3 +573,163 @@ describe('runBestPractices', () => {
     });
   });
 });
+
+// ── mustContainArgument validator (PDX-508) ──────────────────────────────────
+
+describe('mustContainArgument validator', () => {
+  const GUID_MCA_TC = '550e8400-e29b-41d4-a716-4466554409a0';
+  const GUID_MCA_S1 = '550e8400-e29b-41d4-a716-4466554409a1';
+  const GUID_MCA_S2 = '550e8400-e29b-41d4-a716-4466554409a2';
+
+  // Build a single-step (or multi-step) test case from raw <apiCall> XML.
+  function buildTc(stepsXml: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-mca" guid="${GUID_MCA_TC}" registryId="tc-mca" name="MCA Test">
+  <steps>
+${stepsXml}
+  </steps>
+</testCase>`;
+  }
+
+  function find(violations: BPViolation[], ruleId: string): BPViolation | undefined {
+    return violations.find((v) => v.rule_id === ruleId);
+  }
+
+  // CONTROL-IF-001 — If steps must have a 'condition' argument (critical / weight 8).
+  const IF_API = 'com.provar.plugins.bundled.apis.If';
+
+  it('fires when an If step is missing its required condition argument', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If no condition" testItemId="1"/>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'Expected CONTROL-IF-001 to fire for an If step with no condition');
+    assert.equal(v?.severity, 'critical');
+    assert.ok(v?.message.includes('condition'), `Message should name the argument: ${v?.message}`);
+    assert.ok(v?.message.includes('testItemId=1'), `Message should locate the step: ${v?.message}`);
+  });
+
+  it('passes when the If step has a populated condition argument', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If ok" testItemId="1">
+      <arguments>
+        <argument id="condition">
+          <value class="value" valueClass="string">{{count}} == 1</value>
+        </argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `Expected no CONTROL-IF-001 violation, got: ${v?.message}`);
+  });
+
+  it('fires when the required argument is present but an empty self-closing tag', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If empty" testItemId="1">
+      <arguments>
+        <argument id="condition"/>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'Expected CONTROL-IF-001 to fire when condition has no <value>');
+  });
+
+  // ASSERT-COMPARISON-001 — AssertValues must have a 'comparisonType' argument.
+  const ASSERT_API = 'com.provar.plugins.bundled.apis.AssertValues';
+
+  it('emits a single violation per rule for multiple offenders and does not inflate count (score parity)', () => {
+    // The Quality Hub back-end returns one violation per rule; omitting `count`
+    // keeps the weighted-deduction score in parity with the Lambda.
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${ASSERT_API}" name="Assert A" testItemId="1"/>
+    <apiCall guid="${GUID_MCA_S2}" apiId="${ASSERT_API}" name="Assert B" testItemId="2"/>`);
+    const matches = runBestPractices(xml).violations.filter((v) => v.rule_id === 'ASSERT-COMPARISON-001');
+    assert.equal(matches.length, 1, 'Expected exactly one ASSERT-COMPARISON-001 violation');
+    assert.equal(matches[0].count, undefined, 'count must be unset so the score stays in parity with the back-end');
+    assert.ok(matches[0].message.includes('and 0 more') === false);
+    assert.ok(
+      matches[0].message.includes('testItemId=1') && matches[0].message.includes('testItemId=2'),
+      `Message should still name both offenders: ${matches[0].message}`
+    );
+  });
+
+  it('fires for a disabled step missing the argument (back-end does not skip disabled steps)', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If disabled" testItemId="1">
+      <tags>
+        <string>disabled</string>
+      </tags>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'A missing required argument is load-blocking even on a disabled step (matches the back-end)');
+  });
+
+  it('fires when the argument is present but its <value> element is empty (present-and-non-empty semantics)', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If empty value" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="value" valueClass="string"/></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'Expected CONTROL-IF-001 to fire for an empty <value/> (mirrors the back-end)');
+  });
+
+  it('passes when the condition is a variable reference with a <path> child', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If variable" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="variable"><path element="isActive"/></value></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `A variable reference with a <path> is a valid condition, got: ${v?.message}`);
+  });
+
+  it('fires for a bare <value class="variable"/> with no path or text (effectively empty)', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If empty variable" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="variable"/></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'A bare variable value with no path/text is treated as missing (mirrors the back-end)');
+  });
+
+  it('passes when the condition is a comparison-operator value (e.g. class="gt")', () => {
+    const xml = buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="If gt" testItemId="1">
+      <arguments>
+        <argument id="condition"><value class="gt"><left/><right/></value></argument>
+      </arguments>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `A comparison-operator condition is valid, got: ${v?.message}`);
+  });
+
+  it('passes an If with no condition argument when the condition is carried in the title (legacy format)', () => {
+    const xml = buildTc(
+      `    <apiCall guid="${GUID_MCA_S1}" apiId="${IF_API}" name="Legacy If" title="If: {Count(Rows) > 0}" testItemId="1"/>`
+    );
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, `Legacy condition-in-title format should pass, got: ${v?.message}`);
+  });
+
+  it('does not fire for a different apiId that happens to lack the argument', () => {
+    const xml = buildTc(
+      `    <apiCall guid="${GUID_MCA_S1}" apiId="com.provar.plugins.bundled.apis.SwitchCase" name="Switch case" testItemId="1"/>`
+    );
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(!v, 'CONTROL-IF-001 must only apply to If steps');
+  });
+
+  it('checks steps nested inside control-flow containers (recursive)', () => {
+    const xml =
+      buildTc(`    <apiCall guid="${GUID_MCA_S1}" apiId="com.provar.plugins.bundled.apis.control.ForEach" name="Loop" testItemId="1">
+      <arguments>
+        <argument id="list"><value class="value" valueClass="string">{{rows}}</value></argument>
+        <argument id="valueName"><value class="value" valueClass="string">row</value></argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_MCA_S2}" apiId="${IF_API}" name="Nested If" testItemId="3"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>`);
+    const v = find(runBestPractices(xml).violations, 'CONTROL-IF-001');
+    assert.ok(v, 'Expected CONTROL-IF-001 to fire for an If nested inside a ForEach');
+    assert.ok(v?.message.includes('testItemId=3'), `Message should locate the nested step: ${v?.message}`);
+  });
+});
