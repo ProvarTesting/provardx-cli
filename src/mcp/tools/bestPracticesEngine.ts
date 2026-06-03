@@ -938,8 +938,8 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
     const requiredContainer = verdict.includes('UiWithRow')
       ? 'UiWithRow'
       : verdict.includes('UiWithScreen')
-        ? 'UiWithScreen'
-        : 'UiWithScreen';
+      ? 'UiWithScreen'
+      : 'UiWithScreen';
     const message =
       `${shortApi} '${title}' is ${verdict} - must be nested inside a parent ` +
       `${requiredContainer}'s <clauses><clause name="substeps"><steps> block${tidSuffix}`;
@@ -1091,6 +1091,47 @@ function validateNitroxVariantArgRequired(tc: XmlNode, rule: BPRule): BPViolatio
   return violations;
 }
 
+/**
+ * mustContainArgument — every apiCall whose apiId matches `check.apiId` must carry
+ * a populated `<argument id="check.argument">`. Mirrors the Quality Hub backend
+ * `mustContainArgument` check: for the targeted step types a required argument
+ * that is absent (or an empty self-closing `<argument/>` with no `<value>`) is a
+ * load/exec-blocking defect. Uses the same presence test as the NitroX
+ * required-argument validators (`argumentHasValue`) so semantics never drift.
+ *
+ * apiId matching is exact, also accepting a trailing `:variant` suffix (the
+ * NitroX convention) so a variant apiId is never silently skipped. Disabled
+ * steps are ignored — they do not execute. One aggregated violation per rule,
+ * with `count` = number of offending steps (scored via log2 like its siblings).
+ */
+function validateMustContainArgument(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const targetApiId = (rule.check['apiId'] as string | undefined) ?? '';
+  const requiredArg = (rule.check['argument'] as string | undefined) ?? '';
+  if (!targetApiId || !requiredArg) return null;
+
+  const offending: string[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId) continue;
+    if (apiId !== targetApiId && !apiId.startsWith(`${targetApiId}:`)) continue;
+    if (isDisabledCall(call)) continue;
+
+    const arg = getCallArguments(call).find((a) => a['@_id'] === requiredArg);
+    if (arg && argumentHasValue(arg)) continue;
+
+    const label = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+    const tid = call['@_testItemId'] as string | undefined;
+    offending.push(`'${label}'${tid ? ` (testItemId=${tid})` : ''}`);
+  }
+
+  if (!offending.length) return null;
+  let msg = `${offending.length} step(s) missing required '${requiredArg}' argument: ${offending
+    .slice(0, 2)
+    .join(', ')}`;
+  if (offending.length > 2) msg += ` (and ${offending.length - 2} more)`;
+  return makeViolation(rule, msg, offending.length);
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -1107,6 +1148,7 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   detectDuplicatesLiterals: validateDetectDuplicatesLiterals,
   uniqueResultNames: validateUniqueResultNames,
   uiWithScreenTarget: validateUiWithScreenTarget,
+  mustContainArgument: validateMustContainArgument,
   // 'regex' is dispatched separately (needs metadata)
   // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
 };
