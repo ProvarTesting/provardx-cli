@@ -1084,6 +1084,14 @@ Validates an XML test case for schema correctness (validity score) and best prac
   - **`APEX-CONNECT-ARGS-001`** (`apexConnectValidArguments`, critical) — an `ApexConnect` step using an argument id outside the 20-id whitelist (overridable per rule via `check.validArgumentIds`).
   - **`APEX-CONNECT-CONNID-001`** (`apexConnectConnectionIdValueClass`, critical) — an `ApexConnect` `connectionId` value that uses `valueClass="string"` (or any non-`id` class) instead of `valueClass="id"`; leave it empty if there is no GUID.
   - **`APEX-REUSE-CONN-001`** (`apexConnectReuseConnection`, major) — an `ApexConnect` `reuseConnectionName` argument that carries a value; it must be left blank.
+- **Runtime anti-pattern rules** — Major (`weight 5`) checks for XML that loads but silently misbehaves at runtime — typically variable references or expressions written as plain string literals. Like the rules above they run offline / in `local_fallback` and keep score parity with the Quality Hub back-end. Currently enforced:
+  - **`VAR-STRING-LITERAL-001`** (`varStringLiteral`) — an argument value is a whole-token `{VarName}` / `{Obj.Field}` stored as `class="value" valueClass="string"`; Provar passes the literal text instead of resolving the variable. Use `<value class="variable">`. (The interpolation-tolerant target args `sfUiTargetObjectId` / `sfUiTargetResultName` are exempt.) Emits one violation per offending value.
+  - **`ASSERT-STR-VAR-001`** (`assertValuesStringExpr`) — an `AssertValues` `expectedValue`/`actualValue` is a whole `{…}` string literal, so the assertion compares the literal text instead of the variable's value. Use `class="variable"`.
+  - **`SETVALUES-FUNC-STR-001`** (`setValuesFuncCallString`) — a `SetValues` assigned value embeds a `{Func(args)}` call as a string literal; Provar will not evaluate it. Use a `class="funcCall"` value.
+  - **`SETVALUES-ZERO-IDX-001`** (`setValuesZeroIndexString`) — a `SetValues` string-template expression uses a `[0]` index; Provar string templates are 1-indexed, so this is out-of-bounds at runtime. Use `[1]` for the first item (or the XML variable-path structure).
+  - **`CONN-DB-002`** (`dbConnectResultNameMismatch`) — a DB operation (`SqlQuery`/`DbRead`/`DbInsert`/`DbUpdate`/`DbDelete`) sets a `dbConnectionName` that does not match any `DbConnect` `resultName` in the test, so the open connection can't be found. Defers to `CONN-DB-001` when there is no `DbConnect` at all.
+  - **`UI-LOCATOR-BUTTON-CASING-001`** (`uiLocatorButtonCasing`) — a `UiDoAction` locator uses a wrong-cased standard-button name: `name=Cancel` (use lowercase `name=cancel`) or `name=Continue`/`name=continue` on the record-type screen (use `name=save&path=selectRecordType`).
+  - **`UI-LOCATOR-RECORDTYPE-001`** (`uiLocatorRecordTypeField`) — a `UiDoAction` Record Type picker locator uses `name=recordTypeId`/`name=recordType` instead of `name=RecordType` with `field=RecordTypeId` in the binding.
 
 **Error codes**
 
