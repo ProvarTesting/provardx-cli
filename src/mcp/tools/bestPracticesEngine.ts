@@ -617,7 +617,9 @@ function validateDetectDuplicatesLiterals(tc: XmlNode, rule: BPRule): BPViolatio
       if (!valElem || typeof valElem !== 'object') continue;
       if ((valElem['@_class'] as string | undefined) !== 'value') continue; // skip variables/compounds
 
-      const text = ((valElem['#text'] as string | undefined) ?? '').trim();
+      // Read through nodeText: fast-xml-parser yields a NUMBER for a numeric tag
+      // value (e.g. <value>123</value>), so a bare `.trim()` would throw.
+      const text = nodeText(valElem);
       if (!text || text.length <= 3) continue;
       if (DEFAULT_LITERAL_VALUES.has(text)) continue;
       if (text.toLowerCase() === 'true' || text.toLowerCase() === 'false') continue;
@@ -1125,7 +1127,8 @@ function argumentHasMeaningfulValue(arg: XmlNode): boolean {
     if (typeof value !== 'object') continue;
     const v = value;
     const vClass = (v['@_class'] as string | undefined) ?? '';
-    const text = ((v['#text'] as string | undefined) ?? '').trim();
+    // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
+    const text = nodeText(v);
 
     if (vClass === 'variable') {
       if (v['path'] != null || text.length > 0) return true;

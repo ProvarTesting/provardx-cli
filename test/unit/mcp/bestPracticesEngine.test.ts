@@ -1043,6 +1043,21 @@ ${stepsXml}
     </apiCall>`);
   }
 
+  // ── numeric tag-value robustness (no .trim crash) ──────────────────────────
+  describe('numeric <value> text does not crash the engine', () => {
+    it('runs cleanly when a value element holds a bare number (parsed as a JS number)', () => {
+      // fast-xml-parser yields a NUMBER for <value>123456</value>; a bare `.trim()`
+      // on that previously threw "(...).trim is not a function" and turned real
+      // validation into a VALIDATE_ERROR. nodeText coerces to string first.
+      const xml = buildArgStep('<value class="value" valueClass="decimal">123456</value>');
+      let result: ReturnType<typeof runBestPractices> | undefined;
+      assert.doesNotThrow(() => {
+        result = runBestPractices(xml);
+      }, 'numeric tag value must not crash runBestPractices');
+      assert.ok(result && typeof result.quality_score === 'number');
+    });
+  });
+
   // ── varStringLiteral (VAR-STRING-LITERAL-001) — multi-violation ─────────────
   describe('varStringLiteral — VAR-STRING-LITERAL-001', () => {
     it('fires for a {Var} stored as class="value" valueClass="string"', () => {
