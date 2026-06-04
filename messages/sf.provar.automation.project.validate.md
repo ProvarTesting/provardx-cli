@@ -15,7 +15,7 @@ Path to the Provar project root (directory containing the .testproject file). De
 
 # flags.quality-threshold.summary
 
-Minimum quality score (0-100) for a test case to pass validation (default: 80).
+Minimum quality score (0-100) for a test case to pass validation (default: 90).
 
 # flags.save-results.summary
 

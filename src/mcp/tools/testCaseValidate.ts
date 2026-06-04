@@ -25,6 +25,7 @@ import {
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { resolveQualityThreshold } from '../utils/qualityThreshold.js';
 import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
 import {
   generateRunId,
@@ -67,6 +68,9 @@ const UNREACHABLE_WARNING =
 const TC_VALIDATE_SUMMARY_FIELDS = [
   'requestId',
   'is_valid',
+  'status',
+  'quality_threshold',
+  'meets_quality_threshold',
   'validity_score',
   'quality_score',
   'validation_source',
@@ -78,6 +82,25 @@ const TC_VALIDATE_SUMMARY_FIELDS = [
 /** Storage dir for testcase diff runs (namespaced to avoid cross-tool baseline collisions). */
 function tcStorageDir(): string {
   return resolveValidationDir('testcase');
+}
+
+/** PDX-509 tri-state verdict: validity gate (criticals) + quality bar (threshold). */
+interface QualityVerdict {
+  status: 'invalid' | 'needs_improvement' | 'valid';
+  quality_threshold: number;
+  meets_quality_threshold: boolean;
+}
+
+/**
+ * Combine the validity gate and the quality bar into one verdict.
+ * `invalid` when a critical defect blocks loading; otherwise `needs_improvement`
+ * when the score is below the (resolved) threshold; otherwise `valid`.
+ */
+function deriveQualityVerdict(isValid: boolean, qualityScore: number, qualityThresholdArg?: number): QualityVerdict {
+  const quality_threshold = resolveQualityThreshold(qualityThresholdArg);
+  const meets_quality_threshold = qualityScore >= quality_threshold;
+  const status = !isValid ? 'invalid' : meets_quality_threshold ? 'valid' : 'needs_improvement';
+  return { status, quality_threshold, meets_quality_threshold };
 }
 
 /** Resolve validation result from QualityHub API or fall back to local. */
@@ -141,7 +164,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     {
       title: 'Validate Test Case',
       description: desc(
-        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
+        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Returns a tri-state status: 'invalid' (a critical defect — the test will not load in Provar, is_valid=false), 'needs_improvement' (loads but quality_score is below quality_threshold), or 'valid' (loads and clears the bar); meets_quality_threshold and the effective quality_threshold are also returned. Note: a critical best-practice violation (e.g. an unknown apiId) now gates is_valid the same way a structural error does — it surfaces in issues[] as an ERROR. major/minor/info best-practice violations affect quality_score (and the status verdict) only. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
         'Validate a Provar XML test case: structure, UUIDs, steps, quality scoring; run_id for baseline diff.'
       ),
       inputSchema: {
@@ -164,6 +187,17 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
               'enum summary|standard|full, optional; default standard'
             )
           ),
+        quality_threshold: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe(
+            desc(
+              'Minimum quality_score for status to be "valid" rather than "needs_improvement". Does NOT affect is_valid (only critical defects do). Precedence: this arg → PROVAR_MCP_QUALITY_THRESHOLD env → 90.',
+              'number 0–100, optional; default 90'
+            )
+          ),
         baseline_run_id: z
           .string()
           .optional()
@@ -175,7 +209,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           ),
       },
     },
-    async ({ content, xml, file_path, detail, baseline_run_id }) => {
+    async ({ content, xml, file_path, detail, baseline_run_id, quality_threshold }) => {
       const requestId = makeRequestId();
       log('info', 'provar_testcase_validate', { requestId, has_content: !!(content ?? xml), file_path });
 
@@ -208,7 +242,13 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const context = tcRunContext(file_path, source);
         const contextHash = computeContextHash('tc', context);
         const runId = generateRunId(context);
-        const bpViolations = (baseResult.best_practices_violations ?? []) as unknown as DiffableViolation[];
+        // A critical BP violation bridged into issues[] shares its rule_id with the
+        // surfaced issue (the issue/BP rule_id namespaces are disjoint), so drop it
+        // from the BP list here to avoid double-counting it in the baseline diff.
+        const issueRuleIds = new Set(baseResult.issues.map((i) => i.rule_id));
+        const bpViolations = (baseResult.best_practices_violations ?? []).filter(
+          (v) => !issueRuleIds.has(v.rule_id)
+        ) as unknown as DiffableViolation[];
         const currentViolations: DiffableViolation[] = [
           ...(baseResult.issues as unknown as DiffableViolation[]),
           ...bpViolations,
@@ -262,12 +302,18 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
         const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
 
+        // PDX-509 tri-state verdict. is_valid answers "will it load" (gated by
+        // criticals only); status layers the quality bar on top so an AI client
+        // gets an explicit "loads but fix before running" signal.
+        const verdict = deriveQualityVerdict(baseResult.is_valid, baseResult.quality_score, quality_threshold);
+
         const result = {
           requestId,
           run_id: runId,
           completeness_score,
           recommended_next_action,
           ...baseResult,
+          ...verdict,
         };
 
         const detailLevel = (detail ?? 'standard') as DetailLevel;
@@ -915,6 +961,69 @@ function validateComparisonTypes(tc: Record<string, unknown>, issues: Validation
   }
 }
 
+/**
+ * PDX-509 — validity bridge.
+ *
+ * Best-practice violations carry a `critical|major|minor|info` severity, but
+ * historically that severity only moved `quality_score` and never gated
+ * `is_valid`. Per the canonical taxonomy, `critical` means "Provar will not
+ * load/render the test case" — exactly the class of defect that MUST flip
+ * validity. This map records, for each `critical` BP rule, the hand-coded
+ * Layer-1 rule(s) that already cover the same defect; when one of those issues
+ * is already present we suppress the bridge so the failure is reported once,
+ * not twice.
+ *
+ * `major`/`minor`/`info` are intentionally NOT bridged — a major is a runtime
+ * ERROR that still loads, so it influences the quality score (and the
+ * `needs_improvement` verdict) without flipping `is_valid`.
+ */
+const BRIDGE_SUPPRESSED_BY: Record<string, readonly string[]> = {
+  'SCHEMA-ROOT-001': ['TC_003'],
+  'SCHEMA-STEPS-001': ['TC_020'],
+  'VALID-STEPS-001': ['TC_020'],
+  'SCHEMA-ID-001': ['TC_010', 'TC_011', 'TC_012'],
+  'VALID-GUID-001': ['TC_010', 'TC_011', 'TC_012'],
+  'STEP-ITEMID-001': ['TC_034', 'TC_035'],
+  // comparisonType enum BP rule (deferred) maps to the hand-coded Layer-1 check.
+  'COMPARISON-TYPE-ENUM-001': ['COMPARISON-TYPE-001'],
+};
+
+/** Map a Best-Practices `appliesTo` token to the issue `applies_to` vocabulary. */
+const BP_APPLIES_TO_ISSUE: Record<string, string> = {
+  TestCase: 'testCase',
+  Step: 'apiCall',
+  Argument: 'argument',
+  Document: 'document',
+};
+
+/**
+ * Surface every un-suppressed `critical` best-practice violation as an ERROR
+ * issue so it gates `is_valid`. Mutates `issues` in place. The BP list itself is
+ * left untouched, so `quality_score` (and its Lambda parity) is unchanged — a
+ * bridged critical deliberately appears in BOTH `issues[]` (validity) and
+ * `best_practices_violations[]` (scoring).
+ */
+function bridgeCriticalViolations(
+  bpViolations: Array<import('./bestPracticesEngine.js').BPViolation>,
+  issues: ValidationIssue[]
+): void {
+  const present = new Set(issues.map((i) => i.rule_id));
+  for (const v of bpViolations) {
+    if (v.severity !== 'critical') continue;
+    if (present.has(v.rule_id)) continue;
+    const suppressors = BRIDGE_SUPPRESSED_BY[v.rule_id];
+    if (suppressors && suppressors.some((id) => present.has(id))) continue;
+    issues.push({
+      rule_id: v.rule_id,
+      severity: 'ERROR',
+      message: v.message,
+      applies_to: BP_APPLIES_TO_ISSUE[v.applies_to[0] ?? ''] ?? 'testCase',
+      suggestion: v.recommendation,
+    });
+    present.add(v.rule_id);
+  }
+}
+
 function finalize(
   issues: ValidationIssue[],
   testCaseId: string | null,
@@ -923,14 +1032,18 @@ function finalize(
   xmlContent: string,
   testName?: string
 ): TestCaseValidationResult {
+  // Layer 2: quality score (best practices engine — same rules & formula as Quality Hub API)
+  const bp = runBestPractices(xmlContent, { testName });
+
+  // PDX-509: bridge critical BP violations into Layer-1 issues BEFORE counting,
+  // so a "won't load" best-practice defect flips is_valid like a structural one.
+  bridgeCriticalViolations(bp.violations, issues);
+
   const errorCount = issues.filter((i) => i.severity === 'ERROR').length;
   const warningCount = issues.filter((i) => i.severity === 'WARNING').length;
 
-  // Layer 1: validity score (schema compliance — existing rules)
+  // Layer 1: validity score (schema compliance — existing rules + bridged criticals)
   const validity_score = Math.max(0, 100 - errorCount * 20);
-
-  // Layer 2: quality score (best practices engine — same rules & formula as Quality Hub API)
-  const bp = runBestPractices(xmlContent, { testName });
 
   return {
     is_valid: errorCount === 0,
