@@ -1210,6 +1210,402 @@ function validateMustContainArgument(tc: XmlNode, rule: BPRule): BPViolation | n
   return makeViolation(rule, msg);
 }
 
+// ── Render / load-blocking validators (Tier 2) ───────────────────────────────
+// Faithful ports of the Quality Hub XMLRendering / InvalidValueClass /
+// DateValueClassFormat / ApexConnect* / SetValuesInvalidElements validators.
+// These check types map 1:1 to load-blocking rules (mostly `critical`) that
+// stop a test case rendering or loading in the Provar IDE. Each returns a
+// single BPViolation per rule (the back-end reports the first offender and sets
+// `count = len(offenders)` only when > 1), so the weighted-deduction score stays
+// in parity with the Lambda.
+
+const APEX_CONNECT_API_ID = 'com.provar.plugins.forcedotcom.core.testapis.ApexConnect';
+const SETVALUES_API_ID = 'com.provar.plugins.bundled.apis.control.SetValues';
+
+/**
+ * Recursively collect every element that appears under `tag` anywhere in the
+ * subtree (the fast-xml-parser equivalent of ElementTree's `.//tag`). Returns
+ * the raw values (object, string, or — for repeated tags — each array member);
+ * callers filter to objects when they need attributes. Mirrors the back-end's
+ * descendant search so nested-step double-counting matches exactly.
+ */
+function collectElementsByTag(node: unknown, tag: string): unknown[] {
+  const out: unknown[] = [];
+  function walk(n: unknown): void {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) {
+      for (const item of n) walk(item);
+      return;
+    }
+    for (const [k, v] of Object.entries(n as XmlNode)) {
+      if (k.startsWith('@_') || k === '#text') continue;
+      if (k === tag) for (const item of toArr(v)) out.push(item);
+      walk(v);
+    }
+  }
+  walk(node);
+  return out;
+}
+
+/** Object-form `<value>` descendants of a node (string-only text values are skipped). */
+function collectValueElements(node: unknown): XmlNode[] {
+  return collectElementsByTag(node, 'value').filter((v): v is XmlNode => v != null && typeof v === 'object');
+}
+
+/**
+ * Trimmed text of an element's `#text`, coercing to string first. fast-xml-parser
+ * parses numeric tag text to a `number` (e.g. an epoch-millis date), so a raw
+ * `.trim()` on `#text` would throw — always read element text through here.
+ */
+function nodeText(node: XmlNode): string {
+  const t = node['#text'];
+  return t == null ? '' : String(t).trim();
+}
+
+/** Step context used in load-blocking violation messages, mirroring the back-end defaults. */
+function stepContext(call: XmlNode): { apiName: string; title: string; tid: string } {
+  const apiId = (call['@_apiId'] as string | undefined) ?? '';
+  const apiName = apiId ? apiId.split('.').pop() ?? apiId : 'Unknown';
+  const title = (call['@_title'] as string | undefined) ?? apiName;
+  const tid = (call['@_testItemId'] as string | undefined) ?? 'N/A';
+  return { apiName, title, tid };
+}
+
+/** A `<value>` element paired with the id of the `<argument>` that encloses it (`unknown` if none). */
+interface StepValueElem {
+  value: XmlNode;
+  argId: string;
+}
+
+/**
+ * Every `<value>` element within an apiCall, tagged with its parent `<argument id>`.
+ * Replicates the back-end's "find the first enclosing argument" lookup so violation
+ * messages name the right argument. Values not inside any argument get `unknown`.
+ */
+function getStepValueElements(call: XmlNode): StepValueElem[] {
+  const argOf = new Map<XmlNode, string>();
+  for (const arg of collectElementsByTag(call, 'argument')) {
+    if (!arg || typeof arg !== 'object') continue;
+    const id = ((arg as XmlNode)['@_id'] as string | undefined) ?? 'unknown';
+    for (const v of collectValueElements(arg)) if (!argOf.has(v)) argOf.set(v, id);
+  }
+  return collectValueElements(call).map((value) => ({ value, argId: argOf.get(value) ?? 'unknown' }));
+}
+
+/** Trimmed text of an argument's direct `<value>` child (handles string and object forms). */
+function directValueText(arg: XmlNode): string {
+  const v = Array.isArray(arg['value']) ? (arg['value'] as unknown[])[0] : arg['value'];
+  if (v == null) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v !== 'object') return String(v).trim();
+  return nodeText(v as XmlNode);
+}
+
+// RENDER-CASE-001 — valid valueClass set, EXACTLY as the back-end declares it: the
+// mixed-case `funcCall`/`valueList` members never match a lowercased input, so
+// casing on those two is deliberately never flagged (parity-preserving quirk).
+const VALUE_CLASS_CASING_VALID: ReadonlySet<string> = new Set([
+  'string',
+  'boolean',
+  'decimal',
+  'integer',
+  'date',
+  'datetime',
+  'variable',
+  'compound',
+  'funcCall',
+  'value',
+  'valueList',
+  'gt',
+  'lt',
+  'eq',
+  'ne',
+  'ge',
+  'le',
+  'and',
+  'or',
+  'not',
+]);
+
+/** RENDER-CASE-001 — a known valueClass spelled with wrong case (e.g. `Boolean` → `boolean`). */
+function validateValueClassCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ valueClass: string; expected: string }> = [];
+  for (const v of collectValueElements(tc)) {
+    const vc = v['@_valueClass'] as string | undefined;
+    if (!vc) continue;
+    const lower = vc.toLowerCase();
+    if (VALUE_CLASS_CASING_VALID.has(lower) && vc !== lower) offenders.push({ valueClass: vc, expected: lower });
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  const reported = Math.min(offenders.length, MAX);
+  let msg = offenders
+    .slice(0, 3)
+    .map((o) => `valueClass='${o.valueClass}' should be '${o.expected}'`)
+    .join('; ');
+  if (reported > 3) msg += ` (+${reported - 3} more)`;
+  if (offenders.length > MAX) msg += ` (total: ${offenders.length})`;
+  return makeViolation(rule, msg, reported);
+}
+
+const BOOLEAN_CASING_BAD: ReadonlySet<string> = new Set(['True', 'False', 'TRUE', 'FALSE']);
+
+/** RENDER-BOOL-001 — `<value valueClass="boolean">` text must be lowercase `true`/`false`. */
+function validateBooleanCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: string[] = [];
+  for (const v of collectValueElements(tc)) {
+    if (v['@_valueClass'] !== 'boolean') continue;
+    const text = nodeText(v);
+    if (BOOLEAN_CASING_BAD.has(text)) offenders.push(text);
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  const reported = Math.min(offenders.length, MAX);
+  let msg = `Boolean values must be lowercase: ${offenders
+    .slice(0, 3)
+    .map((t) => `'${t}' should be '${t.toLowerCase()}'`)
+    .join('; ')}`;
+  if (reported > 3) msg += ` (+${reported - 3} more)`;
+  if (offenders.length > MAX) msg += ` (total: ${offenders.length})`;
+  return makeViolation(rule, msg, reported);
+}
+
+// VALUE-CLASS-001 — the back-end HARDCODES these sets and ignores the rule JSON's
+// validClasses list, so we mirror the hardcoded sets (note `invalid` and
+// `namedValues` are accepted, and `dateTime` is camelCase) to stay score-exact.
+const VALID_VALUE_ELEMENT_CLASSES: ReadonlySet<string> = new Set([
+  'value',
+  'variable',
+  'compound',
+  'funcCall',
+  'valueList',
+  'namedValues',
+  'uiWait',
+  'uiLocator',
+  'uiTarget',
+  'uiInteraction',
+  'restTarget',
+  'excelTarget',
+  'csvTarget',
+  'url',
+  'template',
+  'add',
+  'sub',
+  'mult',
+  'div',
+  'eq',
+  'ne',
+  'gt',
+  'lt',
+  'ge',
+  'le',
+  'and',
+  'or',
+  'match',
+  'invalid',
+]);
+const VALID_VALUE_CLASS_TYPES: ReadonlySet<string> = new Set([
+  'string',
+  'boolean',
+  'decimal',
+  'id',
+  'date',
+  'dateTime',
+]);
+
+/** Classify one `<value>` for VALUE-CLASS-001, or `null` when it is valid / unattributed. */
+function classifyInvalidValueClass(v: XmlNode): { kind: 'class' | 'valueClass'; bad: string } | null {
+  const cls = (v['@_class'] as string | undefined) ?? '';
+  if (!cls) return null;
+  if (!VALID_VALUE_ELEMENT_CLASSES.has(cls)) return { kind: 'class', bad: cls };
+  const vc = (v['@_valueClass'] as string | undefined) ?? '';
+  if (cls === 'value' && vc && !VALID_VALUE_CLASS_TYPES.has(vc)) return { kind: 'valueClass', bad: vc };
+  return null;
+}
+
+/** VALUE-CLASS-001 — `<value class="…">` must use a valid class (and valueClass when class="value"). */
+function validateInvalidValueClass(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{
+    argId: string;
+    ctx: ReturnType<typeof stepContext>;
+    kind: 'class' | 'valueClass';
+    bad: string;
+  }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value, argId } of getStepValueElements(call)) {
+      const c = classifyInvalidValueClass(value);
+      if (c) offenders.push({ argId, ctx, kind: c.kind, bad: c.bad });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    f.kind === 'class'
+      ? `Step '${f.ctx.title}' has invalid class="${f.bad}" in argument '${f.argId}'. Valid class values: value, ` +
+        'variable, compound, funcCall, valueList, uiWait, uiLocator, uiTarget, etc. For empty arguments, omit ' +
+        `<value> entirely: <argument id="${f.argId}"/> (testItemId=${f.ctx.tid})`
+      : `Step '${f.ctx.title}' has invalid valueClass="${f.bad}" in argument '${f.argId}'. Valid valueClass values: ` +
+        `string, boolean, decimal, id, date, dateTime. (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** RENDER-DATE-VALUECLASS-001 — `valueClass="date"|"dateTime"` text must be an epoch-millis integer. */
+function validateDateValueClassFormat(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ argId: string; ctx: ReturnType<typeof stepContext>; vc: string; text: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value, argId } of getStepValueElements(call)) {
+      if (value['@_class'] !== 'value') continue;
+      const vc = (value['@_valueClass'] as string | undefined) ?? '';
+      if (vc !== 'date' && vc !== 'dateTime') continue;
+      const text = nodeText(value);
+      if (!text || /^\d+$/.test(text)) continue;
+      offenders.push({ argId, ctx, vc, text: text.slice(0, 50) });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `Step '${f.ctx.title}' uses valueClass='${f.vc}' with invalid string value '${f.text}' in argument ` +
+    `'${f.argId}'. valueClass='${f.vc}' requires an epoch timestamp (milliseconds), not a date string. This ` +
+    `causes test case loading failures in Provar. (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** Return the ApexConnect calls in a test case (exact apiId match, nested-aware). */
+function getApexConnectCalls(tc: XmlNode): XmlNode[] {
+  return getAllApiCalls(tc).filter((c) => c['@_apiId'] === APEX_CONNECT_API_ID);
+}
+
+/** APEX-REUSE-CONN-001 — ApexConnect `reuseConnectionName` must be blank. */
+function validateApexConnectReuseConnection(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; value: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    const arg = getCallArguments(call).find((a) => a['@_id'] === 'reuseConnectionName');
+    if (!arg) continue;
+    const text = directValueText(arg);
+    if (text) offenders.push({ ctx: stepContext(call), value: text });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' has non-empty reuseConnectionName value '${f.value}'. The ` +
+    `reuseConnectionName argument should be left blank: <argument id="reuseConnectionName"/> (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+const APEX_CONNECT_VALID_ARGS_DEFAULT: readonly string[] = [
+  'connectionName',
+  'resultName',
+  'resultScope',
+  'uiApplicationName',
+  'quickUiLogin',
+  'closeAllPrimaryTabs',
+  'reuseConnectionName',
+  'alreadyOpenBehaviour',
+  'autoCleanup',
+  'cleanupConnectionName',
+  'logFileLocation',
+  'connectionId',
+  'enableObjectIdLogging',
+  'privateBrowsingMode',
+  'lightningMode',
+  'username',
+  'password',
+  'securityToken',
+  'environment',
+  'webBrowser',
+];
+
+/** APEX-CONNECT-ARGS-001 — every ApexConnect `<argument id>` must be in the valid whitelist. */
+function validateApexConnectValidArguments(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const validIds = new Set<string>(
+    (rule.check['validArgumentIds'] as string[] | undefined) ?? APEX_CONNECT_VALID_ARGS_DEFAULT
+  );
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; id: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    if (!call['arguments'] || typeof call['arguments'] !== 'object') continue;
+    for (const arg of getCallArguments(call)) {
+      const id = arg['@_id'] as string | undefined;
+      if (id && !validIds.has(id)) offenders.push({ ctx: stepContext(call), id });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' uses invalid argument ID(s): ${offenders.map((o) => o.id).join(', ')}. ` +
+    'Only the documented ApexConnect argument IDs are valid (connectionName, resultName, resultScope, …, ' +
+    'webBrowser). Leave unused arguments empty (e.g. <argument id="username"/>) rather than inventing IDs. ' +
+    `(testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** APEX-CONNECT-CONNID-001 — `connectionId` value must use `valueClass="id"`, not string/other. */
+function validateApexConnectConnectionIdValueClass(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; value: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    const arg = getCallArguments(call).find((a) => a['@_id'] === 'connectionId');
+    if (!arg) continue;
+    const ve = Array.isArray(arg['value']) ? (arg['value'] as unknown[])[0] : arg['value'];
+    if (!ve || typeof ve !== 'object') continue;
+    const v = ve as XmlNode;
+    const vc = (v['@_valueClass'] as string | undefined) ?? '';
+    if (v['@_class'] !== 'value' || !vc || vc === 'id') continue;
+    offenders.push({ ctx: stepContext(call), wrong: vc, value: nodeText(v) });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' uses incorrect valueClass='${f.wrong}' for connectionId argument. The ` +
+    "connectionId must use valueClass='id' with a GUID value, NOT valueClass='string'. Current value: " +
+    `'${f.value}'. If you have no specific connection GUID, leave it empty: <argument id="connectionId"/> ` +
+    `(testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** Tags found directly under a `<namedValues>` container that are not the allowed `namedValue`. */
+function namedValuesInvalidChildren(nv: XmlNode): string[] {
+  const bad: string[] = [];
+  for (const [k, v] of Object.entries(nv)) {
+    if (k.startsWith('@_') || k === '#text' || k === 'namedValue') continue;
+    const instances = toArr(v).length; // one entry per element instance (mirrors the back-end count)
+    for (let i = 0; i < instances; i++) bad.push(k);
+  }
+  return bad;
+}
+
+/** SETVALUES-INVALID-ELEMENT-001 — reject hallucinated `<namedValueSet>`/`<name>` and bad namedValues children. */
+function validateSetValuesInvalidElements(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const invalidElements = (rule.check['invalidElements'] as string[] | undefined) ?? ['namedValueSet', 'name'];
+  let count = 0;
+  let first: { ctx: ReturnType<typeof stepContext>; elem: string; context?: string } | null = null;
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    const ctx = stepContext(call);
+    for (const elem of invalidElements) {
+      if (collectElementsByTag(call, elem).length) {
+        count++;
+        first ??= { ctx, elem };
+      }
+    }
+    for (const nv of collectElementsByTag(call, 'namedValues')) {
+      if (!nv || typeof nv !== 'object') continue;
+      for (const childTag of namedValuesInvalidChildren(nv as XmlNode)) {
+        count++;
+        first ??= { ctx, elem: childTag, context: 'inside <namedValues>' };
+      }
+    }
+  }
+  if (!first) return null;
+  const ctxStr = first.context ? ` ${first.context}` : '';
+  const message =
+    `SetValues step '${first.ctx.title}' contains invalid element <${first.elem}>${ctxStr}. SetValues must use ` +
+    '<namedValues mutable="Mutable"> with <namedValue name="valuePath|value|valueScope"> children. Do not use ' +
+    `<namedValueSet> or <name> elements. (testItemId=${first.ctx.tid})`;
+  return makeViolation(rule, message, count);
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -1227,6 +1623,15 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   uniqueResultNames: validateUniqueResultNames,
   uiWithScreenTarget: validateUiWithScreenTarget,
   mustContainArgument: validateMustContainArgument,
+  // Tier 2 — render / load-blocking check types (ports of the QH load-blocking validators)
+  valueClassCasing: validateValueClassCasing,
+  booleanCasing: validateBooleanCasing,
+  invalidValueClass: validateInvalidValueClass,
+  dateValueClassFormat: validateDateValueClassFormat,
+  apexConnectReuseConnection: validateApexConnectReuseConnection,
+  apexConnectValidArguments: validateApexConnectValidArguments,
+  apexConnectConnectionIdValueClass: validateApexConnectConnectionIdValueClass,
+  setValuesInvalidElements: validateSetValuesInvalidElements,
   // 'regex' is dispatched separately (needs metadata)
   // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
 };
