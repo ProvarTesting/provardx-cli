@@ -783,12 +783,30 @@ ${stepsXml}
       assert.ok(!v, `Lowercase valueClass should pass, got: ${v?.message}`);
     });
 
-    it('does not fire for funcCall/valueList casing (back-end parity quirk: lowercased form is not in the valid set)', () => {
+    it('does not fire for class-attribute tokens used as a valueClass (e.g. FuncCall) — out of scope', () => {
+      // funcCall/valueList/variable/operators are `class="..."` values, never `valueClass`
+      // values, so they are not in the corpus-confirmed valueClass set and are not normalized.
       const v = find(
         runBestPractices(buildValueStep('<value class="value" valueClass="FuncCall">x</value>')).violations,
         'RENDER-CASE-001'
       );
-      assert.ok(!v, 'valueClass="FuncCall" must NOT fire — mirrors the back-end (funcCall.lower() is not in the set)');
+      assert.ok(!v, 'valueClass="FuncCall" must NOT fire — funcCall is a class value, not a valueClass');
+    });
+
+    it('normalizes valueClass="ID" → "id" (id is a real corpus valueClass)', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="ID">001x</value>')).violations,
+        'RENDER-CASE-001'
+      );
+      assert.ok(v, 'Expected RENDER-CASE-001 to fire for valueClass="ID"');
+      assert.ok(v?.message.includes("'id'"), `Message should suggest lowercase 'id': ${v?.message}`);
+    });
+
+    it('passes for camelCase dateTime and does not fire for already-correct id', () => {
+      const r = runBestPractices(
+        buildValueStep('<value class="value" valueClass="dateTime">1736899200000</value>')
+      ).violations.find((x) => x.rule_id === 'RENDER-CASE-001');
+      assert.ok(!r, 'valueClass="dateTime" is canonical and must pass');
     });
   });
 
@@ -1042,6 +1060,21 @@ ${stepsXml}
       </arguments>
     </apiCall>`);
   }
+
+  // ── numeric tag-value robustness (no .trim crash) ──────────────────────────
+  describe('numeric <value> text does not crash the engine', () => {
+    it('runs cleanly when a value element holds a bare number (parsed as a JS number)', () => {
+      // fast-xml-parser yields a NUMBER for <value>123456</value>; a bare `.trim()`
+      // on that previously threw "(...).trim is not a function" and turned real
+      // validation into a VALIDATE_ERROR. nodeText coerces to string first.
+      const xml = buildArgStep('<value class="value" valueClass="decimal">123456</value>');
+      let result: ReturnType<typeof runBestPractices> | undefined;
+      assert.doesNotThrow(() => {
+        result = runBestPractices(xml);
+      }, 'numeric tag value must not crash runBestPractices');
+      assert.ok(result && typeof result.quality_score === 'number');
+    });
+  });
 
   // ── varStringLiteral (VAR-STRING-LITERAL-001) — multi-violation ─────────────
   describe('varStringLiteral — VAR-STRING-LITERAL-001', () => {
