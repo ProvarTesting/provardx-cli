@@ -77,29 +77,46 @@ describe('validateTestCase', () => {
   });
 
   describe('testCase attribute rules', () => {
-    it('TC_010: flags missing id', () => {
+    it('TC_010: does NOT fire for a missing id — id is optional, guid is the identifier', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?><testCase guid="${GUID_TC}" registryId="r"><steps/></testCase>`
       );
       assert.ok(
-        r.issues.some((i) => i.rule_id === 'TC_010'),
-        'Expected TC_010'
+        !r.issues.some((i) => i.rule_id === 'TC_010'),
+        'A missing id must not be flagged (real Provar test cases routinely omit it)'
       );
     });
 
-    it('TC_010: flags non-"1" id (e.g. UUID used as id)', () => {
+    it('TC_010: flags a non-numeric id (e.g. UUID used as id)', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?><testCase id="${GUID_TC}" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
       );
       assert.ok(
         r.issues.some((i) => i.rule_id === 'TC_010'),
-        'Expected TC_010 for UUID used as id'
+        'Expected TC_010 for a non-numeric id'
       );
     });
 
-    it('TC_010: does not fire when id="1" (the correct literal)', () => {
+    it('TC_010: does not fire for id="0" — non-negative integers are valid (corpus uses 0)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?><testCase id="0" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
+      );
+      assert.ok(!r.issues.some((i) => i.rule_id === 'TC_010'), 'id="0" must be accepted');
+    });
+
+    it('TC_010: does not fire for a valid integer id (id="1")', () => {
       const r = validateTestCase(VALID_TC);
       assert.ok(!r.issues.some((i) => i.rule_id === 'TC_010'), 'TC_010 must not fire when id="1"');
+    });
+
+    it('TC_010: does not fire for a sequential project id (e.g. id="42") — ids are not literally "1"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?><testCase id="42" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'TC_010'),
+        'TC_010 must accept any non-negative-integer id (test case ids are project-unique sequential numbers)'
+      );
     });
 
     it('TC_011: flags missing guid', () => {
