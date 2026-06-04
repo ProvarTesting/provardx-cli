@@ -1051,7 +1051,11 @@ ${stepsXml}
         'VAR-STRING-LITERAL-001'
       );
       assert.ok(v, 'Expected VAR-STRING-LITERAL-001 to fire for {AccountId}');
-      assert.equal(v?.severity, 'major');
+      assert.equal(
+        v?.severity,
+        'major',
+        'a runtime execution error (the test still loads) — major, not minor/critical'
+      );
     });
 
     it('emits one violation per offending value (back-end returns a list)', () => {
@@ -1076,14 +1080,28 @@ ${stepsXml}
       assert.ok(!v, `A class="variable" reference should pass, got: ${v?.message}`);
     });
 
-    it('does not fire for the interpolation-tolerant args (sfUiTargetObjectId)', () => {
+    it('fires for UI-target args (sfUiTargetObjectId) — a bare {Var} is NOT interpolated there', () => {
+      // Field evidence: a literal {AccountId} in sfUiTargetObjectId lands in the
+      // URL as %7BAccountId%7D and the step hard-fails. The back-end exemption was
+      // wrong; we removed it locally, so the rule must now fire.
       const xml = buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${APEX_CREATE}" name="Create" testItemId="1">
       <arguments>
         <argument id="sfUiTargetObjectId"><value class="value" valueClass="string">{AccountId}</value></argument>
       </arguments>
     </apiCall>`);
       const v = find(runBestPractices(xml).violations, 'VAR-STRING-LITERAL-001');
-      assert.ok(!v, 'sfUiTargetObjectId tolerates {Var} interpolation');
+      assert.ok(v, 'sfUiTargetObjectId must flag a bare {Var} literal — it is not interpolated at runtime');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('still passes for binding-style {ns:key} expressions (the colon is excluded)', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${APEX_CREATE}" name="Create" testItemId="1">
+      <arguments>
+        <argument id="sfUiTargetObjectId"><value class="value" valueClass="string">{targetUrl:object}</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'VAR-STRING-LITERAL-001');
+      assert.ok(!v, 'binding-style {ns:key} is safe and must not be flagged');
     });
 
     it('does not fire when the surrounding text is more than a bare token', () => {

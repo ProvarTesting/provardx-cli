@@ -1327,6 +1327,12 @@ const VALUE_CLASS_CASING_VALID: ReadonlySet<string> = new Set([
   'not',
 ]);
 
+// Canonical Provar spelling for valueClasses whose correct form is NOT all-lowercase.
+// The corpus and RENDER-DATE-VALUECLASS-001 / VALUE-CLASS-001 all use camelCase `dateTime`,
+// so the lowercase-enforcement below must expect `dateTime`, not `datetime`. (The QH back-end
+// lowercases all classes — flag a matching correction there; PDX-509.)
+const VALUE_CLASS_CANONICAL_CASE: Record<string, string> = { datetime: 'dateTime' };
+
 /** RENDER-CASE-001 — a known valueClass spelled with wrong case (e.g. `Boolean` → `boolean`). */
 function validateValueClassCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
   const offenders: Array<{ valueClass: string; expected: string }> = [];
@@ -1334,7 +1340,9 @@ function validateValueClassCasing(tc: XmlNode, rule: BPRule): BPViolation | null
     const vc = v['@_valueClass'] as string | undefined;
     if (!vc) continue;
     const lower = vc.toLowerCase();
-    if (VALUE_CLASS_CASING_VALID.has(lower) && vc !== lower) offenders.push({ valueClass: vc, expected: lower });
+    if (!VALUE_CLASS_CASING_VALID.has(lower)) continue;
+    const expected = VALUE_CLASS_CANONICAL_CASE[lower] ?? lower;
+    if (vc !== expected) offenders.push({ valueClass: vc, expected });
   }
   if (!offenders.length) return null;
   const MAX = 5;
@@ -1668,23 +1676,35 @@ function resolvedArgText(call: XmlNode, argId: string): string {
   return nodeText(v);
 }
 
+// Matches a bare variable token only: `{Name}` or `{Obj.Field}`. The character
+// class `[\w.]` excludes `:`, so binding-style expressions such as
+// `{targetUrl:object}` never match — they are inherently safe and need no
+// argument-name exemption.
 const VAR_LITERAL_PATTERN = /^\{[\w.]+\}$/;
-const VAR_LITERAL_TOLERATED_ARGS: ReadonlySet<string> = new Set(['sfUiTargetObjectId', 'sfUiTargetResultName']);
 
 /**
  * VAR-STRING-LITERAL-001 — a `{Var}`/`{Obj.Field}` token stored as
- * `class="value" valueClass="string"` instead of `class="variable"`. Emits ONE
- * violation per offending value (the back-end returns a list), so score parity
- * is preserved; the two interpolation-tolerant target args are exempt.
+ * `class="value" valueClass="string"` instead of `class="variable"`. Provar does
+ * not resolve it at runtime, so the API silently receives the literal text. Emits
+ * ONE violation per offending value (the back-end returns a list).
+ *
+ * Local correction (PDX-508): the back-end exempts `sfUiTargetObjectId` /
+ * `sfUiTargetResultName` from this check, but field evidence shows a bare
+ * `{Variable}` in those UI-target args is NOT interpolated — it lands in the URL
+ * as `%7B…%7D` and the step hard-fails (a load/exec stopper, not a warning). We
+ * therefore do NOT exempt those args. Binding-style `{ns:key}` expressions stay
+ * safe because {@link VAR_LITERAL_PATTERN} already excludes them (the colon). A
+ * matching change is queued for the Quality Hub back-end so the score parity is
+ * restored once both ship.
  */
 function validateVarStringLiteral(tc: XmlNode, rule: BPRule): BPViolation[] {
   const violations: BPViolation[] = [];
   for (const call of getAllApiCalls(tc)) {
     const ctx = stepContext(call);
-    for (const { value, argId } of getStepValueElements(call)) {
+    for (const { value } of getStepValueElements(call)) {
       if (value['@_class'] !== 'value' || value['@_valueClass'] !== 'string') continue;
       const text = nodeText(value);
-      if (!VAR_LITERAL_PATTERN.test(text) || VAR_LITERAL_TOLERATED_ARGS.has(argId)) continue;
+      if (!VAR_LITERAL_PATTERN.test(text)) continue;
       violations.push(
         makeViolation(
           rule,

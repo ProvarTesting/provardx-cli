@@ -93,7 +93,7 @@ export interface HierarchyViolation {
 export interface TestCaseResult {
   name: string;
   level: 'test_case';
-  status: 'valid' | 'invalid' | 'error';
+  status: 'valid' | 'needs_improvement' | 'invalid' | 'error';
   quality_score: number;
   validity_score: number;
   is_valid: boolean;
@@ -137,6 +137,7 @@ export interface ProjectResult {
 export interface HierarchySummary {
   total_test_cases: number;
   test_cases_valid: number;
+  test_cases_needs_improvement: number;
   test_cases_invalid: number;
   test_cases_error: number;
   total_violations: number;
@@ -370,7 +371,10 @@ export function validateHierarchyTestCase(tc: TestCaseInput, qualityThreshold: n
   const xmlSource = tc.xml ?? tc.xml_content ?? '';
   try {
     const r = validateTestCase(xmlSource, tc.name);
-    const status = !r.is_valid ? 'invalid' : r.quality_score < qualityThreshold ? 'invalid' : 'valid';
+    // PDX-509 tri-state: criticals flip is_valid → 'invalid'; a loadable case
+    // below the quality bar is 'needs_improvement' (was previously collapsed to
+    // 'invalid'); at or above the bar is 'valid'.
+    const status = !r.is_valid ? 'invalid' : r.quality_score < qualityThreshold ? 'needs_improvement' : 'valid';
     return {
       name: tc.name,
       level: 'test_case',
@@ -1054,6 +1058,7 @@ export function buildHierarchySummary(result: SuiteResult | PlanResult | Project
   const stats: HierarchySummary = {
     total_test_cases: 0,
     test_cases_valid: 0,
+    test_cases_needs_improvement: 0,
     test_cases_invalid: 0,
     test_cases_error: 0,
     total_violations: 0,
@@ -1078,6 +1083,7 @@ export function buildHierarchySummary(result: SuiteResult | PlanResult | Project
     if (node.level === 'test_case') {
       stats.total_test_cases++;
       if (node.status === 'valid') stats.test_cases_valid++;
+      else if (node.status === 'needs_improvement') stats.test_cases_needs_improvement++;
       else if (node.status === 'invalid') stats.test_cases_invalid++;
       else stats.test_cases_error++;
       scores.push(node.quality_score);

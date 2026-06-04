@@ -226,9 +226,9 @@ const TOOL_DESCRIPTION = [
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
   'locator argument (UiDoAction/UiAssert/UiRead/UiFill): pass the URI value; emitted as class="uiLocator" uri="...".',
   'valueClass auto-detection: argument values are typed automatically before XML emission. ' +
-    'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "datetime"; ' +
+    'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "dateTime"; ' +
     '"true"/"false" → "boolean"; numeric string (e.g. "42", "-5", "3.14") → "decimal"; otherwise "string". ' +
-    'Pass dates / booleans / numbers in those formats — Provar runtime silently discards date fields emitted as valueClass="string". ' +
+    'Pass dates in ISO-8601 — the generator converts them to the epoch-millisecond value Provar requires (a date/dateTime field emitted as an ISO string, or as valueClass="string", fails to load in the IDE). A bare date is treated as UTC midnight; a datetime without a timezone is treated as UTC. ' +
     'Note: numbers always emit valueClass="decimal" per the canonical Provar reference (there is no separate "integer" valueClass).',
   'Edit page objects: action=Edit targets require a compiled page object for the SF object. ' +
     'If none exists in the project page-objects directory, the locator binding will fail at runtime. ' +
@@ -569,7 +569,35 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
   // `fieldTypeHint` parameter on `inferSalesforceValueClass` is intentionally not threaded
   // through here yet — it lands in PDX-492 (H2b) along with the `field_type_hints` tool input.
   const inferred = inferSalesforceValueClass(key, val);
+  if (inferred === 'date' || inferred === 'datetime') {
+    // PDX-509: Provar stores date/dateTime as epoch MILLISECONDS, never an ISO string —
+    // an ISO string fails to load in the IDE (RENDER-DATE-VALUECLASS-001), and the real
+    // corpus uses epoch ms exclusively with camelCase `dateTime`. Convert here.
+    const ms = isoToEpochMs(val, inferred);
+    if (ms !== null) {
+      const valueClass = inferred === 'datetime' ? 'dateTime' : 'date';
+      return `${indent}<value class="value" valueClass="${valueClass}">${ms}</value>`;
+    }
+    // A value that matches the ISO shape but is not a real date (e.g. "2026-99-99")
+    // cannot be converted — fall back to a plain string rather than emit a
+    // load-breaking date/dateTime with a non-epoch value.
+    return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
+  }
   return `${indent}<value class="value" valueClass="${inferred}">${escapeXmlContent(val)}</value>`;
+}
+
+/**
+ * Convert a validated ISO-8601 date / datetime string to epoch milliseconds.
+ * A date-only string ("YYYY-MM-DD") is parsed as UTC midnight per the ES spec. A
+ * datetime WITHOUT an explicit timezone would otherwise parse as machine-local
+ * time (non-deterministic), so we pin it to UTC by appending 'Z' — matching the
+ * Provar corpus, where date/dateTime values are stored as UTC epoch ms.
+ * Returns null if the value cannot be parsed (caller falls back to the raw text).
+ */
+function isoToEpochMs(val: string, kind: 'date' | 'datetime'): number | null {
+  const needsUtc = kind === 'datetime' && !/(Z|[+-]\d{2}:?\d{2})$/.test(val);
+  const ms = Date.parse(needsUtc ? `${val}Z` : val);
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      ', apiId = ''): string {

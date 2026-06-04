@@ -8,7 +8,11 @@
 /* eslint-disable camelcase */
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { validateProjectFromPath, ProjectValidationError, type ProjectValidationResult } from '../../../../services/projectValidation.js';
+import {
+  validateProjectFromPath,
+  ProjectValidationError,
+  type ProjectValidationResult,
+} from '../../../../services/projectValidation.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@provartesting/provardx-cli', 'sf.provar.automation.project.validate');
@@ -27,7 +31,7 @@ export default class SfProvarAutomationProjectValidate extends SfCommand<Project
     'quality-threshold': Flags.integer({
       char: 'q',
       summary: messages.getMessage('flags.quality-threshold.summary'),
-      default: 80,
+      default: 90,
       min: 0,
       max: 100,
     }),
@@ -54,7 +58,9 @@ export default class SfProvarAutomationProjectValidate extends SfCommand<Project
       });
 
       if (!this.jsonEnabled()) {
-        this.log(messages.getMessage('success_message', [result.project_name, result.quality_score, result.quality_grade]));
+        this.log(
+          messages.getMessage('success_message', [result.project_name, result.quality_score, result.quality_grade])
+        );
         if (result.saved_to) {
           this.log(messages.getMessage('saved_to_message', [result.saved_to]));
         }
@@ -62,10 +68,9 @@ export default class SfProvarAutomationProjectValidate extends SfCommand<Project
 
       const threshold = flags['quality-threshold'];
       if (result.quality_score < threshold) {
-        this.error(
-          `Quality score ${result.quality_score}/100 is below the required threshold of ${threshold}/100`,
-          { exit: 1 }
-        );
+        this.error(`Quality score ${result.quality_score}/100 is below the required threshold of ${threshold}/100`, {
+          exit: 1,
+        });
       }
 
       return result;

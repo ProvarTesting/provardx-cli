@@ -23,6 +23,7 @@ import {
   type HierarchyViolation,
   type HierarchySummary,
 } from '../mcp/tools/hierarchyValidate.js';
+import { resolveQualityThreshold } from '../mcp/utils/qualityThreshold.js';
 
 // ── Public error type ─────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export class ProjectValidationError extends Error {
 
 export interface ProjectValidationOptions {
   project_path: string;
-  quality_threshold?: number; // default 80
+  quality_threshold?: number; // resolved via resolveQualityThreshold: arg → PROVAR_MCP_QUALITY_THRESHOLD → 90
   save_results?: boolean; // default true (any value !== false means save)
   results_dir?: string; // default '{project_path}/provardx/validation'
 }
@@ -842,7 +843,7 @@ export function validateProjectFromPath(options: ProjectValidationOptions): Proj
     );
   }
 
-  const threshold = quality_threshold ?? 80;
+  const threshold = resolveQualityThreshold(quality_threshold);
 
   // 1. Read project context from .testproject
   const { projectName, context } = readProjectContext(projectRoot);

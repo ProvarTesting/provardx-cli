@@ -11,6 +11,7 @@ import {
   registerTestCaseValidate,
   validateTestCaseXml,
 } from '../../../src/mcp/tools/testCaseValidate.js';
+import { runBestPractices } from '../../../src/mcp/tools/bestPracticesEngine.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 import {
   ASSERT_VALUES_COMPARISON_TYPES,
@@ -31,8 +32,8 @@ const VALID_TC = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <testCase guid="${GUID_TC}" id="1" registryId="abc123">
   <summary/>
   <steps>
-    <apiCall guid="${GUID_S1}" apiId="UiConnect" name="Connect to browser" testItemId="1"/>
-    <apiCall guid="${GUID_S2}" apiId="UiNavigate" name="Navigate to login" testItemId="2"/>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect to browser" testItemId="1"/>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiNavigate" name="Navigate to login" testItemId="2"/>
   </steps>
 </testCase>`;
 
@@ -1311,6 +1312,75 @@ describe('validateTestCase', () => {
   });
 });
 
+// ── PDX-509: validity bridge (critical BP → is_valid) ─────────────────────────
+
+describe('PDX-509 — validity bridge', () => {
+  const UNKNOWN_API_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.bogus.NotARealApi" name="Bad step" testItemId="1"/>
+  </steps>
+</testCase>`;
+
+  // Empty-but-present <steps>: Layer-1 TC_020 does NOT fire (steps element exists),
+  // and the critical VALID-STEPS-001 BP rule is Layer-1-owned, so it must NOT be bridged.
+  const EMPTY_STEPS_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps></steps>
+</testCase>`;
+
+  // A {Var} stored as a plain string is VAR-STRING-LITERAL-001 (major) — must NOT gate is_valid.
+  const MAJOR_ONLY_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject" name="Create" testItemId="1">
+      <arguments>
+        <argument id="Name"><value class="value" valueClass="string">{AccountId}</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  it('a critical best-practice violation (unknown apiId) flips is_valid=false and surfaces in issues[]', () => {
+    const r = validateTestCase(UNKNOWN_API_TC);
+    assert.equal(r.is_valid, false, 'unknown apiId is load-blocking → is_valid must be false');
+    const issue = r.issues.find((i) => i.rule_id === 'API-UNKNOWN-001');
+    assert.ok(issue, 'API-UNKNOWN-001 should be bridged into issues[]');
+    assert.equal(issue?.severity, 'ERROR');
+    // The bridged critical also remains in best_practices_violations[] for scoring parity.
+    assert.ok(
+      (r.best_practices_violations ?? []).some((v) => v.rule_id === 'API-UNKNOWN-001'),
+      'bridged critical stays in best_practices_violations[] (score parity)'
+    );
+  });
+
+  it('a major best-practice violation does NOT flip is_valid', () => {
+    const r = validateTestCase(MAJOR_ONLY_TC);
+    assert.equal(r.is_valid, true, 'a major (runtime) violation loads — is_valid stays true');
+    assert.ok(
+      (r.best_practices_violations ?? []).some((v) => v.rule_id === 'VAR-STRING-LITERAL-001'),
+      'the major violation is still reported'
+    );
+  });
+
+  it('a Layer-1-owned critical (empty <steps>) is NOT bridged — Layer-1 is authoritative', () => {
+    const r = validateTestCase(EMPTY_STEPS_TC);
+    // TC_020 only fires on a MISSING <steps>; an empty-but-present <steps> loads.
+    assert.equal(r.is_valid, true, 'empty-but-present <steps> loads — is_valid stays true');
+    assert.equal(
+      r.issues.find((i) => i.rule_id === 'VALID-STEPS-001'),
+      undefined,
+      'VALID-STEPS-001 must not be surfaced into issues[] (Layer-1 owns steps presence)'
+    );
+  });
+
+  it('bridging does not perturb quality_score (Lambda parity preserved)', () => {
+    const r = validateTestCase(UNKNOWN_API_TC);
+    const bp = runBestPractices(UNKNOWN_API_TC);
+    assert.equal(r.quality_score, bp.quality_score, 'quality_score is computed from the untouched BP list');
+  });
+});
+
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────
 
 describe('registerTestCaseValidate handler', () => {
@@ -1370,6 +1440,79 @@ describe('registerTestCaseValidate handler', () => {
     const warning = String(result['validation_warning']);
     assert.ok(warning, 'Expected validation_warning to be set');
     assert.ok(warning.includes('Quality Hub'), 'Warning must mention Quality Hub');
+  });
+
+  describe('PDX-509 — tri-state status + quality_threshold', () => {
+    const BAD_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.bogus.NotARealApi" name="Bad" testItemId="1"/>
+  </steps>
+</testCase>`;
+
+    // Loadable (is_valid true) but carries a major (VAR-STRING-LITERAL-001) so quality_score < 100.
+    const NEEDS_IMPROVEMENT_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject" name="Create" testItemId="1">
+      <arguments>
+        <argument id="Name"><value class="value" valueClass="string">{AccountId}</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+    async function validate(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const res = (await capServer.capturedHandler!(args)) as { content: Array<{ text: string }> };
+      return JSON.parse(res.content[0].text) as Record<string, unknown>;
+    }
+
+    it('status="invalid" + default quality_threshold 90 when a critical defect blocks loading', async () => {
+      const r = await validate({ content: BAD_TC });
+      assert.equal(r['is_valid'], false);
+      assert.equal(r['status'], 'invalid');
+      assert.equal(r['quality_threshold'], 90, 'default threshold is 90');
+    });
+
+    it('status="valid" when loadable and meets the threshold', async () => {
+      const r = await validate({ content: VALID_TC, quality_threshold: 0 });
+      assert.equal(r['is_valid'], true);
+      assert.equal(r['status'], 'valid');
+      assert.equal(r['meets_quality_threshold'], true);
+    });
+
+    it('status="needs_improvement" when loadable but below the threshold', async () => {
+      // Loadable, but a major violation keeps quality_score below the strict bar of 100.
+      const r = await validate({ content: NEEDS_IMPROVEMENT_TC, quality_threshold: 100 });
+      assert.equal(r['is_valid'], true);
+      assert.ok((r['quality_score'] as number) < 100, 'fixture must score below 100');
+      assert.equal(r['status'], 'needs_improvement');
+      assert.equal(r['meets_quality_threshold'], false);
+    });
+
+    it('per-call quality_threshold overrides the PROVAR_MCP_QUALITY_THRESHOLD env var', async () => {
+      const saved = process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      process.env.PROVAR_MCP_QUALITY_THRESHOLD = '50';
+      try {
+        const r = await validate({ content: VALID_TC, quality_threshold: 80 });
+        assert.equal(r['quality_threshold'], 80, 'per-call arg wins over the env var');
+      } finally {
+        if (saved !== undefined) process.env.PROVAR_MCP_QUALITY_THRESHOLD = saved;
+        else delete process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      }
+    });
+
+    it('PROVAR_MCP_QUALITY_THRESHOLD is used when no per-call arg is given', async () => {
+      const saved = process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      process.env.PROVAR_MCP_QUALITY_THRESHOLD = '75';
+      try {
+        const r = await validate({ content: VALID_TC });
+        assert.equal(r['quality_threshold'], 75, 'env var is the effective threshold');
+      } finally {
+        if (saved !== undefined) process.env.PROVAR_MCP_QUALITY_THRESHOLD = saved;
+        else delete process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      }
+    });
   });
 
   it('key + API success → validation_source "quality_hub" with local metadata', async () => {
