@@ -338,10 +338,10 @@
       "id": "VAR-NAMING-001",
       "category": "DataDrivenTesting",
       "name": "Variable names must use valid identifiers",
-      "description": "Variable names, field references, and result names must contain only letters, digits, and underscores. Spaces, hyphens, and special characters cause RUNTIME FAILURES in Provar. Examples: {Account.Name} ✅ | {Account.Account Name} ❌ (space will fail)",
+      "description": "Variable names, field references, and result names must contain only letters, digits, and underscores. Spaces, hyphens, and special characters cause RUNTIME FAILURES in Provar (the test case still loads, so this is a major runtime defect, not a load-blocking critical). Examples: {Account.Name} ✅ | {Account.Account Name} ❌ (space will fail)",
       "appliesTo": ["Step"],
-      "severity": "critical",
-      "weight": 8,
+      "severity": "major",
+      "weight": 5,
       "recommendation": "Replace spaces and special characters with underscores. Use API field names (e.g., Account.Name) instead of field labels (e.g., Account.Account Name).",
       "check": {
         "type": "variableNaming",
