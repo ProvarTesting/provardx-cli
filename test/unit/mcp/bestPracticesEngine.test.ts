@@ -1447,6 +1447,17 @@ ${stepsXml}
       const v = find(runBestPractices(xml).violations, 'SETVALUES-STRUCTURE-001');
       assert.ok(!v, `A SetValues with <namedValues> should pass, got: ${v?.message}`);
     });
+
+    it('does NOT fire for a data-driven SetValues (values from an external source)', () => {
+      // Excel/CSV-driven SetValues declares <parameterValueSources> and carries an
+      // empty <value class="valueList"/> with no inline <namedValues> — corpus-confirmed valid.
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Read Data" testItemId="1">
+      <arguments><argument id="values"><value class="valueList" mutable="Mutable"/></argument></arguments>
+      <parameterValueSources><parameterValueSource variableName="Data" variableScope="Test"><cachedParameters><apiParam name="RowNumber"/></cachedParameters></parameterValueSource></parameterValueSources>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-STRUCTURE-001');
+      assert.ok(!v, `A data-driven SetValues must pass, got: ${v?.message}`);
+    });
   });
 
   // ── namedValueName (SETVALUES-NAME-001) ────────────────────────────────────
@@ -1471,13 +1482,29 @@ ${stepsXml}
 
   // ── namedValueValue (SETVALUES-VALUE-001) ──────────────────────────────────
   describe('namedValueValue — SETVALUES-VALUE-001', () => {
-    it('fires when a namedValue has no child <value>', () => {
+    it('fires when a non-structural namedValue has no child <value>', () => {
       const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
-      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="value"/></namedValues></value></argument></arguments>
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="MyVar"/></namedValues></value></argument></arguments>
     </apiCall>`);
       const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
-      assert.ok(v, 'Expected SETVALUES-VALUE-001 to fire for a namedValue with no <value> child');
+      assert.ok(v, 'Expected SETVALUES-VALUE-001 to fire for a non-slot namedValue with no <value> child');
       assert.equal(v?.severity, 'critical');
+    });
+
+    it('does NOT fire for an empty value slot (blank field) — corpus-confirmed valid', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="valuePath"><value class="value" valueClass="string">Field__c</value></namedValue><namedValue name="value"/></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(!v, `An empty name="value" slot blanks the field and must pass, got: ${v?.message}`);
+    });
+
+    it('does NOT fire for a wholly-blank row (empty valuePath + value) — an unused row', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="valuePath"/><namedValue name="value"/></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(!v, `A blank/unused SetValues row must pass, got: ${v?.message}`);
     });
 
     it('passes when every namedValue has a child <value>', () => {

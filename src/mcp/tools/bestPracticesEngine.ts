@@ -1967,6 +1967,10 @@ function validateRootAttributes(tc: XmlNode, rule: BPRule): BPViolation | null {
 function validateSetValuesStructure(tc: XmlNode, rule: BPRule): BPViolation | null {
   for (const call of getAllApiCalls(tc)) {
     if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    // Data-driven SetValues pull their values from an external source declared in
+    // <parameterValueSources> (e.g. an Excel/CSV binding) and legitimately carry an
+    // empty <value class="valueList"/> with no inline <namedValues>. Not a defect.
+    if (call['parameterValueSources'] != null) continue;
     if (collectElementsByTag(call, 'namedValues').length) continue;
     return makeViolation(rule, `SetValues step missing <namedValues> container (testItemId=${stepContext(call).tid})`);
   }
@@ -1988,12 +1992,23 @@ function validateNamedValueName(tc: XmlNode, rule: BPRule): BPViolation | null {
   return null;
 }
 
+// The QEditor SetValues form stores each assignment as a triple of namedValue slots:
+// `valuePath` (target field), `value` (data), `valueScope`. Any of these may be left
+// empty — a blank `value` sets the field to blank, and a wholly-blank row is an unused
+// row Provar simply ignores. So an empty structural slot is NOT a "missing value" defect.
+const SETVALUES_BLANKABLE_SLOTS: ReadonlySet<string> = new Set(['valuePath', 'value', 'valueScope']);
+
 /** SETVALUES-VALUE-001 — every `<namedValue>` in a SetValues step must contain a child `<value>`. */
 function validateNamedValueValue(tc: XmlNode, rule: BPRule): BPViolation | null {
   for (const call of getAllApiCalls(tc)) {
     if (call['@_apiId'] !== SETVALUES_API_ID) continue;
     for (const nv of collectElementsByTag(call, 'namedValue')) {
-      if (!nv || typeof nv !== 'object' || (nv as XmlNode)['value'] != null) continue;
+      if (!nv || typeof nv !== 'object') continue;
+      const node = nv as XmlNode;
+      if (node['value'] != null) continue;
+      // A blank structural slot (valuePath/value/valueScope) is valid (empty value /
+      // unused row). Only a non-standard namedValue missing its value is a real defect.
+      if (SETVALUES_BLANKABLE_SLOTS.has((node['@_name'] as string | undefined) ?? '')) continue;
       return makeViolation(
         rule,
         `namedValue in SetValues step missing value element (testItemId=${stepContext(call).tid})`
