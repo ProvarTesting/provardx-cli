@@ -1553,7 +1553,11 @@ ${stepsXml}
         'UI-BINDING-ORDER-001'
       );
       assert.ok(v, 'Expected UI-BINDING-ORDER-001 to fire for action-first order');
-      assert.equal(v?.severity, 'critical');
+      assert.equal(
+        v?.severity,
+        'major',
+        'wrong binding order errors at runtime (the test loads) — major, not critical'
+      );
     });
 
     it('passes for the object-first binding order', () => {
