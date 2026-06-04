@@ -260,6 +260,34 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   server.resource(
+    'provar-validation-rules',
+    'provar://docs/validation-rules',
+    {
+      description:
+        'Canonical registry of every Provar test-case validation rule across both layers: the structural validity rules (Layer 1, gate is_valid) and the best-practice rules (Layer 2, weighted quality_score). For each rule it lists the id, severity, weight, what it checks, and whether it gates is_valid (a critical best-practice violation does, via the validity bridge). Read this to understand why provar_testcase_validate returned a given issue or marked a test invalid vs needs_improvement.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'VALIDATION_RULE_REGISTRY.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://docs/validation-rules', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/validation-rules',
+              mimeType: 'text/markdown',
+              text: '# Provar Validation Rule Registry\n\nRegistry not found. If you are developing from source, run `node scripts/build-validation-rule-registry.cjs` then rebuild. Otherwise, reinstall or upgrade the plugin/package and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.resource(
     'provar-test-step-schema',
     'provar://schema/test-step',
     {
