@@ -1074,6 +1074,15 @@ Validates an XML test case for schema correctness (validity score) and best prac
   - **BDD** — `BDD-GIVEN-001` / `BDD-WHEN-001` / `BDD-THEN-001` (`Given`/`When`/`Then` → `description`).
   - **Apex / database** — `SOQL-QUERY-001` (`ApexSoqlQuery` → `soqlQuery`), `DB-CONNECT-001`/`-002` (`DbConnect` → `connectionName` / `resultName`), `SQL-QUERY-001`/`-002` (`SqlQuery` → `query` / `dbConnectionName`).
   - **Web service** — `REST-CONN-001`/`-002` (`WebConnect` → `connectionName` / `resultName`), `REST-REQUEST-001` (`RestRequest` → `connectionName`).
+- **Render / load-blocking rules** — Structural checks that catch XML which prevents a test case from rendering or loading in the Provar IDE. They run offline / in `local_fallback` and emit one violation per rule (the message names the first offender; `count` is set only when more than one element offends), matching the Quality Hub back-end so the weighted-deduction score stays in parity with the Lambda. Currently enforced:
+  - **`RENDER-CASE-001`** (`valueClassCasing`, critical) — a `valueClass` spelled with the wrong case (e.g. `Boolean` instead of `boolean`). Only a known class with bad casing fires; an unknown class does not.
+  - **`RENDER-BOOL-001`** (`booleanCasing`, critical) — a `<value valueClass="boolean">` whose text is `True`/`False`/`TRUE`/`FALSE`; it must be lowercase `true`/`false`.
+  - **`VALUE-CLASS-001`** (`invalidValueClass`, critical) — a `<value class="…">` whose `class` is not a recognised Provar value class (e.g. the hallucinated `class="null"`), or a `class="value"` whose `valueClass` is not one of `string`/`boolean`/`decimal`/`id`/`date`/`dateTime`. Empty/optional arguments must omit the `<value>` entirely.
+  - **`RENDER-DATE-VALUECLASS-001`** (`dateValueClassFormat`, critical) — a `valueClass="date"`/`"dateTime"` value whose text is an ISO date string (e.g. `2025-01-15`) instead of an epoch-milliseconds integer; store dates as `valueClass="string"` or convert to epoch millis.
+  - **`SETVALUES-INVALID-ELEMENT-001`** (`setValuesInvalidElements`, critical) — a `SetValues` step containing hallucinated `<namedValueSet>` or `<name>` elements, or a `<namedValues>` child other than `<namedValue>`. The correct shape is `<namedValues mutable="Mutable">` with `<namedValue name="valuePath|value|valueScope">` children.
+  - **`APEX-CONNECT-ARGS-001`** (`apexConnectValidArguments`, critical) — an `ApexConnect` step using an argument id outside the 20-id whitelist (overridable per rule via `check.validArgumentIds`).
+  - **`APEX-CONNECT-CONNID-001`** (`apexConnectConnectionIdValueClass`, critical) — an `ApexConnect` `connectionId` value that uses `valueClass="string"` (or any non-`id` class) instead of `valueClass="id"`; leave it empty if there is no GUID.
+  - **`APEX-REUSE-CONN-001`** (`apexConnectReuseConnection`, major) — an `ApexConnect` `reuseConnectionName` argument that carries a value; it must be left blank.
 
 **Error codes**
 

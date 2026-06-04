@@ -733,3 +733,276 @@ ${stepsXml}
     assert.ok(v?.message.includes('testItemId=3'), `Message should locate the nested step: ${v?.message}`);
   });
 });
+
+describe('render / load-blocking validators (Tier 2)', () => {
+  const GUID_T2_TC = '550e8400-e29b-41d4-a716-4466554408b0';
+  const GUID_T2_S1 = '550e8400-e29b-41d4-a716-4466554408b1';
+  const APEX_CONNECT = 'com.provar.plugins.forcedotcom.core.testapis.ApexConnect';
+  const SET_VALUES = 'com.provar.plugins.bundled.apis.control.SetValues';
+
+  // Wrap raw <apiCall> XML in a minimal, schema-valid test case.
+  function buildTc(stepsXml: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-t2" guid="${GUID_T2_TC}" registryId="tc-t2" name="Tier2 Test">
+  <steps>
+${stepsXml}
+  </steps>
+</testCase>`;
+  }
+
+  // Wrap a single <value> in an AssertValues argument (whole-tree validators don't need apiCall context).
+  function buildValueStep(valueXml: string): string {
+    return buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="com.provar.plugins.bundled.apis.AssertValues" name="Assert" testItemId="1">
+      <arguments>
+        <argument id="actualValue">${valueXml}</argument>
+      </arguments>
+    </apiCall>`);
+  }
+
+  function find(violations: BPViolation[], ruleId: string): BPViolation | undefined {
+    return violations.find((v) => v.rule_id === ruleId);
+  }
+
+  // ── valueClassCasing (RENDER-CASE-001) ──────────────────────────────────────
+  describe('valueClassCasing — RENDER-CASE-001', () => {
+    it('fires when a known valueClass is spelled with wrong case', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="Boolean">true</value>')).violations,
+        'RENDER-CASE-001'
+      );
+      assert.ok(v, 'Expected RENDER-CASE-001 to fire for valueClass="Boolean"');
+      assert.equal(v?.severity, 'critical');
+      assert.ok(v?.message.includes("'boolean'"), `Message should suggest lowercase: ${v?.message}`);
+    });
+
+    it('passes when the valueClass is already lowercase', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="boolean">true</value>')).violations,
+        'RENDER-CASE-001'
+      );
+      assert.ok(!v, `Lowercase valueClass should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire for funcCall/valueList casing (back-end parity quirk: lowercased form is not in the valid set)', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="FuncCall">x</value>')).violations,
+        'RENDER-CASE-001'
+      );
+      assert.ok(!v, 'valueClass="FuncCall" must NOT fire — mirrors the back-end (funcCall.lower() is not in the set)');
+    });
+  });
+
+  // ── booleanCasing (RENDER-BOOL-001) ─────────────────────────────────────────
+  describe('booleanCasing — RENDER-BOOL-001', () => {
+    it('fires for an uppercase boolean value', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="boolean">True</value>')).violations,
+        'RENDER-BOOL-001'
+      );
+      assert.ok(v, 'Expected RENDER-BOOL-001 to fire for "True"');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes for a lowercase boolean value', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="boolean">false</value>')).violations,
+        'RENDER-BOOL-001'
+      );
+      assert.ok(!v, `Lowercase boolean should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire when the value is not a boolean valueClass', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="string">True</value>')).violations,
+        'RENDER-BOOL-001'
+      );
+      assert.ok(!v, 'Only valueClass="boolean" values are checked for boolean casing');
+    });
+  });
+
+  // ── invalidValueClass (VALUE-CLASS-001) ─────────────────────────────────────
+  describe('invalidValueClass — VALUE-CLASS-001', () => {
+    it('fires for a hallucinated class like "null"', () => {
+      const v = find(runBestPractices(buildValueStep('<value class="null"/>')).violations, 'VALUE-CLASS-001');
+      assert.ok(v, 'Expected VALUE-CLASS-001 to fire for class="null"');
+      assert.equal(v?.severity, 'critical');
+      assert.ok(v?.message.includes('actualValue'), `Message should name the argument: ${v?.message}`);
+    });
+
+    it('fires for an invalid valueClass on a class="value" element', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="money">1</value>')).violations,
+        'VALUE-CLASS-001'
+      );
+      assert.ok(v, 'Expected VALUE-CLASS-001 to fire for valueClass="money"');
+      assert.ok(v?.message.includes('valueClass'), `Message should call out the valueClass: ${v?.message}`);
+    });
+
+    it('passes for a valid class="value" valueClass="string"', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="string">x</value>')).violations,
+        'VALUE-CLASS-001'
+      );
+      assert.ok(!v, `A valid value class should pass, got: ${v?.message}`);
+    });
+
+    it('accepts class="invalid" (back-end hardcodes it in the valid set — parity)', () => {
+      const v = find(runBestPractices(buildValueStep('<value class="invalid"/>')).violations, 'VALUE-CLASS-001');
+      assert.ok(!v, 'class="invalid" is accepted by the back-end and must not fire here');
+    });
+  });
+
+  // ── dateValueClassFormat (RENDER-DATE-VALUECLASS-001) ───────────────────────
+  describe('dateValueClassFormat — RENDER-DATE-VALUECLASS-001', () => {
+    it('fires for an ISO date string with valueClass="date"', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="date">2025-01-15</value>')).violations,
+        'RENDER-DATE-VALUECLASS-001'
+      );
+      assert.ok(v, 'Expected the date-format rule to fire for an ISO string');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes for an epoch-millis integer with valueClass="date"', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="date">1736899200000</value>')).violations,
+        'RENDER-DATE-VALUECLASS-001'
+      );
+      assert.ok(!v, `Epoch millis should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire when the same string is stored as valueClass="string"', () => {
+      const v = find(
+        runBestPractices(buildValueStep('<value class="value" valueClass="string">2025-01-15</value>')).violations,
+        'RENDER-DATE-VALUECLASS-001'
+      );
+      assert.ok(!v, 'Only date/dateTime valueClasses are checked for epoch format');
+    });
+  });
+
+  // ── apexConnectReuseConnection (APEX-REUSE-CONN-001) ────────────────────────
+  describe('apexConnectReuseConnection — APEX-REUSE-CONN-001', () => {
+    it('fires when reuseConnectionName carries a non-empty value', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="reuseConnectionName"><value class="value" valueClass="string">Reuse</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-REUSE-CONN-001');
+      assert.ok(v, 'Expected APEX-REUSE-CONN-001 to fire for a non-empty reuseConnectionName');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('passes when reuseConnectionName is left blank', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="reuseConnectionName"/>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-REUSE-CONN-001');
+      assert.ok(!v, `A blank reuseConnectionName should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── apexConnectValidArguments (APEX-CONNECT-ARGS-001) ───────────────────────
+  describe('apexConnectValidArguments — APEX-CONNECT-ARGS-001', () => {
+    it('fires for a hallucinated argument id', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="connectionName"><value class="value" valueClass="string">SF</value></argument>
+        <argument id="commandTimeout"><value class="value" valueClass="decimal">30</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-CONNECT-ARGS-001');
+      assert.ok(v, 'Expected APEX-CONNECT-ARGS-001 to fire for commandTimeout');
+      assert.equal(v?.severity, 'critical');
+      assert.ok(v?.message.includes('commandTimeout'), `Message should name the bad arg: ${v?.message}`);
+    });
+
+    it('passes when all argument ids are in the whitelist', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="connectionName"><value class="value" valueClass="string">SF</value></argument>
+        <argument id="resultName"><value class="value" valueClass="string">conn</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-CONNECT-ARGS-001');
+      assert.ok(!v, `All-valid arguments should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── apexConnectConnectionIdValueClass (APEX-CONNECT-CONNID-001) ─────────────
+  describe('apexConnectConnectionIdValueClass — APEX-CONNECT-CONNID-001', () => {
+    it('fires when connectionId uses valueClass="string"', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="connectionId"><value class="value" valueClass="string">default</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-CONNECT-CONNID-001');
+      assert.ok(v, 'Expected APEX-CONNECT-CONNID-001 to fire for valueClass="string"');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes when connectionId uses valueClass="id"', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="connectionId"><value class="value" valueClass="id">bce7fd3f-0f81-4c5c-ab68-c3edd44b5d1e</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-CONNECT-CONNID-001');
+      assert.ok(!v, `valueClass="id" should pass, got: ${v?.message}`);
+    });
+
+    it('passes when connectionId is left empty', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${APEX_CONNECT}" name="Connect" testItemId="1">
+      <arguments>
+        <argument id="connectionId"/>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'APEX-CONNECT-CONNID-001');
+      assert.ok(!v, `An empty connectionId should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── setValuesInvalidElements (SETVALUES-INVALID-ELEMENT-001) ────────────────
+  describe('setValuesInvalidElements — SETVALUES-INVALID-ELEMENT-001', () => {
+    it('fires for hallucinated <namedValueSet>/<name> elements', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValueSet>
+                <name>LeadId</name>
+                <value class="variable"><path element="x"/></value>
+              </namedValueSet>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-INVALID-ELEMENT-001');
+      assert.ok(v, 'Expected SETVALUES-INVALID-ELEMENT-001 to fire for <namedValueSet>/<name>');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes for a correctly-structured SetValues step', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T2_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValue name="valuePath"><value class="value" valueClass="string">MyVar</value></namedValue>
+              <namedValue name="value"><value class="value" valueClass="string">1</value></namedValue>
+              <namedValue name="valueScope"><value class="value" valueClass="string">Test</value></namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-INVALID-ELEMENT-001');
+      assert.ok(!v, `A correctly-structured SetValues step should pass, got: ${v?.message}`);
+    });
+  });
+});
