@@ -242,9 +242,11 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const context = tcRunContext(file_path, source);
         const contextHash = computeContextHash('tc', context);
         const runId = generateRunId(context);
-        // A critical BP violation bridged into issues[] shares its rule_id with the
-        // surfaced issue (the issue/BP rule_id namespaces are disjoint), so drop it
-        // from the BP list here to avoid double-counting it in the baseline diff.
+        // A bridged critical appears twice — as the surfaced issue AND as its original
+        // BP violation — both carrying the same BP rule_id. Hand-coded issue rule_ids
+        // (TC_*, UI-*, COMPARISON-TYPE-001) never collide with BP rule_ids, so a BP
+        // rule_id appearing in issues[] can only mean it was bridged. Drop those from
+        // the BP list here so the baseline diff counts each finding once.
         const issueRuleIds = new Set(baseResult.issues.map((i) => i.rule_id));
         const bpViolations = (baseResult.best_practices_violations ?? []).filter(
           (v) => !issueRuleIds.has(v.rule_id)

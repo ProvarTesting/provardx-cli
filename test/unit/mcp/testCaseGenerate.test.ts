@@ -826,6 +826,28 @@ describe('provar_testcase_generate', () => {
       );
     });
 
+    it('falls back to valueClass="string" for an ISO-shaped but invalid date (no load-breaking date)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'BadDateField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create',
+            attributes: { CloseDate: '2026-99-99' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="string">2026-99-99</value>'),
+        `Unparseable date must emit valueClass="string", not a non-epoch date; got: ${xml}`
+      );
+      assert.ok(!xml.includes('valueClass="date"'), 'must not emit a load-breaking valueClass="date"');
+    });
+
     it('emits valueClass="boolean" for "true" / "false" literals', () => {
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'BoolField',

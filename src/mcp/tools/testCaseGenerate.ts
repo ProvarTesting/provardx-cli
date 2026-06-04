@@ -574,9 +574,14 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
     // an ISO string fails to load in the IDE (RENDER-DATE-VALUECLASS-001), and the real
     // corpus uses epoch ms exclusively with camelCase `dateTime`. Convert here.
     const ms = isoToEpochMs(val, inferred);
-    const valueClass = inferred === 'datetime' ? 'dateTime' : 'date';
-    const emitted = ms !== null ? String(ms) : escapeXmlContent(val);
-    return `${indent}<value class="value" valueClass="${valueClass}">${emitted}</value>`;
+    if (ms !== null) {
+      const valueClass = inferred === 'datetime' ? 'dateTime' : 'date';
+      return `${indent}<value class="value" valueClass="${valueClass}">${ms}</value>`;
+    }
+    // A value that matches the ISO shape but is not a real date (e.g. "2026-99-99")
+    // cannot be converted — fall back to a plain string rather than emit a
+    // load-breaking date/dateTime with a non-epoch value.
+    return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
   }
   return `${indent}<value class="value" valueClass="${inferred}">${escapeXmlContent(val)}</value>`;
 }
