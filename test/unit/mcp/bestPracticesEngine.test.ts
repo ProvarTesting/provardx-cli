@@ -1006,3 +1006,307 @@ ${stepsXml}
     });
   });
 });
+
+describe('back-end-only rules (Tier 4)', () => {
+  const GUID_T4_TC = '550e8400-e29b-41d4-a716-4466554407c0';
+  const GUID_T4_S1 = '550e8400-e29b-41d4-a716-4466554407c1';
+  const APEX_CREATE = 'com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject';
+  const ASSERT_VALUES = 'com.provar.plugins.bundled.apis.AssertValues';
+  const SET_VALUES = 'com.provar.plugins.bundled.apis.control.SetValues';
+  const DB_CONNECT = 'com.provar.plugins.bundled.apis.db.DbConnect';
+  const SQL_QUERY = 'com.provar.plugins.bundled.apis.db.SqlQuery';
+  const UI_DO_ACTION = 'com.provar.plugins.forcedotcom.core.ui.UiDoAction';
+
+  function buildTc(stepsXml: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-t4" guid="${GUID_T4_TC}" registryId="tc-t4" name="Tier4 Test">
+  <steps>
+${stepsXml}
+  </steps>
+</testCase>`;
+  }
+
+  function find(violations: BPViolation[], ruleId: string): BPViolation | undefined {
+    return violations.find((v) => v.rule_id === ruleId);
+  }
+
+  function countOf(violations: BPViolation[], ruleId: string): number {
+    return violations.filter((v) => v.rule_id === ruleId).length;
+  }
+
+  // Wrap one <argument> around a raw <value> on an ApexCreateObject step (avoids triggering other Tier 4 rules).
+  function buildArgStep(valueXml: string): string {
+    return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${APEX_CREATE}" name="Create" testItemId="1">
+      <arguments>
+        <argument id="fieldValue">${valueXml}</argument>
+      </arguments>
+    </apiCall>`);
+  }
+
+  // ── varStringLiteral (VAR-STRING-LITERAL-001) — multi-violation ─────────────
+  describe('varStringLiteral — VAR-STRING-LITERAL-001', () => {
+    it('fires for a {Var} stored as class="value" valueClass="string"', () => {
+      const v = find(
+        runBestPractices(buildArgStep('<value class="value" valueClass="string">{AccountId}</value>')).violations,
+        'VAR-STRING-LITERAL-001'
+      );
+      assert.ok(v, 'Expected VAR-STRING-LITERAL-001 to fire for {AccountId}');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('emits one violation per offending value (back-end returns a list)', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${APEX_CREATE}" name="Create" testItemId="1">
+      <arguments>
+        <argument id="a"><value class="value" valueClass="string">{AccountId}</value></argument>
+        <argument id="b"><value class="value" valueClass="string">{Obj.Field}</value></argument>
+      </arguments>
+    </apiCall>`);
+      assert.equal(
+        countOf(runBestPractices(xml).violations, 'VAR-STRING-LITERAL-001'),
+        2,
+        'each offending value is its own violation'
+      );
+    });
+
+    it('passes when the value is a proper class="variable" reference', () => {
+      const v = find(
+        runBestPractices(buildArgStep('<value class="variable"><path element="AccountId"/></value>')).violations,
+        'VAR-STRING-LITERAL-001'
+      );
+      assert.ok(!v, `A class="variable" reference should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire for the interpolation-tolerant args (sfUiTargetObjectId)', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${APEX_CREATE}" name="Create" testItemId="1">
+      <arguments>
+        <argument id="sfUiTargetObjectId"><value class="value" valueClass="string">{AccountId}</value></argument>
+      </arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'VAR-STRING-LITERAL-001');
+      assert.ok(!v, 'sfUiTargetObjectId tolerates {Var} interpolation');
+    });
+
+    it('does not fire when the surrounding text is more than a bare token', () => {
+      const v = find(
+        runBestPractices(buildArgStep('<value class="value" valueClass="string">Hello {Name}</value>')).violations,
+        'VAR-STRING-LITERAL-001'
+      );
+      assert.ok(!v, 'only a whole-string {Token} is flagged, not embedded references');
+    });
+  });
+
+  // ── dbConnectResultNameMismatch (CONN-DB-002) ──────────────────────────────
+  describe('dbConnectResultNameMismatch — CONN-DB-002', () => {
+    function dbStep(apiId: string, argId: string, value: string, tid: string): string {
+      return `    <apiCall guid="${GUID_T4_S1}" apiId="${apiId}" name="${apiId.split('.').pop()}" testItemId="${tid}">
+      <arguments>
+        <argument id="${argId}"><value class="value" valueClass="string">${value}</value></argument>
+      </arguments>
+    </apiCall>`;
+    }
+
+    it('fires when a DB operation references a dbConnectionName that no DbConnect produced', () => {
+      const xml = buildTc(
+        `${dbStep(DB_CONNECT, 'resultName', 'SQLServer', '1')}\n${dbStep(
+          SQL_QUERY,
+          'dbConnectionName',
+          'WrongName',
+          '2'
+        )}`
+      );
+      const v = find(runBestPractices(xml).violations, 'CONN-DB-002');
+      assert.ok(v, 'Expected CONN-DB-002 to fire for a mismatched dbConnectionName');
+      assert.equal(v?.severity, 'major');
+      assert.ok(v?.message.includes('SQLServer'), `Message should name the valid resultName(s): ${v?.message}`);
+    });
+
+    it('passes when the dbConnectionName matches the DbConnect resultName', () => {
+      const xml = buildTc(
+        `${dbStep(DB_CONNECT, 'resultName', 'SQLServer', '1')}\n${dbStep(
+          SQL_QUERY,
+          'dbConnectionName',
+          'SQLServer',
+          '2'
+        )}`
+      );
+      const v = find(runBestPractices(xml).violations, 'CONN-DB-002');
+      assert.ok(!v, `A matching dbConnectionName should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire when there is no DbConnect (delegated to CONN-DB-001)', () => {
+      const xml = buildTc(dbStep(SQL_QUERY, 'dbConnectionName', 'SQLServer', '1'));
+      const v = find(runBestPractices(xml).violations, 'CONN-DB-002');
+      assert.ok(!v, 'with no DbConnect resultName the mismatch rule defers to CONN-DB-001');
+    });
+  });
+
+  // ── setValuesFuncCallString (SETVALUES-FUNC-STR-001) ───────────────────────
+  describe('setValuesFuncCallString — SETVALUES-FUNC-STR-001', () => {
+    function setValuesStep(valueXml: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValue name="value">${valueXml}</namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires for a {Func(args)} string interpolation', () => {
+      const v = find(
+        runBestPractices(setValuesStep('<value class="value" valueClass="string">{Count(AccountList)}</value>'))
+          .violations,
+        'SETVALUES-FUNC-STR-001'
+      );
+      assert.ok(v, 'Expected SETVALUES-FUNC-STR-001 to fire for {Count(...)}');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('passes when the value is a proper funcCall element', () => {
+      const v = find(
+        runBestPractices(
+          setValuesStep(
+            '<value class="funcCall" id="Count"><argument id="value"><value class="variable"><path element="AccountList"/></value></argument></value>'
+          )
+        ).violations,
+        'SETVALUES-FUNC-STR-001'
+      );
+      assert.ok(!v, `A funcCall value should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── setValuesZeroIndexString (SETVALUES-ZERO-IDX-001) ──────────────────────
+  describe('setValuesZeroIndexString — SETVALUES-ZERO-IDX-001', () => {
+    function setValuesStep(text: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments>
+        <argument id="values">
+          <value class="valueList" mutable="Mutable">
+            <namedValues mutable="Mutable">
+              <namedValue name="value"><value class="value" valueClass="string">${text}</value></namedValue>
+            </namedValues>
+          </value>
+        </argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires for a [0] index in a string template', () => {
+      const v = find(runBestPractices(setValuesStep('{AccountList[0].Name}')).violations, 'SETVALUES-ZERO-IDX-001');
+      assert.ok(v, 'Expected SETVALUES-ZERO-IDX-001 to fire for [0]');
+    });
+
+    it('passes for a 1-indexed string template', () => {
+      const v = find(runBestPractices(setValuesStep('{AccountList[1].Name}')).violations, 'SETVALUES-ZERO-IDX-001');
+      assert.ok(!v, `A [1] index should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── assertValuesStringExpr (ASSERT-STR-VAR-001) ────────────────────────────
+  describe('assertValuesStringExpr — ASSERT-STR-VAR-001', () => {
+    function assertStep(argId: string, valueXml: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${ASSERT_VALUES}" name="Assert" testItemId="1">
+      <arguments>
+        <argument id="${argId}">${valueXml}</argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires when expectedValue is a {Var} string literal', () => {
+      const v = find(
+        runBestPractices(assertStep('expectedValue', '<value class="value" valueClass="string">{RowCount}</value>'))
+          .violations,
+        'ASSERT-STR-VAR-001'
+      );
+      assert.ok(v, 'Expected ASSERT-STR-VAR-001 to fire for a {RowCount} literal');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('passes when the value is a proper class="variable" reference', () => {
+      const v = find(
+        runBestPractices(assertStep('expectedValue', '<value class="variable"><path element="RowCount"/></value>'))
+          .violations,
+        'ASSERT-STR-VAR-001'
+      );
+      assert.ok(!v, `A class="variable" reference should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire for a plain literal that is not a brace expression', () => {
+      const v = find(
+        runBestPractices(assertStep('expectedValue', '<value class="value" valueClass="string">Acme</value>'))
+          .violations,
+        'ASSERT-STR-VAR-001'
+      );
+      assert.ok(!v, 'a literal value that is not a {…} expression is fine');
+    });
+  });
+
+  // ── uiLocatorButtonCasing (UI-LOCATOR-BUTTON-CASING-001) ───────────────────
+  describe('uiLocatorButtonCasing — UI-LOCATOR-BUTTON-CASING-001', () => {
+    function uiStep(uri: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${UI_DO_ACTION}" name="Click" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="${uri}"/></argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires for the wrong-cased Cancel button (name=Cancel)', () => {
+      const v = find(runBestPractices(uiStep('ui:locator?name=Cancel')).violations, 'UI-LOCATOR-BUTTON-CASING-001');
+      assert.ok(v, 'Expected UI-LOCATOR-BUTTON-CASING-001 to fire for name=Cancel');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('fires for name=Continue (record-type Continue needs name=save&path=selectRecordType)', () => {
+      const v = find(runBestPractices(uiStep('ui:locator?name=Continue')).violations, 'UI-LOCATOR-BUTTON-CASING-001');
+      assert.ok(v, 'Expected UI-LOCATOR-BUTTON-CASING-001 to fire for name=Continue');
+    });
+
+    it('passes for the correct lowercase name=cancel', () => {
+      const v = find(runBestPractices(uiStep('ui:locator?name=cancel')).violations, 'UI-LOCATOR-BUTTON-CASING-001');
+      assert.ok(!v, `name=cancel is correct and should pass, got: ${v?.message}`);
+    });
+
+    it('does not match a prefix (name=Cancelled must not fire)', () => {
+      const v = find(runBestPractices(uiStep('ui:locator?name=Cancelled')).violations, 'UI-LOCATOR-BUTTON-CASING-001');
+      assert.ok(!v, 'the name= boundary must not match a longer name');
+    });
+  });
+
+  // ── uiLocatorRecordTypeField (UI-LOCATOR-RECORDTYPE-001) ───────────────────
+  describe('uiLocatorRecordTypeField — UI-LOCATOR-RECORDTYPE-001', () => {
+    function uiStep(uri: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T4_S1}" apiId="${UI_DO_ACTION}" name="Pick" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="${uri}"/></argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires for name=recordTypeId', () => {
+      const v = find(
+        runBestPractices(uiStep('ui:locator?name=recordTypeId&amp;field=RecordTypeId')).violations,
+        'UI-LOCATOR-RECORDTYPE-001'
+      );
+      assert.ok(v, 'Expected UI-LOCATOR-RECORDTYPE-001 to fire for name=recordTypeId');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('fires for the lowercase name=recordType', () => {
+      const v = find(runBestPractices(uiStep('ui:locator?name=recordType')).violations, 'UI-LOCATOR-RECORDTYPE-001');
+      assert.ok(v, 'Expected UI-LOCATOR-RECORDTYPE-001 to fire for name=recordType');
+    });
+
+    it('passes for the correct name=RecordType', () => {
+      const v = find(
+        runBestPractices(uiStep('ui:locator?name=RecordType&amp;field=RecordTypeId')).violations,
+        'UI-LOCATOR-RECORDTYPE-001'
+      );
+      assert.ok(!v, `name=RecordType is correct and should pass, got: ${v?.message}`);
+    });
+  });
+});

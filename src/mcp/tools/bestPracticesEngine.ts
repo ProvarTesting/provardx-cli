@@ -1606,6 +1606,277 @@ function validateSetValuesInvalidElements(tc: XmlNode, rule: BPRule): BPViolatio
   return makeViolation(rule, message, count);
 }
 
+// ── Back-end-only rules (Tier 4) ─────────────────────────────────────────────
+// Ports of seven Quality Hub validators that existed only in the back-end rule
+// set. All seven rules are severity=major / weight=5. Score parity: six emit a
+// single violation (the back-end returns the first offender; `count` is set only
+// for the two UI-locator checks, and only when >1 offender); `varStringLiteral`
+// emits ONE violation per offending value (the back-end returns a list, scored
+// linearly) — do not collapse it.
+
+const ASSERT_VALUES_API_ID = 'com.provar.plugins.bundled.apis.AssertValues';
+const DB_CONNECT_API_ID = 'com.provar.plugins.bundled.apis.db.DbConnect';
+const UI_DO_ACTION_API_ID = 'com.provar.plugins.forcedotcom.core.ui.UiDoAction';
+
+// DB operation steps whose dbConnectionName must reference a DbConnect resultName
+// (both the modern `db.*` and legacy `data.*` namespaces, mirroring the back-end).
+const DB_OPERATION_API_IDS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.bundled.apis.db.SqlQuery',
+  'com.provar.plugins.bundled.apis.db.DbRead',
+  'com.provar.plugins.bundled.apis.db.DbInsert',
+  'com.provar.plugins.bundled.apis.db.DbUpdate',
+  'com.provar.plugins.bundled.apis.db.DbDelete',
+  'com.provar.plugins.bundled.apis.data.SqlQuery',
+  'com.provar.plugins.bundled.apis.data.DbRead',
+  'com.provar.plugins.bundled.apis.data.DbInsert',
+  'com.provar.plugins.bundled.apis.data.DbUpdate',
+  'com.provar.plugins.bundled.apis.data.DbDelete',
+]);
+
+/** Escape a literal for safe embedding in a RegExp (mirrors Python's re.escape). */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Resolve an argument's text value, mirroring the back-end `get_argument_value`:
+ * `variable` → first `<path>` element name, `compound` → concatenated `<parts>`
+ * text, otherwise the element text. Wrapper-aware (handles both the `<arguments>`
+ * wrapper and direct `<argument>` children) via {@link findArgumentById}.
+ */
+function resolvedArgText(call: XmlNode, argId: string): string {
+  const arg = findArgumentById(call, argId);
+  if (!arg) return '';
+  const raw = arg['value'];
+  const ve = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
+  if (ve == null) return '';
+  if (typeof ve === 'string') return ve.trim();
+  if (typeof ve !== 'object') return String(ve).trim();
+  const v = ve as XmlNode;
+  const cls = v['@_class'] as string | undefined;
+  if (cls === 'variable') {
+    const firstPath = toArr(v['path'] as XmlNode | XmlNode[])[0] as XmlNode | undefined;
+    return ((firstPath?.['@_element'] as string | undefined) ?? '').trim();
+  }
+  if (cls === 'compound') {
+    const partsNode = (v['parts'] as XmlNode | undefined)?.['value'];
+    return toArr(partsNode as XmlNode | XmlNode[])
+      .filter((p) => p && typeof p === 'object')
+      .map((p) => nodeText(p))
+      .join('');
+  }
+  return nodeText(v);
+}
+
+const VAR_LITERAL_PATTERN = /^\{[\w.]+\}$/;
+const VAR_LITERAL_TOLERATED_ARGS: ReadonlySet<string> = new Set(['sfUiTargetObjectId', 'sfUiTargetResultName']);
+
+/**
+ * VAR-STRING-LITERAL-001 — a `{Var}`/`{Obj.Field}` token stored as
+ * `class="value" valueClass="string"` instead of `class="variable"`. Emits ONE
+ * violation per offending value (the back-end returns a list), so score parity
+ * is preserved; the two interpolation-tolerant target args are exempt.
+ */
+function validateVarStringLiteral(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value, argId } of getStepValueElements(call)) {
+      if (value['@_class'] !== 'value' || value['@_valueClass'] !== 'string') continue;
+      const text = nodeText(value);
+      if (!VAR_LITERAL_PATTERN.test(text) || VAR_LITERAL_TOLERATED_ARGS.has(argId)) continue;
+      violations.push(
+        makeViolation(
+          rule,
+          `Argument value "${text}" looks like a variable reference but is stored as a plain string — Provar ` +
+            'will not resolve it at runtime. Use <value class="variable"> instead ' +
+            `(step '${ctx.title}', testItemId=${ctx.tid})`
+        )
+      );
+    }
+  }
+  return violations;
+}
+
+/** CONN-DB-002 — every DB operation's dbConnectionName must match a DbConnect resultName in the test. */
+function validateDbConnectResultNameMismatch(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const calls = getAllApiCalls(tc);
+  const resultNames = new Set<string>();
+  for (const call of calls) {
+    if (call['@_apiId'] !== DB_CONNECT_API_ID) continue;
+    const rn = resolvedArgText(call, 'resultName');
+    if (rn) resultNames.add(rn);
+  }
+  if (!resultNames.size) return null; // no DbConnect resultName — CONN-DB-001 covers a missing DbConnect
+
+  const offenders: string[] = [];
+  for (const call of calls) {
+    if (!DB_OPERATION_API_IDS.has(call['@_apiId'] as string)) continue;
+    const ref = resolvedArgText(call, 'dbConnectionName');
+    if (!ref || resultNames.has(ref)) continue;
+    offenders.push(`'${stepContext(call).title.slice(0, 40)}' uses dbConnectionName='${ref}'`);
+  }
+  if (!offenders.length) return null;
+  const names = [...resultNames].sort().join(', ');
+  return makeViolation(
+    rule,
+    `DbConnect resultName does not match dbConnectionName in ${offenders.length} DB operation(s): ` +
+      `${offenders[0]} but DbConnect resultName(s) are: ${names}`
+  );
+}
+
+/** The `<value>` children of a SetValues `<namedValue name="value">` (the assigned-value slot). */
+function getSetValuesValueElements(call: XmlNode): XmlNode[] {
+  const out: XmlNode[] = [];
+  for (const nv of collectElementsByTag(call, 'namedValue')) {
+    if (!nv || typeof nv !== 'object' || (nv as XmlNode)['@_name'] !== 'value') continue;
+    for (const v of toArr((nv as XmlNode)['value'] as XmlNode | XmlNode[])) {
+      if (v && typeof v === 'object') out.push(v);
+    }
+  }
+  return out;
+}
+
+const SETVALUES_FUNC_EXPR = /\{[A-Za-z][A-Za-z0-9]*\s*\([^)]*\)\s*\}/;
+const SETVALUES_ZERO_IDX = /\{[^}]*\[0\][^}]*\}/;
+
+/** First SetValues `valueClass="string"` value whose text matches `re` (string-template anti-patterns). */
+function firstSetValuesStringMatch(
+  tc: XmlNode,
+  re: RegExp
+): { ctx: ReturnType<typeof stepContext>; text: string } | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const ve of getSetValuesValueElements(call)) {
+      if (ve['@_class'] !== 'value' || ve['@_valueClass'] !== 'string') continue;
+      const text = nodeText(ve);
+      if (re.test(text)) return { ctx: stepContext(call), text };
+    }
+  }
+  return null;
+}
+
+/** SETVALUES-FUNC-STR-001 — SetValues uses `{Func(args)}` string interpolation instead of a `funcCall` value. */
+function validateSetValuesFuncCallString(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const hit = firstSetValuesStringMatch(tc, SETVALUES_FUNC_EXPR);
+  if (!hit) return null;
+  return makeViolation(
+    rule,
+    'SetValues uses string interpolation for a function call — the value will not be evaluated: ' +
+      `'${hit.ctx.title.slice(0, 50)}' value='${hit.text.slice(0, 60)}' (testItemId=${hit.ctx.tid})`
+  );
+}
+
+/** SETVALUES-ZERO-IDX-001 — SetValues string template uses a 0 index (templates are 1-indexed). */
+function validateSetValuesZeroIndexString(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const hit = firstSetValuesStringMatch(tc, SETVALUES_ZERO_IDX);
+  if (!hit) return null;
+  return makeViolation(
+    rule,
+    'SetValues string expression uses a [0] index — Provar string templates are 1-indexed, causing an ' +
+      `out-of-bounds error at runtime: '${hit.ctx.title.slice(0, 50)}' value='${hit.text.slice(0, 60)}' — use ` +
+      `[1] for the first item (testItemId=${hit.ctx.tid})`
+  );
+}
+
+const ASSERT_WHOLE_EXPR = /^\s*\{[^{}]+\}\s*$/;
+
+/** The direct `<value>` element child of an argument (wrapper-aware), or undefined. */
+function directArgValueElement(call: XmlNode, argId: string): XmlNode | undefined {
+  const arg = findArgumentById(call, argId);
+  if (!arg) return undefined;
+  const raw = arg['value'];
+  const ve = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
+  return ve && typeof ve === 'object' ? (ve as XmlNode) : undefined;
+}
+
+/** ASSERT-STR-VAR-001 — AssertValues references a variable via a `{Var}` string literal instead of `class="variable"`. */
+function validateAssertValuesStringExpr(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== ASSERT_VALUES_API_ID) continue;
+    for (const argId of ['expectedValue', 'actualValue']) {
+      const v = directArgValueElement(call, argId);
+      if (!v || v['@_class'] !== 'value' || v['@_valueClass'] !== 'string') continue;
+      const text = nodeText(v);
+      if (!ASSERT_WHOLE_EXPR.test(text)) continue;
+      const ctx = stepContext(call);
+      return makeViolation(
+        rule,
+        'AssertValues uses a string literal to reference a variable — the assertion compares the literal text, ' +
+          `not the variable value: '${ctx.title.slice(0, 50)}' ${argId}='${text.slice(0, 60)}' should use ` +
+          `<value class="variable"> (testItemId=${ctx.tid})`
+      );
+    }
+  }
+  return null;
+}
+
+/** The `uri` of a UiDoAction's `locator` argument value (`class="uiLocator"`), or '' if absent. */
+function getUiDoActionLocatorUri(call: XmlNode): string {
+  const arg = getCallArguments(call).find((a) => a['@_id'] === 'locator');
+  if (!arg) return '';
+  for (const v of toArr(arg['value'] as XmlNode | XmlNode[])) {
+    if (v && typeof v === 'object' && v['@_class'] === 'uiLocator') {
+      return (v['@_uri'] as string | undefined) ?? '';
+    }
+  }
+  return '';
+}
+
+// Standard SF flow buttons whose locator name must use the corpus-validated casing/path.
+const UI_WRONG_BUTTONS: ReadonlyArray<readonly [string, string]> = [
+  ['Cancel', "use 'name=cancel' (lowercase)"],
+  ['continue', "the Continue button on record type selection screens uses 'name=save&path=selectRecordType'"],
+  ['Continue', "the Continue button on record type selection screens uses 'name=save&path=selectRecordType'"],
+];
+
+/** UI-LOCATOR-BUTTON-CASING-001 — Cancel/Continue flow buttons must use the correct locator name. */
+function validateUiLocatorButtonCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; explanation: string; uri: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_DO_ACTION_API_ID) continue;
+    const uri = getUiDoActionLocatorUri(call);
+    if (!uri) continue;
+    for (const [wrong, explanation] of UI_WRONG_BUTTONS) {
+      if (new RegExp(`name=${escapeRegExp(wrong)}(&|$)`).test(uri)) {
+        offenders.push({ ctx: stepContext(call), wrong, explanation, uri });
+        break; // only report the first match per step (mirrors the back-end)
+      }
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `Step '${f.ctx.title}' uses incorrect button name 'name=${f.wrong}': ${f.explanation}. Incorrect button ` +
+      `names cause Provar to show 'Not Available' and fail at runtime. Current URI: ${f.uri.slice(0, 120)} ` +
+      `(testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+const UI_RECORDTYPE_WRONG = /name=recordType(Id)?(&|$)/;
+
+/** UI-LOCATOR-RECORDTYPE-001 — the Record Type picker locator must use `name=RecordType`, not `name=recordType(Id)`. */
+function validateUiLocatorRecordTypeField(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; uri: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_DO_ACTION_API_ID) continue;
+    const uri = getUiDoActionLocatorUri(call);
+    if (!uri || !UI_RECORDTYPE_WRONG.test(uri)) continue;
+    offenders.push({ ctx: stepContext(call), uri });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `Step '${f.ctx.title}' uses an incorrect Record Type field locator. The Record Type picker must use ` +
+      "'name=RecordType' (not 'name=recordTypeId' or 'name=recordType') with 'field=RecordTypeId' in the binding. " +
+      `Current URI: ${f.uri.slice(0, 150)} (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -1632,6 +1903,13 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   apexConnectValidArguments: validateApexConnectValidArguments,
   apexConnectConnectionIdValueClass: validateApexConnectConnectionIdValueClass,
   setValuesInvalidElements: validateSetValuesInvalidElements,
+  // Tier 4 — back-end-only rules (single-violation ports)
+  dbConnectResultNameMismatch: validateDbConnectResultNameMismatch,
+  setValuesFuncCallString: validateSetValuesFuncCallString,
+  setValuesZeroIndexString: validateSetValuesZeroIndexString,
+  assertValuesStringExpr: validateAssertValuesStringExpr,
+  uiLocatorButtonCasing: validateUiLocatorButtonCasing,
+  uiLocatorRecordTypeField: validateUiLocatorRecordTypeField,
   // 'regex' is dispatched separately (needs metadata)
   // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
 };
@@ -1643,6 +1921,8 @@ const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
   uiActionNestingStructure: validateUiActionNestingStructure,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,
   nitroxVariantArgRequired: validateNitroxVariantArgRequired,
+  // Tier 4 — emits one violation per offending value (back-end returns a list)
+  varStringLiteral: validateVarStringLiteral,
 };
 
 // ── XML parser (shared settings) ─────────────────────────────────────────────
