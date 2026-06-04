@@ -75,6 +75,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.loop.db](#provarloopdb)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
+  - [provar://schema/test-step](#provarschematest-step)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
   - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
@@ -2523,6 +2524,17 @@ Canonical reference for all Provar XML test step API IDs, argument formats, vali
 **MIME type:** `text/markdown`
 
 The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this repository, compiled into the package at build time.
+
+---
+
+### `provar://schema/test-step`
+
+Machine-readable JSON Schema (draft-07) describing the full Provar test case XML structure: the `<testCase>` root, the generic `<apiCall>` shape, and every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with its required/optional arguments and validation rules, plus the value-class types and common patterns. Where `provar://docs/step-reference` is the prose reference, this resource is the structured contract a client can parse to drive generation or validation programmatically.
+
+**URI:** `provar://schema/test-step`  
+**MIME type:** `application/json`
+
+The resource content is the bundled `src/mcp/rules/provar_test_step_schema.json`, compiled into the package at build time. It is the same schema the local best-practices validator's API-ID and value-class checks are derived from, so step structures that satisfy it are consistent with what `provar_testcase_validate` enforces. If the file is missing from the package, the resource returns a small `{ "error": "schema_not_found", "message": … }` object instead.
 
 ---
 

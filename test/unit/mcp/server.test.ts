@@ -10,7 +10,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { describe, it, afterEach } from 'mocha';
-import { resolveDocsDir, readCatalogSource } from '../../../src/mcp/server.js';
+import { resolveDocsDir, readCatalogSource, resolveRulesDir, readTestStepSchema } from '../../../src/mcp/server.js';
 
 describe('resolveDocsDir', () => {
   const tmpDirs: string[] = [];
@@ -125,5 +125,75 @@ describe('readCatalogSource', () => {
     const result = JSON.parse(readCatalogSource(docsDir)) as Record<string, unknown>;
     assert.equal(result['commitSha'], null);
     assert.equal(result['schemasUpdated'], null);
+  });
+});
+
+describe('resolveRulesDir', () => {
+  const tmpDirs: string[] = [];
+
+  afterEach(() => {
+    for (const d of tmpDirs) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup errors
+      }
+    }
+    tmpDirs.length = 0;
+  });
+
+  function makeTmpDir(): string {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-rules-test-'));
+    tmpDirs.push(d);
+    return d;
+  }
+
+  it('returns sibling rules/ when it exists (compiled lib/mcp/ and dev src/mcp/ modes)', () => {
+    const base = makeTmpDir();
+    const sibling = path.join(base, 'rules');
+    fs.mkdirSync(sibling);
+    assert.equal(resolveRulesDir(base), sibling);
+  });
+
+  it('falls back one level to ../rules when the sibling is absent', () => {
+    const base = makeTmpDir();
+    assert.equal(resolveRulesDir(base), path.join(base, '..', 'rules'));
+  });
+});
+
+describe('readTestStepSchema', () => {
+  const tmpDirs: string[] = [];
+
+  afterEach(() => {
+    for (const d of tmpDirs) {
+      try {
+        fs.rmSync(d, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+    }
+    tmpDirs.length = 0;
+  });
+
+  function makeTmpDir(): string {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-rules-test-'));
+    tmpDirs.push(d);
+    return d;
+  }
+
+  it('returns the schema file verbatim when present (parseable JSON with expected keys)', () => {
+    const rulesDir = makeTmpDir();
+    const schema = { title: 'Provar Test Case XML Structure Schema', version: '2.0.0', testCase: {}, apiCalls: {} };
+    fs.writeFileSync(path.join(rulesDir, 'provar_test_step_schema.json'), JSON.stringify(schema));
+    const parsed = JSON.parse(readTestStepSchema(rulesDir)) as typeof schema;
+    assert.equal(parsed.version, '2.0.0');
+    assert.ok('testCase' in parsed && 'apiCalls' in parsed, 'schema should expose testCase and apiCalls');
+  });
+
+  it('returns a schema_not_found fallback object when the file is absent', () => {
+    const rulesDir = makeTmpDir();
+    const result = JSON.parse(readTestStepSchema(rulesDir)) as Record<string, unknown>;
+    assert.equal(result['error'], 'schema_not_found');
+    assert.ok(typeof result['message'] === 'string' && result['message'].length > 0);
   });
 });

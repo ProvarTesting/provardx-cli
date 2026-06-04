@@ -1,0 +1,3004 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Provar Test Case XML Structure Schema",
+  "description": "Complete mapping of Provar test case XML elements, apiCall types, and their required/optional arguments - organized by Test Palette categories",
+  "version": "2.0.0",
+
+  "testCase": {
+    "description": "Root element of a Provar test case",
+    "required_attributes": ["id"],
+    "optional_attributes": ["guid", "registryId", "failureBehaviour", "visibility", "isTestTemplate"],
+    "child_elements": {
+      "summary": {
+        "description": "Human-readable description of test case",
+        "type": "text",
+        "required": false
+      },
+      "params": {
+        "description": "Test case parameters for data-driven testing",
+        "required": false,
+        "children": {
+          "param": {
+            "required_attributes": ["name", "linkedToUrl"],
+            "optional_attributes": ["type", "passwordVariableAllowed", "title"]
+          }
+        }
+      },
+      "args": {
+        "description": "Default argument values for test case parameters",
+        "required": false
+      },
+      "steps": {
+        "description": "Container for all test steps",
+        "required": true,
+        "children": ["apiCall"]
+      }
+    }
+  },
+
+  "apiCall": {
+    "description": "Generic apiCall element representing a test step",
+    "required_attributes": ["guid", "apiId", "name", "testItemId"],
+    "optional_attributes": ["title", "isTitleTemplate", "disabled", "continueOnFailure"],
+    "guid_format": "UUID v4 format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "validation_rules": [
+      "guid must be unique across all steps in test case",
+      "guid must be valid UUID v4 format",
+      "apiId must match a valid Provar API identifier",
+      "testItemId must be unique sequential integer starting from 1"
+    ],
+    "note": "Every <apiCall> element MUST have a guid attribute - this is mandatory for Provar test case validation"
+  },
+
+  "apiCalls": {
+    "description": "All supported Provar test step types organized by Test Palette categories",
+
+    "Control": {
+      "description": "Control flow steps for loops, conditionals, assertions, and test flow management",
+
+      "AssertValues": {
+        "apiId": "com.provar.plugins.bundled.apis.AssertValues",
+        "description": "Validate values using various comparison operators. IMPORTANT: actualValue can be empty for NotEqualTo blank string checks.",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "expectedValue",
+            "type": "value",
+            "description": "Expected value for comparison"
+          },
+          {
+            "id": "actualValue",
+            "type": "value",
+            "description": "Actual value to compare. Can be empty for NotEqualTo blank string checks."
+          },
+          {
+            "id": "comparisonType",
+            "type": "string",
+            "description": "Type of comparison (EqualTo, NotEqualTo, Contains, GreaterThan, LessThan, etc.)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "caseSensitive",
+            "type": "boolean",
+            "default": "true",
+            "description": "Whether comparison is case-sensitive"
+          },
+          {
+            "id": "numeric",
+            "type": "boolean",
+            "default": "true",
+            "description": "Whether to treat values as numbers"
+          },
+          {
+            "id": "retainDecimals",
+            "type": "boolean",
+            "default": "false",
+            "description": "Whether to retain decimal precision"
+          },
+          {
+            "id": "nullGreater",
+            "type": "boolean",
+            "default": "false",
+            "description": "Whether null is greater than non-null"
+          },
+          {
+            "id": "matchMultiLine",
+            "type": "boolean",
+            "default": "false",
+            "description": "Whether to match across multiple lines (for regex)"
+          },
+          {
+            "id": "matchDotAll",
+            "type": "boolean",
+            "default": "false",
+            "description": "Whether dot matches all characters (for regex)"
+          },
+          {
+            "id": "failureMessage",
+            "type": "string",
+            "description": "Custom failure message"
+          },
+          {
+            "id": "continueOnFailure",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "validation_rules": [
+          "expectedValue and actualValue types should be compatible",
+          "comparisonType must be valid operator (EqualTo, NotEqualTo, Contains, NotContain, StartsWith, EndsWith, GreaterThan, LessThan, GreaterOrEqual, LessOrEqual, Matches, NotMatches)",
+          "For NotEqualTo blank string checks, actualValue can be empty"
+        ],
+        "best_practices": [
+          "Use specific comparison types rather than generic EqualTo",
+          "Add meaningful failure messages",
+          "For blank string checks, use expectedValue={variable}, comparisonType='NotEqualTo', actualValue=<empty/>"
+        ]
+      },
+
+      "Break": {
+        "apiId": "com.provar.plugins.bundled.apis.control.Break",
+        "description": "Exit from a loop (ForEach, While) prematurely",
+        "category": "Control",
+        "required_arguments": [],
+        "optional_arguments": [],
+        "validation_rules": ["Must be inside a ForEach or While loop"],
+        "best_practices": [
+          "Use Break sparingly - consider loop conditions instead",
+          "Document reason for breaking loop"
+        ]
+      },
+
+      "Fail": {
+        "apiId": "com.provar.plugins.bundled.apis.control.Fail",
+        "description": "Immediately fail the test with a message",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "message",
+            "type": "string",
+            "description": "Failure message to display"
+          }
+        ],
+        "optional_arguments": [],
+        "validation_rules": ["message should be descriptive"],
+        "best_practices": ["Use for critical validation failures", "Provide clear, actionable failure messages"]
+      },
+
+      "Finally": {
+        "apiId": "com.provar.plugins.bundled.apis.control.Finally",
+        "description": "Execute cleanup steps that always run regardless of test outcome",
+        "category": "Control",
+        "required_arguments": [],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": ["Should be at end of test", "Typically contains cleanup operations"],
+        "best_practices": [
+          "Use for critical cleanup that must always execute",
+          "Keep Finally blocks simple and fast",
+          "Don't perform assertions in Finally"
+        ]
+      },
+
+      "ForEach": {
+        "apiId": "com.provar.plugins.bundled.apis.control.ForEach",
+        "description": "Loop through collection of items",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "valuePath",
+            "type": "variable",
+            "description": "Collection to iterate over"
+          },
+          {
+            "id": "iterationPathName",
+            "type": "string",
+            "description": "Variable name for current item"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": [
+          "valuePath must reference a valid list/collection",
+          "iterationPathName should be meaningful",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Use descriptive iteration variable names",
+          "Consider performance with large collections",
+          "Avoid nested ForEach when possible"
+        ]
+      },
+
+      "GroupSteps": {
+        "apiId": "com.provar.plugins.bundled.apis.control.StepGroup",
+        "description": "Organize related steps into logical groups",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "name",
+            "type": "string",
+            "description": "Group name"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "Detailed group description"
+          }
+        ],
+        "substeps": true,
+        "validation_rules": ["name should be descriptive", "Should contain multiple related steps"],
+        "best_practices": ["Use for tests with 10+ steps", "Group by logical functionality", "Add clear descriptions"]
+      },
+
+      "If": {
+        "apiId": "com.provar.plugins.bundled.apis.If",
+        "description": "Conditional execution based on boolean expression",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "condition",
+            "type": "boolean",
+            "description": "Boolean expression to evaluate"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "clauses": ["then", "else"],
+        "validation_rules": [
+          "condition must be boolean expression",
+          "Must have then clause",
+          "else clause is optional"
+        ],
+        "best_practices": [
+          "Keep conditions simple and readable",
+          "Consider using Switch for multiple conditions",
+          "Avoid deeply nested If statements"
+        ]
+      },
+
+      "SetValues": {
+        "apiId": "com.provar.plugins.bundled.apis.control.SetValues",
+        "description": "Set variable values for use in test",
+        "category": "Control",
+        "required_arguments": [],
+        "optional_arguments": [],
+        "child_elements": {
+          "namedValues": {
+            "description": "Container for namedValue elements",
+            "children": ["namedValue"]
+          },
+          "namedValue": {
+            "required_attributes": ["name"],
+            "optional_attributes": ["readOnly", "value"],
+            "description": "Individual variable assignment"
+          }
+        },
+        "validation_rules": [
+          "Must contain namedValues container",
+          "Each namedValue must have name attribute",
+          "Variable names should follow naming conventions"
+        ],
+        "best_practices": [
+          "Use at beginning of test for test data",
+          "Use descriptive variable names",
+          "Group related variables together"
+        ]
+      },
+
+      "Sleep": {
+        "apiId": "com.provar.plugins.bundled.apis.control.Sleep",
+        "description": "Pause test execution for specified duration",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "sleepSecs",
+            "type": "decimal",
+            "description": "Sleep duration"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "unit",
+            "type": "string",
+            "default": "seconds",
+            "description": "Time unit (seconds)"
+          }
+        ],
+        "validation_rules": ["duration must be positive number", "Avoid long sleep durations"],
+        "best_practices": [
+          "Prefer WaitFor over fixed Sleep",
+          "Keep sleepSecs under 10 seconds",
+          "Document reason for sleep"
+        ]
+      },
+
+      "Switch": {
+        "apiId": "com.provar.plugins.bundled.apis.Switch",
+        "description": "Multi-way conditional branching (similar to switch/case in programming languages)",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "value",
+            "type": "value",
+            "description": "Expression to evaluate against case values"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": false,
+        "clauses": ["case"],
+        "structure": "Switch contains clause name='case' with steps containing multiple SwitchCase apiCalls",
+        "validation_rules": [
+          "Must have at least one case",
+          "Uses clause name='case' (not 'substeps')",
+          "Individual cases are SwitchCase apiCalls within the case clause"
+        ],
+        "best_practices": [
+          "Use Switch instead of multiple If statements",
+          "Always include default case",
+          "Keep cases simple"
+        ],
+        "note": "Individual case/default clauses use apiId='com.provar.plugins.bundled.apis.SwitchCase' as separate apiCall elements within the case clause"
+      },
+
+      "SwitchCase": {
+        "apiId": "com.provar.plugins.bundled.apis.SwitchCase",
+        "description": "Individual case or default clause within a Switch statement (similar to 'case' keyword in programming)",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "value",
+            "type": "value",
+            "description": "Value to match against Switch value (omitted or empty for default case)"
+          },
+          {
+            "id": "caseSensitive",
+            "type": "value",
+            "description": "Whether comparison is case-sensitive (Yes/No)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "alreadyMatched",
+            "type": "value",
+            "description": "Internal flag indicating if a previous case matched"
+          },
+          {
+            "id": "switchValue",
+            "type": "value",
+            "description": "Internal reference to parent Switch value"
+          }
+        ],
+        "substeps": true,
+        "clauses": ["steps"],
+        "validation_rules": [
+          "Must be child of Switch step's case clause",
+          "Default case has empty or no value argument",
+          "Multiple SwitchCase elements can exist within same Switch"
+        ],
+        "best_practices": [
+          "Keep case logic simple",
+          "Use default for catch-all behavior",
+          "Order cases from most to least likely"
+        ],
+        "structure_example": "Switch > clause name='case' > steps > SwitchCase (with clause name='steps' containing substeps)"
+      },
+
+      "WaitFor": {
+        "apiId": "com.provar.plugins.bundled.apis.control.WaitFor",
+        "description": "Wait for condition or duration",
+        "category": "Control",
+        "required_arguments": [],
+        "optional_arguments": [
+          {
+            "id": "duration",
+            "type": "decimal",
+            "description": "Maximum wait duration"
+          },
+          {
+            "id": "condition",
+            "type": "boolean",
+            "description": "Condition to wait for"
+          },
+          {
+            "id": "pollInterval",
+            "type": "decimal",
+            "default": "1",
+            "description": "How often to check condition (seconds)"
+          }
+        ],
+        "validation_rules": ["Must specify duration OR condition", "duration should be reasonable (< 60 seconds)"],
+        "best_practices": [
+          "Prefer condition-based over fixed duration",
+          "Set reasonable timeout values",
+          "Use for async operations"
+        ]
+      },
+
+      "While": {
+        "apiId": "com.provar.plugins.bundled.apis.control.DoWhile",
+        "description": "Loop while condition is true",
+        "category": "Control",
+        "required_arguments": [
+          {
+            "id": "condition",
+            "type": "boolean",
+            "description": "Loop condition"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "maxIterations",
+            "type": "decimal",
+            "description": "Maximum loop iterations to prevent infinite loops"
+          }
+        ],
+        "substeps": true,
+        "validation_rules": [
+          "condition must be boolean",
+          "Should have maxIterations to prevent infinite loops",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Always set maxIterations",
+          "Ensure condition will eventually become false",
+          "Prefer ForEach for collections"
+        ]
+      }
+    },
+
+    "Data": {
+      "description": "Database, REST/Web, and messaging operations",
+
+      "DbConnect": {
+        "apiId": "com.provar.plugins.bundled.apis.db.DbConnect",
+        "description": "Connect to external database (Oracle, SQL Server, DB2, MySQL, PostgreSQL)",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Name of database connection"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "connectionId",
+            "type": "id"
+          },
+          {
+            "id": "autoCommit",
+            "type": "boolean",
+            "default": "true"
+          },
+          {
+            "id": "commitBehavior",
+            "type": "string",
+            "default": "AfterTest"
+          },
+          {
+            "id": "ifAlreadyOpen",
+            "type": "string",
+            "default": "Fail"
+          }
+        ],
+        "validation_rules": ["Should be first DB operation", "connectionName must be unique"],
+        "best_practices": ["Use connection pooling when possible", "Set appropriate commit behavior"]
+      },
+
+      "DbDelete": {
+        "apiId": "com.provar.plugins.bundled.apis.db.DbDelete",
+        "description": "Delete records from database table",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "dbConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "tableName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "whereClause",
+            "type": "string"
+          }
+        ],
+        "validation_rules": [
+          "Must have DbConnect first",
+          "tableName must be valid",
+          "Should have whereClause to avoid deleting all records"
+        ],
+        "best_practices": ["Always use WHERE clause", "Test with SELECT first"]
+      },
+
+      "DbInsert": {
+        "apiId": "com.provar.plugins.bundled.apis.db.DbInsert",
+        "description": "Insert records into database table",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "dbConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "tableName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "columnValues",
+            "type": "object",
+            "description": "Column name/value pairs"
+          }
+        ],
+        "validation_rules": [
+          "Must have DbConnect first",
+          "tableName must be valid",
+          "columnValues should match table schema"
+        ],
+        "best_practices": ["Validate data before insert", "Handle insert failures gracefully"]
+      },
+
+      "DbRead": {
+        "apiId": "com.provar.plugins.bundled.apis.db.DbRead",
+        "description": "Read records from database table",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "dbConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "tableName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "whereClause",
+            "type": "string"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have DbConnect first", "Should store results in variable"],
+        "best_practices": ["Use WHERE clause to limit results", "Store in meaningful variable name"]
+      },
+
+      "DbUpdate": {
+        "apiId": "com.provar.plugins.bundled.apis.db.DbUpdate",
+        "description": "Update records in database table",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "dbConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "tableName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "columnValues",
+            "type": "object"
+          },
+          {
+            "id": "whereClause",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have DbConnect first", "Should have WHERE clause"],
+        "best_practices": ["Always use WHERE clause", "Verify update with SELECT"]
+      },
+
+      "SqlQuery": {
+        "apiId": "com.provar.plugins.bundled.apis.db.SqlQuery",
+        "description": "Execute custom SQL query",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "dbConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "query",
+            "type": "string",
+            "description": "SQL query to execute"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have DbConnect first", "query must be valid SQL"],
+        "best_practices": ["Use parameterized queries", "Store results for verification"]
+      },
+
+      "WebConnect": {
+        "apiId": "com.provar.plugins.bundled.apis.restservice.WebConnect",
+        "description": "Connect to REST API or web service",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "connectionId",
+            "type": "id"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Required before RestRequest", "Required for Agentforce connections"],
+        "best_practices": ["Reuse connections when possible", "Configure authentication properly"]
+      },
+
+      "RestRequest": {
+        "apiId": "com.provar.plugins.bundled.apis.restservice.RestRequest",
+        "description": "Make REST API call",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "webConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "endpoint",
+            "type": "string"
+          },
+          {
+            "id": "method",
+            "type": "string",
+            "description": "HTTP method (GET, POST, PUT, DELETE, PATCH)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "body",
+            "type": "string"
+          },
+          {
+            "id": "headers",
+            "type": "object"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": [
+          "Must have WebConnect first",
+          "method must be valid HTTP method",
+          "Body required for POST/PUT/PATCH"
+        ],
+        "best_practices": ["Validate response status", "Store response for assertions"]
+      },
+
+      "SoapRequest": {
+        "apiId": "com.provar.plugins.bundled.apis.restservice.SoapRequest",
+        "description": "Make SOAP web service request",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          },
+          {
+            "id": "operation",
+            "type": "string",
+            "description": "SOAP operation name"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "requestBody",
+            "type": "string",
+            "description": "SOAP request XML"
+          },
+          {
+            "id": "headers",
+            "type": "object"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": [
+          "Must have WebConnect first",
+          "operation must be valid SOAP operation",
+          "requestBody should be well-formed XML"
+        ],
+        "best_practices": ["Use REST instead of SOAP when possible", "Validate SOAP response"]
+      },
+
+      "PublishMessage": {
+        "apiId": "com.provar.plugins.bundled.apis.messaging.PublishMessage",
+        "description": "Publish message to messaging service",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          },
+          {
+            "id": "message",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "topic",
+            "type": "string"
+          },
+          {
+            "id": "properties",
+            "type": "object"
+          }
+        ],
+        "validation_rules": ["connectionName must be messaging connection", "message should be valid format"],
+        "best_practices": ["Use for async testing", "Validate message format"]
+      },
+
+      "ReceiveMessage": {
+        "apiId": "com.provar.plugins.bundled.apis.messaging.ReceiveMessage",
+        "description": "Receive message from messaging service",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "timeout",
+            "type": "decimal",
+            "default": "30",
+            "description": "Timeout in seconds"
+          },
+          {
+            "id": "selector",
+            "type": "string",
+            "description": "Message selector/filter"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["timeout should be reasonable", "Store result for verification"],
+        "best_practices": ["Set appropriate timeout", "Use selector to filter messages"]
+      },
+
+      "SendMessage": {
+        "apiId": "com.provar.plugins.bundled.apis.messaging.SendMessage",
+        "description": "Send message to specific recipient",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          },
+          {
+            "id": "message",
+            "type": "string"
+          },
+          {
+            "id": "recipient",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "properties",
+            "type": "object"
+          }
+        ],
+        "validation_rules": ["recipient must be valid", "message format should be correct"],
+        "best_practices": ["Validate recipient exists", "Handle send failures"]
+      },
+
+      "Subscribe": {
+        "apiId": "com.provar.plugins.bundled.apis.messaging.Subscribe",
+        "description": "Subscribe to messaging topic/channel",
+        "category": "Data",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          },
+          {
+            "id": "topic",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["topic must exist", "Subscribe before ReceiveMessage"],
+        "best_practices": ["Unsubscribe in cleanup", "Handle subscription errors"]
+      }
+    },
+
+    "Design": {
+      "description": "BDD (Behavior-Driven Development) steps for Gherkin-style test organization",
+
+      "Given": {
+        "apiId": "com.provar.plugins.bundled.apis.bdd.Given",
+        "description": "BDD Given step - set up preconditions",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "Given statement description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": [
+          "Should be first BDD step in scenario",
+          "Description should start with present tense",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Use for test setup and preconditions",
+          "Keep description clear and concise",
+          "Focus on system state, not actions"
+        ]
+      },
+
+      "When": {
+        "apiId": "com.provar.plugins.bundled.apis.bdd.When",
+        "description": "BDD When step - perform actions",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "When statement description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": ["Should follow Given step", "Description should describe action", "Must contain substeps"],
+        "best_practices": [
+          "Use for test actions/operations",
+          "One When per scenario when possible",
+          "Describe user actions clearly"
+        ]
+      },
+
+      "Then": {
+        "apiId": "com.provar.plugins.bundled.apis.bdd.Then",
+        "description": "BDD Then step - verify outcomes",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "Then statement description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": [
+          "Should follow When step",
+          "Description should describe expected outcome",
+          "Must contain substeps with assertions"
+        ],
+        "best_practices": [
+          "Use for verification and assertions",
+          "Focus on observable outcomes",
+          "Each Then should verify one concept"
+        ]
+      },
+
+      "And": {
+        "apiId": "com.provar.plugins.bundled.apis.bdd.And",
+        "description": "BDD And connector - additional steps of same type",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "And statement description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": [
+          "Should follow Given, When, or Then",
+          "Inherits context from previous step",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Use to add additional steps of same type",
+          "Keep And chains reasonable (< 5)",
+          "Consider breaking into separate scenarios if too many Ands"
+        ]
+      },
+
+      "But": {
+        "apiId": "com.provar.plugins.bundled.apis.bdd.But",
+        "description": "BDD But connector - contrasting additional steps",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "But statement description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": [
+          "Should follow Given, When, or Then",
+          "Used for contrasting conditions",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Use for negative assertions or exceptions",
+          "Clarifies contrast with previous steps",
+          "Less common than And"
+        ]
+      },
+
+      "ActualResult": {
+        "apiId": "com.provar.plugins.bundled.apis.control.ActualResult",
+        "description": "Document actual test result for manual review (Design phase step)",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "description",
+            "type": "string",
+            "description": "Actual result description"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "validation_rules": ["description should be descriptive"],
+        "best_practices": [
+          "Use for exploratory testing",
+          "Document unexpected behavior",
+          "Helpful for test case design phase"
+        ]
+      },
+
+      "DesignStep": {
+        "apiId": "com.provar.plugins.bundled.apis.control.DesignStep",
+        "description": "Placeholder step for test case design phase",
+        "category": "Design",
+        "required_arguments": [
+          {
+            "id": "name",
+            "type": "string",
+            "description": "Step name"
+          },
+          {
+            "id": "description",
+            "type": "string",
+            "description": "Step description"
+          },
+          {
+            "id": "expectedResult",
+            "type": "string",
+            "description": "Step expected result"
+          }
+        ],
+        "optional_arguments": [],
+        "validation_rules": [
+          "Should be replaced with actual implementation",
+          "description should describe intended action"
+        ],
+        "best_practices": [
+          "Use during test design phase",
+          "Replace with actual steps before execution",
+          "Helps plan test structure"
+        ]
+      }
+    },
+
+    "ProvarAI": {
+      "description": "AI-powered testing capabilities including Agentforce and test data generation",
+
+      "AIAgentSession": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentSession",
+        "description": "Create Agentforce AI agent session",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "agentConnectionName",
+            "type": "string",
+            "description": "WebConnect connection name"
+          },
+          {
+            "id": "agentId",
+            "type": "string",
+            "description": "Agent ID from Salesforce"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store session ID"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "endSession",
+            "type": "boolean",
+            "default": "false",
+            "description": "End session after creation"
+          }
+        ],
+        "validation_rules": [
+          "Must have WebConnect step first",
+          "agentId must be valid GUID format",
+          "resultName should be unique"
+        ],
+        "best_practices": [
+          "Create session at start of agent testing",
+          "Store session ID for subsequent conversations",
+          "End session explicitly in cleanup"
+        ]
+      },
+
+      "AIAgentConversation": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentConversation",
+        "description": "Send message to AI agent and receive response",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "agentConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "sessionID",
+            "type": "variable",
+            "description": "Session ID from AIAgentSession"
+          },
+          {
+            "id": "message",
+            "type": "string",
+            "description": "Message to send to agent"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store agent response"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "endSession",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "validation_rules": [
+          "Must have AIAgentSession first",
+          "sessionID must reference valid session",
+          "message should be meaningful test input"
+        ],
+        "best_practices": [
+          "Test various conversation scenarios",
+          "Validate agent responses",
+          "Use in ForEach for multiple messages"
+        ]
+      },
+
+      "GenerateUtterance": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.GenerateUtterance",
+        "description": "Generate AI-powered test utterances for intent testing",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "intent",
+            "type": "string",
+            "description": "Intent to generate utterances for"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store generated utterances"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "count",
+            "type": "decimal",
+            "default": "10",
+            "description": "Number of utterances to generate"
+          },
+          {
+            "id": "generateCsvFile",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "validation_rules": ["intent should be descriptive", "count should be reasonable (1-100)"],
+        "best_practices": [
+          "Use for comprehensive intent testing",
+          "Generate variety of phrasings",
+          "Validate with IntentValidator"
+        ]
+      },
+
+      "IntentValidator": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.IntentValidator",
+        "description": "Validate that utterance matches expected intent",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "intent",
+            "type": "string",
+            "description": "Expected intent"
+          },
+          {
+            "id": "utterance",
+            "type": "string",
+            "description": "Utterance to validate"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store validation result"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "continueOnFailure",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "validation_rules": ["intent must be valid", "utterance should be test input"],
+        "best_practices": [
+          "Use with GenerateUtterance",
+          "Test edge cases and variations",
+          "Document validation failures"
+        ]
+      },
+
+      "GenerateTestData": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.generate.GenerateTestData",
+        "description": "AI-powered test data generation",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "dataType",
+            "type": "string",
+            "description": "Type of data to generate (email, name, address, etc.)"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store generated data"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "count",
+            "type": "decimal",
+            "default": "1",
+            "description": "Number of data items to generate"
+          }
+        ],
+        "validation_rules": ["dataType must be supported type", "count should be reasonable"],
+        "best_practices": [
+          "Use for realistic test data",
+          "Validate generated data format",
+          "Consider data privacy requirements"
+        ]
+      },
+
+      "ImageValidator": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.ImageValidator",
+        "description": "AI-powered image validation",
+        "category": "ProvarAI",
+        "required_arguments": [
+          {
+            "id": "imagePath",
+            "type": "string",
+            "description": "Path to image file"
+          },
+          {
+            "id": "validationCriteria",
+            "type": "string",
+            "description": "What to validate in image"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "confidenceThreshold",
+            "type": "decimal",
+            "default": "0.8",
+            "description": "Minimum confidence score (0.0-1.0)"
+          }
+        ],
+        "validation_rules": [
+          "imagePath must be valid file path",
+          "validationCriteria should be specific",
+          "confidenceThreshold should be 0.0-1.0"
+        ],
+        "best_practices": [
+          "Use for visual regression testing",
+          "Set appropriate confidence threshold",
+          "Test with various image conditions"
+        ]
+      }
+    },
+
+    "ProvarLabs": {
+      "description": "Experimental and advanced Provar features",
+
+      "GenerateTestCase": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.GenerateTestCase",
+        "description": "AI-powered test case generation from scenario",
+        "category": "ProvarLabs",
+        "required_arguments": [
+          {
+            "id": "scenario",
+            "type": "string",
+            "description": "Test scenario description"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store generated test case"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "template",
+            "type": "string",
+            "description": "Template to use for generation"
+          },
+          {
+            "id": "framework",
+            "type": "string",
+            "description": "Test framework (BDD, standard, etc.)"
+          }
+        ],
+        "validation_rules": ["scenario should be clear and detailed", "Review generated test before use"],
+        "best_practices": [
+          "Use for rapid test creation",
+          "Review and refine generated tests",
+          "Provide detailed scenarios for better results"
+        ]
+      },
+
+      "PageObjectCleaner": {
+        "apiId": "com.provar.plugins.bundled.apis.provarlabs.PageObjectCleaner",
+        "description": "Clean up and optimize page object models",
+        "category": "ProvarLabs",
+        "required_arguments": [
+          {
+            "id": "pageObjectPath",
+            "type": "string",
+            "description": "Path to page object file"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "cleanupStrategy",
+            "type": "string",
+            "default": "RemoveUnused",
+            "description": "Strategy for cleanup"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["pageObjectPath must be valid", "Backup page objects before cleaning"],
+        "best_practices": [
+          "Run periodically to maintain page objects",
+          "Review changes before committing",
+          "Use in maintenance scripts"
+        ]
+      }
+    },
+
+    "Salesforce": {
+      "description": "Salesforce-specific operations including Apex API, SOQL, and SF-specific features",
+
+      "ApexConnect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConnect",
+        "description": "Connect to Salesforce Apex API",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Name of the Salesforce connection"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "connectionId",
+            "type": "string"
+          },
+          {
+            "id": "autoCleanup",
+            "type": "boolean",
+            "default": "true",
+            "description": "Automatically delete created objects after test"
+          },
+          {
+            "id": "enableObjectIdLogging",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test"
+          }
+        ],
+        "validation_rules": [
+          "Should be first step when using Apex API",
+          "connectionName must be unique",
+          "If autoCleanup=true, enableObjectIdLogging must be true"
+        ],
+        "best_practices": [
+          "Use meaningful connection names",
+          "Set autoCleanup=true unless manual cleanup required",
+          "Reuse connections when possible"
+        ]
+      },
+
+      "ApexCreateObject": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject",
+        "description": "Create Salesforce object via Apex",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "resultIdName",
+            "type": "string",
+            "description": "Variable to store created object ID"
+          },
+          {
+            "id": "objectType",
+            "type": "string",
+            "description": "Salesforce object type (Account, Contact, etc.)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "fieldValues",
+            "type": "object",
+            "description": "Field values for the object"
+          }
+        ],
+        "validation_rules": [
+          "Must have ApexConnect first",
+          "objectType must be valid SF object",
+          "Required fields must be provided"
+        ],
+        "best_practices": ["Store result ID for later use", "Provide all required fields", "Use for test data setup"]
+      },
+
+      "ApexReadObject": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexReadObject",
+        "description": "Read Salesforce object by ID",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectType",
+            "type": "string"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          },
+          {
+            "id": "objectId",
+            "type": "variable",
+            "description": "ID of object to read"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "fields",
+            "type": "array",
+            "description": "Fields to retrieve"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "objectId must be valid 15 or 18 character SF ID"],
+        "best_practices": ["Specify fields to retrieve", "Use for verification steps"]
+      },
+
+      "ApexUpdateObject": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexUpdateObject",
+        "description": "Update Salesforce object",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectType",
+            "type": "string"
+          },
+          {
+            "id": "objectId",
+            "type": "variable"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "fieldValues",
+            "type": "object"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "objectId must be valid"],
+        "best_practices": ["Only update fields that changed", "Verify update with ApexReadObject"]
+      },
+
+      "ApexDeleteObject": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexDeleteObject",
+        "description": "Delete Salesforce object",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectId",
+            "type": "variable"
+          }
+        ],
+        "optional_arguments": [],
+        "validation_rules": ["Must have ApexConnect first", "Use only if autoCleanup=false"],
+        "best_practices": [
+          "Prefer autoCleanup over manual delete",
+          "Delete in Finally block for reliability",
+          "Use ApexLogForCleanup for SOQL-based cleanup"
+        ]
+      },
+
+      "ApexSoqlQuery": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSoqlQuery",
+        "description": "Execute SOQL query",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "soqlQuery",
+            "type": "string",
+            "description": "SOQL query string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "resultListName",
+            "type": "string",
+            "description": "Variable to store query results"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test"
+          }
+        ],
+        "validation_rules": [
+          "Must have ApexConnect first",
+          "SOQL must have SELECT and FROM clauses",
+          "Always retrieve Id field",
+          "Use {VariableName[1].FieldName} syntax (1-indexed)"
+        ],
+        "best_practices": [
+          "Always select Id and Name fields",
+          "Use WHERE clause to limit results",
+          "Store results for later use",
+          "Use ORDER BY for predictable results"
+        ]
+      },
+
+      "ApexExecute": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexExecute",
+        "description": "Execute anonymous Apex code",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "apexBlock",
+            "type": "string",
+            "description": "Apex code to execute"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "results",
+            "type": "string",
+            "description": "Variable to store execution results"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "apexBlock must be valid Apex syntax"],
+        "best_practices": [
+          "Use for complex operations not available via API",
+          "Keep Apex code simple",
+          "Test Apex code in Developer Console first"
+        ]
+      },
+
+      "ApexBulk": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexBulk",
+        "description": "Execute bulk Apex operations",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectType",
+            "type": "string"
+          },
+          {
+            "id": "operation",
+            "type": "string",
+            "description": "Bulk operation (insert, update, delete, etc.)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "records",
+            "type": "array",
+            "description": "Records to process"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": [
+          "Must have ApexConnect first",
+          "operation must be valid bulk operation",
+          "records must be valid for operation"
+        ],
+        "best_practices": [
+          "Use for large data volumes (> 200 records)",
+          "Handle bulk API limits",
+          "Monitor bulk job status"
+        ]
+      },
+
+      "ApexApproveWorkItem": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexApproveWorkItem",
+        "description": "Approve Salesforce approval work item",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "workItemId",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "comments",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "workItemId must be valid"],
+        "best_practices": ["Add approval comments", "Verify approval status after"]
+      },
+
+      "SubmitForApproval": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexSubmitForApproval",
+        "description": "Submit record for approval",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectId",
+            "type": "variable"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "comments",
+            "type": "string"
+          },
+          {
+            "id": "processName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "Object must have approval process"],
+        "best_practices": ["Verify record meets approval criteria", "Track approval process status"]
+      },
+
+      "ConvertLead": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexConvertLead",
+        "description": "Convert Salesforce lead",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "leadId",
+            "type": "variable"
+          },
+          {
+            "id": "convertedStatus",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "contactId",
+            "type": "variable"
+          },
+          {
+            "id": "accountId",
+            "type": "variable"
+          },
+          {
+            "id": "ownerId",
+            "type": "variable"
+          },
+          {
+            "id": "createOpportunity",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "opportunityName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "convertedStatus must be valid lead status"],
+        "best_practices": ["Verify lead meets conversion criteria", "Store converted IDs for verification"]
+      },
+
+      "ExtractSalesforceLayout": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexExtractLayout",
+        "description": "Extract Salesforce page layout for comparison",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "extractRecordPageLayout",
+            "type": "boolean",
+            "default": "true"
+          },
+          {
+            "id": "extractDynamicFormLayout",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "dataUrl",
+            "type": "string",
+            "description": "File path to save layout"
+          }
+        ],
+        "validation_rules": ["Must have ApexConnect first", "objectName must be valid"],
+        "best_practices": ["Use for layout validation tests", "Save layouts for regression testing"]
+      },
+
+      "AssertSalesforceLayout": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexAssertLayout",
+        "description": "Assert Salesforce page layout matches expected",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "objectName",
+            "type": "string"
+          },
+          {
+            "id": "dataUrl",
+            "type": "string",
+            "description": "Path to expected layout file"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "extractRecordPageLayout",
+            "type": "boolean",
+            "default": "true"
+          },
+          {
+            "id": "extractDynamicFormLayout",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "validation_rules": [
+          "Must have ApexConnect first",
+          "Must have ExtractSalesforceLayout first",
+          "dataUrl must point to valid layout file"
+        ],
+        "best_practices": ["Use for regression testing", "Update baseline after intentional changes"]
+      },
+
+      "LogForCleanup": {
+        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ApexLogForCleanup",
+        "description": "Log SOQL query results for cleanup",
+        "category": "Salesforce",
+        "required_arguments": [
+          {
+            "id": "apexConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "selector",
+            "type": "string",
+            "description": "SOQL query to select records for cleanup"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "maxMatches",
+            "type": "decimal",
+            "description": "Maximum records to log"
+          }
+        ],
+        "validation_rules": [
+          "Must have ApexConnect first with enableObjectIdLogging=true",
+          "selector must be valid SOQL",
+          "Use ORDER BY CreatedDate DESC LIMIT 1 for latest record"
+        ],
+        "best_practices": [
+          "Use for dynamic cleanup",
+          "Add after create operations",
+          "Use with ORDER BY for predictable cleanup"
+        ]
+      }
+    },
+
+    "UI": {
+      "description": "User interface automation steps for Salesforce and web applications",
+
+      "UiConnect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiConnect",
+        "description": "Connect to Salesforce UI or web application",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "connectionId",
+            "type": "string"
+          },
+          {
+            "id": "uiApplicationName",
+            "type": "string",
+            "default": "LightningSales"
+          },
+          {
+            "id": "reuseConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "closeAllOtherTabs",
+            "type": "boolean",
+            "default": "true"
+          },
+          {
+            "id": "privateBrowsingMode",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "webBrowser",
+            "type": "string",
+            "default": "Chrome_Headless"
+          }
+        ],
+        "validation_rules": ["Should be first UI step", "connectionName must be unique"],
+        "best_practices": [
+          "Use headless mode for CI/CD",
+          "Reuse connections when possible",
+          "Close tabs for clean state"
+        ]
+      },
+
+      "MSDynamics365Connect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dynamics365",
+        "description": "Connect to a Microsoft Dynamics 365 application via the NitroX connector. Use INSTEAD of UiConnect when targeting Microsoft Dynamics 365.",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Provar connection profile name configured for the Dynamics 365 environment"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable name that downstream UI steps reference via uiConnectionName"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test",
+            "description": "Scope of the connection result (typically 'Test')"
+          },
+          {
+            "id": "appName",
+            "type": "string",
+            "description": "Dynamics 365 app to open after sign-in (e.g., 'Sales Hub', 'Customer Service Hub'). May be left empty if declared as a runtime-bound <apiParam name=\"appName\"> in <generatedParameters>."
+          }
+        ],
+        "optional_arguments": [
+          { "id": "reuseConnectionName", "type": "string" },
+          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
+          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+        ],
+        "validation_rules": [
+          "Use INSTEAD of UiConnect/ApexConnect for Microsoft Dynamics 365 targets",
+          "resultName is required so downstream UI steps can set uiConnectionName",
+          "appName must be populated OR declared as a runtime parameter in <generatedParameters> (data-driven pattern)"
+        ],
+        "best_practices": [
+          "Set appName to the target model-driven app to land directly on the right surface",
+          "Declare appName in <generatedParameters> when the value is supplied at runtime",
+          "Use headless mode for CI/CD"
+        ]
+      },
+
+      "MSDataverseConnect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-dataverse",
+        "description": "Connect to a Microsoft Dataverse environment via the NitroX connector. Use INSTEAD of UiConnect when targeting Microsoft Dataverse.",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Provar connection profile name configured for the Dataverse environment"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable name that downstream UI steps reference via uiConnectionName"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test",
+            "description": "Scope of the connection result (typically 'Test')"
+          }
+        ],
+        "optional_arguments": [
+          { "id": "reuseConnectionName", "type": "string" },
+          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
+          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+        ],
+        "validation_rules": [
+          "Use INSTEAD of UiConnect/ApexConnect for Microsoft Dataverse targets",
+          "resultName is required so downstream UI steps can set uiConnectionName",
+          "Has no variant-specific arguments; <generatedParameters/> stays empty"
+        ],
+        "best_practices": [
+          "Reuse the connection across the test rather than reconnecting",
+          "Use headless mode for CI/CD"
+        ]
+      },
+
+      "MSPowerAppConnect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerapp",
+        "description": "Connect to a Microsoft Power App via the NitroX connector. Use INSTEAD of UiConnect when targeting Microsoft Power Apps.",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Provar connection profile name configured for the Power Apps tenant"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable name that downstream UI steps reference via uiConnectionName"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test",
+            "description": "Scope of the connection result (typically 'Test')"
+          },
+          {
+            "id": "powerAppName",
+            "type": "string",
+            "description": "Display name of the target Power App. May be left empty if declared as a runtime-bound <apiParam name=\"powerAppName\"> in <generatedParameters>."
+          }
+        ],
+        "optional_arguments": [
+          { "id": "reuseConnectionName", "type": "string" },
+          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
+          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+        ],
+        "validation_rules": [
+          "Use INSTEAD of UiConnect/ApexConnect for Microsoft Power Apps targets",
+          "resultName is required so downstream UI steps can set uiConnectionName",
+          "powerAppName must be populated OR declared as a runtime parameter in <generatedParameters> (data-driven pattern)"
+        ],
+        "best_practices": [
+          "Set powerAppName to the exact display name from the Power Apps maker portal",
+          "Declare powerAppName in <generatedParameters> when the value is supplied at runtime",
+          "Use headless mode for CI/CD"
+        ]
+      },
+
+      "MSPowerPageConnect": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.NitroXConnect:ms-powerpage",
+        "description": "Connect to a Microsoft Power Page via the NitroX connector. Use INSTEAD of UiConnect when targeting Microsoft Power Pages.",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "connectionName",
+            "type": "string",
+            "description": "Provar connection profile name configured for the Power Pages tenant"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable name that downstream UI steps reference via uiConnectionName"
+          },
+          {
+            "id": "resultScope",
+            "type": "string",
+            "default": "Test",
+            "description": "Scope of the connection result (typically 'Test')"
+          },
+          {
+            "id": "environment",
+            "type": "string",
+            "description": "Power Platform environment that hosts the page. May be left empty if declared as a runtime-bound <apiParam name=\"environment\"> in <generatedParameters>."
+          },
+          {
+            "id": "powerPageName",
+            "type": "string",
+            "description": "Display name of the target Power Page site. May be left empty if declared as a runtime-bound <apiParam name=\"powerPageName\"> in <generatedParameters>."
+          }
+        ],
+        "optional_arguments": [
+          { "id": "reuseConnectionName", "type": "string" },
+          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
+          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+        ],
+        "validation_rules": [
+          "Use INSTEAD of UiConnect/ApexConnect for Microsoft Power Pages targets",
+          "resultName is required so downstream UI steps can set uiConnectionName",
+          "environment and powerPageName must each be populated OR declared as runtime parameters in <generatedParameters>"
+        ],
+        "best_practices": [
+          "Set environment and powerPageName so the test lands on the right Power Page site",
+          "Declare environment / powerPageName in <generatedParameters> when supplied at runtime",
+          "Use headless mode for CI/CD"
+        ]
+      },
+
+      "UiWithScreen": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiWithScreen",
+        "description": "Navigate to and interact with Salesforce screen",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "screenName",
+            "type": "string",
+            "description": "Screen name (e.g., 'Account Home', 'Account New')"
+          },
+          {
+            "id": "uiConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "target",
+            "type": "uiTarget",
+            "description": "Screen target (sf:ui:target?object=X&action=Y)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "navigate",
+            "type": "string",
+            "default": "Always",
+            "description": "Always for first screen, Dont for subsequent"
+          },
+          {
+            "id": "targetDescription",
+            "type": "string"
+          },
+          {
+            "id": "windowSelection",
+            "type": "string",
+            "default": "Default"
+          },
+          {
+            "id": "windowSize",
+            "type": "string",
+            "default": "Default"
+          },
+          {
+            "id": "sfUiTargetResultName",
+            "type": "string",
+            "description": "Store record ID (required for New screens)"
+          },
+          {
+            "id": "sfUiTargetResultScope",
+            "type": "string",
+            "default": "Test"
+          },
+          {
+            "id": "sfUiTargetObjectId",
+            "type": "variable",
+            "description": "Record ID to edit/view (required for Edit/View screens when navigate=Always)"
+          }
+        ],
+        "substeps": true,
+        "naming_convention": "On {ObjectName} {ScreenType} screen",
+        "validation_rules": [
+          "Must have UiConnect first",
+          "First screen: navigate=Always",
+          "Subsequent screens: navigate=Dont",
+          "New screens: must store sfUiTargetResultName",
+          "Edit/View screens with navigate=Always: must have sfUiTargetObjectId"
+        ],
+        "best_practices": [
+          "Follow naming convention",
+          "Store record IDs from New screens",
+          "Group related UI actions in substeps"
+        ]
+      },
+
+      "UiDoAction": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiDoAction",
+        "description": "Perform UI action (click, set, select, etc.)",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "locator",
+            "type": "uiLocator",
+            "description": "UI element locator"
+          },
+          {
+            "id": "interaction",
+            "type": "uiInteraction",
+            "description": "Interaction type (click, set, check, etc.)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "value",
+            "type": "value",
+            "description": "Value for set/select interactions"
+          },
+          {
+            "id": "captureBefore",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "captureAfter",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "parent_required": "UiWithScreen",
+        "validation_rules": [
+          "Must be inside UiWithScreen substeps",
+          "value required for set/select interactions",
+          "Picklist: use ui:interaction?name=set",
+          "Lead Conversion buttons: MUST use name=submitConvert and action=submitConvert (NOT Convert, ConvertButton, or action=convert)",
+          "Dialog fields (e.g., OpportunityName): MUST bind to the TARGET object (object=Opportunity with field=name, NOT object=Lead with field=OpportunityName)"
+        ],
+        "locator_format": {
+          "description": "uiLocator URI format for UiDoAction steps",
+          "action_buttons": {
+            "format": "ui:locator?name=<actionName>&binding=sf%3Aui%3Abinding%3Aobject%3Faction%3D<actionName>",
+            "examples": {
+              "lead_convert_button": "ui:locator?name=submitConvert&binding=sf%3Aui%3Abinding%3Aobject%3Faction%3DsubmitConvert",
+              "save_button": "ui:locator?name=save&binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DAccount%26action%3Dsave",
+              "new_button": "ui:locator?name=New&binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DAccount%26action%3DNew",
+              "continue_button_record_type_selection": "ui:locator?name=save&path=selectRecordType",
+              "cancel_button": "ui:locator?name=cancel&binding=sf%3Aui%3Abinding%3Aobject%3Faction%3Dcancel",
+              "record_type_field": "ui:locator?name=RecordType&binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3D%7BtargetUrl%3Aobject%7D%26field%3DRecordTypeId"
+            }
+          },
+          "dialog_fields": {
+            "format": "ui:locator?name=<fieldName>&binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3D<fieldName>%26object%3D<targetObject>",
+            "examples": {
+              "opportunity_name_in_lead_convert": "ui:locator?name=name&binding=sf%3Aui%3Abinding%3Aobject%3Ffield%3Dname%26object%3DOpportunity"
+            },
+            "note": "Dialog fields reference the TARGET object being created, not the source object"
+          }
+        },
+        "best_practices": [
+          "Use descriptive locator names",
+          "Validate values before setting",
+          "Add screenshots for failures"
+        ]
+      },
+
+      "UiAssert": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiAssert",
+        "description": "Assert UI element state or value",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "locator",
+            "type": "uiLocator"
+          },
+          {
+            "id": "assertionType",
+            "type": "string",
+            "description": "Type of assertion (EqualTo, Contains, etc.)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "expectedValue",
+            "type": "value"
+          },
+          {
+            "id": "continueOnFailure",
+            "type": "boolean",
+            "default": "false"
+          }
+        ],
+        "parent_required": "UiWithScreen",
+        "validation_rules": [
+          "Must be inside UiWithScreen substeps",
+          "Currency fields: format as $1,000.00",
+          "Phone fields: format as (123) 456-7890",
+          "Date/time: use Contains or EqualTo based on format"
+        ],
+        "best_practices": [
+          "Format values to match UI display",
+          "Use appropriate assertion type",
+          "Assert critical values"
+        ]
+      },
+
+      "UiNavigate": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiNavigate",
+        "description": "Navigate to URL",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "url",
+            "type": "string",
+            "description": "URL to navigate to"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "uiConnectionName",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["url must be valid", "Use for non-Salesforce sites or direct URLs"],
+        "best_practices": [
+          "Prefer UiWithScreen for Salesforce navigation",
+          "Use for external sites",
+          "Wait for page load after navigation"
+        ]
+      },
+
+      "UiFill": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiFill",
+        "description": "Auto-fill form fields",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "formLocator",
+            "type": "uiLocator",
+            "description": "Form container locator"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "fieldValues",
+            "type": "object",
+            "description": "Field name/value pairs"
+          }
+        ],
+        "parent_required": "UiWithScreen",
+        "validation_rules": ["Must be inside UiWithScreen substeps", "Field names must match form fields"],
+        "best_practices": ["Use for multi-field forms", "Verify all fields filled", "Handle required fields first"]
+      },
+
+      "UiWithRow": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiWithRow",
+        "description": "Work with specific table/list row",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "tableLocator",
+            "type": "uiLocator",
+            "description": "Table/list locator"
+          },
+          {
+            "id": "rowSelector",
+            "type": "string",
+            "description": "Row selection criteria"
+          }
+        ],
+        "optional_arguments": [],
+        "substeps": true,
+        "parent_required": "UiWithScreen",
+        "validation_rules": [
+          "Must be inside UiWithScreen substeps",
+          "rowSelector must be valid",
+          "Must contain substeps"
+        ],
+        "best_practices": [
+          "Use for table interactions",
+          "Specify unique row selector",
+          "Handle multiple rows with ForEach"
+        ]
+      },
+
+      "UiHandleAlert": {
+        "apiId": "com.provar.plugins.forcedotcom.core.ui.UiHandleAlert",
+        "description": "Handle browser alerts and pop-ups",
+        "category": "UI",
+        "required_arguments": [
+          {
+            "id": "action",
+            "type": "string",
+            "description": "Action to take (Accept, Dismiss, GetText)"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store alert text"
+          }
+        ],
+        "validation_rules": ["action must be valid (Accept, Dismiss, GetText)", "Store text when using GetText"],
+        "best_practices": ["Handle alerts promptly", "Validate alert text", "Use in Try/Catch for optional alerts"]
+      }
+    },
+
+    "Utility": {
+      "description": "String manipulation, list operations, and file I/O utilities",
+
+      "Read": {
+        "apiId": "com.provar.plugins.bundled.apis.io.Read",
+        "description": "Read data from Excel/CSV file",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "dataUrl",
+            "type": "string",
+            "description": "Path to Excel/CSV file"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store read data"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "worksheetName",
+            "type": "string",
+            "description": "Excel worksheet name"
+          },
+          {
+            "id": "valuesRange",
+            "type": "string",
+            "description": "Cell range to read (e.g., A1:D10)"
+          },
+          {
+            "id": "namesLocation",
+            "type": "string",
+            "default": "FirstRowOfRange",
+            "description": "Where column names are located"
+          }
+        ],
+        "validation_rules": [
+          "dataUrl must be valid file path",
+          "File must exist and be readable",
+          "valuesRange must be valid Excel range"
+        ],
+        "best_practices": ["Use for data-driven testing", "Store in meaningful variable", "Validate data after reading"]
+      },
+
+      "Write": {
+        "apiId": "com.provar.plugins.bundled.apis.io.Write",
+        "description": "Write data to file",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "data",
+            "type": "variable",
+            "description": "Data to write"
+          },
+          {
+            "id": "dataUrl",
+            "type": "string",
+            "description": "Output file path"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "updateValueRange",
+            "type": "string"
+          },
+          {
+            "id": "updateMatchType",
+            "type": "string"
+          },
+          {
+            "id": "updateMatchLocator",
+            "type": "string"
+          }
+        ],
+        "validation_rules": ["data must be valid variable", "dataUrl must be writable path"],
+        "best_practices": ["Use for test result recording", "Ensure output directory exists", "Handle write failures"]
+      },
+
+      "Replace": {
+        "apiId": "com.provar.plugins.bundled.apis.string.Replace",
+        "description": "Replace text in string",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "input",
+            "type": "string",
+            "description": "Input string"
+          },
+          {
+            "id": "searchString",
+            "type": "string",
+            "description": "Text to find"
+          },
+          {
+            "id": "replacement",
+            "type": "string",
+            "description": "Replacement text"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "caseSensitive",
+            "type": "boolean",
+            "default": "true"
+          },
+          {
+            "id": "replaceAll",
+            "type": "boolean",
+            "default": "true",
+            "description": "Replace all occurrences vs first only"
+          }
+        ],
+        "validation_rules": ["searchString should not be empty", "Store result in variable"],
+        "best_practices": ["Use for string formatting", "Consider regex for complex patterns", "Test with edge cases"]
+      },
+
+      "Split": {
+        "apiId": "com.provar.plugins.bundled.apis.string.Split",
+        "description": "Split string into array",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "input",
+            "type": "string",
+            "description": "String to split"
+          },
+          {
+            "id": "delimiter",
+            "type": "string",
+            "description": "Delimiter character/string"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store array"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "maxSplits",
+            "type": "decimal",
+            "description": "Maximum number of splits"
+          }
+        ],
+        "validation_rules": ["delimiter should not be empty", "Store result as list"],
+        "best_practices": ["Use for parsing delimited data", "Iterate results with ForEach", "Handle empty splits"]
+      },
+
+      "Match": {
+        "apiId": "com.provar.plugins.bundled.apis.string.Match",
+        "description": "Pattern matching and regex operations",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "input",
+            "type": "string",
+            "description": "Input string to match against"
+          },
+          {
+            "id": "pattern",
+            "type": "string",
+            "description": "Regex pattern or match string"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "isRegex",
+            "type": "boolean",
+            "default": "false",
+            "description": "Treat pattern as regex"
+          },
+          {
+            "id": "caseSensitive",
+            "type": "boolean",
+            "default": "true"
+          }
+        ],
+        "validation_rules": ["pattern must be valid regex if isRegex=true", "Store match results"],
+        "best_practices": [
+          "Use for validation and extraction",
+          "Test regex patterns separately",
+          "Handle no-match scenarios"
+        ]
+      },
+
+      "ListCompare": {
+        "apiId": "com.provar.plugins.bundled.apis.list.ListCompareListCompare",
+        "description": "Compare two lists",
+        "category": "Utility",
+        "required_arguments": [
+          {
+            "id": "list1",
+            "type": "variable",
+            "description": "First list"
+          },
+          {
+            "id": "list2",
+            "type": "variable",
+            "description": "Second list"
+          },
+          {
+            "id": "resultName",
+            "type": "string",
+            "description": "Variable to store comparison results"
+          }
+        ],
+        "optional_arguments": [
+          {
+            "id": "compareType",
+            "type": "string",
+            "default": "Equal",
+            "description": "Comparison type (Equal, Contains, etc.)"
+          }
+        ],
+        "validation_rules": ["Both lists must be valid", "Store comparison result"],
+        "best_practices": [
+          "Use for data validation",
+          "Compare sorted lists for order-independent comparison",
+          "Handle different list sizes"
+        ]
+      }
+    }
+  },
+
+  "value_types": {
+    "description": "Standard value class types used in Provar test steps. Based on corpus analysis of 329,424 value elements across 1,451 test files.",
+
+    "_valid_class_values": {
+      "description": "Complete list of valid 'class' attribute values for <value> elements",
+      "literal_and_container": ["value", "variable", "compound", "funcCall", "valueList", "namedValues"],
+      "ui_types": ["uiWait", "uiLocator", "uiTarget", "uiInteraction"],
+      "data_sources": ["restTarget", "excelTarget", "csvTarget", "url", "template"],
+      "expression_operators": ["add", "sub", "mult", "div", "eq", "ne", "gt", "lt", "ge", "le", "and", "or", "match"],
+      "invalid_never_use": ["null"]
+    },
+
+    "_valid_valueClass_values": {
+      "description": "Complete list of valid 'valueClass' attribute values when class='value'",
+      "values": ["string", "boolean", "decimal", "id", "date", "dateTime"],
+      "invalid_never_use": ["null", "integer", "number", "text"]
+    },
+
+    "string": {
+      "class": "value",
+      "valueClass": "string",
+      "description": "String literal value"
+    },
+    "boolean": {
+      "class": "value",
+      "valueClass": "boolean",
+      "valid_values": ["true", "false"]
+    },
+    "decimal": {
+      "class": "value",
+      "valueClass": "decimal",
+      "description": "Numeric value"
+    },
+    "id": {
+      "class": "value",
+      "valueClass": "id",
+      "description": "Salesforce ID or GUID"
+    },
+    "date": {
+      "class": "value",
+      "valueClass": "date",
+      "description": "Date value"
+    },
+    "dateTime": {
+      "class": "value",
+      "valueClass": "dateTime",
+      "description": "DateTime value"
+    },
+    "variable": {
+      "class": "variable",
+      "description": "Reference to test variable",
+      "syntax": "{VariableName} or {VariableName.FieldName} or {VariableName[index].FieldName}",
+      "note": "Array indices are 1-based, not 0-based",
+      "child_element": {
+        "path": {
+          "required_attribute": "element",
+          "description": "Variable path (e.g., VariableName, VariableName.Field)"
+        }
+      }
+    },
+    "expression": {
+      "class": "expression",
+      "description": "Dynamic expression evaluation"
+    },
+    "uiLocator": {
+      "class": "uiLocator",
+      "description": "UI element locator",
+      "uri_format": "ui:locator?..."
+    },
+    "uiTarget": {
+      "class": "uiTarget",
+      "description": "UI navigation target",
+      "uri_format": "sf:ui:target?object=X&action=Y"
+    },
+    "uiInteraction": {
+      "class": "uiInteraction",
+      "description": "UI interaction type",
+      "uri_format": "ui:interaction?name=set|click|check|..."
+    }
+  },
+
+  "common_patterns": {
+    "description": "Common test case patterns and best practices",
+
+    "apex_crud_pattern": {
+      "description": "Standard Salesforce Apex CRUD operation pattern",
+      "category": "Salesforce",
+      "steps": [
+        {
+          "step": "ApexConnect",
+          "purpose": "Establish connection with autoCleanup=true"
+        },
+        {
+          "step": "ApexCreateObject or ApexUpdateObject",
+          "purpose": "Perform CRUD operation, store result ID"
+        },
+        {
+          "step": "ApexSoqlQuery (optional)",
+          "purpose": "Verify operation success"
+        },
+        {
+          "step": "Automatic cleanup",
+          "purpose": "autoCleanup deletes created objects"
+        }
+      ],
+      "best_practices": [
+        "Enable autoCleanup for automatic cleanup",
+        "Store object IDs for verification",
+        "Use SOQL to verify operations"
+      ]
+    },
+
+    "ui_interaction_pattern": {
+      "description": "Standard UI interaction and verification pattern",
+      "category": "UI",
+      "steps": [
+        {
+          "step": "UiConnect",
+          "purpose": "Establish UI connection"
+        },
+        {
+          "step": "UiWithScreen (navigate=Always)",
+          "purpose": "Navigate to target screen",
+          "substeps": [
+            {
+              "step": "UiDoAction",
+              "purpose": "Interact with UI elements"
+            },
+            {
+              "step": "UiAssert",
+              "purpose": "Verify UI state"
+            }
+          ]
+        },
+        {
+          "step": "UiWithScreen (navigate=Dont)",
+          "purpose": "Subsequent screens",
+          "substeps": ["More UI interactions"]
+        }
+      ],
+      "best_practices": [
+        "First screen: navigate=Always",
+        "Subsequent screens: navigate=Dont",
+        "Store record IDs from New screens",
+        "Group related actions in substeps"
+      ]
+    },
+
+    "data_driven_pattern": {
+      "description": "Data-driven testing with external data files",
+      "category": "Control + Utility",
+      "steps": [
+        {
+          "step": "Read",
+          "purpose": "Read test data from Excel/CSV"
+        },
+        {
+          "step": "ForEach",
+          "purpose": "Loop through data rows",
+          "substeps": [
+            {
+              "step": "SetValues",
+              "purpose": "Extract current row data"
+            },
+            {
+              "step": "Connection + Operations",
+              "purpose": "Execute test with data"
+            },
+            {
+              "step": "Assert",
+              "purpose": "Verify results"
+            },
+            {
+              "step": "Write",
+              "purpose": "Record results back to file"
+            }
+          ]
+        }
+      ],
+      "best_practices": ["Use Read to load test data", "Use ForEach to iterate rows", "Write results for reporting"]
+    },
+
+    "agentforce_conversation_pattern": {
+      "description": "Agentforce AI agent conversation testing pattern",
+      "category": "ProvarAI + Data",
+      "steps": [
+        {
+          "step": "Read",
+          "purpose": "Load conversation test data"
+        },
+        {
+          "step": "WebConnect",
+          "purpose": "Establish agent connection"
+        },
+        {
+          "step": "ApexConnect (optional)",
+          "purpose": "Connect to Salesforce for record validation"
+        },
+        {
+          "step": "AIAgentSession",
+          "purpose": "Create agent session, store session ID"
+        },
+        {
+          "step": "ForEach (conversation data)",
+          "purpose": "Iterate through test scenarios",
+          "substeps": [
+            {
+              "step": "GenerateUtterance (optional)",
+              "purpose": "Generate test utterances for intent"
+            },
+            {
+              "step": "AIAgentConversation",
+              "purpose": "Send message, receive response"
+            },
+            {
+              "step": "IntentValidator (optional)",
+              "purpose": "Validate agent understood intent"
+            },
+            {
+              "step": "ApexSoqlQuery (optional)",
+              "purpose": "Verify agent created/updated records"
+            },
+            {
+              "step": "LogForCleanup (optional)",
+              "purpose": "Log created records for cleanup"
+            },
+            {
+              "step": "Write",
+              "purpose": "Record conversation results"
+            }
+          ]
+        },
+        {
+          "step": "AIAgentConversation (endSession=true)",
+          "purpose": "End agent session"
+        }
+      ],
+      "best_practices": [
+        "Test multiple conversation paths",
+        "Validate agent responses",
+        "Log records for cleanup",
+        "End session explicitly"
+      ]
+    },
+
+    "callable_test_case_pattern": {
+      "description": "Calling reusable test cases with caseCall element",
+      "category": "Design + Control",
+      "usage": {
+        "caseCall_element": {
+          "description": "Reference to another test case to execute",
+          "required_attributes": [
+            {
+              "name": "testCaseId",
+              "description": "GUID of the callable test case"
+            },
+            {
+              "name": "testCasePath",
+              "description": "Relative path to the .testcase file"
+            },
+            {
+              "name": "testItemId",
+              "description": "Unique test item ID"
+            }
+          ],
+          "optional_attributes": [
+            {
+              "name": "guid",
+              "description": "Unique GUID for this call instance"
+            }
+          ]
+        },
+        "callable_test_requirements": {
+          "visibility": "Internal or Callable",
+          "description": "Test case being called must have visibility='Internal' or visibility='Callable'",
+          "note": "Public tests cannot be called from other tests"
+        }
+      },
+      "example": "<caseCall guid=\"unique-guid\" testCaseId=\"test-guid\" testCasePath=\"path/to/test.testcase\" testItemId=\"10\"/>",
+      "best_practices": [
+        "Use for reusable test logic (setup, cleanup, common flows)",
+        "Ensure called test has visibility='Internal'",
+        "Pass parameters using <argument> elements if test has <params>",
+        "Use for modular test design"
+      ],
+      "validation_rules": [
+        "testCaseId must match an existing test case GUID",
+        "testCasePath must be valid relative path",
+        "Called test must have visibility='Internal' or visibility='Callable'",
+        "Parameter types must match called test signature"
+      ]
+    },
+
+    "parameterized_test_pattern": {
+      "description": "Test case with input parameters for reusability",
+      "category": "Design",
+      "structure": {
+        "params_section": {
+          "description": "Define test case parameters in <params> element",
+          "param_attributes": [
+            {
+              "name": "name",
+              "required": true,
+              "description": "Parameter name"
+            },
+            {
+              "name": "passwordVariableAllowed",
+              "required": false,
+              "description": "Allow password variables"
+            },
+            {
+              "name": "title",
+              "required": false,
+              "description": "Display title"
+            }
+          ],
+          "param_child_elements": [
+            {
+              "name": "summary",
+              "description": "Parameter description"
+            },
+            {
+              "name": "type",
+              "description": "Parameter data type (textType, booleanType, etc.)"
+            }
+          ]
+        },
+        "args_section": {
+          "description": "Default parameter values in <args> element",
+          "note": "Arguments can be overridden when calling the test via caseCall"
+        }
+      },
+      "example_usage": {
+        "define_params": "<params><param name=\"SEQUENCE_ID\" passwordVariableAllowed=\"true\" title=\"Sequence ID\">...</param></params>",
+        "provide_defaults": "<args><argument id=\"SEQUENCE_ID\"><value class=\"value\" valueClass=\"string\">123</value></argument></args>",
+        "call_with_params": "<caseCall testCaseId=\"...\"><arguments><argument id=\"SEQUENCE_ID\"><value>456</value></argument></arguments></caseCall>"
+      },
+      "best_practices": [
+        "Define clear parameter names",
+        "Provide default values in <args>",
+        "Document parameter purpose in summary",
+        "Use for reusable callable tests"
+      ]
+    },
+
+    "bdd_scenario_pattern": {
+      "description": "BDD (Behavior-Driven Development) test scenario structure",
+      "category": "Design",
+      "steps": [
+        {
+          "step": "Given",
+          "purpose": "Set up preconditions",
+          "substeps": ["Setup steps, data creation"]
+        },
+        {
+          "step": "And (optional)",
+          "purpose": "Additional Given conditions"
+        },
+        {
+          "step": "When",
+          "purpose": "Perform test action",
+          "substeps": ["Action steps"]
+        },
+        {
+          "step": "And (optional)",
+          "purpose": "Additional When actions"
+        },
+        {
+          "step": "Then",
+          "purpose": "Verify outcomes",
+          "substeps": ["Assertion steps"]
+        },
+        {
+          "step": "And/But (optional)",
+          "purpose": "Additional Then verifications"
+        }
+      ],
+      "best_practices": [
+        "One When per scenario when possible",
+        "Focus Given on state, not actions",
+        "Use Then for observable outcomes",
+        "Limit And/But chains to 3-5"
+      ]
+    },
+
+    "database_testing_pattern": {
+      "description": "External database testing pattern",
+      "category": "Data",
+      "steps": [
+        {
+          "step": "DbConnect",
+          "purpose": "Establish database connection"
+        },
+        {
+          "step": "DbInsert or DbUpdate",
+          "purpose": "Set up test data"
+        },
+        {
+          "step": "SqlQuery or DbRead",
+          "purpose": "Verify data state"
+        },
+        {
+          "step": "DbDelete",
+          "purpose": "Clean up test data"
+        }
+      ],
+      "best_practices": ["Always use WHERE clauses", "Test queries with SELECT first", "Clean up in Finally block"]
+    },
+
+    "rest_api_testing_pattern": {
+      "description": "REST API testing pattern",
+      "category": "Data",
+      "steps": [
+        {
+          "step": "WebConnect",
+          "purpose": "Establish API connection"
+        },
+        {
+          "step": "RestRequest (GET)",
+          "purpose": "Retrieve initial state"
+        },
+        {
+          "step": "RestRequest (POST/PUT)",
+          "purpose": "Modify data"
+        },
+        {
+          "step": "RestRequest (GET)",
+          "purpose": "Verify changes"
+        },
+        {
+          "step": "Assert",
+          "purpose": "Validate response data"
+        }
+      ],
+      "best_practices": [
+        "Validate response status codes",
+        "Store responses for assertions",
+        "Handle authentication properly"
+      ]
+    }
+  }
+}
