@@ -177,7 +177,9 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllPrompts(server);
 
   // ── Documentation resources ──────────────────────────────────────────────────
-  const docsDir = resolveDocsDir(dirname(fileURLToPath(import.meta.url)));
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const docsDir = resolveDocsDir(moduleDir);
+  const rulesDir = resolveRulesDir(moduleDir);
 
   server.resource(
     'provar-nitrox-component-catalog',
@@ -258,6 +260,22 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   server.resource(
+    'provar-test-step-schema',
+    'provar://schema/test-step',
+    {
+      description:
+        'Structured JSON reference describing the full Provar test case XML structure: the <testCase> root, the generic <apiCall> shape, every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with required/optional arguments and validation rules, plus value-class types and common patterns. This is a Provar-specific schema reference (domain-keyed: testCase / apiCalls / value_types), NOT a standards-compliant constraint JSON Schema — read it to author or validate test-step XML with exact argument names and structures, not to drive a JSON-Schema validator.',
+      mimeType: 'application/json',
+    },
+    () => {
+      const text = readTestStepSchema(rulesDir);
+      return {
+        contents: [{ uri: 'provar://schema/test-step', mimeType: 'application/json', text }],
+      };
+    }
+  );
+
+  server.resource(
     'provar-tool-guide',
     'provar://docs/tool-guide',
     {
@@ -329,6 +347,42 @@ export function readCatalogSource(docsDir: string): string {
         commitSha: null,
         fetchedAt: null,
         schemasUpdated: null,
+      },
+      null,
+      2
+    );
+  }
+}
+
+/**
+ * Resolve the rules directory for bundled MCP JSON resources. The rules/ dir is
+ * a sibling of this module in both compiled output (lib/mcp/rules) and dev mode
+ * (src/mcp/rules); fall back one level up if a future layout moves it.
+ */
+export function resolveRulesDir(currentDir: string): string {
+  const sibling = join(currentDir, 'rules');
+  return existsSync(sibling) ? sibling : join(currentDir, '..', 'rules');
+}
+
+/**
+ * Read provar_test_step_schema.json from the rules directory and return it as a
+ * JSON string. The file is parsed once to verify it is valid JSON before being
+ * returned verbatim, so the resource never advertises `application/json` while
+ * serving a truncated/corrupted body; on a missing or unparseable file it
+ * returns a small `schema_not_found` fallback object, mirroring the
+ * graceful-degradation shape of the other resource handlers.
+ */
+export function readTestStepSchema(rulesDir: string): string {
+  try {
+    const raw = readFileSync(join(rulesDir, 'provar_test_step_schema.json'), 'utf-8');
+    JSON.parse(raw); // validate only — return the original text untouched if it parses
+    return raw;
+  } catch {
+    return JSON.stringify(
+      {
+        error: 'schema_not_found',
+        message:
+          'provar_test_step_schema.json not found. If you are developing from source, rebuild the package; otherwise reinstall or upgrade the plugin and try again.',
       },
       null,
       2

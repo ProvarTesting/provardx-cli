@@ -75,6 +75,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.loop.db](#provarloopdb)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
+  - [provar://schema/test-step](#provarschematest-step)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
   - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
@@ -2523,6 +2524,19 @@ Canonical reference for all Provar XML test step API IDs, argument formats, vali
 **MIME type:** `text/markdown`
 
 The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this repository, compiled into the package at build time.
+
+---
+
+### `provar://schema/test-step`
+
+Structured JSON reference describing the full Provar test case XML structure: the `<testCase>` root, the generic `<apiCall>` shape, and every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with its required/optional arguments and validation rules, plus the value-class types and common patterns. Where `provar://docs/step-reference` is the prose reference, this resource is the structured contract a client can parse to drive generation or validation programmatically.
+
+This is a **Provar-specific schema reference** — its top-level keys (`testCase`, `apiCall`, `apiCalls`, `value_types`, `common_patterns`) are Provar domain entities, not JSON-Schema keywords. Although the file carries a `$schema: draft-07` declaration inherited from its source, it is **not** a standards-compliant constraint JSON Schema; do not load it into a JSON-Schema validator expecting it to constrain documents.
+
+**URI:** `provar://schema/test-step`  
+**MIME type:** `application/json`
+
+The resource content is the bundled `src/mcp/rules/provar_test_step_schema.json`, compiled into the package at build time. It is the same schema the local best-practices validator's API-ID and value-class checks are derived from, so step structures that satisfy it are consistent with what `provar_testcase_validate` enforces. The handler parses the file once to confirm it is valid JSON before serving it; if the file is missing or unparseable, the resource returns a small `{ "error": "schema_not_found", "message": … }` object instead.
 
 ---
 
