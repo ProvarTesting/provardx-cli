@@ -384,21 +384,18 @@ export function validateTestCaseXml(filePath: string, config: ServerConfig): Tes
 
 /** TC_010/TC_011: validate testCase id and guid attributes. */
 function checkTestCaseIdAndGuid(tcId: string | null, tcGuid: string | undefined, issues: ValidationIssue[]): void {
-  if (!tcId) {
+  // The testCase `id` is OPTIONAL — the guid is the unique identifier (real Provar
+  // projects routinely omit id). When an id IS present it must be a non-negative
+  // integer: test case ids are project-unique sequential numbers (corpus shows 0…N),
+  // NOT the literal "1". Only a present-but-non-numeric id (e.g. a UUID) is rejected.
+  if (tcId !== null && !/^\d+$/.test(tcId)) {
     issues.push({
       rule_id: 'TC_010',
       severity: 'ERROR',
-      message: 'testCase missing required id attribute.',
+      message: `testCase id="${tcId}" is invalid — when present, the id must be a non-negative integer (test case ids are unique within a project, numbered sequentially). The guid is the cross-project unique identifier.`,
       applies_to: 'testCase',
-      suggestion: 'Add id="1" to testCase element (Provar requires the integer literal "1").',
-    });
-  } else if (tcId !== '1') {
-    issues.push({
-      rule_id: 'TC_010',
-      severity: 'ERROR',
-      message: `testCase id="${tcId}" is invalid — Provar requires id="1" (integer literal).`,
-      applies_to: 'testCase',
-      suggestion: 'Set id="1" on the testCase element. The unique identifier is the guid attribute, not id.',
+      suggestion:
+        'Set id to a project-unique non-negative integer (typically the highest in use + 1), or omit the id attribute entirely and rely on the guid.',
     });
   }
   if (!tcGuid) {
