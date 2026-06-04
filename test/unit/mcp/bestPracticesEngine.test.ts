@@ -1361,3 +1361,269 @@ ${stepsXml}
     });
   });
 });
+
+describe('structural / load-affecting validators (Tier 5)', () => {
+  const GUID_T5_TC = '550e8400-e29b-41d4-a716-4466554406d0';
+  const GUID_T5_S1 = '550e8400-e29b-41d4-a716-4466554406d1';
+  const SET_VALUES = 'com.provar.plugins.bundled.apis.control.SetValues';
+  const UI_ASSERT = 'com.provar.plugins.forcedotcom.core.ui.UiAssert';
+  const UI_DO_ACTION = 'com.provar.plugins.forcedotcom.core.ui.UiDoAction';
+  const GENERIC = 'com.provar.plugins.forcedotcom.core.testapis.ApexExecute';
+
+  function buildTc(stepsXml: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-t5" guid="${GUID_T5_TC}" registryId="tc-t5" name="Tier5 Test">
+  <steps>
+${stepsXml}
+  </steps>
+</testCase>`;
+  }
+
+  function find(violations: BPViolation[], ruleId: string): BPViolation | undefined {
+    return violations.find((v) => v.rule_id === ruleId);
+  }
+
+  // ── validFuncCallId (FUNCCALL-VALID-001) ───────────────────────────────────
+  describe('validFuncCallId — FUNCCALL-VALID-001', () => {
+    function funcStep(valueXml: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${GENERIC}" name="Exec" testItemId="1">
+      <arguments>
+        <argument id="value">${valueXml}</argument>
+      </arguments>
+    </apiCall>`);
+    }
+
+    it('fires for a hallucinated funcCall id', () => {
+      const v = find(
+        runBestPractices(funcStep('<value class="funcCall" id="Concatenate"/>')).violations,
+        'FUNCCALL-VALID-001'
+      );
+      assert.ok(v, 'Expected FUNCCALL-VALID-001 to fire for id="Concatenate"');
+      assert.equal(v?.severity, 'major');
+    });
+
+    it('passes for a real Provar built-in (Count)', () => {
+      const v = find(
+        runBestPractices(funcStep('<value class="funcCall" id="Count"/>')).violations,
+        'FUNCCALL-VALID-001'
+      );
+      assert.ok(!v, `id="Count" is valid and should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── rootAttributes (RENDER-ROOT-001) ───────────────────────────────────────
+  describe('rootAttributes — RENDER-ROOT-001', () => {
+    it('fires when the root testCase carries an unknown attribute', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-t5" guid="${GUID_T5_TC}" registryId="tc-t5" name="Tier5" bogusAttr="x"><steps/></testCase>`;
+      const v = find(runBestPractices(xml).violations, 'RENDER-ROOT-001');
+      assert.ok(v, 'Expected RENDER-ROOT-001 to fire for an unknown root attribute');
+      assert.ok(v?.message.includes('bogusAttr'), `Message should name the bad attr: ${v?.message}`);
+    });
+
+    it('passes when the root has only known attributes', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-t5" guid="${GUID_T5_TC}" registryId="tc-t5" name="Tier5" visibility="Public" failureBehaviour="Continue"><steps/></testCase>`;
+      const v = find(runBestPractices(xml).violations, 'RENDER-ROOT-001');
+      assert.ok(!v, `Only known root attrs should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── setValuesStructure (SETVALUES-STRUCTURE-001) ───────────────────────────
+  describe('setValuesStructure — SETVALUES-STRUCTURE-001', () => {
+    it('fires for a SetValues step with no <namedValues> container', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"/></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-STRUCTURE-001');
+      assert.ok(v, 'Expected SETVALUES-STRUCTURE-001 to fire when <namedValues> is missing');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes when the SetValues step contains a <namedValues> container', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="value"><value class="value" valueClass="string">1</value></namedValue></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-STRUCTURE-001');
+      assert.ok(!v, `A SetValues with <namedValues> should pass, got: ${v?.message}`);
+    });
+
+    it('does NOT fire for a data-driven SetValues (values from an external source)', () => {
+      // Excel/CSV-driven SetValues declares <parameterValueSources> and carries an
+      // empty <value class="valueList"/> with no inline <namedValues> — corpus-confirmed valid.
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Read Data" testItemId="1">
+      <arguments><argument id="values"><value class="valueList" mutable="Mutable"/></argument></arguments>
+      <parameterValueSources><parameterValueSource variableName="Data" variableScope="Test"><cachedParameters><apiParam name="RowNumber"/></cachedParameters></parameterValueSource></parameterValueSources>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-STRUCTURE-001');
+      assert.ok(!v, `A data-driven SetValues must pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── namedValueName (SETVALUES-NAME-001) ────────────────────────────────────
+  describe('namedValueName — SETVALUES-NAME-001', () => {
+    it('fires when a namedValue lacks a name attribute', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue><value class="value" valueClass="string">1</value></namedValue></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-NAME-001');
+      assert.ok(v, 'Expected SETVALUES-NAME-001 to fire for a nameless namedValue');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes when every namedValue has a name attribute', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="value"><value class="value" valueClass="string">1</value></namedValue></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-NAME-001');
+      assert.ok(!v, `A named namedValue should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── namedValueValue (SETVALUES-VALUE-001) ──────────────────────────────────
+  describe('namedValueValue — SETVALUES-VALUE-001', () => {
+    it('fires when a non-structural namedValue has no child <value>', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="MyVar"/></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(v, 'Expected SETVALUES-VALUE-001 to fire for a non-slot namedValue with no <value> child');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('does NOT fire for an empty value slot (blank field) — corpus-confirmed valid', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="valuePath"><value class="value" valueClass="string">Field__c</value></namedValue><namedValue name="value"/></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(!v, `An empty name="value" slot blanks the field and must pass, got: ${v?.message}`);
+    });
+
+    it('does NOT fire for a wholly-blank row (empty valuePath + value) — an unused row', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="valuePath"/><namedValue name="value"/></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(!v, `A blank/unused SetValues row must pass, got: ${v?.message}`);
+    });
+
+    it('passes when every namedValue has a child <value>', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${SET_VALUES}" name="Set" testItemId="1">
+      <arguments><argument id="values"><value class="valueList"><namedValues><namedValue name="value"><value class="value" valueClass="string">1</value></namedValue></namedValues></value></argument></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'SETVALUES-VALUE-001');
+      assert.ok(!v, `A namedValue with a <value> child should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── uiAssertHallucinatedGeneratedParameters (UI-ASSERT-STRUCT-002) ─────────
+  describe('uiAssertHallucinatedGeneratedParameters — UI-ASSERT-STRUCT-002', () => {
+    it('fires for a UiAssert step containing <generatedParameters>', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_ASSERT}" name="Assert" testItemId="1">
+      <generatedParameters><apiParam name="foo"/></generatedParameters>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'UI-ASSERT-STRUCT-002');
+      assert.ok(v, 'Expected UI-ASSERT-STRUCT-002 to fire for hallucinated generatedParameters');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes for a UiAssert step with no generatedParameters', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_ASSERT}" name="Assert" testItemId="1"/>`);
+      const v = find(runBestPractices(xml).violations, 'UI-ASSERT-STRUCT-002');
+      assert.ok(!v, `A UiAssert with no generatedParameters should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── uiAssertMissingArguments (UI-ASSERT-STRUCT-001) ────────────────────────
+  describe('uiAssertMissingArguments — UI-ASSERT-STRUCT-001', () => {
+    it('fires for a UiAssert step missing required arguments', () => {
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_ASSERT}" name="Assert" testItemId="1">
+      <arguments><argument id="resultName"/></arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'UI-ASSERT-STRUCT-001');
+      assert.ok(v, 'Expected UI-ASSERT-STRUCT-001 to fire when required args are missing');
+      assert.equal(v?.severity, 'critical');
+      assert.ok(v?.message.includes('fieldAssertions'), `Message should list a missing arg: ${v?.message}`);
+    });
+
+    it('passes when all required UiAssert arguments are present', () => {
+      const args = [
+        'fieldAssertions',
+        'columnAssertions',
+        'pageAssertions',
+        'resultScope',
+        'captureAfter',
+        'beforeWait',
+        'autoRetry',
+      ]
+        .map((a) => `<argument id="${a}"/>`)
+        .join('');
+      const xml = buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_ASSERT}" name="Assert" testItemId="1">
+      <arguments>${args}</arguments>
+    </apiCall>`);
+      const v = find(runBestPractices(xml).violations, 'UI-ASSERT-STRUCT-001');
+      assert.ok(!v, `All required args present should pass, got: ${v?.message}`);
+    });
+  });
+
+  // ── bindingParameterOrder (UI-BINDING-ORDER-001) ───────────────────────────
+  describe('bindingParameterOrder — UI-BINDING-ORDER-001', () => {
+    function locStep(uri: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_DO_ACTION}" name="Click" testItemId="1">
+      <arguments><argument id="locator"><value class="uiLocator" uri="${uri}"/></argument></arguments>
+    </apiCall>`);
+    }
+
+    it('fires for an action-before-object binding order', () => {
+      const v = find(
+        runBestPractices(locStep('ui:locator?binding=object%3Faction%3DNEW%26object%3DAccount')).violations,
+        'UI-BINDING-ORDER-001'
+      );
+      assert.ok(v, 'Expected UI-BINDING-ORDER-001 to fire for action-first order');
+      assert.equal(
+        v?.severity,
+        'major',
+        'wrong binding order errors at runtime (the test loads) — major, not critical'
+      );
+    });
+
+    it('passes for the object-first binding order', () => {
+      const v = find(
+        runBestPractices(locStep('ui:locator?binding=object%3Fobject%3DAccount%26action%3DNEW')).violations,
+        'UI-BINDING-ORDER-001'
+      );
+      assert.ok(!v, `object-first order should pass, got: ${v?.message}`);
+    });
+
+    it('does not fire for a locator with no binding= parameter', () => {
+      const v = find(runBestPractices(locStep('ui:locator?name=save')).violations, 'UI-BINDING-ORDER-001');
+      assert.ok(!v, 'a locator without a binding is out of scope for this rule');
+    });
+  });
+
+  // ── uiConnectionNameLiteral (UI-CONN-LITERAL-001) ──────────────────────────
+  describe('uiConnectionNameLiteral — UI-CONN-LITERAL-001', () => {
+    function uiConnStep(valueXml: string): string {
+      return buildTc(`    <apiCall guid="${GUID_T5_S1}" apiId="${UI_DO_ACTION}" name="Click" testItemId="1">
+      <arguments><argument id="uiConnectionName">${valueXml}</argument></arguments>
+    </apiCall>`);
+    }
+
+    it('fires when uiConnectionName is a variable reference', () => {
+      const v = find(
+        runBestPractices(uiConnStep('<value class="variable"><path element="ConnName"/></value>')).violations,
+        'UI-CONN-LITERAL-001'
+      );
+      assert.ok(v, 'Expected UI-CONN-LITERAL-001 to fire for a variable uiConnectionName');
+      assert.equal(v?.severity, 'critical');
+    });
+
+    it('passes when uiConnectionName is a literal string', () => {
+      const v = find(
+        runBestPractices(uiConnStep('<value class="value" valueClass="string">MyConnection</value>')).violations,
+        'UI-CONN-LITERAL-001'
+      );
+      assert.ok(!v, `A literal uiConnectionName should pass, got: ${v?.message}`);
+    });
+  });
+});

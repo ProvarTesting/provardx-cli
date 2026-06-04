@@ -2670,10 +2670,10 @@
       "id": "UI-BINDING-ORDER-001",
       "category": "LocatorPatterns",
       "name": "UI binding parameter order must have object= first",
-      "description": "In UI binding URIs, the object= parameter MUST come FIRST, followed by field= or action=. Wrong order causes 'Unknown control' errors in Provar at runtime.",
+      "description": "In UI binding URIs, the object= parameter MUST come FIRST, followed by field= or action=. Wrong order causes 'Unknown control' errors in Provar at runtime (the test case still loads, so this is a major runtime defect, not a load-blocking critical).",
       "appliesTo": ["Step"],
-      "severity": "critical",
-      "weight": 10,
+      "severity": "major",
+      "weight": 5,
       "recommendation": "Correct the binding parameter order. Use 'object?object=ObjectName&action=ActionName' or 'object?object=ObjectName&field=FieldName'. Never put action= or field= before object=.",
       "check": {
         "type": "bindingParameterOrder",
