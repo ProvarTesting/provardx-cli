@@ -1,5 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Provar-specific structural reference for test case XML (top-level keys are Provar domain entities such as testCase/apiCalls, not JSON-Schema keywords). Despite the $schema declaration this is NOT a standards-compliant constraint JSON Schema; it is consumed as the provar://schema/test-step MCP resource and as the source for the validator's API-ID / value-class sets.",
   "title": "Provar Test Case XML Structure Schema",
   "description": "Complete mapping of Provar test case XML elements, apiCall types, and their required/optional arguments - organized by Test Palette categories",
   "version": "2.0.0",

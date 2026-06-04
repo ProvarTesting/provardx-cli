@@ -264,7 +264,7 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
     'provar://schema/test-step',
     {
       description:
-        'Machine-readable JSON Schema (draft-07) describing the full Provar test case XML structure: the <testCase> root, the generic <apiCall> shape, every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with required/optional arguments and validation rules, plus value-class types and common patterns. Read this to author or validate test-step XML with exact argument names and structures.',
+        'Structured JSON reference describing the full Provar test case XML structure: the <testCase> root, the generic <apiCall> shape, every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with required/optional arguments and validation rules, plus value-class types and common patterns. This is a Provar-specific schema reference (domain-keyed: testCase / apiCalls / value_types), NOT a standards-compliant constraint JSON Schema — read it to author or validate test-step XML with exact argument names and structures, not to drive a JSON-Schema validator.',
       mimeType: 'application/json',
     },
     () => {
@@ -366,13 +366,17 @@ export function resolveRulesDir(currentDir: string): string {
 
 /**
  * Read provar_test_step_schema.json from the rules directory and return it as a
- * JSON string (verbatim — the file is already canonical JSON). Returns a small
- * fallback object string if the file is absent or unreadable, mirroring the
+ * JSON string. The file is parsed once to verify it is valid JSON before being
+ * returned verbatim, so the resource never advertises `application/json` while
+ * serving a truncated/corrupted body; on a missing or unparseable file it
+ * returns a small `schema_not_found` fallback object, mirroring the
  * graceful-degradation shape of the other resource handlers.
  */
 export function readTestStepSchema(rulesDir: string): string {
   try {
-    return readFileSync(join(rulesDir, 'provar_test_step_schema.json'), 'utf-8');
+    const raw = readFileSync(join(rulesDir, 'provar_test_step_schema.json'), 'utf-8');
+    JSON.parse(raw); // validate only — return the original text untouched if it parses
+    return raw;
   } catch {
     return JSON.stringify(
       {

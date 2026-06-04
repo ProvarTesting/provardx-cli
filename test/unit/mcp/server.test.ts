@@ -196,4 +196,11 @@ describe('readTestStepSchema', () => {
     assert.equal(result['error'], 'schema_not_found');
     assert.ok(typeof result['message'] === 'string' && result['message'].length > 0);
   });
+
+  it('returns the schema_not_found fallback when the file is present but corrupted (invalid JSON)', () => {
+    const rulesDir = makeTmpDir();
+    fs.writeFileSync(path.join(rulesDir, 'provar_test_step_schema.json'), '{ "truncated": ');
+    const result = JSON.parse(readTestStepSchema(rulesDir)) as Record<string, unknown>;
+    assert.equal(result['error'], 'schema_not_found', 'a corrupt file must not be served verbatim as application/json');
+  });
 });
