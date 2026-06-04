@@ -1889,6 +1889,251 @@ function validateUiLocatorRecordTypeField(tc: XmlNode, rule: BPRule): BPViolatio
   );
 }
 
+// ── Structural / load-affecting check types (Tier 5) ─────────────────────────
+// Faithful ports of nine Quality Hub structural validators. Six emit a single
+// first-offender violation with no `count`; validFuncCallId, the two UiAssert
+// structure checks, and bindingParameterOrder collect every offender and emit
+// one violation carrying `count` (capped at 5 for funcCall), matching the
+// back-end so the weighted-deduction score stays in parity with the Lambda.
+
+const UI_ASSERT_API_ID = 'com.provar.plugins.forcedotcom.core.ui.UiAssert';
+
+// FUNCCALL-VALID-001 — Provar's built-in funcCall ids (exact back-end whitelist, 20 entries).
+const VALID_FUNCCALL_IDS: ReadonlySet<string> = new Set([
+  'TestCaseName',
+  'TestCasePath',
+  'TestCaseOutcome',
+  'TestCaseSuccessful',
+  'TestCaseErrors',
+  'TestRunErrors',
+  'StringReplace',
+  'StringTrim',
+  'StringNormalize',
+  'DateAdd',
+  'DateFormat',
+  'DateParse',
+  'Count',
+  'Round',
+  'NumberFormat',
+  'Not',
+  'IsSorted',
+  'GetEnvironmentVariable',
+  'GetSelectedEnvironment',
+  'UniqueId',
+]);
+
+/** FUNCCALL-VALID-001 — every `<value class="funcCall">` `id` must be a real Provar built-in function. */
+function validateValidFuncCallId(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: string[] = [];
+  for (const v of collectValueElements(tc)) {
+    if (v['@_class'] !== 'funcCall') continue;
+    const id = (v['@_id'] as string | undefined) ?? '';
+    if (id && !VALID_FUNCCALL_IDS.has(id)) offenders.push(id);
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  let msg = `Unknown funcCall id(s) — these functions do not exist in Provar: ${offenders
+    .slice(0, 3)
+    .map((id) => `'${id}'`)
+    .join(', ')}`;
+  if (offenders.length > 3) msg += ` (+${offenders.length - 3} more)`;
+  msg +=
+    '. Valid functions include Count, DateAdd, DateFormat, Round, StringReplace, UniqueId, etc. ' +
+    'For string concatenation use <value class="compound"><parts>…</parts></value>.';
+  return makeViolation(rule, msg, Math.min(offenders.length, MAX));
+}
+
+// RENDER-ROOT-001 — the only attributes allowed on the root <testCase> element.
+const VALID_ROOT_ATTRS: ReadonlySet<string> = new Set([
+  'guid',
+  'id',
+  'name',
+  'visibility',
+  'registryId',
+  'failureBehaviour',
+]);
+
+/** RENDER-ROOT-001 — the root `<testCase>` element must not carry unknown attributes. */
+function validateRootAttributes(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const unknown = Object.keys(tc)
+    .filter((k) => k.startsWith('@_'))
+    .map((k) => k.slice(2))
+    .filter((a) => !VALID_ROOT_ATTRS.has(a));
+  if (!unknown.length) return null;
+  return makeViolation(rule, `Unknown root attributes: ${unknown.join(', ')}`);
+}
+
+/** SETVALUES-STRUCTURE-001 — every SetValues step must contain a `<namedValues>` container. */
+function validateSetValuesStructure(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    if (collectElementsByTag(call, 'namedValues').length) continue;
+    return makeViolation(rule, `SetValues step missing <namedValues> container (testItemId=${stepContext(call).tid})`);
+  }
+  return null;
+}
+
+/** SETVALUES-NAME-001 — every `<namedValue>` in a SetValues step must carry a `name` attribute. */
+function validateNamedValueName(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const nv of collectElementsByTag(call, 'namedValue')) {
+      if (!nv || typeof nv !== 'object' || (nv as XmlNode)['@_name']) continue;
+      return makeViolation(
+        rule,
+        `namedValue in SetValues step missing name attribute (testItemId=${stepContext(call).tid})`
+      );
+    }
+  }
+  return null;
+}
+
+/** SETVALUES-VALUE-001 — every `<namedValue>` in a SetValues step must contain a child `<value>`. */
+function validateNamedValueValue(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const nv of collectElementsByTag(call, 'namedValue')) {
+      if (!nv || typeof nv !== 'object' || (nv as XmlNode)['value'] != null) continue;
+      return makeViolation(
+        rule,
+        `namedValue in SetValues step missing value element (testItemId=${stepContext(call).tid})`
+      );
+    }
+  }
+  return null;
+}
+
+/** UI-ASSERT-STRUCT-002 — UiAssert steps must not contain a (hallucinated) `<generatedParameters>` element. */
+function validateUiAssertHallucinatedGeneratedParameters(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<ReturnType<typeof stepContext>> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_ASSERT_API_ID || call['generatedParameters'] == null) continue;
+    offenders.push(stepContext(call));
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UiAssert step '${f.title}' contains a hallucinated <generatedParameters> element — UiAssert steps never ` +
+      `contain generatedParameters; remove the entire section (testItemId=${f.tid})`,
+    offenders.length
+  );
+}
+
+// UI-ASSERT-STRUCT-001 — arguments every UiAssert step must declare (even if empty).
+const UI_ASSERT_REQUIRED_ARGS: readonly string[] = [
+  'fieldAssertions',
+  'columnAssertions',
+  'pageAssertions',
+  'resultScope',
+  'captureAfter',
+  'beforeWait',
+  'autoRetry',
+];
+
+/** UI-ASSERT-STRUCT-001 — a UiAssert step is missing one or more of its required arguments. */
+function validateUiAssertMissingArguments(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; missing: string[] }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_ASSERT_API_ID) continue;
+    const argsNode = call['arguments'];
+    let missing: string[];
+    if (!argsNode || typeof argsNode !== 'object') {
+      missing = [...UI_ASSERT_REQUIRED_ARGS];
+    } else {
+      const existing = new Set<string>();
+      for (const a of getCallArguments(call)) {
+        const id = a['@_id'] as string | undefined;
+        if (id) existing.add(id);
+      }
+      missing = UI_ASSERT_REQUIRED_ARGS.filter((r) => !existing.has(r));
+    }
+    if (missing.length) offenders.push({ ctx: stepContext(call), missing });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UiAssert step '${f.ctx.title}' is missing required arguments: ${f.missing.join(', ')}. All UiAssert steps ` +
+      'must include fieldAssertions, columnAssertions, pageAssertions, resultScope, captureAfter, beforeWait, and ' +
+      `autoRetry (even if empty) (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+// UI-BINDING-ORDER-001 — binding URIs must list object= before action=/field= (percent-encoded).
+const BINDING_WRONG_ACTION_FIRST = /object%3Faction%3D[^%]+%26object%3D/;
+const BINDING_WRONG_FIELD_FIRST = /object%3Ffield%3D[^%]+%26object%3D/;
+const BINDING_ACTION_EXTRACT = /action%3D([^%&]+)%26object%3D([^%&"]+)/;
+const BINDING_FIELD_EXTRACT = /field%3D([^%&]+)%26object%3D([^%&"]+)/;
+
+/** Classify a binding URI's parameter order, returning the wrong/correct pair or null when fine. */
+function classifyBindingOrder(uri: string): { wrong: string; correct: string } | null {
+  if (BINDING_WRONG_ACTION_FIRST.test(uri)) {
+    const m = BINDING_ACTION_EXTRACT.exec(uri);
+    if (m) {
+      const o = m[2].replace(/&amp;/g, '').replace(/&/g, '');
+      return { wrong: `action=${m[1]}&object=${o}`, correct: `object=${o}&action=${m[1]}` };
+    }
+  } else if (BINDING_WRONG_FIELD_FIRST.test(uri)) {
+    const m = BINDING_FIELD_EXTRACT.exec(uri);
+    if (m) {
+      const o = m[2].replace(/&amp;/g, '').replace(/&/g, '');
+      return { wrong: `field=${m[1]}&object=${o}`, correct: `object=${o}&field=${m[1]}` };
+    }
+  }
+  return null;
+}
+
+/** UI-BINDING-ORDER-001 — a `uiLocator` binding lists object= after action=/field= (non-standard order). */
+function validateBindingParameterOrder(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const seen = new Set<XmlNode>();
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; correct: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const v of collectValueElements(call)) {
+      if (v['@_class'] !== 'uiLocator' || seen.has(v)) continue;
+      seen.add(v);
+      const uri = (v['@_uri'] as string | undefined) ?? '';
+      if (!uri || !uri.includes('binding=')) continue;
+      const verdict = classifyBindingOrder(uri);
+      if (verdict) offenders.push({ ctx, ...verdict });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UI binding in step '${f.ctx.title}' lists parameters in a non-standard order: found '${f.wrong}', the ` +
+      `corpus-majority convention lists object= first ('${f.correct}'). (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+// UI-CONN-LITERAL-001 — UI step types whose uiConnectionName must be a literal, not a variable.
+const UI_CONN_LITERAL_APIS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
+  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
+  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+]);
+
+/** UI-CONN-LITERAL-001 — a UI step's `uiConnectionName` uses a `class="variable"` value instead of a literal. */
+function validateUiConnectionNameLiteral(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (!UI_CONN_LITERAL_APIS.has(call['@_apiId'] as string)) continue;
+    const v = directArgValueElement(call, 'uiConnectionName');
+    if (!v || v['@_class'] !== 'variable') continue;
+    const ctx = stepContext(call);
+    return makeViolation(
+      rule,
+      `UI step '${ctx.title}' uses a variable reference for uiConnectionName; it must be a literal string ` +
+        `(testItemId=${ctx.tid})`
+    );
+  }
+  return null;
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -1922,6 +2167,16 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   assertValuesStringExpr: validateAssertValuesStringExpr,
   uiLocatorButtonCasing: validateUiLocatorButtonCasing,
   uiLocatorRecordTypeField: validateUiLocatorRecordTypeField,
+  // Tier 5 — structural / load-affecting check types
+  validFuncCallId: validateValidFuncCallId,
+  rootAttributes: validateRootAttributes,
+  setValuesStructure: validateSetValuesStructure,
+  namedValueName: validateNamedValueName,
+  namedValueValue: validateNamedValueValue,
+  uiAssertHallucinatedGeneratedParameters: validateUiAssertHallucinatedGeneratedParameters,
+  uiAssertMissingArguments: validateUiAssertMissingArguments,
+  bindingParameterOrder: validateBindingParameterOrder,
+  uiConnectionNameLiteral: validateUiConnectionNameLiteral,
   // 'regex' is dispatched separately (needs metadata)
   // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
 };

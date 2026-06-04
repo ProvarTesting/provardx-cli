@@ -1099,6 +1099,16 @@ Validates an XML test case for schema correctness (validity score) and best prac
   - **`CONN-DB-002`** (`dbConnectResultNameMismatch`) — a DB operation (`SqlQuery`/`DbRead`/`DbInsert`/`DbUpdate`/`DbDelete`) sets a `dbConnectionName` that does not match any `DbConnect` `resultName` in the test, so the open connection can't be found. Defers to `CONN-DB-001` when there is no `DbConnect` at all.
   - **`UI-LOCATOR-BUTTON-CASING-001`** (`uiLocatorButtonCasing`) — a `UiDoAction` locator uses a wrong-cased standard-button name: `name=Cancel` (use lowercase `name=cancel`) or `name=Continue`/`name=continue` on the record-type screen (use `name=save&path=selectRecordType`).
   - **`UI-LOCATOR-RECORDTYPE-001`** (`uiLocatorRecordTypeField`) — a `UiDoAction` Record Type picker locator uses `name=recordTypeId`/`name=recordType` instead of `name=RecordType` with `field=RecordTypeId` in the binding.
+- **Structural correctness rules** — Checks on element shape / required structure that the Provar IDE depends on to render and run a step. Mostly critical; like the rules above they run offline / in `local_fallback` and keep score parity with the Quality Hub back-end. Currently enforced:
+  - **`SETVALUES-STRUCTURE-001`** (`setValuesStructure`, critical) — a `SetValues` step has no `<namedValues>` container.
+  - **`SETVALUES-NAME-001`** (`namedValueName`, critical) — a `<namedValue>` inside a `SetValues` step is missing its `name` attribute.
+  - **`SETVALUES-VALUE-001`** (`namedValueValue`, critical) — a `<namedValue>` inside a `SetValues` step is missing its child `<value>` element.
+  - **`UI-ASSERT-STRUCT-002`** (`uiAssertHallucinatedGeneratedParameters`, critical) — a `UiAssert` step contains a `<generatedParameters>` element, which is never valid on `UiAssert` and blocks validation.
+  - **`UI-ASSERT-STRUCT-001`** (`uiAssertMissingArguments`, critical) — a `UiAssert` step is missing one or more required arguments (`fieldAssertions`, `columnAssertions`, `pageAssertions`, `resultScope`, `captureAfter`, `beforeWait`, `autoRetry` — present even if empty).
+  - **`UI-BINDING-ORDER-001`** (`bindingParameterOrder`, critical) — a `uiLocator` binding URI lists `action=`/`field=` before `object=`; the corpus-majority convention is `object=` first.
+  - **`UI-CONN-LITERAL-001`** (`uiConnectionNameLiteral`, critical) — a UI step's `uiConnectionName` uses a `class="variable"` value; it must be a literal connection name.
+  - **`FUNCCALL-VALID-001`** (`validFuncCallId`, major) — a `<value class="funcCall">` uses an `id` that is not one of Provar's built-in functions (e.g. the hallucinated `Concatenate`/`Substring`); use the documented set (`Count`, `DateAdd`, `StringReplace`, …) or `class="compound"` for concatenation.
+  - **`RENDER-ROOT-001`** (`rootAttributes`, minor) — the root `<testCase>` element carries an attribute outside the allowed set (`guid`, `id`, `name`, `visibility`, `registryId`, `failureBehaviour`).
 
 **Error codes**
 
