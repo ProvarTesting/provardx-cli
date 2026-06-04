@@ -968,25 +968,34 @@ function validateComparisonTypes(tc: Record<string, unknown>, issues: Validation
  * historically that severity only moved `quality_score` and never gated
  * `is_valid`. Per the canonical taxonomy, `critical` means "Provar will not
  * load/render the test case" — exactly the class of defect that MUST flip
- * validity. This map records, for each `critical` BP rule, the hand-coded
- * Layer-1 rule(s) that already cover the same defect; when one of those issues
- * is already present we suppress the bridge so the failure is reported once,
- * not twice.
+ * validity. The bridge surfaces every un-suppressed `critical` BP violation as
+ * an ERROR issue so it gates `is_valid`.
  *
  * `major`/`minor`/`info` are intentionally NOT bridged — a major is a runtime
  * ERROR that still loads, so it influences the quality score (and the
  * `needs_improvement` verdict) without flipping `is_valid`.
+ *
+ * These BP rules cover concepts the hand-coded Layer-1 checks already OWN
+ * (root element, identifier, steps presence, testItemId integers, comparisonType
+ * enums). Layer-1 is authoritative for those: it fires only on the genuinely
+ * load-blocking condition (e.g. TC_020 fires on a MISSING <steps>, but an
+ * empty-but-present <steps> still loads — it just does nothing), whereas the
+ * ported BP rule is coarser (VALID-STEPS-001 also flags an empty <steps>, a
+ * "does nothing" design smell, not a load failure). So we never bridge these —
+ * Layer-1 already gates the load-blocking case, and the BP version still counts
+ * toward quality_score. The bridge's real value is the criticals Layer-1 does
+ * NOT check (unknown apiId, missing required control/connection args, invalid
+ * render value-class casing, NitroX connect args…).
  */
-const BRIDGE_SUPPRESSED_BY: Record<string, readonly string[]> = {
-  'SCHEMA-ROOT-001': ['TC_003'],
-  'SCHEMA-STEPS-001': ['TC_020'],
-  'VALID-STEPS-001': ['TC_020'],
-  'SCHEMA-ID-001': ['TC_010', 'TC_011', 'TC_012'],
-  'VALID-GUID-001': ['TC_010', 'TC_011', 'TC_012'],
-  'STEP-ITEMID-001': ['TC_034', 'TC_035'],
-  // comparisonType enum BP rule (deferred) maps to the hand-coded Layer-1 check.
-  'COMPARISON-TYPE-ENUM-001': ['COMPARISON-TYPE-001'],
-};
+const LAYER1_OWNED_BP_RULES: ReadonlySet<string> = new Set([
+  'SCHEMA-ROOT-001', // TC_003 owns root element
+  'SCHEMA-STEPS-001', // TC_020 owns steps presence
+  'VALID-STEPS-001',
+  'SCHEMA-ID-001', // TC_010/TC_011/TC_012 own identifier
+  'VALID-GUID-001',
+  'STEP-ITEMID-001', // TC_034/TC_035 own testItemId
+  'COMPARISON-TYPE-ENUM-001', // COMPARISON-TYPE-001 owns comparisonType enums (deferred BP rule)
+]);
 
 /** Map a Best-Practices `appliesTo` token to the issue `applies_to` vocabulary. */
 const BP_APPLIES_TO_ISSUE: Record<string, string> = {
@@ -1011,8 +1020,7 @@ function bridgeCriticalViolations(
   for (const v of bpViolations) {
     if (v.severity !== 'critical') continue;
     if (present.has(v.rule_id)) continue;
-    const suppressors = BRIDGE_SUPPRESSED_BY[v.rule_id];
-    if (suppressors && suppressors.some((id) => present.has(id))) continue;
+    if (LAYER1_OWNED_BP_RULES.has(v.rule_id)) continue; // Layer-1 is authoritative for these
     issues.push({
       rule_id: v.rule_id,
       severity: 'ERROR',

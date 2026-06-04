@@ -60,7 +60,7 @@ function makeXml(tcGuid: string, stepGuid: string, id: string): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<testCase id="${id}" guid="${tcGuid}" registryId="${id}" name="${id}">`,
     '  <steps>',
-    `    <apiCall guid="${stepGuid}" apiId="UiConnect" name="Connect" testItemId="1"/>`,
+    `    <apiCall guid="${stepGuid}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1"/>`,
     '  </steps>',
     '</testCase>',
   ].join('\n');
@@ -345,7 +345,7 @@ describe('provar_testsuite_validate', () => {
   });
 
   describe('quality_threshold', () => {
-    it('uses default threshold of 80 when not specified', () => {
+    it('uses default threshold of 90 (PDX-509) when not specified', () => {
       // Just verify no error and score is present
       const result = server.call('provar_testsuite_validate', {
         suite_name: 'ThresholdDefault',
@@ -362,6 +362,38 @@ describe('provar_testsuite_validate', () => {
         quality_threshold: 90,
       });
       assert.equal(isError(result), false);
+    });
+
+    it('PDX-509: a loadable but sub-threshold case is "needs_improvement", not "invalid"', () => {
+      // A {Var} stored as a plain string is a major (VAR-STRING-LITERAL-001): the case
+      // still loads (is_valid true) but scores below 100.
+      const TC_MAJOR = {
+        name: 'Major.testcase',
+        xml_content: [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          `<testCase id="1" guid="${G.tc1}" registryId="m1" name="m1">`,
+          '  <steps>',
+          `    <apiCall guid="${G.s1}" apiId="com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject" name="Create" testItemId="1">`,
+          '      <arguments>',
+          '        <argument id="Name"><value class="value" valueClass="string">{AccountId}</value></argument>',
+          '      </arguments>',
+          '    </apiCall>',
+          '  </steps>',
+          '</testCase>',
+        ].join('\n'),
+      };
+      const result = server.call('provar_testsuite_validate', {
+        suite_name: 'NeedsImprovement',
+        test_cases: [TC_MAJOR],
+        quality_threshold: 100,
+      });
+      const body = parseText(result);
+      const cases = body['test_cases'] as Array<Record<string, unknown>>;
+      assert.equal(cases[0]['is_valid'], true, 'a major violation still loads');
+      assert.equal(cases[0]['status'], 'needs_improvement');
+      const summary = body['summary'] as Record<string, unknown>;
+      assert.equal(summary['test_cases_needs_improvement'], 1);
+      assert.equal(summary['test_cases_invalid'], 0, 'sub-threshold is no longer collapsed to invalid');
     });
   });
 

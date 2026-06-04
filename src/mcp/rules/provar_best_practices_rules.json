@@ -2963,7 +2963,7 @@
       "id": "VAR-STRING-LITERAL-001",
       "category": "TestCaseDesign",
       "name": "Variable reference stored as plain string",
-      "description": "An argument value contains a {VarName} or {Obj.Field} pattern stored as class=\"value\" valueClass=\"string\". Provar passes the literal string to the API instead of resolving the variable — the step will silently receive the wrong input.",
+      "description": "An argument value contains a {VarName} or {Obj.Field} pattern stored as class=\"value\" valueClass=\"string\". Provar passes the literal string to the API instead of resolving the variable. In data arguments the step silently receives the wrong input; in UI target arguments (sfUiTargetObjectId, sfUiTargetResultName) the literal {VarName} lands in the URL as %7BVarName%7D and the step fails at runtime (record 'no longer available'). The test case still loads, so this is a runtime execution error (major), not a load failure (critical) or a style warning (minor).",
       "appliesTo": ["Step"],
       "severity": "major",
       "weight": 5,

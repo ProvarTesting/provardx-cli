@@ -407,17 +407,20 @@ describe('provar_testcase_generate', () => {
       assert.ok(!xml.includes('Test &amp;'), 'escaped name must not appear in XML');
     });
 
-    it('escapes XML special characters in step api_id and name', () => {
+    it('escapes XML special characters in the step name', () => {
+      // A real apiId never contains XML metacharacters (and an unknown apiId is now
+      // a load-blocking error via the bridge), so escaping is exercised through the
+      // step name — which legitimately can contain &, <, > and ".
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Escape Step Test',
-        steps: [{ api_id: 'Api<Id>', name: 'Step & "Name"', attributes: {} }],
+        steps: [{ api_id: 'UiConnect', name: 'Step & <Name>', attributes: {} }],
         dry_run: true,
         overwrite: false,
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('&lt;') && xml.includes('&gt;'), 'Expected < > escaped in apiId');
       assert.ok(xml.includes('&amp;'), 'Expected & escaped in step name');
+      assert.ok(xml.includes('&lt;') && xml.includes('&gt;'), 'Expected < > escaped in step name');
     });
   });
 
@@ -794,9 +797,10 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
+      // Provar stores dates as epoch milliseconds (UTC midnight), not an ISO string.
       assert.ok(
-        xml.includes('valueClass="date">2026-05-19</value>'),
-        `Expected valueClass="date" for ISO date; got: ${xml}`
+        xml.includes('valueClass="date">1779148800000</value>'),
+        `Expected valueClass="date" with epoch ms for ISO date; got: ${xml}`
       );
     });
 
@@ -815,9 +819,10 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
+      // Provar uses camelCase valueClass="dateTime" with an epoch-ms value (UTC when no tz).
       assert.ok(
-        xml.includes('valueClass="datetime">2026-05-19T10:30:00</value>'),
-        `Expected valueClass="datetime" for ISO datetime; got: ${xml}`
+        xml.includes('valueClass="dateTime">1779186600000</value>'),
+        `Expected valueClass="dateTime" with epoch ms for ISO datetime; got: ${xml}`
       );
     });
 
