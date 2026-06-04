@@ -1304,36 +1304,25 @@ function directValueText(arg: XmlNode): string {
   return nodeText(v as XmlNode);
 }
 
-// RENDER-CASE-001 — valid valueClass set, EXACTLY as the back-end declares it: the
-// mixed-case `funcCall`/`valueList` members never match a lowercased input, so
-// casing on those two is deliberately never flagged (parity-preserving quirk).
+// RENDER-CASE-001 — the valueClass values that actually exist. This validator only
+// inspects the `valueClass` attribute, and a full-corpus scan (AllPOCProjects) shows
+// exactly SIX distinct valueClass values: string, boolean, decimal, id, date, dateTime
+// — matching the back-end's VALID_VALUE_CLASSES. (The earlier list also carried
+// `class="..."` tokens — variable/compound/funcCall/value/valueList/operators — and
+// `integer`; none of those ever appear as a valueClass, so they were dead entries, and
+// `id` — a real corpus valueClass — was missing. Coordinated with the QH back-end.)
 const VALUE_CLASS_CASING_VALID: ReadonlySet<string> = new Set([
   'string',
   'boolean',
   'decimal',
-  'integer',
+  'id',
   'date',
   'datetime',
-  'variable',
-  'compound',
-  'funcCall',
-  'value',
-  'valueList',
-  'gt',
-  'lt',
-  'eq',
-  'ne',
-  'ge',
-  'le',
-  'and',
-  'or',
-  'not',
 ]);
 
 // Canonical Provar spelling for valueClasses whose correct form is NOT all-lowercase.
-// The corpus and RENDER-DATE-VALUECLASS-001 / VALUE-CLASS-001 all use camelCase `dateTime`,
-// so the lowercase-enforcement below must expect `dateTime`, not `datetime`. (The QH back-end
-// lowercases all classes — flag a matching correction there; PDX-509.)
+// The corpus uses camelCase `dateTime` exclusively (lowercase `datetime` never appears),
+// so the casing check must expect `dateTime`; every other valueClass is all-lowercase.
 const VALUE_CLASS_CANONICAL_CASE: Record<string, string> = { datetime: 'dateTime' };
 
 /** RENDER-CASE-001 — a known valueClass spelled with wrong case (e.g. `Boolean` → `boolean`). */
