@@ -76,6 +76,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
   - [provar://schema/test-step](#provarschematest-step)
+  - [provar://docs/validation-rules](#provardocsvalidation-rules)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
   - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
@@ -2562,6 +2563,17 @@ This is a **Provar-specific schema reference** — its top-level keys (`testCase
 **MIME type:** `application/json`
 
 The resource content is the bundled `src/mcp/rules/provar_test_step_schema.json`, compiled into the package at build time. It is the same schema the local best-practices validator's API-ID and value-class checks are derived from, so step structures that satisfy it are consistent with what `provar_testcase_validate` enforces. The handler parses the file once to confirm it is valid JSON before serving it; if the file is missing or unparseable, the resource returns a small `{ "error": "schema_not_found", "message": … }` object instead.
+
+---
+
+### `provar://docs/validation-rules`
+
+The single canonical registry of every Provar test-case validation rule across both layers — the structural validity rules (**Layer 1**, hand-coded, gate `is_valid`) and the best-practice rules (**Layer 2**, the 178-rule engine, weighted `quality_score`). For each rule it lists the id, severity, weight, what it checks, and **whether it gates `is_valid`**. A `critical` best-practice violation gates `is_valid` via the validity bridge (except where a Layer-1 check already owns the concept); `major`/`minor`/`info` affect `quality_score` (and the `needs_improvement` status) only. Read this to understand why `provar_testcase_validate` returned a given issue, or why it marked a test `invalid` vs `needs_improvement`.
+
+**URI:** `provar://docs/validation-rules`  
+**MIME type:** `text/markdown`
+
+The resource content is `docs/VALIDATION_RULE_REGISTRY.md`, generated from the rule sources by `scripts/build-validation-rule-registry.cjs` and compiled into the package at build time. Re-run that script after changing any rule; a unit test guards the registry against drift.
 
 ---
 
