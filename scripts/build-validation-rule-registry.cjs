@@ -9,8 +9,9 @@
 /*
  * Generates the canonical Validation Rule Registry (docs/VALIDATION_RULE_REGISTRY.md)
  * from the two rule sources:
- *   - Layer 1 (structural validity): hand-coded checks in src/mcp/tools/testCaseValidate.ts.
- *     These are listed here explicitly because they are code, not data.
+ *   - Layer 1 (structural validity): metadata catalog in
+ *     src/mcp/rules/provar_layer1_rules.json — the single source of truth shared
+ *     with testCaseValidate.ts (detection stays in code; only metadata is data).
  *   - Layer 2 (best practices): src/mcp/rules/provar_best_practices_rules.json.
  *
  * "Gates is_valid?" reflects the PDX-509 model:
@@ -29,70 +30,18 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'docs', 'VALIDATION_RULE_REGISTRY.md');
 const BP_JSON = path.join(ROOT, 'src', 'mcp', 'rules', 'provar_best_practices_rules.json');
+const LAYER1_JSON = path.join(ROOT, 'src', 'mcp', 'rules', 'provar_layer1_rules.json');
 
-// Layer-2 critical rules whose concept a Layer-1 hand-coded check already owns. Mirrors
-// LAYER1_OWNED_BP_RULES in testCaseValidate.ts — these criticals are NOT bridged.
-const LAYER1_OWNED = new Set([
-  'SCHEMA-ROOT-001',
-  'SCHEMA-STEPS-001',
-  'VALID-STEPS-001',
-  'SCHEMA-ID-001',
-  'VALID-GUID-001',
-  'STEP-ITEMID-001',
-  'COMPARISON-TYPE-ENUM-001',
-]);
+// Layer-1 structural-validity catalog (id, severity, applies_to, description,
+// owns_bp_rules), read from the shared single source of truth. The same JSON is
+// consumed by testCaseValidate.ts (owned-set) and validationRuleRegistry.test.ts
+// (drift guard). Detection stays in code; only this metadata is centralized.
+const LAYER1 = JSON.parse(fs.readFileSync(LAYER1_JSON, 'utf8')).rules;
 
-// Layer-1 structural validity rules (hand-coded in testCaseValidate.ts).
-const LAYER1 = [
-  ['TC_001', 'ERROR', 'document', 'XML declaration present (<?xml …?> first line).'],
-  ['TC_002', 'ERROR', 'document', 'XML is well-formed (parses without error).'],
-  ['TC_003', 'ERROR', 'document', 'Root element is <testCase>.'],
-  [
-    'TC_010',
-    'ERROR',
-    'testCase',
-    'testCase id, when present, is a non-negative integer (id is optional; guid is the identifier).',
-  ],
-  ['TC_011', 'ERROR', 'testCase', 'testCase has a guid attribute.'],
-  ['TC_012', 'ERROR', 'testCase', 'testCase guid is a valid UUID v4.'],
-  ['TC_020', 'ERROR', 'testCase', 'testCase has a <steps> element.'],
-  ['TC_030', 'ERROR', 'apiCall', 'Each apiCall has a guid attribute.'],
-  ['TC_031', 'ERROR', 'apiCall', 'Each apiCall guid is a valid UUID v4.'],
-  ['TC_032', 'ERROR', 'apiCall', 'Each apiCall has an apiId attribute.'],
-  ['TC_033', 'WARNING', 'apiCall', 'Each apiCall has a descriptive name attribute.'],
-  ['TC_034', 'ERROR', 'apiCall', 'Each apiCall has a testItemId attribute.'],
-  ['TC_035', 'ERROR', 'apiCall', 'apiCall testItemId is a whole number.'],
-  [
-    'DATA-001',
-    'WARNING',
-    'testCase',
-    '<dataTable> only iterates under a test plan; flags direct testCase-mode execution.',
-  ],
-  ['VAR-REF-001', 'WARNING', 'argument', 'A whole-token {Var} stored as valueClass="string" (use class="variable").'],
-  ['VAR-REF-002', 'WARNING', 'argument', '{Var} tokens embedded in a plain string (use class="compound").'],
-  ['UI-TARGET-001', 'ERROR', 'apiCall', 'UiWithScreen/UiWithRow target uses class="uiTarget".'],
-  ['UI-LOCATOR-001', 'ERROR', 'apiCall', 'UI action locator uses class="uiLocator".'],
-  ['UI-INTERACTION-001', 'ERROR', 'apiCall', 'UiDoAction interaction uses class="uiInteraction".'],
-  [
-    'UI-ASSERT-STRUCTURE-001',
-    'ERROR',
-    'apiCall',
-    'UiAssert uses nested field/column/page assertion containers, not a flat argument.',
-  ],
-  [
-    'SETVALUES-STRUCTURE-001',
-    'ERROR',
-    'apiCall',
-    'SetValues values argument uses class="valueList" with <namedValues>.',
-  ],
-  ['ASSERT-001', 'WARNING', 'apiCall', 'AssertValues namedValues format flagged for variable/Apex comparisons.'],
-  [
-    'COMPARISON-TYPE-001',
-    'ERROR',
-    'apiCall',
-    'comparisonType is within the step-scoped enum subset (load-blocking otherwise).',
-  ],
-];
+// Layer-2 critical rules whose concept a Layer-1 check already owns — derived
+// from the catalog's `owns_bp_rules` (mirrors LAYER1_OWNED_BP_RULES in
+// testCaseValidate.ts, same source). These criticals are NOT bridged.
+const LAYER1_OWNED = new Set(LAYER1.flatMap((r) => r.owns_bp_rules || []));
 
 function gatesLayer1(sev) {
   return sev === 'ERROR' ? 'Yes' : 'No';
@@ -142,19 +91,19 @@ lines.push(
 );
 lines.push('');
 lines.push(
-  `**Counts:** Layer 1 — ${LAYER1.length} rules (${LAYER1.filter((r) => r[1] === 'ERROR').length} gating). Layer 2 — ${
-    rules.length
-  } rules (critical ${sev.critical} / major ${sev.major} / minor ${sev.minor} / info ${
-    sev.info
-  }; ${bpGating} bridged to \`is_valid\`).`
+  `**Counts:** Layer 1 — ${LAYER1.length} rules (${
+    LAYER1.filter((r) => r.severity === 'ERROR').length
+  } gating). Layer 2 — ${rules.length} rules (critical ${sev.critical} / major ${sev.major} / minor ${
+    sev.minor
+  } / info ${sev.info}; ${bpGating} bridged to \`is_valid\`).`
 );
 lines.push('');
 lines.push('## Layer 1 — Structural validity rules');
 lines.push('');
 lines.push('| Rule ID | Severity | Gates is_valid? | Applies to | Checks |');
 lines.push('| ------- | -------- | --------------- | ---------- | ------ |');
-for (const [id, s, applies, desc] of LAYER1) {
-  lines.push(`| \`${id}\` | ${s} | ${gatesLayer1(s)} | ${applies} | ${esc(desc)} |`);
+for (const r of LAYER1) {
+  lines.push(`| \`${r.id}\` | ${r.severity} | ${gatesLayer1(r.severity)} | ${r.applies_to} | ${esc(r.description)} |`);
 }
 lines.push('');
 lines.push('## Layer 2 — Best-practice rules');

@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { XMLParser } from 'fast-xml-parser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -961,6 +962,36 @@ function validateComparisonTypes(tc: Record<string, unknown>, issues: Validation
 }
 
 /**
+ * The Layer-1 structural-validity rule catalog — the single source of truth for
+ * Layer-1 rule metadata (id / severity / applies_to / description) and the
+ * best-practice ownership mapping. Loaded from `provar_layer1_rules.json`
+ * (copied into `lib/mcp/rules/` at compile, same as the best-practices ruleset).
+ * The imperative DETECTION below is unchanged; centralizing only the metadata
+ * keeps the published Validation Rule Registry from drifting from the validator.
+ * The same JSON is read by `scripts/build-validation-rule-registry.cjs` (renders
+ * the registry rows) and guarded by `validationRuleRegistry.test.ts`.
+ */
+export interface Layer1RuleCatalogEntry {
+  id: string;
+  severity: 'ERROR' | 'WARNING';
+  applies_to: string;
+  description: string;
+  /** Layer-2 `critical` BP rule ids whose concept this Layer-1 check owns (suppressed from the bridge). */
+  owns_bp_rules?: string[];
+}
+
+export const LAYER1_RULE_CATALOG: readonly Layer1RuleCatalogEntry[] = ((): Layer1RuleCatalogEntry[] => {
+  const catalogPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'rules',
+    'provar_layer1_rules.json'
+  );
+  const parsed = JSON.parse(fs.readFileSync(catalogPath, 'utf-8')) as { rules: Layer1RuleCatalogEntry[] };
+  return parsed.rules;
+})();
+
+/**
  * PDX-509 — validity bridge.
  *
  * Best-practice violations carry a `critical|major|minor|info` severity, but
@@ -986,15 +1017,15 @@ function validateComparisonTypes(tc: Record<string, unknown>, issues: Validation
  * NOT check (unknown apiId, missing required control/connection args, invalid
  * render value-class casing, NitroX connect args…).
  */
-const LAYER1_OWNED_BP_RULES: ReadonlySet<string> = new Set([
-  'SCHEMA-ROOT-001', // TC_003 owns root element
-  'SCHEMA-STEPS-001', // TC_020 owns steps presence
-  'VALID-STEPS-001',
-  'SCHEMA-ID-001', // TC_010/TC_011/TC_012 own identifier
-  'VALID-GUID-001',
-  'STEP-ITEMID-001', // TC_034/TC_035 own testItemId
-  'COMPARISON-TYPE-ENUM-001', // COMPARISON-TYPE-001 owns comparisonType enums (deferred BP rule)
-]);
+// Derived from the catalog's `owns_bp_rules` — the single source shared with the
+// registry generator. A Layer-2 `critical` listed here is NOT bridged into
+// `is_valid` (the named Layer-1 check is authoritative; bridging would
+// double-report). Ownership today: TC_003→SCHEMA-ROOT-001, TC_010→SCHEMA-ID-001,
+// TC_011→VALID-GUID-001, TC_020→SCHEMA-STEPS-001/VALID-STEPS-001,
+// TC_034→STEP-ITEMID-001, COMPARISON-TYPE-001→COMPARISON-TYPE-ENUM-001.
+export const LAYER1_OWNED_BP_RULES: ReadonlySet<string> = new Set(
+  LAYER1_RULE_CATALOG.flatMap((rule) => rule.owns_bp_rules ?? [])
+);
 
 /** Map a Best-Practices `appliesTo` token to the issue `applies_to` vocabulary. */
 const BP_APPLIES_TO_ISSUE: Record<string, string> = {
