@@ -127,29 +127,36 @@ describe('Validation Rule Registry (PDX-508 Tier 6 / PDX-511)', () => {
     }
   });
 
-  it('catalogs every Layer-1 rule the validator emits, with matching severity (drift guard)', () => {
+  it('catalogs every Layer-1 rule the validator emits, with matching severity + applies_to (drift guard)', () => {
     const src = readFileSync(validatorSrcPath, 'utf-8');
-    // Detection sites read `rule_id: 'ID',` immediately followed by `severity: 'SEV',`.
-    // The validity bridge uses `rule_id: v.rule_id` (no string literal) and is skipped.
-    const re = /rule_id:\s*'([A-Za-z0-9_-]+)',\s*\n\s*severity:\s*'(ERROR|WARNING)'/g;
-    const emitted = new Map<string, string>();
+    // Detection sites read `rule_id: 'ID',` then `severity: 'SEV',` then (after the
+    // message/suggestion) `applies_to: 'SCOPE'`. The validity bridge uses
+    // `rule_id: v.rule_id` (no string literal) and is skipped. This guard relies on
+    // that field order: a push that emits severity before rule_id drops out of the
+    // set below and trips the deepEqual — a loud, if indirect, failure (see message).
+    const re =
+      /rule_id:\s*'([A-Za-z0-9_-]+)',\s*\n\s*severity:\s*'(ERROR|WARNING)',[\s\S]*?applies_to:\s*'([A-Za-z]+)'/g;
+    const emitted = new Map<string, { severity: string; appliesTo: string }>();
     for (let m = re.exec(src); m !== null; m = re.exec(src)) {
-      const [, id, severity] = m;
+      const [, id, severity, appliesTo] = m;
       const prior = emitted.get(id);
       assert.ok(
-        prior === undefined || prior === severity,
-        `${id} is emitted with conflicting severities in testCaseValidate.ts`
+        prior === undefined || (prior.severity === severity && prior.appliesTo === appliesTo),
+        `${id} is emitted with conflicting metadata across detection sites in testCaseValidate.ts`
       );
-      emitted.set(id, severity);
+      emitted.set(id, { severity, appliesTo });
     }
-    const catalogSeverity = new Map(layer1.map((r) => [r.id, r.severity as string]));
+    const catalogById = new Map(layer1.map((r) => [r.id, r]));
     assert.deepEqual(
       [...emitted.keys()].sort(),
-      [...catalogSeverity.keys()].sort(),
-      'Layer-1 rule ids emitted by testCaseValidate.ts differ from provar_layer1_rules.json — update the catalog'
+      [...catalogById.keys()].sort(),
+      'Layer-1 rule ids emitted by testCaseValidate.ts differ from provar_layer1_rules.json ' +
+        '(or a detection push reordered its rule_id/severity fields, which this guard scans for) — update the catalog'
     );
-    for (const [id, severity] of emitted) {
-      assert.equal(severity, catalogSeverity.get(id), `${id} severity in the validator differs from the catalog`);
+    for (const [id, meta] of emitted) {
+      const rule = catalogById.get(id);
+      assert.equal(meta.severity, rule?.severity, `${id} severity in the validator differs from the catalog`);
+      assert.equal(meta.appliesTo, rule?.applies_to, `${id} applies_to in the validator differs from the catalog`);
     }
   });
 });
