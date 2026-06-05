@@ -71,7 +71,10 @@ function readRootTestCaseId(file: string): number | undefined {
   try {
     const match = readPrefix(file).match(/<testCase\b[^>]*?\bid=["'](\d+)["']/);
     if (!match) return undefined;
-    return Number.parseInt(match[1], 10);
+    const id = Number.parseInt(match[1], 10);
+    // Ignore ids too large to round-trip as an exact integer: otherwise `max + 1`
+    // would render in scientific notation (e.g. id="1e+22"), an invalid id.
+    return Number.isSafeInteger(id) ? id : undefined;
   } catch {
     return undefined;
   }
@@ -116,7 +119,16 @@ function maxProjectTestCaseId(projectRoot: string, excludeFile: string): number 
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else if (entry.name.endsWith('.testcase') && path.resolve(full) !== excludeFile) {
+      } else if (
+        // Only read real files inside the project. A symlinked `.testcase` could
+        // point outside the allowed roots; skip it so the scan honours the
+        // path-policy containment promised by findProjectRoot. (Dir symlinks are
+        // already skipped — isDirectory() is false for them.)
+        entry.isFile() &&
+        !entry.isSymbolicLink() &&
+        entry.name.endsWith('.testcase') &&
+        path.resolve(full) !== excludeFile
+      ) {
         const id = readRootTestCaseId(full);
         if (id !== undefined && (max === undefined || id > max)) max = id;
       }
