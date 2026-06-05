@@ -43,6 +43,19 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
+/** Some Windows hosts / CI restrict symlink creation to privileged users. */
+const symlinkSupported = ((): boolean => {
+  try {
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'tcid-symcap-'));
+    fs.writeFileSync(path.join(probe, 'target'), 'x', 'utf-8');
+    fs.symlinkSync(path.join(probe, 'target'), path.join(probe, 'link'));
+    fs.rmSync(probe, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('allocateTestCaseId', () => {
@@ -133,5 +146,47 @@ describe('allocateTestCaseId', () => {
 
     assert.equal(alloc.id, DEFAULT_TESTCASE_ID);
     assert.equal(alloc.basis, 'default');
+  });
+
+  it('ignores a numeric id too large to be a safe integer', () => {
+    markProject();
+    writeCase('tests/Normal.testcase', '4');
+    writeCase('tests/Huge.testcase', '99999999999999999999999');
+
+    const out = path.join(tmpDir, 'tests', 'New.testcase');
+    const alloc = allocateTestCaseId(out, [tmpDir]);
+
+    // The 23-digit id overflows JS integer precision; it must be ignored so the
+    // generator never emits id="1e+22". Only the safe id 4 counts → next is 5.
+    assert.equal(alloc.id, 5);
+    assert.equal(alloc.basis, 'project-max-plus-1');
+    assert.equal(alloc.highestExistingId, 4);
+  });
+
+  (symlinkSupported ? it : it.skip)('does not read a symlinked .testcase that points outside the allowed roots', () => {
+    markProject();
+    writeCase('tests/Real.testcase', '4');
+
+    // A "secret" project OUTSIDE the allowed root, carrying a deliberately huge id.
+    const secretDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tcid-secret-')));
+    try {
+      const secretCase = path.join(secretDir, 'Secret.testcase');
+      fs.writeFileSync(
+        secretCase,
+        '<?xml version="1.0"?>\n<testCase guid="11111111-1111-4111-8111-111111111111" id="88888"><steps/></testCase>\n',
+        'utf-8'
+      );
+      fs.symlinkSync(secretCase, path.join(tmpDir, 'tests', 'Link.testcase'));
+
+      const out = path.join(tmpDir, 'tests', 'New.testcase');
+      const alloc = allocateTestCaseId(out, [tmpDir]);
+
+      // The symlink must be skipped: only the in-root id 4 counts → next is 5,
+      // NOT 88889 (which would mean the out-of-root file was read).
+      assert.equal(alloc.id, 5);
+      assert.equal(alloc.highestExistingId, 4);
+    } finally {
+      fs.rmSync(secretDir, { recursive: true, force: true });
+    }
   });
 });
