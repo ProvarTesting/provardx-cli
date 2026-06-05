@@ -15,6 +15,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { allocateTestCaseId, DEFAULT_TESTCASE_ID } from '../utils/testCaseId.js';
 import { validateTestCase } from './testCaseValidate.js';
 import { desc } from './descHelper.js';
 import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
@@ -201,7 +202,7 @@ const TOOL_DESCRIPTION = [
   // ── Existing description (unchanged below) ───────────────────────────────────
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
-  'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="1" registryId="..."> (id is always the integer literal "1" as required by the Provar runtime), a <summary/> child, then <steps>.',
+  'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="N" registryId="..."> (a numeric integer id), a <summary/> child, then <steps>. The unique identifier is the guid; id is a human-facing label. When writing into an existing project the id is auto-allocated as the highest in-use id + 1; otherwise it defaults to 1.',
   'URI-aware generation: use target_uri to control the XML nesting structure.',
   '  - sf:ui:target (or omit target_uri) → flat Salesforce XML structure (existing behaviour).',
   '  - ui:pageobject:target?pageId=pageobjects.PageClass → wraps all steps in a UiWithScreen element targeting that non-SF page object.',
@@ -389,13 +390,23 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
       }
 
       try {
-        const xmlContent = buildTestCaseXml(input);
         const filePath: string | undefined = input.output_path ? path.resolve(input.output_path) : undefined;
+
+        // Allocate the root testCase id from surrounding project context, but only
+        // when actually persisting (a write path that has cleared the path policy).
+        // Preview/dry-run runs have no project anchor, so they keep the default id.
+        let idAllocation = { id: DEFAULT_TESTCASE_ID, basis: 'default' as const } as ReturnType<
+          typeof allocateTestCaseId
+        >;
+        if (filePath && !input.dry_run) {
+          assertPathAllowed(filePath, config.allowedPaths);
+          idAllocation = allocateTestCaseId(filePath, config.allowedPaths);
+        }
+
+        const xmlContent = buildTestCaseXml(input, idAllocation.id);
         let written = false;
 
         if (filePath && !input.dry_run) {
-          assertPathAllowed(filePath, config.allowedPaths);
-
           if (fs.existsSync(filePath) && !input.overwrite) {
             const err = makeError(
               'FILE_EXISTS',
@@ -408,7 +419,12 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar_testcase_generate: wrote file', { requestId, filePath });
+          log('info', 'provar_testcase_generate: wrote file', {
+            requestId,
+            filePath,
+            testCaseId: idAllocation.id,
+            idBasis: idAllocation.basis,
+          });
         }
 
         const warnings = buildStepWarnings(input.steps);
@@ -420,6 +436,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           written,
           dry_run: input.dry_run,
           step_count: input.steps.length,
+          test_case_id: idAllocation.id,
           idempotency_key: input.idempotency_key,
           ...(warnings.length > 0 ? { warnings } : {}),
         };
@@ -905,12 +922,15 @@ function emitGroupedSteps(nodes: StepNode[], indent: string, startId: number): {
   return { xml: lines.join('\n'), nextId: id };
 }
 
-function buildTestCaseXml(input: {
-  test_case_name: string;
-  steps: Step[];
-  target_uri?: string;
-  grouping_mode?: 'auto' | 'flat' | 'single-screen';
-}): string {
+function buildTestCaseXml(
+  input: {
+    test_case_name: string;
+    steps: Step[];
+    target_uri?: string;
+    grouping_mode?: 'auto' | 'flat' | 'single-screen';
+  },
+  testCaseId: number = DEFAULT_TESTCASE_ID
+): string {
   const testCaseGuid = randomUUID();
   const registryId = randomUUID();
   const groupingMode = input.grouping_mode ?? 'auto';
@@ -956,10 +976,12 @@ function buildTestCaseXml(input: {
     stepLines = lines || '    <!-- TODO: Add test steps here -->';
   }
 
-  // Provar requires: standalone="no", id="1" (integer literal), no name attr, <summary/> before <steps>.
+  // Provar requires: standalone="no", a numeric integer id, no name attr, <summary/> before <steps>.
+  // The id is a human-facing label, not a uniqueness key (guid is) — see allocateTestCaseId:
+  // when writing into an existing project we pass highest-in-use + 1; otherwise it defaults to 1.
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
-    `<testCase guid="${testCaseGuid}" id="1" registryId="${registryId}">\n` +
+    `<testCase guid="${testCaseGuid}" id="${testCaseId}" registryId="${registryId}">\n` +
     '  <summary/>\n' +
     '  <steps>\n' +
     stepLines +
