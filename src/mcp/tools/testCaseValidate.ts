@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { XMLParser } from 'fast-xml-parser';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -25,6 +26,7 @@ import {
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
+import { resolveQualityThreshold } from '../utils/qualityThreshold.js';
 import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
 import {
   generateRunId,
@@ -46,7 +48,7 @@ import {
 } from '../rules/comparisonTypeSets.js';
 import { runBestPractices } from './bestPracticesEngine.js';
 import { desc } from './descHelper.js';
-import { UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
+import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
 
 const ONBOARDING_MESSAGE =
   'Quality Hub validation unavailable — running local validation only (structural rules, no quality scoring).\n' +
@@ -67,6 +69,9 @@ const UNREACHABLE_WARNING =
 const TC_VALIDATE_SUMMARY_FIELDS = [
   'requestId',
   'is_valid',
+  'status',
+  'quality_threshold',
+  'meets_quality_threshold',
   'validity_score',
   'quality_score',
   'validation_source',
@@ -78,6 +83,25 @@ const TC_VALIDATE_SUMMARY_FIELDS = [
 /** Storage dir for testcase diff runs (namespaced to avoid cross-tool baseline collisions). */
 function tcStorageDir(): string {
   return resolveValidationDir('testcase');
+}
+
+/** PDX-509 tri-state verdict: validity gate (criticals) + quality bar (threshold). */
+interface QualityVerdict {
+  status: 'invalid' | 'needs_improvement' | 'valid';
+  quality_threshold: number;
+  meets_quality_threshold: boolean;
+}
+
+/**
+ * Combine the validity gate and the quality bar into one verdict.
+ * `invalid` when a critical defect blocks loading; otherwise `needs_improvement`
+ * when the score is below the (resolved) threshold; otherwise `valid`.
+ */
+function deriveQualityVerdict(isValid: boolean, qualityScore: number, qualityThresholdArg?: number): QualityVerdict {
+  const quality_threshold = resolveQualityThreshold(qualityThresholdArg);
+  const meets_quality_threshold = qualityScore >= quality_threshold;
+  const status = !isValid ? 'invalid' : meets_quality_threshold ? 'valid' : 'needs_improvement';
+  return { status, quality_threshold, meets_quality_threshold };
 }
 
 /** Resolve validation result from QualityHub API or fall back to local. */
@@ -141,7 +165,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     {
       title: 'Validate Test Case',
       description: desc(
-        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
+        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Returns a tri-state status: 'invalid' (a critical defect — the test will not load in Provar, is_valid=false), 'needs_improvement' (loads but quality_score is below quality_threshold), or 'valid' (loads and clears the bar); meets_quality_threshold and the effective quality_threshold are also returned. Note: a critical best-practice violation (e.g. an unknown apiId) now gates is_valid the same way a structural error does — it surfaces in issues[] as an ERROR. major/minor/info best-practice violations affect quality_score (and the status verdict) only. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
         'Validate a Provar XML test case: structure, UUIDs, steps, quality scoring; run_id for baseline diff.'
       ),
       inputSchema: {
@@ -164,6 +188,17 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
               'enum summary|standard|full, optional; default standard'
             )
           ),
+        quality_threshold: z
+          .number()
+          .min(0)
+          .max(100)
+          .optional()
+          .describe(
+            desc(
+              'Minimum quality_score for status to be "valid" rather than "needs_improvement". Does NOT affect is_valid (only critical defects do). Precedence: this arg → PROVAR_MCP_QUALITY_THRESHOLD env → 90.',
+              'number 0–100, optional; default 90'
+            )
+          ),
         baseline_run_id: z
           .string()
           .optional()
@@ -175,7 +210,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           ),
       },
     },
-    async ({ content, xml, file_path, detail, baseline_run_id }) => {
+    async ({ content, xml, file_path, detail, baseline_run_id, quality_threshold }) => {
       const requestId = makeRequestId();
       log('info', 'provar_testcase_validate', { requestId, has_content: !!(content ?? xml), file_path });
 
@@ -208,7 +243,15 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const context = tcRunContext(file_path, source);
         const contextHash = computeContextHash('tc', context);
         const runId = generateRunId(context);
-        const bpViolations = (baseResult.best_practices_violations ?? []) as unknown as DiffableViolation[];
+        // A bridged critical appears twice — as the surfaced issue AND as its original
+        // BP violation — both carrying the same BP rule_id. Hand-coded issue rule_ids
+        // (TC_*, UI-*, COMPARISON-TYPE-001) never collide with BP rule_ids, so a BP
+        // rule_id appearing in issues[] can only mean it was bridged. Drop those from
+        // the BP list here so the baseline diff counts each finding once.
+        const issueRuleIds = new Set(baseResult.issues.map((i) => i.rule_id));
+        const bpViolations = (baseResult.best_practices_violations ?? []).filter(
+          (v) => !issueRuleIds.has(v.rule_id)
+        ) as unknown as DiffableViolation[];
         const currentViolations: DiffableViolation[] = [
           ...(baseResult.issues as unknown as DiffableViolation[]),
           ...bpViolations,
@@ -262,12 +305,18 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         const completeness_score = calcCompletenessScore(baseResult.is_valid ? 1 : 0, 1);
         const recommended_next_action = calcNextAction(completeness_score, hasBaseline, currentViolations.length);
 
+        // PDX-509 tri-state verdict. is_valid answers "will it load" (gated by
+        // criticals only); status layers the quality bar on top so an AI client
+        // gets an explicit "loads but fix before running" signal.
+        const verdict = deriveQualityVerdict(baseResult.is_valid, baseResult.quality_score, quality_threshold);
+
         const result = {
           requestId,
           run_id: runId,
           completeness_score,
           recommended_next_action,
           ...baseResult,
+          ...verdict,
         };
 
         const detailLevel = (detail ?? 'standard') as DetailLevel;
@@ -336,21 +385,18 @@ export function validateTestCaseXml(filePath: string, config: ServerConfig): Tes
 
 /** TC_010/TC_011: validate testCase id and guid attributes. */
 function checkTestCaseIdAndGuid(tcId: string | null, tcGuid: string | undefined, issues: ValidationIssue[]): void {
-  if (!tcId) {
+  // The testCase `id` is OPTIONAL — the guid is the unique identifier (real Provar
+  // projects routinely omit id). When an id IS present it must be a non-negative
+  // integer: test case ids are project-unique sequential numbers (corpus shows 0…N),
+  // NOT the literal "1". Only a present-but-non-numeric id (e.g. a UUID) is rejected.
+  if (tcId !== null && !/^\d+$/.test(tcId)) {
     issues.push({
       rule_id: 'TC_010',
       severity: 'ERROR',
-      message: 'testCase missing required id attribute.',
+      message: `testCase id="${tcId}" is invalid — when present, the id must be a non-negative integer (test case ids are unique within a project, numbered sequentially). The guid is the cross-project unique identifier.`,
       applies_to: 'testCase',
-      suggestion: 'Add id="1" to testCase element (Provar requires the integer literal "1").',
-    });
-  } else if (tcId !== '1') {
-    issues.push({
-      rule_id: 'TC_010',
-      severity: 'ERROR',
-      message: `testCase id="${tcId}" is invalid — Provar requires id="1" (integer literal).`,
-      applies_to: 'testCase',
-      suggestion: 'Set id="1" on the testCase element. The unique identifier is the guid attribute, not id.',
+      suggestion:
+        'Set id to a project-unique non-negative integer (typically the highest in use + 1), or omit the id attribute entirely and rely on the guid.',
     });
   }
   if (!tcGuid) {
@@ -672,6 +718,90 @@ function checkUiTarget(
   }
 }
 
+// UI-INTERACTION-001 (PDX-506): a UI action step's `interaction` argument must
+// use class="uiInteraction". A plain string runs green from the CLI but renders
+// the Provar IDE Action widget blank. Mirrors checkUiTarget / UI-LOCATOR-001.
+function checkUiInteraction(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const interactionArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'interaction');
+  if (!interactionArg) return;
+  const interactionNode = interactionArg['value'] as Record<string, unknown> | undefined;
+  if (interactionNode == null) return;
+  const valClass = interactionNode['@_class'] as string | undefined;
+  if (valClass !== 'uiInteraction') {
+    issues.push({
+      rule_id: 'UI-INTERACTION-001',
+      severity: 'ERROR',
+      message: `"${stepName}" interaction argument uses class="${
+        valClass ?? '(missing)'
+      }" — must be class="uiInteraction".`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Emit the interaction as: <value class="uiInteraction" uri="ui:interaction?name=action"/>. ' +
+        'In provar_testcase_generate the "interaction" attribute is converted automatically.',
+    });
+  }
+}
+
+// Flat-form argument ids that the broken/CLI-only UiAssert shape carries at the
+// top level. The IDE-renderable contract nests these inside a uiFieldAssertion.
+const UI_ASSERT_FLAT_ARG_IDS = ['fieldLocator', 'attributeName', 'comparisonType', 'expectedValue'];
+
+// UI-ASSERT-STRUCTURE-001 (PDX-507, local rule): a UiAssert field assertion must
+// be nested inside fieldAssertions → uiFieldAssertion (with a bare
+// <fieldLocator uri="…"/> element), not emitted as flat top-level arguments.
+// The flat shape runs green from the CLI but renders the IDE Result Assertions
+// tab blank. Confirmed against the real corpus (AllPOCProjects): 0 of 3,778
+// UiAssert steps use a flat fieldLocator argument; ~99% use the nested form.
+// (Named "-STRUCTURE-001" to match the local SETVALUES-STRUCTURE-001 convention
+// and avoid colliding with the best-practice JSON rule UI-ASSERT-STRUCT-001.)
+function checkUiAssertStructure(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const flatArg = getArgList(call).find((a) =>
+    UI_ASSERT_FLAT_ARG_IDS.includes((a['@_id'] as string | undefined) ?? '')
+  );
+  if (!flatArg) return;
+  const offendingId = (flatArg['@_id'] as string | undefined) ?? '';
+  issues.push({
+    rule_id: 'UI-ASSERT-STRUCTURE-001',
+    severity: 'ERROR',
+    message: `UiAssert step "${stepName}" carries a flat "${offendingId}" argument — field assertions must be nested inside fieldAssertions/uiFieldAssertion or the Provar IDE Result Assertions tab renders blank.`,
+    applies_to: 'apiCall',
+    suggestion:
+      'Nest field assertions: <argument id="fieldAssertions"><value class="valueList" mutable="Mutable">' +
+      '<uiFieldAssertion resultName="Field"><fieldLocator uri="ui:locator?name=Field&binding=..."/>' +
+      '<attributeAssertions><uiAttributeAssertion attributeName="value" comparisonType="EqualTo"/></attributeAssertions>' +
+      '</uiFieldAssertion></value></argument> plus empty columnAssertions/pageAssertions. The fieldLocator is a bare ' +
+      'uri element, NOT class="uiLocator". In provar_testcase_generate pass fieldLocator/attributeName/comparisonType/' +
+      'expectedValue as flat attributes — the generator builds this structure automatically.',
+  });
+}
+
+// SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):
+// SetValues values argument must use class="valueList" with <namedValues> children.
+// A plain string value causes an immediate ClassCastException at runtime.
+// Extracted to keep validateApiCallArgs within the complexity budget.
+function checkSetValuesStructure(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
+  const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
+  if (!valuesArg) return;
+  const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
+  if (valuesNode == null) return;
+  const valClass = valuesNode['@_class'] as string | undefined;
+  if (valClass !== 'valueList') {
+    issues.push({
+      rule_id: 'SETVALUES-STRUCTURE-001',
+      severity: 'ERROR',
+      message: `SetValues step "${stepName}" values argument uses class="${
+        valClass ?? '(missing)'
+      }" — must use class="valueList" with <namedValues> children.`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
+        '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
+        '</namedValues></value>. In provar_testcase_generate pass each variable as a flat key/value pair ' +
+        'in attributes — the generator builds the valueList structure automatically.',
+    });
+  }
+}
+
 function validateApiCallArgs(
   call: Record<string, unknown>,
   apiId: string,
@@ -715,32 +845,18 @@ function validateApiCallArgs(
     }
   }
 
-  // SETVALUES-STRUCTURE-001 (mirrors quality-hub-agents SETVALUES-STRUCTURE-001):
-  // SetValues values argument must use class="valueList" with <namedValues> children.
-  // A plain string value causes an immediate ClassCastException at runtime.
+  // UI-INTERACTION-001 (PDX-506) for any UI action; UI-ASSERT-STRUCTURE-001
+  // (PDX-507) additionally for UiAssert field-assertion structure. Both are
+  // local rules gated on the shared UI-action set and extracted to helpers to
+  // keep validateApiCallArgs within the complexity budget.
+  if (UI_ACTION_API_IDS.has(apiId)) {
+    checkUiInteraction(call, stepName, issues);
+    if (apiId.endsWith('UiAssert')) checkUiAssertStructure(call, stepName, issues);
+  }
+
+  // SETVALUES-STRUCTURE-001: SetValues values argument must use class="valueList".
   if (apiId.includes('SetValues') && !apiId.includes('AssertValues')) {
-    const valuesArg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === 'values');
-    if (valuesArg) {
-      const valuesNode = valuesArg['value'] as Record<string, unknown> | undefined;
-      if (valuesNode != null) {
-        const valClass = valuesNode['@_class'] as string | undefined;
-        if (valClass !== 'valueList') {
-          issues.push({
-            rule_id: 'SETVALUES-STRUCTURE-001',
-            severity: 'ERROR',
-            message: `SetValues step "${stepName}" values argument uses class="${
-              valClass ?? '(missing)'
-            }" — must use class="valueList" with <namedValues> children.`,
-            applies_to: 'apiCall',
-            suggestion:
-              'Wrap variable assignments in: <value class="valueList" mutable="Mutable"><namedValues>' +
-              '<namedValue name="varName"><value class="value" valueClass="string">value</value></namedValue>' +
-              '</namedValues></value>. In provar_testcase_generate pass each variable as a flat key/value pair ' +
-              'in attributes — the generator builds the valueList structure automatically.',
-          });
-        }
-      }
-    }
+    checkSetValuesStructure(call, stepName, issues);
   }
 
   // ASSERT-001: AssertValues using UI namedValues format instead of variable format
@@ -845,6 +961,107 @@ function validateComparisonTypes(tc: Record<string, unknown>, issues: Validation
   }
 }
 
+/**
+ * The Layer-1 structural-validity rule catalog — the single source of truth for
+ * Layer-1 rule metadata (id / severity / applies_to / description) and the
+ * best-practice ownership mapping. Loaded from `provar_layer1_rules.json`
+ * (copied into `lib/mcp/rules/` at compile, same as the best-practices ruleset).
+ * The imperative DETECTION below is unchanged; centralizing only the metadata
+ * keeps the published Validation Rule Registry from drifting from the validator.
+ * The same JSON is read by `scripts/build-validation-rule-registry.cjs` (renders
+ * the registry rows) and guarded by `validationRuleRegistry.test.ts`.
+ */
+export interface Layer1RuleCatalogEntry {
+  id: string;
+  severity: 'ERROR' | 'WARNING';
+  applies_to: string;
+  description: string;
+  /** Layer-2 `critical` BP rule ids whose concept this Layer-1 check owns (suppressed from the bridge). */
+  owns_bp_rules?: string[];
+}
+
+export const LAYER1_RULE_CATALOG: readonly Layer1RuleCatalogEntry[] = ((): Layer1RuleCatalogEntry[] => {
+  const catalogPath = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'rules',
+    'provar_layer1_rules.json'
+  );
+  const parsed = JSON.parse(fs.readFileSync(catalogPath, 'utf-8')) as { rules: Layer1RuleCatalogEntry[] };
+  return parsed.rules;
+})();
+
+/**
+ * PDX-509 — validity bridge.
+ *
+ * Best-practice violations carry a `critical|major|minor|info` severity, but
+ * historically that severity only moved `quality_score` and never gated
+ * `is_valid`. Per the canonical taxonomy, `critical` means "Provar will not
+ * load/render the test case" — exactly the class of defect that MUST flip
+ * validity. The bridge surfaces every un-suppressed `critical` BP violation as
+ * an ERROR issue so it gates `is_valid`.
+ *
+ * `major`/`minor`/`info` are intentionally NOT bridged — a major is a runtime
+ * ERROR that still loads, so it influences the quality score (and the
+ * `needs_improvement` verdict) without flipping `is_valid`.
+ *
+ * These BP rules cover concepts the hand-coded Layer-1 checks already OWN
+ * (root element, identifier, steps presence, testItemId integers, comparisonType
+ * enums). Layer-1 is authoritative for those: it fires only on the genuinely
+ * load-blocking condition (e.g. TC_020 fires on a MISSING <steps>, but an
+ * empty-but-present <steps> still loads — it just does nothing), whereas the
+ * ported BP rule is coarser (VALID-STEPS-001 also flags an empty <steps>, a
+ * "does nothing" design smell, not a load failure). So we never bridge these —
+ * Layer-1 already gates the load-blocking case, and the BP version still counts
+ * toward quality_score. The bridge's real value is the criticals Layer-1 does
+ * NOT check (unknown apiId, missing required control/connection args, invalid
+ * render value-class casing, NitroX connect args…).
+ */
+// Derived from the catalog's `owns_bp_rules` — the single source shared with the
+// registry generator. A Layer-2 `critical` listed here is NOT bridged into
+// `is_valid` (the named Layer-1 check is authoritative; bridging would
+// double-report). Ownership today: TC_003→SCHEMA-ROOT-001, TC_010→SCHEMA-ID-001,
+// TC_011→VALID-GUID-001, TC_020→SCHEMA-STEPS-001/VALID-STEPS-001,
+// TC_034→STEP-ITEMID-001, COMPARISON-TYPE-001→COMPARISON-TYPE-ENUM-001.
+export const LAYER1_OWNED_BP_RULES: ReadonlySet<string> = new Set(
+  LAYER1_RULE_CATALOG.flatMap((rule) => rule.owns_bp_rules ?? [])
+);
+
+/** Map a Best-Practices `appliesTo` token to the issue `applies_to` vocabulary. */
+const BP_APPLIES_TO_ISSUE: Record<string, string> = {
+  TestCase: 'testCase',
+  Step: 'apiCall',
+  Argument: 'argument',
+  Document: 'document',
+};
+
+/**
+ * Surface every un-suppressed `critical` best-practice violation as an ERROR
+ * issue so it gates `is_valid`. Mutates `issues` in place. The BP list itself is
+ * left untouched, so `quality_score` (and its Lambda parity) is unchanged — a
+ * bridged critical deliberately appears in BOTH `issues[]` (validity) and
+ * `best_practices_violations[]` (scoring).
+ */
+function bridgeCriticalViolations(
+  bpViolations: Array<import('./bestPracticesEngine.js').BPViolation>,
+  issues: ValidationIssue[]
+): void {
+  const present = new Set(issues.map((i) => i.rule_id));
+  for (const v of bpViolations) {
+    if (v.severity !== 'critical') continue;
+    if (present.has(v.rule_id)) continue;
+    if (LAYER1_OWNED_BP_RULES.has(v.rule_id)) continue; // Layer-1 is authoritative for these
+    issues.push({
+      rule_id: v.rule_id,
+      severity: 'ERROR',
+      message: v.message,
+      applies_to: BP_APPLIES_TO_ISSUE[v.applies_to[0] ?? ''] ?? 'testCase',
+      suggestion: v.recommendation,
+    });
+    present.add(v.rule_id);
+  }
+}
+
 function finalize(
   issues: ValidationIssue[],
   testCaseId: string | null,
@@ -853,14 +1070,18 @@ function finalize(
   xmlContent: string,
   testName?: string
 ): TestCaseValidationResult {
+  // Layer 2: quality score (best practices engine — same rules & formula as Quality Hub API)
+  const bp = runBestPractices(xmlContent, { testName });
+
+  // PDX-509: bridge critical BP violations into Layer-1 issues BEFORE counting,
+  // so a "won't load" best-practice defect flips is_valid like a structural one.
+  bridgeCriticalViolations(bp.violations, issues);
+
   const errorCount = issues.filter((i) => i.severity === 'ERROR').length;
   const warningCount = issues.filter((i) => i.severity === 'WARNING').length;
 
-  // Layer 1: validity score (schema compliance — existing rules)
+  // Layer 1: validity score (schema compliance — existing rules + bridged criticals)
   const validity_score = Math.max(0, 100 - errorCount * 20);
-
-  // Layer 2: quality score (best practices engine — same rules & formula as Quality Hub API)
-  const bp = runBestPractices(xmlContent, { testName });
 
   return {
     is_valid: errorCount === 0,

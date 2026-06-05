@@ -15,6 +15,7 @@ import type { ServerConfig } from '../server.js';
 import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
+import { allocateTestCaseId, DEFAULT_TESTCASE_ID } from '../utils/testCaseId.js';
 import { validateTestCase } from './testCaseValidate.js';
 import { desc } from './descHelper.js';
 import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
@@ -201,7 +202,7 @@ const TOOL_DESCRIPTION = [
   // ── Existing description (unchanged below) ───────────────────────────────────
   'Generate a Provar XML test case skeleton with proper UUID v4 guids, sequential testItemId values, and <steps> structure.',
   'Returns XML content. Writes to disk only when dry_run=false.',
-  'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="1" registryId="..."> (id is always the integer literal "1" as required by the Provar runtime), a <summary/> child, then <steps>.',
+  'Generated structure: <?xml version="1.0" encoding="UTF-8" standalone="no"?> with <testCase guid="..." id="N" registryId="..."> (a numeric integer id), a <summary/> child, then <steps>. The unique identifier is the guid; id is a human-facing label. When writing into an existing project the id is auto-allocated as the highest in-use id + 1; otherwise it defaults to 1.',
   'URI-aware generation: use target_uri to control the XML nesting structure.',
   '  - sf:ui:target (or omit target_uri) → flat Salesforce XML structure (existing behaviour).',
   '  - ui:pageobject:target?pageId=pageobjects.PageClass → wraps all steps in a UiWithScreen element targeting that non-SF page object.',
@@ -226,9 +227,9 @@ const TOOL_DESCRIPTION = [
   'target argument (UiWithScreen/UiWithRow): pass the URI value; emitted as class="uiTarget" uri="...".',
   'locator argument (UiDoAction/UiAssert/UiRead/UiFill): pass the URI value; emitted as class="uiLocator" uri="...".',
   'valueClass auto-detection: argument values are typed automatically before XML emission. ' +
-    'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "datetime"; ' +
+    'ISO-8601 date "YYYY-MM-DD" → valueClass="date"; ISO-8601 datetime "YYYY-MM-DDTHH:MM:SS" (optional fractional seconds + timezone) → "dateTime"; ' +
     '"true"/"false" → "boolean"; numeric string (e.g. "42", "-5", "3.14") → "decimal"; otherwise "string". ' +
-    'Pass dates / booleans / numbers in those formats — Provar runtime silently discards date fields emitted as valueClass="string". ' +
+    'Pass dates in ISO-8601 — the generator converts them to the epoch-millisecond value Provar requires (a date/dateTime field emitted as an ISO string, or as valueClass="string", fails to load in the IDE). A bare date is treated as UTC midnight; a datetime without a timezone is treated as UTC. ' +
     'Note: numbers always emit valueClass="decimal" per the canonical Provar reference (there is no separate "integer" valueClass).',
   'Edit page objects: action=Edit targets require a compiled page object for the SF object. ' +
     'If none exists in the project page-objects directory, the locator binding will fail at runtime. ' +
@@ -389,13 +390,23 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
       }
 
       try {
-        const xmlContent = buildTestCaseXml(input);
         const filePath: string | undefined = input.output_path ? path.resolve(input.output_path) : undefined;
+
+        // Allocate the root testCase id from surrounding project context, but only
+        // when actually persisting (a write path that has cleared the path policy).
+        // Preview/dry-run runs have no project anchor, so they keep the default id.
+        let idAllocation = { id: DEFAULT_TESTCASE_ID, basis: 'default' as const } as ReturnType<
+          typeof allocateTestCaseId
+        >;
+        if (filePath && !input.dry_run) {
+          assertPathAllowed(filePath, config.allowedPaths);
+          idAllocation = allocateTestCaseId(filePath, config.allowedPaths);
+        }
+
+        const xmlContent = buildTestCaseXml(input, idAllocation.id);
         let written = false;
 
         if (filePath && !input.dry_run) {
-          assertPathAllowed(filePath, config.allowedPaths);
-
           if (fs.existsSync(filePath) && !input.overwrite) {
             const err = makeError(
               'FILE_EXISTS',
@@ -408,7 +419,12 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           fs.mkdirSync(path.dirname(filePath), { recursive: true });
           fs.writeFileSync(filePath, xmlContent, 'utf-8');
           written = true;
-          log('info', 'provar_testcase_generate: wrote file', { requestId, filePath });
+          log('info', 'provar_testcase_generate: wrote file', {
+            requestId,
+            filePath,
+            testCaseId: idAllocation.id,
+            idBasis: idAllocation.basis,
+          });
         }
 
         const warnings = buildStepWarnings(input.steps);
@@ -420,6 +436,7 @@ export function registerTestCaseGenerate(server: McpServer, config: ServerConfig
           written,
           dry_run: input.dry_run,
           step_count: input.steps.length,
+          test_case_id: idAllocation.id,
           idempotency_key: input.idempotency_key,
           ...(warnings.length > 0 ? { warnings } : {}),
         };
@@ -557,12 +574,47 @@ function buildArgumentValue(key: string, val: string, indent: string, inNamedVal
     if (key === 'locator' && UI_LOCATOR_BEARING_API_IDS.has(apiId)) {
       return `${indent}<value class="uiLocator" uri="${escapeXmlAttr(val)}"/>`;
     }
+    // D2: 'interaction' argument → class="uiInteraction" (UiDoAction Action widget).
+    // PDX-506: the IDE step editor binds its Action only from a typed uiInteraction;
+    // a plain string runs green from the CLI but renders the Action field blank.
+    // Gated on the shared UI-action API set so generator + validator stay aligned.
+    if (key === 'interaction' && UI_ACTION_API_IDS.has(apiId)) {
+      return `${indent}<value class="uiInteraction" uri="${escapeXmlAttr(val)}"/>`;
+    }
   }
   // PDX-493 (H3): infer valueClass for date / datetime / boolean / decimal / string. The
   // `fieldTypeHint` parameter on `inferSalesforceValueClass` is intentionally not threaded
   // through here yet — it lands in PDX-492 (H2b) along with the `field_type_hints` tool input.
   const inferred = inferSalesforceValueClass(key, val);
+  if (inferred === 'date' || inferred === 'datetime') {
+    // PDX-509: Provar stores date/dateTime as epoch MILLISECONDS, never an ISO string —
+    // an ISO string fails to load in the IDE (RENDER-DATE-VALUECLASS-001), and the real
+    // corpus uses epoch ms exclusively with camelCase `dateTime`. Convert here.
+    const ms = isoToEpochMs(val, inferred);
+    if (ms !== null) {
+      const valueClass = inferred === 'datetime' ? 'dateTime' : 'date';
+      return `${indent}<value class="value" valueClass="${valueClass}">${ms}</value>`;
+    }
+    // A value that matches the ISO shape but is not a real date (e.g. "2026-99-99")
+    // cannot be converted — fall back to a plain string rather than emit a
+    // load-breaking date/dateTime with a non-epoch value.
+    return `${indent}<value class="value" valueClass="string">${escapeXmlContent(val)}</value>`;
+  }
   return `${indent}<value class="value" valueClass="${inferred}">${escapeXmlContent(val)}</value>`;
+}
+
+/**
+ * Convert a validated ISO-8601 date / datetime string to epoch milliseconds.
+ * A date-only string ("YYYY-MM-DD") is parsed as UTC midnight per the ES spec. A
+ * datetime WITHOUT an explicit timezone would otherwise parse as machine-local
+ * time (non-deterministic), so we pin it to UTC by appending 'Z' — matching the
+ * Provar corpus, where date/dateTime values are stored as UTC epoch ms.
+ * Returns null if the value cannot be parsed (caller falls back to the raw text).
+ */
+function isoToEpochMs(val: string, kind: 'date' | 'datetime'): number | null {
+  const needsUtc = kind === 'datetime' && !/(Z|[+-]\d{2}:?\d{2})$/.test(val);
+  const ms = Date.parse(needsUtc ? `${val}Z` : val);
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function buildArgumentsXml(attributes: Record<string, string>, baseIndent = '      ', apiId = ''): string {
@@ -603,6 +655,94 @@ function buildSetValuesXml(attributes: Record<string, string>, baseIndent: strin
   );
 }
 
+// PDX-507: derive the field name for a uiFieldAssertion from a locator URI's
+// `name=` parameter (e.g. ui:locator?name=LastName&binding=… → "LastName").
+function extractFieldName(uri: string): string {
+  const m = /[?&]name=([^&]*)/.exec(uri);
+  if (!m) return 'Field';
+  try {
+    return decodeURIComponent(m[1]) || 'Field';
+  } catch {
+    return m[1] || 'Field';
+  }
+}
+
+// PDX-507: UiAssert — assemble the nested fieldAssertions / uiFieldAssertion
+// structure the Provar IDE Result Assertions tab binds from. The generator
+// previously emitted the flat shape (top-level fieldLocator / attributeName /
+// comparisonType / expectedValue arguments), which runs green from the CLI but
+// renders the Result Assertions tab blank in the IDE. Shape confirmed against
+// the real test corpus (AllPOCProjects): 3,743/3,778 UiAssert steps use this
+// nested form, with a BARE <fieldLocator uri="…"/> element (never class="uiLocator"
+// — see best-practice rule UI-ASSERT-FIELDLOCATOR-002) and no `assertionType`.
+// Only a `fieldLocator` attribute triggers the nested form; a UiAssert that
+// carries a plain `locator` argument keeps the documented locator→uiLocator
+// contract via the flat fallback (buildArgumentValue dispatches it). When no
+// fieldLocator is supplied the step is not a field assertion, so fall back to
+// flat argument emission and leave other UiAssert shapes untouched.
+function buildUiAssertXml(attributes: Record<string, string>, baseIndent: string, apiId: string): string {
+  const a = attributes;
+  const fieldLocator = a['fieldLocator'] ?? '';
+  if (!fieldLocator) return buildArgumentsXml(attributes, baseIndent, apiId);
+
+  const i = (n: number): string => baseIndent + '  '.repeat(n);
+  const resultName = a['resultName'] ?? 'Values';
+  const resultScope = a['resultScope'] ?? 'Test';
+  const captureAfter = a['captureAfter'] ?? 'false';
+  const attributeName = a['attributeName'] ?? 'value';
+  const comparisonType = a['comparisonType'] ?? 'EqualTo';
+  const fieldName = extractFieldName(fieldLocator);
+  const expected = a['expectedValue'];
+
+  // resultName / resultScope / captureAfter are control-plane literals that the
+  // real corpus ALWAYS emits as valueClass="string" — including captureAfter
+  // ("true"/"false"), which is intentionally NOT valueClass="boolean" here.
+  // Routing these through inferSalesforceValueClass would diverge from the
+  // corpus (it would infer boolean), so they are emitted as string literals.
+  const strVal = (v: string): string => `<value class="value" valueClass="string">${escapeXmlContent(v)}</value>`;
+
+  // uiAttributeAssertion — self-closing when there is no expected value. This is
+  // a real corpus form (e.g. ADP_POV "UI Assert - Date Empty" emits
+  // <uiAttributeAssertion attributeName="value" comparisonType="EqualTo"/>);
+  // otherwise it carries a typed <value> child built via buildArgumentValue so
+  // {Var} expands to class="variable".
+  const attrOpen = `${i(5)}<uiAttributeAssertion attributeName="${escapeXmlAttr(
+    attributeName
+  )}" comparisonType="${escapeXmlAttr(comparisonType)}"`;
+  const attrAssertion =
+    expected != null && expected !== ''
+      ? `${attrOpen}>\n${buildArgumentValue('expectedValue', expected, i(6), true)}\n${i(5)}</uiAttributeAssertion>`
+      : `${attrOpen}/>`;
+
+  const fieldAssertion =
+    `${i(4)}<uiFieldAssertion resultName="${escapeXmlAttr(fieldName)}">\n` +
+    `${i(5)}<fieldLocator uri="${escapeXmlAttr(fieldLocator)}"/>\n` +
+    `${i(5)}<attributeAssertions>\n` +
+    `${attrAssertion}\n` +
+    `${i(5)}</attributeAssertions>\n` +
+    `${i(4)}</uiFieldAssertion>`;
+
+  return (
+    `\n${i(0)}<arguments>\n` +
+    `${i(0)}<argument id="resultName">\n${i(1)}${strVal(resultName)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="resultScope">\n${i(1)}${strVal(resultScope)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="fieldAssertions">\n` +
+    `${i(1)}<value class="valueList" mutable="Mutable">\n` +
+    `${fieldAssertion}\n` +
+    `${i(1)}</value>\n` +
+    `${i(0)}</argument>\n` +
+    `${i(0)}<argument id="captureAfter">\n${i(1)}${strVal(captureAfter)}\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="columnAssertions">\n${i(1)}<value class="valueList" mutable="Mutable"/>\n${i(
+      0
+    )}</argument>\n` +
+    `${i(0)}<argument id="pageAssertions">\n${i(1)}<value class="valueList" mutable="Mutable"/>\n${i(0)}</argument>\n` +
+    `${i(0)}<argument id="beforeWait"/>\n` +
+    `${i(0)}<argument id="autoRetry"/>\n` +
+    `${i(0)}</arguments>\n` +
+    `${baseIndent.slice(0, -2)}`
+  );
+}
+
 function buildFlatStepXml(
   step: { api_id: string; name: string; attributes: Record<string, string> },
   testItemId: number,
@@ -631,9 +771,15 @@ function buildStepXmlWithChildren(
   const resolvedApiId = resolveApiId(step.api_id);
   const baseIndent = indent + '  ';
   // Use SetValues structure for any SetValues API (string-match mirrors the validator).
-  const argumentsXml = resolvedApiId.includes('SetValues')
-    ? buildSetValuesXml(step.attributes, baseIndent)
-    : buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
+  // PDX-507: UiAssert uses the nested fieldAssertions/uiFieldAssertion structure.
+  let argumentsXml: string;
+  if (resolvedApiId.includes('SetValues')) {
+    argumentsXml = buildSetValuesXml(step.attributes, baseIndent);
+  } else if (resolvedApiId.endsWith('.UiAssert') || resolvedApiId === 'UiAssert') {
+    argumentsXml = buildUiAssertXml(step.attributes, baseIndent, resolvedApiId);
+  } else {
+    argumentsXml = buildArgumentsXml(step.attributes, baseIndent, resolvedApiId);
+  }
 
   const hasClauses = substepsTestItemId !== undefined;
   const open = `${indent}<apiCall guid="${guid}" apiId="${escapeXmlAttr(resolvedApiId)}" name="${escapeXmlAttr(
@@ -776,12 +922,15 @@ function emitGroupedSteps(nodes: StepNode[], indent: string, startId: number): {
   return { xml: lines.join('\n'), nextId: id };
 }
 
-function buildTestCaseXml(input: {
-  test_case_name: string;
-  steps: Step[];
-  target_uri?: string;
-  grouping_mode?: 'auto' | 'flat' | 'single-screen';
-}): string {
+function buildTestCaseXml(
+  input: {
+    test_case_name: string;
+    steps: Step[];
+    target_uri?: string;
+    grouping_mode?: 'auto' | 'flat' | 'single-screen';
+  },
+  testCaseId: number = DEFAULT_TESTCASE_ID
+): string {
   const testCaseGuid = randomUUID();
   const registryId = randomUUID();
   const groupingMode = input.grouping_mode ?? 'auto';
@@ -827,10 +976,12 @@ function buildTestCaseXml(input: {
     stepLines = lines || '    <!-- TODO: Add test steps here -->';
   }
 
-  // Provar requires: standalone="no", id="1" (integer literal), no name attr, <summary/> before <steps>.
+  // Provar requires: standalone="no", a numeric integer id, no name attr, <summary/> before <steps>.
+  // The id is a human-facing label, not a uniqueness key (guid is) — see allocateTestCaseId:
+  // when writing into an existing project we pass highest-in-use + 1; otherwise it defaults to 1.
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
-    `<testCase guid="${testCaseGuid}" id="1" registryId="${registryId}">\n` +
+    `<testCase guid="${testCaseGuid}" id="${testCaseId}" registryId="${registryId}">\n` +
     '  <summary/>\n' +
     '  <steps>\n' +
     stepLines +

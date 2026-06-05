@@ -62,7 +62,7 @@ function makeXml(tcGuid: string, stepGuid: string, id: string): string {
     '<?xml version="1.0" encoding="UTF-8"?>',
     `<testCase id="${id}" guid="${tcGuid}" registryId="${id}" name="${id}">`,
     '  <steps>',
-    `    <apiCall guid="${stepGuid}" apiId="UiConnect" name="Connect" testItemId="1"/>`,
+    `    <apiCall guid="${stepGuid}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1"/>`,
     '  </steps>',
     '</testCase>',
   ].join('\n');

@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "1.0",
+  "name": "Provar Test Case Layer-1 Structural Validity Rules",
+  "description": "Single source of truth for the Layer-1 (structural validity) rule catalog. The DETECTION logic stays imperative in src/mcp/tools/testCaseValidate.ts; only the rule metadata (id, severity, applies_to, description) and the best-practice ownership/suppression mapping are centralized here. Consumers: testCaseValidate.ts (derives the bridge-suppression owned-set), scripts/build-validation-rule-registry.cjs (renders the Layer-1 registry rows), and test/unit/mcp/validationRuleRegistry.test.ts (drift guard). The `owns_bp_rules` field lists the Layer-2 `critical` best-practice rule ids whose concept this Layer-1 check already owns — those criticals are NOT bridged into is_valid (avoids double-reporting). Order is display order for the registry; keep it stable. severity is ERROR or WARNING (INFO reserved).",
+  "rules": [
+    {
+      "id": "TC_001",
+      "severity": "ERROR",
+      "applies_to": "document",
+      "description": "XML declaration present (<?xml …?> first line)."
+    },
+    {
+      "id": "TC_002",
+      "severity": "ERROR",
+      "applies_to": "document",
+      "description": "XML is well-formed (parses without error)."
+    },
+    {
+      "id": "TC_003",
+      "severity": "ERROR",
+      "applies_to": "document",
+      "description": "Root element is <testCase>.",
+      "owns_bp_rules": ["SCHEMA-ROOT-001"]
+    },
+    {
+      "id": "TC_010",
+      "severity": "ERROR",
+      "applies_to": "testCase",
+      "description": "testCase id, when present, is a non-negative integer (id is optional; guid is the identifier).",
+      "owns_bp_rules": ["SCHEMA-ID-001"]
+    },
+    {
+      "id": "TC_011",
+      "severity": "ERROR",
+      "applies_to": "testCase",
+      "description": "testCase has a guid attribute.",
+      "owns_bp_rules": ["VALID-GUID-001"]
+    },
+    {
+      "id": "TC_012",
+      "severity": "ERROR",
+      "applies_to": "testCase",
+      "description": "testCase guid is a valid UUID v4."
+    },
+    {
+      "id": "TC_020",
+      "severity": "ERROR",
+      "applies_to": "testCase",
+      "description": "testCase has a <steps> element.",
+      "owns_bp_rules": ["SCHEMA-STEPS-001", "VALID-STEPS-001"]
+    },
+    {
+      "id": "TC_030",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "Each apiCall has a guid attribute."
+    },
+    {
+      "id": "TC_031",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "Each apiCall guid is a valid UUID v4."
+    },
+    {
+      "id": "TC_032",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "Each apiCall has an apiId attribute."
+    },
+    {
+      "id": "TC_033",
+      "severity": "WARNING",
+      "applies_to": "apiCall",
+      "description": "Each apiCall has a descriptive name attribute."
+    },
+    {
+      "id": "TC_034",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "Each apiCall has a testItemId attribute.",
+      "owns_bp_rules": ["STEP-ITEMID-001"]
+    },
+    {
+      "id": "TC_035",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "apiCall testItemId is a whole number."
+    },
+    {
+      "id": "DATA-001",
+      "severity": "WARNING",
+      "applies_to": "testCase",
+      "description": "<dataTable> only iterates under a test plan; flags direct testCase-mode execution."
+    },
+    {
+      "id": "VAR-REF-001",
+      "severity": "WARNING",
+      "applies_to": "argument",
+      "description": "A whole-token {Var} stored as valueClass=\"string\" (use class=\"variable\")."
+    },
+    {
+      "id": "VAR-REF-002",
+      "severity": "WARNING",
+      "applies_to": "argument",
+      "description": "{Var} tokens embedded in a plain string (use class=\"compound\")."
+    },
+    {
+      "id": "UI-TARGET-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "UiWithScreen/UiWithRow target uses class=\"uiTarget\"."
+    },
+    {
+      "id": "UI-LOCATOR-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "UI action locator uses class=\"uiLocator\"."
+    },
+    {
+      "id": "UI-INTERACTION-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "UiDoAction interaction uses class=\"uiInteraction\"."
+    },
+    {
+      "id": "UI-ASSERT-STRUCTURE-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "UiAssert uses nested field/column/page assertion containers, not a flat argument."
+    },
+    {
+      "id": "SETVALUES-STRUCTURE-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "SetValues values argument uses class=\"valueList\" with <namedValues>."
+    },
+    {
+      "id": "ASSERT-001",
+      "severity": "WARNING",
+      "applies_to": "apiCall",
+      "description": "AssertValues namedValues format flagged for variable/Apex comparisons."
+    },
+    {
+      "id": "COMPARISON-TYPE-001",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "comparisonType is within the step-scoped enum subset (load-blocking otherwise).",
+      "owns_bp_rules": ["COMPARISON-TYPE-ENUM-001"]
+    }
+  ]
+}

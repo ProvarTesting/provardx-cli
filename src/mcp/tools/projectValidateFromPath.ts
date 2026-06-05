@@ -203,11 +203,10 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .min(0)
           .max(100)
           .optional()
-          .default(80)
           .describe(
             desc(
-              'Minimum quality score for a test case to be considered valid (default: 80)',
-              'number 0–100, optional; minimum quality score threshold'
+              'Minimum quality score for a test case to be considered valid. Precedence: this arg → PROVAR_MCP_QUALITY_THRESHOLD env → 90.',
+              'number 0–100, optional; default 90'
             )
           ),
         save_results: z

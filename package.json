@@ -1,7 +1,7 @@
 {
   "name": "@provartesting/provardx-cli",
   "description": "A plugin for the Salesforce CLI to orchestrate testing activities and report quality metrics to Provar Quality Hub",
-  "version": "1.5.4",
+  "version": "1.6.0",
   "mcpName": "io.github.ProvarTesting/provar",
   "license": "BSD-3-Clause",
   "plugins": [
@@ -152,7 +152,7 @@
       ]
     },
     "compile": {
-      "command": "tsc -p . --pretty --incremental && shx mkdir -p lib/mcp/rules && shx cp src/mcp/rules/*.json lib/mcp/rules/ && shx mkdir -p lib/mcp/docs && shx cp docs/PROVAR_TEST_STEP_REFERENCE.md lib/mcp/docs/ && shx cp docs/NITROX_COMPONENT_CATALOG.md lib/mcp/docs/ && shx cp docs/NITROX_CATALOG_SOURCE.json lib/mcp/docs/ && shx cp docs/PROVAR_TOOL_GUIDE.md lib/mcp/docs/",
+      "command": "tsc -p . --pretty --incremental && shx mkdir -p lib/mcp/rules && shx cp src/mcp/rules/*.json lib/mcp/rules/ && shx mkdir -p lib/mcp/docs && shx cp docs/PROVAR_TEST_STEP_REFERENCE.md lib/mcp/docs/ && shx cp docs/NITROX_COMPONENT_CATALOG.md lib/mcp/docs/ && shx cp docs/NITROX_CATALOG_SOURCE.json lib/mcp/docs/ && shx cp docs/PROVAR_TOOL_GUIDE.md lib/mcp/docs/ && shx cp docs/VALIDATION_RULE_REGISTRY.md lib/mcp/docs/",
       "files": [
         "src/**/*.ts",
         "src/mcp/rules/*.json",
@@ -160,6 +160,7 @@
         "docs/NITROX_CATALOG_SOURCE.json",
         "docs/PROVAR_TOOL_GUIDE.md",
         "docs/PROVAR_TEST_STEP_REFERENCE.md",
+        "docs/VALIDATION_RULE_REGISTRY.md",
         "**/tsconfig.json",
         "messages/**"
       ],

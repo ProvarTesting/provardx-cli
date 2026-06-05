@@ -12,6 +12,7 @@ import { makeError, makeRequestId } from '../schemas/common.js';
 import { log } from '../logging/logger.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
 import { calcCompletenessScore, calcNextAction } from '../utils/validationScore.js';
+import { resolveQualityThreshold } from '../utils/qualityThreshold.js';
 import {
   generateRunId,
   saveRun,
@@ -114,7 +115,10 @@ export function registerTestSuiteValidate(server: McpServer): void {
           .max(100)
           .optional()
           .describe(
-            desc('Minimum quality score for a test case to be considered valid (default: 80)', 'number 0–100, optional')
+            desc(
+              'Minimum quality score for a test case to be considered valid. Precedence: this arg → PROVAR_MCP_QUALITY_THRESHOLD env → 90.',
+              'number 0–100, optional; default 90'
+            )
           ),
         detail: z
           .enum(['summary', 'standard', 'full'])
@@ -142,7 +146,7 @@ export function registerTestSuiteValidate(server: McpServer): void {
       log('info', 'provar_testsuite_validate', { requestId, suite_name });
 
       try {
-        const threshold = quality_threshold ?? 80;
+        const threshold = resolveQualityThreshold(quality_threshold);
         const input: TestSuiteInput = {
           name: suite_name,
           test_cases: test_cases ?? [],

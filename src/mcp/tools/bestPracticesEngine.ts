@@ -617,7 +617,9 @@ function validateDetectDuplicatesLiterals(tc: XmlNode, rule: BPRule): BPViolatio
       if (!valElem || typeof valElem !== 'object') continue;
       if ((valElem['@_class'] as string | undefined) !== 'value') continue; // skip variables/compounds
 
-      const text = ((valElem['#text'] as string | undefined) ?? '').trim();
+      // Read through nodeText: fast-xml-parser yields a NUMBER for a numeric tag
+      // value (e.g. <value>123</value>), so a bare `.trim()` would throw.
+      const text = nodeText(valElem);
       if (!text || text.length <= 3) continue;
       if (DEFAULT_LITERAL_VALUES.has(text)) continue;
       if (text.toLowerCase() === 'true' || text.toLowerCase() === 'false') continue;
@@ -935,11 +937,7 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
     const tid = call['@_testItemId'] as string | undefined;
     const shortApi = apiId.split('.').pop() ?? apiId;
     const tidSuffix = tid ? ` (testItemId=${tid})` : '';
-    const requiredContainer = verdict.includes('UiWithRow')
-      ? 'UiWithRow'
-      : verdict.includes('UiWithScreen')
-        ? 'UiWithScreen'
-        : 'UiWithScreen';
+    const requiredContainer = verdict.includes('UiWithRow') ? 'UiWithRow' : 'UiWithScreen';
     const message =
       `${shortApi} '${title}' is ${verdict} - must be nested inside a parent ` +
       `${requiredContainer}'s <clauses><clause name="substeps"><steps> block${tidSuffix}`;
@@ -1091,6 +1089,1066 @@ function validateNitroxVariantArgRequired(tc: XmlNode, rule: BPRule): BPViolatio
   return violations;
 }
 
+/**
+ * Value `class` attributes that, when present on a condition/expression argument,
+ * are themselves meaningful content — comparison and boolean-logic operators that
+ * Provar emits for `If`/`DoWhile`/`WaitFor` conditions (e.g. `{Count(Rows) > 0}`
+ * is stored as `<value class="gt">`). Mirrors the backend operator allow-list.
+ */
+const MEANINGFUL_VALUE_OPERATOR_CLASSES: ReadonlySet<string> = new Set([
+  'gt',
+  'lt',
+  'eq',
+  'ne',
+  'ge',
+  'le',
+  'and',
+  'or',
+  'not',
+]);
+
+/**
+ * True when an `<argument>` carries a *meaningful* value, mirroring the Quality
+ * Hub `MustContainArgumentValidator` content checks exactly. A `variable` value
+ * counts only if it references a `<path>` (or has non-empty text) — a bare
+ * `<value class="variable"/>` is effectively empty; `funcCall` and the comparison
+ * / logic operator classes always count; `compound` counts only if `<parts>` has
+ * children; any other (simple) value counts only if it has non-empty text. An
+ * `<argument>` with no `<value>` child, or an empty `<value/>`, is NOT meaningful
+ * and is treated as a missing required argument.
+ */
+function argumentHasMeaningfulValue(arg: XmlNode): boolean {
+  for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
+    if (value == null) continue;
+    if (typeof value === 'string') {
+      if (value.trim().length > 0) return true;
+      continue;
+    }
+    if (typeof value !== 'object') continue;
+    const v = value;
+    const vClass = (v['@_class'] as string | undefined) ?? '';
+    // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
+    const text = nodeText(v);
+
+    if (vClass === 'variable') {
+      if (v['path'] != null || text.length > 0) return true;
+      continue; // bare <value class="variable"/> — not meaningful
+    }
+    if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
+    if (vClass === 'compound') {
+      const parts = v['parts'];
+      if (parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_'))) return true;
+      continue;
+    }
+    if (text.length > 0) return true;
+  }
+  return false;
+}
+
+/** Find an `<argument id=…>` for a call, tolerating both the `<arguments>` wrapper and direct children. */
+function findArgumentById(call: XmlNode, argId: string): XmlNode | undefined {
+  return getCallArguments(call).find((a) => a['@_id'] === argId) ?? getArguments(call).find((a) => a['@_id'] === argId);
+}
+
+/** Human-readable step label for a violation message: `'<title|name>' (testItemId=N)`. */
+function stepLabel(call: XmlNode): string {
+  const label = (call['@_title'] as string | undefined) ?? (call['@_name'] as string | undefined) ?? '(unnamed)';
+  const tid = call['@_testItemId'] as string | undefined;
+  return `'${label}'${tid ? ` (testItemId=${tid})` : ''}`;
+}
+
+/**
+ * True when `call` satisfies a `mustContainArgument` requirement — either the
+ * argument is present with a meaningful value, or (for `If`/`DoWhile` conditions)
+ * the legacy condition-in-title format is used.
+ */
+function callSatisfiesRequiredArg(call: XmlNode, requiredArg: string, conditionInTitleAllowed: boolean): boolean {
+  const arg = findArgumentById(call, requiredArg);
+  if (arg && argumentHasMeaningfulValue(arg)) return true;
+  if (!arg && conditionInTitleAllowed) {
+    const title = (call['@_title'] as string | undefined) ?? '';
+    if (title.includes('{') && title.includes('}')) return true; // legacy condition-in-title format
+  }
+  return false;
+}
+
+/**
+ * mustContainArgument — every apiCall whose apiId equals `check.apiId` must carry a
+ * populated `<argument id="check.argument">`. Faithful TypeScript port of the
+ * Quality Hub `MustContainArgumentValidator`, so the local (offline) result and
+ * the back-end agree: present-AND-non-empty semantics via
+ * {@link argumentHasMeaningfulValue} (an absent argument OR an empty
+ * `<argument/>`/`<value/>` is a violation); exact apiId match (no substring /
+ * variant widening); the legacy exception where `If`/`DoWhile` may carry the
+ * condition in the step `title` (`If: {expr}`) instead of a `condition` argument;
+ * disabled steps are NOT skipped (a missing required argument is load/exec
+ * blocking regardless of the disabled flag); and one violation per rule (the
+ * back-end returns the first offender), so the weighted-deduction score stays in
+ * parity with the Lambda. The message still names every offending step without
+ * inflating `count`.
+ */
+function validateMustContainArgument(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const targetApiId = (rule.check['apiId'] as string | undefined) ?? '';
+  const requiredArg = (rule.check['argument'] as string | undefined) ?? '';
+  if (!targetApiId || !requiredArg) return null;
+
+  const conditionInTitleAllowed =
+    requiredArg === 'condition' &&
+    (targetApiId === 'com.provar.plugins.bundled.apis.If' ||
+      targetApiId === 'com.provar.plugins.bundled.apis.control.DoWhile');
+
+  const offending: string[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== targetApiId) continue;
+    if (callSatisfiesRequiredArg(call, requiredArg, conditionInTitleAllowed)) continue;
+    offending.push(stepLabel(call));
+  }
+
+  if (!offending.length) return null;
+  const apiName = targetApiId.split('.').pop() ?? targetApiId;
+  let msg = `${apiName} step missing required '${requiredArg}' argument: ${offending.slice(0, 2).join(', ')}`;
+  if (offending.length > 2) msg += ` (and ${offending.length - 2} more)`;
+  // Intentionally no `count`: the back-end reports a single violation per rule, so
+  // omitting count keeps the weighted-deduction score in parity with the Lambda.
+  return makeViolation(rule, msg);
+}
+
+// ── Render / load-blocking validators (Tier 2) ───────────────────────────────
+// Faithful ports of the Quality Hub XMLRendering / InvalidValueClass /
+// DateValueClassFormat / ApexConnect* / SetValuesInvalidElements validators.
+// These check types map 1:1 to load-blocking rules (mostly `critical`) that
+// stop a test case rendering or loading in the Provar IDE. Each returns a
+// single BPViolation per rule (the back-end reports the first offender and sets
+// `count = len(offenders)` only when > 1), so the weighted-deduction score stays
+// in parity with the Lambda.
+
+const APEX_CONNECT_API_ID = 'com.provar.plugins.forcedotcom.core.testapis.ApexConnect';
+const SETVALUES_API_ID = 'com.provar.plugins.bundled.apis.control.SetValues';
+
+/**
+ * Recursively collect every element that appears under `tag` anywhere in the
+ * subtree (the fast-xml-parser equivalent of ElementTree's `.//tag`). Returns
+ * the raw values (object, string, or — for repeated tags — each array member);
+ * callers filter to objects when they need attributes. Mirrors the back-end's
+ * descendant search so nested-step double-counting matches exactly.
+ */
+function collectElementsByTag(node: unknown, tag: string): unknown[] {
+  const out: unknown[] = [];
+  function walk(n: unknown): void {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) {
+      for (const item of n) walk(item);
+      return;
+    }
+    for (const [k, v] of Object.entries(n as XmlNode)) {
+      if (k.startsWith('@_') || k === '#text') continue;
+      if (k === tag) for (const item of toArr(v)) out.push(item);
+      walk(v);
+    }
+  }
+  walk(node);
+  return out;
+}
+
+/** Object-form `<value>` descendants of a node (string-only text values are skipped). */
+function collectValueElements(node: unknown): XmlNode[] {
+  return collectElementsByTag(node, 'value').filter((v): v is XmlNode => v != null && typeof v === 'object');
+}
+
+/**
+ * Trimmed text of an element's `#text`, coercing to string first. fast-xml-parser
+ * parses numeric tag text to a `number` (e.g. an epoch-millis date), so a raw
+ * `.trim()` on `#text` would throw — always read element text through here.
+ */
+function nodeText(node: XmlNode): string {
+  const t = node['#text'];
+  return t == null ? '' : String(t).trim();
+}
+
+/** Step context used in load-blocking violation messages, mirroring the back-end defaults. */
+function stepContext(call: XmlNode): { apiName: string; title: string; tid: string } {
+  const apiId = (call['@_apiId'] as string | undefined) ?? '';
+  const apiName = apiId ? apiId.split('.').pop() ?? apiId : 'Unknown';
+  const title = (call['@_title'] as string | undefined) ?? apiName;
+  const tid = (call['@_testItemId'] as string | undefined) ?? 'N/A';
+  return { apiName, title, tid };
+}
+
+/** A `<value>` element paired with the id of the `<argument>` that encloses it (`unknown` if none). */
+interface StepValueElem {
+  value: XmlNode;
+  argId: string;
+}
+
+/**
+ * Every `<value>` element within an apiCall, tagged with its parent `<argument id>`.
+ * Replicates the back-end's "find the first enclosing argument" lookup so violation
+ * messages name the right argument. Values not inside any argument get `unknown`.
+ */
+function getStepValueElements(call: XmlNode): StepValueElem[] {
+  const argOf = new Map<XmlNode, string>();
+  for (const arg of collectElementsByTag(call, 'argument')) {
+    if (!arg || typeof arg !== 'object') continue;
+    const id = ((arg as XmlNode)['@_id'] as string | undefined) ?? 'unknown';
+    for (const v of collectValueElements(arg)) if (!argOf.has(v)) argOf.set(v, id);
+  }
+  return collectValueElements(call).map((value) => ({ value, argId: argOf.get(value) ?? 'unknown' }));
+}
+
+/** Trimmed text of an argument's direct `<value>` child (handles string and object forms). */
+function directValueText(arg: XmlNode): string {
+  const v = Array.isArray(arg['value']) ? (arg['value'] as unknown[])[0] : arg['value'];
+  if (v == null) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v !== 'object') return String(v).trim();
+  return nodeText(v as XmlNode);
+}
+
+// RENDER-CASE-001 — the valueClass values that actually exist. This validator only
+// inspects the `valueClass` attribute, and a full-corpus scan (AllPOCProjects) shows
+// exactly SIX distinct valueClass values: string, boolean, decimal, id, date, dateTime
+// — matching the back-end's VALID_VALUE_CLASSES. (The earlier list also carried
+// `class="..."` tokens — variable/compound/funcCall/value/valueList/operators — and
+// `integer`; none of those ever appear as a valueClass, so they were dead entries, and
+// `id` — a real corpus valueClass — was missing. Coordinated with the QH back-end.)
+const VALUE_CLASS_CASING_VALID: ReadonlySet<string> = new Set([
+  'string',
+  'boolean',
+  'decimal',
+  'id',
+  'date',
+  'datetime',
+]);
+
+// Canonical Provar spelling for valueClasses whose correct form is NOT all-lowercase.
+// The corpus uses camelCase `dateTime` exclusively (lowercase `datetime` never appears),
+// so the casing check must expect `dateTime`; every other valueClass is all-lowercase.
+const VALUE_CLASS_CANONICAL_CASE: Record<string, string> = { datetime: 'dateTime' };
+
+/** RENDER-CASE-001 — a known valueClass spelled with wrong case (e.g. `Boolean` → `boolean`). */
+function validateValueClassCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ valueClass: string; expected: string }> = [];
+  for (const v of collectValueElements(tc)) {
+    const vc = v['@_valueClass'] as string | undefined;
+    if (!vc) continue;
+    const lower = vc.toLowerCase();
+    if (!VALUE_CLASS_CASING_VALID.has(lower)) continue;
+    const expected = VALUE_CLASS_CANONICAL_CASE[lower] ?? lower;
+    if (vc !== expected) offenders.push({ valueClass: vc, expected });
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  const reported = Math.min(offenders.length, MAX);
+  let msg = offenders
+    .slice(0, 3)
+    .map((o) => `valueClass='${o.valueClass}' should be '${o.expected}'`)
+    .join('; ');
+  if (reported > 3) msg += ` (+${reported - 3} more)`;
+  if (offenders.length > MAX) msg += ` (total: ${offenders.length})`;
+  return makeViolation(rule, msg, reported);
+}
+
+const BOOLEAN_CASING_BAD: ReadonlySet<string> = new Set(['True', 'False', 'TRUE', 'FALSE']);
+
+/** RENDER-BOOL-001 — `<value valueClass="boolean">` text must be lowercase `true`/`false`. */
+function validateBooleanCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: string[] = [];
+  for (const v of collectValueElements(tc)) {
+    if (v['@_valueClass'] !== 'boolean') continue;
+    const text = nodeText(v);
+    if (BOOLEAN_CASING_BAD.has(text)) offenders.push(text);
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  const reported = Math.min(offenders.length, MAX);
+  let msg = `Boolean values must be lowercase: ${offenders
+    .slice(0, 3)
+    .map((t) => `'${t}' should be '${t.toLowerCase()}'`)
+    .join('; ')}`;
+  if (reported > 3) msg += ` (+${reported - 3} more)`;
+  if (offenders.length > MAX) msg += ` (total: ${offenders.length})`;
+  return makeViolation(rule, msg, reported);
+}
+
+// VALUE-CLASS-001 — the back-end HARDCODES these sets and ignores the rule JSON's
+// validClasses list, so we mirror the hardcoded sets (note `invalid` and
+// `namedValues` are accepted, and `dateTime` is camelCase) to stay score-exact.
+const VALID_VALUE_ELEMENT_CLASSES: ReadonlySet<string> = new Set([
+  'value',
+  'variable',
+  'compound',
+  'funcCall',
+  'valueList',
+  'namedValues',
+  'uiWait',
+  'uiLocator',
+  'uiTarget',
+  'uiInteraction',
+  'restTarget',
+  'excelTarget',
+  'csvTarget',
+  'url',
+  'template',
+  'add',
+  'sub',
+  'mult',
+  'div',
+  'eq',
+  'ne',
+  'gt',
+  'lt',
+  'ge',
+  'le',
+  'and',
+  'or',
+  'match',
+  'invalid',
+]);
+const VALID_VALUE_CLASS_TYPES: ReadonlySet<string> = new Set([
+  'string',
+  'boolean',
+  'decimal',
+  'id',
+  'date',
+  'dateTime',
+]);
+
+/** Classify one `<value>` for VALUE-CLASS-001, or `null` when it is valid / unattributed. */
+function classifyInvalidValueClass(v: XmlNode): { kind: 'class' | 'valueClass'; bad: string } | null {
+  const cls = (v['@_class'] as string | undefined) ?? '';
+  if (!cls) return null;
+  if (!VALID_VALUE_ELEMENT_CLASSES.has(cls)) return { kind: 'class', bad: cls };
+  const vc = (v['@_valueClass'] as string | undefined) ?? '';
+  if (cls === 'value' && vc && !VALID_VALUE_CLASS_TYPES.has(vc)) return { kind: 'valueClass', bad: vc };
+  return null;
+}
+
+/** VALUE-CLASS-001 — `<value class="…">` must use a valid class (and valueClass when class="value"). */
+function validateInvalidValueClass(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{
+    argId: string;
+    ctx: ReturnType<typeof stepContext>;
+    kind: 'class' | 'valueClass';
+    bad: string;
+  }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value, argId } of getStepValueElements(call)) {
+      const c = classifyInvalidValueClass(value);
+      if (c) offenders.push({ argId, ctx, kind: c.kind, bad: c.bad });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    f.kind === 'class'
+      ? `Step '${f.ctx.title}' has invalid class="${f.bad}" in argument '${f.argId}'. Valid class values: value, ` +
+        'variable, compound, funcCall, valueList, uiWait, uiLocator, uiTarget, etc. For empty arguments, omit ' +
+        `<value> entirely: <argument id="${f.argId}"/> (testItemId=${f.ctx.tid})`
+      : `Step '${f.ctx.title}' has invalid valueClass="${f.bad}" in argument '${f.argId}'. Valid valueClass values: ` +
+        `string, boolean, decimal, id, date, dateTime. (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** RENDER-DATE-VALUECLASS-001 — `valueClass="date"|"dateTime"` text must be an epoch-millis integer. */
+function validateDateValueClassFormat(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ argId: string; ctx: ReturnType<typeof stepContext>; vc: string; text: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value, argId } of getStepValueElements(call)) {
+      if (value['@_class'] !== 'value') continue;
+      const vc = (value['@_valueClass'] as string | undefined) ?? '';
+      if (vc !== 'date' && vc !== 'dateTime') continue;
+      const text = nodeText(value);
+      if (!text || /^\d+$/.test(text)) continue;
+      offenders.push({ argId, ctx, vc, text: text.slice(0, 50) });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `Step '${f.ctx.title}' uses valueClass='${f.vc}' with invalid string value '${f.text}' in argument ` +
+    `'${f.argId}'. valueClass='${f.vc}' requires an epoch timestamp (milliseconds), not a date string. This ` +
+    `causes test case loading failures in Provar. (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** Return the ApexConnect calls in a test case (exact apiId match, nested-aware). */
+function getApexConnectCalls(tc: XmlNode): XmlNode[] {
+  return getAllApiCalls(tc).filter((c) => c['@_apiId'] === APEX_CONNECT_API_ID);
+}
+
+/** APEX-REUSE-CONN-001 — ApexConnect `reuseConnectionName` must be blank. */
+function validateApexConnectReuseConnection(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; value: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    const arg = getCallArguments(call).find((a) => a['@_id'] === 'reuseConnectionName');
+    if (!arg) continue;
+    const text = directValueText(arg);
+    if (text) offenders.push({ ctx: stepContext(call), value: text });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' has non-empty reuseConnectionName value '${f.value}'. The ` +
+    `reuseConnectionName argument should be left blank: <argument id="reuseConnectionName"/> (testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+const APEX_CONNECT_VALID_ARGS_DEFAULT: readonly string[] = [
+  'connectionName',
+  'resultName',
+  'resultScope',
+  'uiApplicationName',
+  'quickUiLogin',
+  'closeAllPrimaryTabs',
+  'reuseConnectionName',
+  'alreadyOpenBehaviour',
+  'autoCleanup',
+  'cleanupConnectionName',
+  'logFileLocation',
+  'connectionId',
+  'enableObjectIdLogging',
+  'privateBrowsingMode',
+  'lightningMode',
+  'username',
+  'password',
+  'securityToken',
+  'environment',
+  'webBrowser',
+];
+
+/** APEX-CONNECT-ARGS-001 — every ApexConnect `<argument id>` must be in the valid whitelist. */
+function validateApexConnectValidArguments(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const validIds = new Set<string>(
+    (rule.check['validArgumentIds'] as string[] | undefined) ?? APEX_CONNECT_VALID_ARGS_DEFAULT
+  );
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; id: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    if (!call['arguments'] || typeof call['arguments'] !== 'object') continue;
+    for (const arg of getCallArguments(call)) {
+      const id = arg['@_id'] as string | undefined;
+      if (id && !validIds.has(id)) offenders.push({ ctx: stepContext(call), id });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' uses invalid argument ID(s): ${offenders.map((o) => o.id).join(', ')}. ` +
+    'Only the documented ApexConnect argument IDs are valid (connectionName, resultName, resultScope, …, ' +
+    'webBrowser). Leave unused arguments empty (e.g. <argument id="username"/>) rather than inventing IDs. ' +
+    `(testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** APEX-CONNECT-CONNID-001 — `connectionId` value must use `valueClass="id"`, not string/other. */
+function validateApexConnectConnectionIdValueClass(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; value: string }> = [];
+  for (const call of getApexConnectCalls(tc)) {
+    const arg = getCallArguments(call).find((a) => a['@_id'] === 'connectionId');
+    if (!arg) continue;
+    const ve = Array.isArray(arg['value']) ? (arg['value'] as unknown[])[0] : arg['value'];
+    if (!ve || typeof ve !== 'object') continue;
+    const v = ve as XmlNode;
+    const vc = (v['@_valueClass'] as string | undefined) ?? '';
+    if (v['@_class'] !== 'value' || !vc || vc === 'id') continue;
+    offenders.push({ ctx: stepContext(call), wrong: vc, value: nodeText(v) });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  const message =
+    `ApexConnect step '${f.ctx.title}' uses incorrect valueClass='${f.wrong}' for connectionId argument. The ` +
+    "connectionId must use valueClass='id' with a GUID value, NOT valueClass='string'. Current value: " +
+    `'${f.value}'. If you have no specific connection GUID, leave it empty: <argument id="connectionId"/> ` +
+    `(testItemId=${f.ctx.tid})`;
+  return makeViolation(rule, message, offenders.length);
+}
+
+/** Tags found directly under a `<namedValues>` container that are not the allowed `namedValue`. */
+function namedValuesInvalidChildren(nv: XmlNode): string[] {
+  const bad: string[] = [];
+  for (const [k, v] of Object.entries(nv)) {
+    if (k.startsWith('@_') || k === '#text' || k === 'namedValue') continue;
+    const instances = toArr(v).length; // one entry per element instance (mirrors the back-end count)
+    for (let i = 0; i < instances; i++) bad.push(k);
+  }
+  return bad;
+}
+
+/** SETVALUES-INVALID-ELEMENT-001 — reject hallucinated `<namedValueSet>`/`<name>` and bad namedValues children. */
+function validateSetValuesInvalidElements(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const invalidElements = (rule.check['invalidElements'] as string[] | undefined) ?? ['namedValueSet', 'name'];
+  let count = 0;
+  let first: { ctx: ReturnType<typeof stepContext>; elem: string; context?: string } | null = null;
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    const ctx = stepContext(call);
+    for (const elem of invalidElements) {
+      if (collectElementsByTag(call, elem).length) {
+        count++;
+        first ??= { ctx, elem };
+      }
+    }
+    for (const nv of collectElementsByTag(call, 'namedValues')) {
+      if (!nv || typeof nv !== 'object') continue;
+      for (const childTag of namedValuesInvalidChildren(nv as XmlNode)) {
+        count++;
+        first ??= { ctx, elem: childTag, context: 'inside <namedValues>' };
+      }
+    }
+  }
+  if (!first) return null;
+  const ctxStr = first.context ? ` ${first.context}` : '';
+  const message =
+    `SetValues step '${first.ctx.title}' contains invalid element <${first.elem}>${ctxStr}. SetValues must use ` +
+    '<namedValues mutable="Mutable"> with <namedValue name="valuePath|value|valueScope"> children. Do not use ' +
+    `<namedValueSet> or <name> elements. (testItemId=${first.ctx.tid})`;
+  return makeViolation(rule, message, count);
+}
+
+// ── Back-end-only rules (Tier 4) ─────────────────────────────────────────────
+// Ports of seven Quality Hub validators that existed only in the back-end rule
+// set. All seven rules are severity=major / weight=5. Score parity: six emit a
+// single violation (the back-end returns the first offender; `count` is set only
+// for the two UI-locator checks, and only when >1 offender); `varStringLiteral`
+// emits ONE violation per offending value (the back-end returns a list, scored
+// linearly) — do not collapse it.
+
+const ASSERT_VALUES_API_ID = 'com.provar.plugins.bundled.apis.AssertValues';
+const DB_CONNECT_API_ID = 'com.provar.plugins.bundled.apis.db.DbConnect';
+const UI_DO_ACTION_API_ID = 'com.provar.plugins.forcedotcom.core.ui.UiDoAction';
+
+// DB operation steps whose dbConnectionName must reference a DbConnect resultName
+// (both the modern `db.*` and legacy `data.*` namespaces, mirroring the back-end).
+const DB_OPERATION_API_IDS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.bundled.apis.db.SqlQuery',
+  'com.provar.plugins.bundled.apis.db.DbRead',
+  'com.provar.plugins.bundled.apis.db.DbInsert',
+  'com.provar.plugins.bundled.apis.db.DbUpdate',
+  'com.provar.plugins.bundled.apis.db.DbDelete',
+  'com.provar.plugins.bundled.apis.data.SqlQuery',
+  'com.provar.plugins.bundled.apis.data.DbRead',
+  'com.provar.plugins.bundled.apis.data.DbInsert',
+  'com.provar.plugins.bundled.apis.data.DbUpdate',
+  'com.provar.plugins.bundled.apis.data.DbDelete',
+]);
+
+/** Escape a literal for safe embedding in a RegExp (mirrors Python's re.escape). */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Resolve an argument's text value, mirroring the back-end `get_argument_value`:
+ * `variable` → first `<path>` element name, `compound` → concatenated `<parts>`
+ * text, otherwise the element text. Wrapper-aware (handles both the `<arguments>`
+ * wrapper and direct `<argument>` children) via {@link findArgumentById}.
+ */
+function resolvedArgText(call: XmlNode, argId: string): string {
+  const arg = findArgumentById(call, argId);
+  if (!arg) return '';
+  const raw = arg['value'];
+  const ve = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
+  if (ve == null) return '';
+  if (typeof ve === 'string') return ve.trim();
+  if (typeof ve !== 'object') return String(ve).trim();
+  const v = ve as XmlNode;
+  const cls = v['@_class'] as string | undefined;
+  if (cls === 'variable') {
+    const firstPath = toArr(v['path'] as XmlNode | XmlNode[])[0] as XmlNode | undefined;
+    return ((firstPath?.['@_element'] as string | undefined) ?? '').trim();
+  }
+  if (cls === 'compound') {
+    const partsNode = (v['parts'] as XmlNode | undefined)?.['value'];
+    return toArr(partsNode as XmlNode | XmlNode[])
+      .filter((p) => p && typeof p === 'object')
+      .map((p) => nodeText(p))
+      .join('');
+  }
+  return nodeText(v);
+}
+
+// Matches a bare variable token only: `{Name}` or `{Obj.Field}`. The character
+// class `[\w.]` excludes `:`, so binding-style expressions such as
+// `{targetUrl:object}` never match — they are inherently safe and need no
+// argument-name exemption.
+const VAR_LITERAL_PATTERN = /^\{[\w.]+\}$/;
+
+/**
+ * VAR-STRING-LITERAL-001 — a `{Var}`/`{Obj.Field}` token stored as
+ * `class="value" valueClass="string"` instead of `class="variable"`. Provar does
+ * not resolve it at runtime, so the API silently receives the literal text. Emits
+ * ONE violation per offending value (the back-end returns a list).
+ *
+ * Local correction (PDX-508): the back-end exempts `sfUiTargetObjectId` /
+ * `sfUiTargetResultName` from this check, but field evidence shows a bare
+ * `{Variable}` in those UI-target args is NOT interpolated — it lands in the URL
+ * as `%7B…%7D` and the step hard-fails (a load/exec stopper, not a warning). We
+ * therefore do NOT exempt those args. Binding-style `{ns:key}` expressions stay
+ * safe because {@link VAR_LITERAL_PATTERN} already excludes them (the colon). A
+ * matching change is queued for the Quality Hub back-end so the score parity is
+ * restored once both ship.
+ */
+function validateVarStringLiteral(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const violations: BPViolation[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const { value } of getStepValueElements(call)) {
+      if (value['@_class'] !== 'value' || value['@_valueClass'] !== 'string') continue;
+      const text = nodeText(value);
+      if (!VAR_LITERAL_PATTERN.test(text)) continue;
+      violations.push(
+        makeViolation(
+          rule,
+          `Argument value "${text}" looks like a variable reference but is stored as a plain string — Provar ` +
+            'will not resolve it at runtime. Use <value class="variable"> instead ' +
+            `(step '${ctx.title}', testItemId=${ctx.tid})`
+        )
+      );
+    }
+  }
+  return violations;
+}
+
+/** CONN-DB-002 — every DB operation's dbConnectionName must match a DbConnect resultName in the test. */
+function validateDbConnectResultNameMismatch(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const calls = getAllApiCalls(tc);
+  const resultNames = new Set<string>();
+  for (const call of calls) {
+    if (call['@_apiId'] !== DB_CONNECT_API_ID) continue;
+    const rn = resolvedArgText(call, 'resultName');
+    if (rn) resultNames.add(rn);
+  }
+  if (!resultNames.size) return null; // no DbConnect resultName — CONN-DB-001 covers a missing DbConnect
+
+  const offenders: string[] = [];
+  for (const call of calls) {
+    if (!DB_OPERATION_API_IDS.has(call['@_apiId'] as string)) continue;
+    const ref = resolvedArgText(call, 'dbConnectionName');
+    if (!ref || resultNames.has(ref)) continue;
+    offenders.push(`'${stepContext(call).title.slice(0, 40)}' uses dbConnectionName='${ref}'`);
+  }
+  if (!offenders.length) return null;
+  const names = [...resultNames].sort().join(', ');
+  return makeViolation(
+    rule,
+    `DbConnect resultName does not match dbConnectionName in ${offenders.length} DB operation(s): ` +
+      `${offenders[0]} but DbConnect resultName(s) are: ${names}`
+  );
+}
+
+/** The `<value>` children of a SetValues `<namedValue name="value">` (the assigned-value slot). */
+function getSetValuesValueElements(call: XmlNode): XmlNode[] {
+  const out: XmlNode[] = [];
+  for (const nv of collectElementsByTag(call, 'namedValue')) {
+    if (!nv || typeof nv !== 'object' || (nv as XmlNode)['@_name'] !== 'value') continue;
+    for (const v of toArr((nv as XmlNode)['value'] as XmlNode | XmlNode[])) {
+      if (v && typeof v === 'object') out.push(v);
+    }
+  }
+  return out;
+}
+
+const SETVALUES_FUNC_EXPR = /\{[A-Za-z][A-Za-z0-9]*\s*\([^)]*\)\s*\}/;
+const SETVALUES_ZERO_IDX = /\{[^}]*\[0\][^}]*\}/;
+
+/** First SetValues `valueClass="string"` value whose text matches `re` (string-template anti-patterns). */
+function firstSetValuesStringMatch(
+  tc: XmlNode,
+  re: RegExp
+): { ctx: ReturnType<typeof stepContext>; text: string } | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const ve of getSetValuesValueElements(call)) {
+      if (ve['@_class'] !== 'value' || ve['@_valueClass'] !== 'string') continue;
+      const text = nodeText(ve);
+      if (re.test(text)) return { ctx: stepContext(call), text };
+    }
+  }
+  return null;
+}
+
+/** SETVALUES-FUNC-STR-001 — SetValues uses `{Func(args)}` string interpolation instead of a `funcCall` value. */
+function validateSetValuesFuncCallString(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const hit = firstSetValuesStringMatch(tc, SETVALUES_FUNC_EXPR);
+  if (!hit) return null;
+  return makeViolation(
+    rule,
+    'SetValues uses string interpolation for a function call — the value will not be evaluated: ' +
+      `'${hit.ctx.title.slice(0, 50)}' value='${hit.text.slice(0, 60)}' (testItemId=${hit.ctx.tid})`
+  );
+}
+
+/** SETVALUES-ZERO-IDX-001 — SetValues string template uses a 0 index (templates are 1-indexed). */
+function validateSetValuesZeroIndexString(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const hit = firstSetValuesStringMatch(tc, SETVALUES_ZERO_IDX);
+  if (!hit) return null;
+  return makeViolation(
+    rule,
+    'SetValues string expression uses a [0] index — Provar string templates are 1-indexed, causing an ' +
+      `out-of-bounds error at runtime: '${hit.ctx.title.slice(0, 50)}' value='${hit.text.slice(0, 60)}' — use ` +
+      `[1] for the first item (testItemId=${hit.ctx.tid})`
+  );
+}
+
+const ASSERT_WHOLE_EXPR = /^\s*\{[^{}]+\}\s*$/;
+
+/** The direct `<value>` element child of an argument (wrapper-aware), or undefined. */
+function directArgValueElement(call: XmlNode, argId: string): XmlNode | undefined {
+  const arg = findArgumentById(call, argId);
+  if (!arg) return undefined;
+  const raw = arg['value'];
+  const ve = Array.isArray(raw) ? (raw as unknown[])[0] : raw;
+  return ve && typeof ve === 'object' ? (ve as XmlNode) : undefined;
+}
+
+/** ASSERT-STR-VAR-001 — AssertValues references a variable via a `{Var}` string literal instead of `class="variable"`. */
+function validateAssertValuesStringExpr(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== ASSERT_VALUES_API_ID) continue;
+    for (const argId of ['expectedValue', 'actualValue']) {
+      const v = directArgValueElement(call, argId);
+      if (!v || v['@_class'] !== 'value' || v['@_valueClass'] !== 'string') continue;
+      const text = nodeText(v);
+      if (!ASSERT_WHOLE_EXPR.test(text)) continue;
+      const ctx = stepContext(call);
+      return makeViolation(
+        rule,
+        'AssertValues uses a string literal to reference a variable — the assertion compares the literal text, ' +
+          `not the variable value: '${ctx.title.slice(0, 50)}' ${argId}='${text.slice(0, 60)}' should use ` +
+          `<value class="variable"> (testItemId=${ctx.tid})`
+      );
+    }
+  }
+  return null;
+}
+
+/** The `uri` of a UiDoAction's `locator` argument value (`class="uiLocator"`), or '' if absent. */
+function getUiDoActionLocatorUri(call: XmlNode): string {
+  const arg = getCallArguments(call).find((a) => a['@_id'] === 'locator');
+  if (!arg) return '';
+  for (const v of toArr(arg['value'] as XmlNode | XmlNode[])) {
+    if (v && typeof v === 'object' && v['@_class'] === 'uiLocator') {
+      return (v['@_uri'] as string | undefined) ?? '';
+    }
+  }
+  return '';
+}
+
+// Standard SF flow buttons whose locator name must use the corpus-validated casing/path.
+const UI_WRONG_BUTTONS: ReadonlyArray<readonly [string, string]> = [
+  ['Cancel', "use 'name=cancel' (lowercase)"],
+  ['continue', "the Continue button on record type selection screens uses 'name=save&path=selectRecordType'"],
+  ['Continue', "the Continue button on record type selection screens uses 'name=save&path=selectRecordType'"],
+];
+
+/** UI-LOCATOR-BUTTON-CASING-001 — Cancel/Continue flow buttons must use the correct locator name. */
+function validateUiLocatorButtonCasing(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; explanation: string; uri: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_DO_ACTION_API_ID) continue;
+    const uri = getUiDoActionLocatorUri(call);
+    if (!uri) continue;
+    for (const [wrong, explanation] of UI_WRONG_BUTTONS) {
+      if (new RegExp(`name=${escapeRegExp(wrong)}(&|$)`).test(uri)) {
+        offenders.push({ ctx: stepContext(call), wrong, explanation, uri });
+        break; // only report the first match per step (mirrors the back-end)
+      }
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `Step '${f.ctx.title}' uses incorrect button name 'name=${f.wrong}': ${f.explanation}. Incorrect button ` +
+      `names cause Provar to show 'Not Available' and fail at runtime. Current URI: ${f.uri.slice(0, 120)} ` +
+      `(testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+const UI_RECORDTYPE_WRONG = /name=recordType(Id)?(&|$)/;
+
+/** UI-LOCATOR-RECORDTYPE-001 — the Record Type picker locator must use `name=RecordType`, not `name=recordType(Id)`. */
+function validateUiLocatorRecordTypeField(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; uri: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_DO_ACTION_API_ID) continue;
+    const uri = getUiDoActionLocatorUri(call);
+    if (!uri || !UI_RECORDTYPE_WRONG.test(uri)) continue;
+    offenders.push({ ctx: stepContext(call), uri });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `Step '${f.ctx.title}' uses an incorrect Record Type field locator. The Record Type picker must use ` +
+      "'name=RecordType' (not 'name=recordTypeId' or 'name=recordType') with 'field=RecordTypeId' in the binding. " +
+      `Current URI: ${f.uri.slice(0, 150)} (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+// ── Structural / load-affecting check types (Tier 5) ─────────────────────────
+// Faithful ports of nine Quality Hub structural validators. Six emit a single
+// first-offender violation with no `count`; validFuncCallId, the two UiAssert
+// structure checks, and bindingParameterOrder collect every offender and emit
+// one violation carrying `count` (capped at 5 for funcCall), matching the
+// back-end so the weighted-deduction score stays in parity with the Lambda.
+
+const UI_ASSERT_API_ID = 'com.provar.plugins.forcedotcom.core.ui.UiAssert';
+
+// FUNCCALL-VALID-001 — Provar's built-in funcCall ids (exact back-end whitelist, 20 entries).
+const VALID_FUNCCALL_IDS: ReadonlySet<string> = new Set([
+  'TestCaseName',
+  'TestCasePath',
+  'TestCaseOutcome',
+  'TestCaseSuccessful',
+  'TestCaseErrors',
+  'TestRunErrors',
+  'StringReplace',
+  'StringTrim',
+  'StringNormalize',
+  'DateAdd',
+  'DateFormat',
+  'DateParse',
+  'Count',
+  'Round',
+  'NumberFormat',
+  'Not',
+  'IsSorted',
+  'GetEnvironmentVariable',
+  'GetSelectedEnvironment',
+  'UniqueId',
+]);
+
+/** FUNCCALL-VALID-001 — every `<value class="funcCall">` `id` must be a real Provar built-in function. */
+function validateValidFuncCallId(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: string[] = [];
+  for (const v of collectValueElements(tc)) {
+    if (v['@_class'] !== 'funcCall') continue;
+    const id = (v['@_id'] as string | undefined) ?? '';
+    if (id && !VALID_FUNCCALL_IDS.has(id)) offenders.push(id);
+  }
+  if (!offenders.length) return null;
+  const MAX = 5;
+  let msg = `Unknown funcCall id(s) — these functions do not exist in Provar: ${offenders
+    .slice(0, 3)
+    .map((id) => `'${id}'`)
+    .join(', ')}`;
+  if (offenders.length > 3) msg += ` (+${offenders.length - 3} more)`;
+  msg +=
+    '. Valid functions include Count, DateAdd, DateFormat, Round, StringReplace, UniqueId, etc. ' +
+    'For string concatenation use <value class="compound"><parts>…</parts></value>.';
+  return makeViolation(rule, msg, Math.min(offenders.length, MAX));
+}
+
+// RENDER-ROOT-001 — the only attributes allowed on the root <testCase> element.
+const VALID_ROOT_ATTRS: ReadonlySet<string> = new Set([
+  'guid',
+  'id',
+  'name',
+  'visibility',
+  'registryId',
+  'failureBehaviour',
+]);
+
+/** RENDER-ROOT-001 — the root `<testCase>` element must not carry unknown attributes. */
+function validateRootAttributes(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const unknown = Object.keys(tc)
+    .filter((k) => k.startsWith('@_'))
+    .map((k) => k.slice(2))
+    .filter((a) => !VALID_ROOT_ATTRS.has(a));
+  if (!unknown.length) return null;
+  return makeViolation(rule, `Unknown root attributes: ${unknown.join(', ')}`);
+}
+
+/** SETVALUES-STRUCTURE-001 — every SetValues step must contain a `<namedValues>` container. */
+function validateSetValuesStructure(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    // Data-driven SetValues pull their values from an external source declared in
+    // <parameterValueSources> (e.g. an Excel/CSV binding) and legitimately carry an
+    // empty <value class="valueList"/> with no inline <namedValues>. Not a defect.
+    if (call['parameterValueSources'] != null) continue;
+    if (collectElementsByTag(call, 'namedValues').length) continue;
+    return makeViolation(rule, `SetValues step missing <namedValues> container (testItemId=${stepContext(call).tid})`);
+  }
+  return null;
+}
+
+/** SETVALUES-NAME-001 — every `<namedValue>` in a SetValues step must carry a `name` attribute. */
+function validateNamedValueName(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const nv of collectElementsByTag(call, 'namedValue')) {
+      if (!nv || typeof nv !== 'object' || (nv as XmlNode)['@_name']) continue;
+      return makeViolation(
+        rule,
+        `namedValue in SetValues step missing name attribute (testItemId=${stepContext(call).tid})`
+      );
+    }
+  }
+  return null;
+}
+
+// The QEditor SetValues form stores each assignment as a triple of namedValue slots:
+// `valuePath` (target field), `value` (data), `valueScope`. Any of these may be left
+// empty — a blank `value` sets the field to blank, and a wholly-blank row is an unused
+// row Provar simply ignores. So an empty structural slot is NOT a "missing value" defect.
+const SETVALUES_BLANKABLE_SLOTS: ReadonlySet<string> = new Set(['valuePath', 'value', 'valueScope']);
+
+/** SETVALUES-VALUE-001 — every `<namedValue>` in a SetValues step must contain a child `<value>`. */
+function validateNamedValueValue(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== SETVALUES_API_ID) continue;
+    for (const nv of collectElementsByTag(call, 'namedValue')) {
+      if (!nv || typeof nv !== 'object') continue;
+      const node = nv as XmlNode;
+      if (node['value'] != null) continue;
+      // A blank structural slot (valuePath/value/valueScope) is valid (empty value /
+      // unused row). Only a non-standard namedValue missing its value is a real defect.
+      if (SETVALUES_BLANKABLE_SLOTS.has((node['@_name'] as string | undefined) ?? '')) continue;
+      return makeViolation(
+        rule,
+        `namedValue in SetValues step missing value element (testItemId=${stepContext(call).tid})`
+      );
+    }
+  }
+  return null;
+}
+
+/** UI-ASSERT-STRUCT-002 — UiAssert steps must not contain a (hallucinated) `<generatedParameters>` element. */
+function validateUiAssertHallucinatedGeneratedParameters(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<ReturnType<typeof stepContext>> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_ASSERT_API_ID || call['generatedParameters'] == null) continue;
+    offenders.push(stepContext(call));
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UiAssert step '${f.title}' contains a hallucinated <generatedParameters> element — UiAssert steps never ` +
+      `contain generatedParameters; remove the entire section (testItemId=${f.tid})`,
+    offenders.length
+  );
+}
+
+// UI-ASSERT-STRUCT-001 — arguments every UiAssert step must declare (even if empty).
+const UI_ASSERT_REQUIRED_ARGS: readonly string[] = [
+  'fieldAssertions',
+  'columnAssertions',
+  'pageAssertions',
+  'resultScope',
+  'captureAfter',
+  'beforeWait',
+  'autoRetry',
+];
+
+/** UI-ASSERT-STRUCT-001 — a UiAssert step is missing one or more of its required arguments. */
+function validateUiAssertMissingArguments(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; missing: string[] }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_ASSERT_API_ID) continue;
+    const argsNode = call['arguments'];
+    let missing: string[];
+    if (!argsNode || typeof argsNode !== 'object') {
+      missing = [...UI_ASSERT_REQUIRED_ARGS];
+    } else {
+      const existing = new Set<string>();
+      for (const a of getCallArguments(call)) {
+        const id = a['@_id'] as string | undefined;
+        if (id) existing.add(id);
+      }
+      missing = UI_ASSERT_REQUIRED_ARGS.filter((r) => !existing.has(r));
+    }
+    if (missing.length) offenders.push({ ctx: stepContext(call), missing });
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UiAssert step '${f.ctx.title}' is missing required arguments: ${f.missing.join(', ')}. All UiAssert steps ` +
+      'must include fieldAssertions, columnAssertions, pageAssertions, resultScope, captureAfter, beforeWait, and ' +
+      `autoRetry (even if empty) (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+// UI-BINDING-ORDER-001 — binding URIs must list object= before action=/field= (percent-encoded).
+const BINDING_WRONG_ACTION_FIRST = /object%3Faction%3D[^%]+%26object%3D/;
+const BINDING_WRONG_FIELD_FIRST = /object%3Ffield%3D[^%]+%26object%3D/;
+const BINDING_ACTION_EXTRACT = /action%3D([^%&]+)%26object%3D([^%&"]+)/;
+const BINDING_FIELD_EXTRACT = /field%3D([^%&]+)%26object%3D([^%&"]+)/;
+
+/** Classify a binding URI's parameter order, returning the wrong/correct pair or null when fine. */
+function classifyBindingOrder(uri: string): { wrong: string; correct: string } | null {
+  if (BINDING_WRONG_ACTION_FIRST.test(uri)) {
+    const m = BINDING_ACTION_EXTRACT.exec(uri);
+    if (m) {
+      const o = m[2].replace(/&amp;/g, '').replace(/&/g, '');
+      return { wrong: `action=${m[1]}&object=${o}`, correct: `object=${o}&action=${m[1]}` };
+    }
+  } else if (BINDING_WRONG_FIELD_FIRST.test(uri)) {
+    const m = BINDING_FIELD_EXTRACT.exec(uri);
+    if (m) {
+      const o = m[2].replace(/&amp;/g, '').replace(/&/g, '');
+      return { wrong: `field=${m[1]}&object=${o}`, correct: `object=${o}&field=${m[1]}` };
+    }
+  }
+  return null;
+}
+
+/** UI-BINDING-ORDER-001 — a `uiLocator` binding lists object= after action=/field= (non-standard order). */
+function validateBindingParameterOrder(tc: XmlNode, rule: BPRule): BPViolation | null {
+  const seen = new Set<XmlNode>();
+  const offenders: Array<{ ctx: ReturnType<typeof stepContext>; wrong: string; correct: string }> = [];
+  for (const call of getAllApiCalls(tc)) {
+    const ctx = stepContext(call);
+    for (const v of collectValueElements(call)) {
+      if (v['@_class'] !== 'uiLocator' || seen.has(v)) continue;
+      seen.add(v);
+      const uri = (v['@_uri'] as string | undefined) ?? '';
+      if (!uri || !uri.includes('binding=')) continue;
+      const verdict = classifyBindingOrder(uri);
+      if (verdict) offenders.push({ ctx, ...verdict });
+    }
+  }
+  if (!offenders.length) return null;
+  const f = offenders[0];
+  return makeViolation(
+    rule,
+    `UI binding in step '${f.ctx.title}' lists parameters in a non-standard order: found '${f.wrong}', the ` +
+      `corpus-majority convention lists object= first ('${f.correct}'). (testItemId=${f.ctx.tid})`,
+    offenders.length
+  );
+}
+
+// UI-CONN-LITERAL-001 — UI step types whose uiConnectionName must be a literal, not a variable.
+const UI_CONN_LITERAL_APIS: ReadonlySet<string> = new Set([
+  'com.provar.plugins.forcedotcom.core.ui.UiWithScreen',
+  'com.provar.plugins.forcedotcom.core.ui.UiDoAction',
+  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiWithRow',
+]);
+
+/** UI-CONN-LITERAL-001 — a UI step's `uiConnectionName` uses a `class="variable"` value instead of a literal. */
+function validateUiConnectionNameLiteral(tc: XmlNode, rule: BPRule): BPViolation | null {
+  for (const call of getAllApiCalls(tc)) {
+    if (!UI_CONN_LITERAL_APIS.has(call['@_apiId'] as string)) continue;
+    const v = directArgValueElement(call, 'uiConnectionName');
+    if (!v || v['@_class'] !== 'variable') continue;
+    const ctx = stepContext(call);
+    return makeViolation(
+      rule,
+      `UI step '${ctx.title}' uses a variable reference for uiConnectionName; it must be a literal string ` +
+        `(testItemId=${ctx.tid})`
+    );
+  }
+  return null;
+}
+
 // ── Validator dispatch map ────────────────────────────────────────────────────
 
 type ValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation | null;
@@ -1107,6 +2165,33 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
   detectDuplicatesLiterals: validateDetectDuplicatesLiterals,
   uniqueResultNames: validateUniqueResultNames,
   uiWithScreenTarget: validateUiWithScreenTarget,
+  mustContainArgument: validateMustContainArgument,
+  // Tier 2 — render / load-blocking check types (ports of the QH load-blocking validators)
+  valueClassCasing: validateValueClassCasing,
+  booleanCasing: validateBooleanCasing,
+  invalidValueClass: validateInvalidValueClass,
+  dateValueClassFormat: validateDateValueClassFormat,
+  apexConnectReuseConnection: validateApexConnectReuseConnection,
+  apexConnectValidArguments: validateApexConnectValidArguments,
+  apexConnectConnectionIdValueClass: validateApexConnectConnectionIdValueClass,
+  setValuesInvalidElements: validateSetValuesInvalidElements,
+  // Tier 4 — back-end-only rules (single-violation ports)
+  dbConnectResultNameMismatch: validateDbConnectResultNameMismatch,
+  setValuesFuncCallString: validateSetValuesFuncCallString,
+  setValuesZeroIndexString: validateSetValuesZeroIndexString,
+  assertValuesStringExpr: validateAssertValuesStringExpr,
+  uiLocatorButtonCasing: validateUiLocatorButtonCasing,
+  uiLocatorRecordTypeField: validateUiLocatorRecordTypeField,
+  // Tier 5 — structural / load-affecting check types
+  validFuncCallId: validateValidFuncCallId,
+  rootAttributes: validateRootAttributes,
+  setValuesStructure: validateSetValuesStructure,
+  namedValueName: validateNamedValueName,
+  namedValueValue: validateNamedValueValue,
+  uiAssertHallucinatedGeneratedParameters: validateUiAssertHallucinatedGeneratedParameters,
+  uiAssertMissingArguments: validateUiAssertMissingArguments,
+  bindingParameterOrder: validateBindingParameterOrder,
+  uiConnectionNameLiteral: validateUiConnectionNameLiteral,
   // 'regex' is dispatched separately (needs metadata)
   // 'uiActionNestingStructure' is dispatched separately (emits one violation per offending step)
 };
@@ -1118,6 +2203,8 @@ const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
   uiActionNestingStructure: validateUiActionNestingStructure,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,
   nitroxVariantArgRequired: validateNitroxVariantArgRequired,
+  // Tier 4 — emits one violation per offending value (back-end returns a list)
+  varStringLiteral: validateVarStringLiteral,
 };
 
 // ── XML parser (shared settings) ─────────────────────────────────────────────

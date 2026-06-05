@@ -11,6 +11,7 @@ import {
   registerTestCaseValidate,
   validateTestCaseXml,
 } from '../../../src/mcp/tools/testCaseValidate.js';
+import { runBestPractices } from '../../../src/mcp/tools/bestPracticesEngine.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 import {
   ASSERT_VALUES_COMPARISON_TYPES,
@@ -31,8 +32,8 @@ const VALID_TC = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <testCase guid="${GUID_TC}" id="1" registryId="abc123">
   <summary/>
   <steps>
-    <apiCall guid="${GUID_S1}" apiId="UiConnect" name="Connect to browser" testItemId="1"/>
-    <apiCall guid="${GUID_S2}" apiId="UiNavigate" name="Navigate to login" testItemId="2"/>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect to browser" testItemId="1"/>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiNavigate" name="Navigate to login" testItemId="2"/>
   </steps>
 </testCase>`;
 
@@ -76,29 +77,46 @@ describe('validateTestCase', () => {
   });
 
   describe('testCase attribute rules', () => {
-    it('TC_010: flags missing id', () => {
+    it('TC_010: does NOT fire for a missing id — id is optional, guid is the identifier', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?><testCase guid="${GUID_TC}" registryId="r"><steps/></testCase>`
       );
       assert.ok(
-        r.issues.some((i) => i.rule_id === 'TC_010'),
-        'Expected TC_010'
+        !r.issues.some((i) => i.rule_id === 'TC_010'),
+        'A missing id must not be flagged (real Provar test cases routinely omit it)'
       );
     });
 
-    it('TC_010: flags non-"1" id (e.g. UUID used as id)', () => {
+    it('TC_010: flags a non-numeric id (e.g. UUID used as id)', () => {
       const r = validateTestCase(
         `<?xml version="1.0" encoding="UTF-8"?><testCase id="${GUID_TC}" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
       );
       assert.ok(
         r.issues.some((i) => i.rule_id === 'TC_010'),
-        'Expected TC_010 for UUID used as id'
+        'Expected TC_010 for a non-numeric id'
       );
     });
 
-    it('TC_010: does not fire when id="1" (the correct literal)', () => {
+    it('TC_010: does not fire for id="0" — non-negative integers are valid (corpus uses 0)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?><testCase id="0" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
+      );
+      assert.ok(!r.issues.some((i) => i.rule_id === 'TC_010'), 'id="0" must be accepted');
+    });
+
+    it('TC_010: does not fire for a valid integer id (id="1")', () => {
       const r = validateTestCase(VALID_TC);
       assert.ok(!r.issues.some((i) => i.rule_id === 'TC_010'), 'TC_010 must not fire when id="1"');
+    });
+
+    it('TC_010: does not fire for a sequential project id (e.g. id="42") — ids are not literally "1"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?><testCase id="42" guid="${GUID_TC}" registryId="r"><steps/></testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'TC_010'),
+        'TC_010 must accept any non-negative-integer id (test case ids are project-unique sequential numbers)'
+      );
     });
 
     it('TC_011: flags missing guid', () => {
@@ -710,6 +728,235 @@ describe('validateTestCase', () => {
     });
   });
 
+  // PDX-506: UiDoAction `interaction` must serialise as class="uiInteraction".
+  // The Cox Demo "Create Test Case (Generated)" file ran green from the CLI but
+  // rendered the IDE Action widget blank because `interaction` was a plain string.
+  describe('UI-INTERACTION-001', () => {
+    // REPRODUCE: the exact broken Cox Demo shape — a plain-string `interaction`.
+    // This assertion FAILS against pre-fix validator code (no rule existed) and
+    // PASSES once UI-INTERACTION-001 is added.
+    it('errors when UiDoAction interaction argument uses class="value" (plain string)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value class="value" valueClass="string">ui:interaction?name=click</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'Expected UI-INTERACTION-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('uiInteraction'), `Message should mention uiInteraction: ${issue.message}`);
+    });
+
+    // CLEARED: the corrected typed-uiInteraction form must pass with no false positive.
+    it('does not fire when UiDoAction interaction uses class="uiInteraction"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value class="uiInteraction" uri="ui:interaction?name=action"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 should not fire for correct uiInteraction class'
+      );
+    });
+
+    it('fires when UiDoAction interaction <value> has no class attribute', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="interaction">
+          <value>ui:interaction?name=click</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 should fire when <value> has no class attribute'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-001')!;
+      assert.ok(issue.message.includes('(missing)'), `Message should note missing class: ${issue.message}`);
+    });
+
+    it('does not fire for a UI action step without an interaction argument', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click btn" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Save"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'UI-INTERACTION-001 must not fire when no interaction argument is present'
+      );
+    });
+  });
+
+  // PDX-507: a UiAssert field assertion must be nested inside
+  // fieldAssertions/uiFieldAssertion (bare <fieldLocator uri/>). The flat shape
+  // (top-level fieldLocator/attributeName/comparisonType/expectedValue args) runs
+  // green from the CLI but renders the IDE Result Assertions tab blank. Contract
+  // confirmed against the real corpus (AllPOCProjects): 0/3,778 UiAssert steps
+  // use a flat fieldLocator argument.
+  describe('UI-ASSERT-STRUCTURE-001', () => {
+    // REPRODUCE: the exact broken Cox Demo flat shape. On pre-fix code the rule
+    // did not exist, so provar_testcase_validate did NOT flag this shape and this
+    // test's assertion therefore FAILS on main; it PASSES once the rule is added.
+    it('errors when UiAssert carries a flat fieldLocator argument (Cox Demo shape)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert Priority error" testItemId="1">
+      <arguments>
+        <argument id="resultName">
+          <value class="value" valueClass="string">Values</value>
+        </argument>
+        <argument id="fieldLocator">
+          <value class="value" valueClass="string">ui:locator?name=Priority</value>
+        </argument>
+        <argument id="attributeName">
+          <value class="value" valueClass="string">error</value>
+        </argument>
+        <argument id="comparisonType">
+          <value class="value" valueClass="string">Contains</value>
+        </argument>
+        <argument id="expectedValue">
+          <value class="value" valueClass="string">Priority must be set</value>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Expected UI-ASSERT-STRUCTURE-001'
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001')!;
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(
+        issue.message.includes('fieldAssertions') || issue.message.includes('uiFieldAssertion'),
+        `Message should mention the nested structure: ${issue.message}`
+      );
+    });
+
+    // CLEARED: the corpus-confirmed nested form must pass with no false positive.
+    it('does not fire for the nested uiFieldAssertion structure', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert Name" testItemId="1">
+      <arguments>
+        <argument id="resultName">
+          <value class="value" valueClass="string">Values</value>
+        </argument>
+        <argument id="resultScope">
+          <value class="value" valueClass="string">Test</value>
+        </argument>
+        <argument id="fieldAssertions">
+          <value class="valueList" mutable="Mutable">
+            <uiFieldAssertion resultName="Name">
+              <fieldLocator uri="ui:locator?name=Name&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DAccount%26field%3DName"/>
+              <attributeAssertions>
+                <uiAttributeAssertion attributeName="value" comparisonType="EqualTo">
+                  <value class="value" valueClass="string">Test</value>
+                </uiAttributeAssertion>
+              </attributeAssertions>
+            </uiFieldAssertion>
+          </value>
+        </argument>
+        <argument id="captureAfter">
+          <value class="value" valueClass="string">false</value>
+        </argument>
+        <argument id="columnAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="pageAssertions">
+          <value class="valueList" mutable="Mutable"/>
+        </argument>
+        <argument id="beforeWait"/>
+        <argument id="autoRetry"/>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'UI-ASSERT-STRUCTURE-001 should not fire for the nested structure'
+      );
+    });
+
+    // CLEARED (anchored to the real fixture): the corrected Contact_Lead_nested
+    // fixture uses the nested form and must pass with no false positive.
+    it('does not fire for the Contact_Lead_nested.testcase fixture', () => {
+      const fixturePath = path.resolve(process.cwd(), 'test', 'fixtures', 'testcases', 'Contact_Lead_nested.testcase');
+      const xml = fs.readFileSync(fixturePath, 'utf-8');
+      const r = validateTestCase(xml);
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Nested fixture should not trigger UI-ASSERT-STRUCTURE-001'
+      );
+    });
+
+    it('does not fire for a non-UiAssert step with a fieldLocator-like argument', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1">
+      <arguments>
+        <argument id="locator">
+          <value class="uiLocator" uri="sf:ui:locator:label?label=Save"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'UI-ASSERT-STRUCTURE-001 must only apply to UiAssert steps'
+      );
+    });
+  });
+
   describe('SETVALUES-STRUCTURE-001', () => {
     it('errors when SetValues values argument uses class="value" (plain string)', () => {
       const r = validateTestCase(
@@ -1082,6 +1329,75 @@ describe('validateTestCase', () => {
   });
 });
 
+// ── PDX-509: validity bridge (critical BP → is_valid) ─────────────────────────
+
+describe('PDX-509 — validity bridge', () => {
+  const UNKNOWN_API_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.bogus.NotARealApi" name="Bad step" testItemId="1"/>
+  </steps>
+</testCase>`;
+
+  // Empty-but-present <steps>: Layer-1 TC_020 does NOT fire (steps element exists),
+  // and the critical VALID-STEPS-001 BP rule is Layer-1-owned, so it must NOT be bridged.
+  const EMPTY_STEPS_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps></steps>
+</testCase>`;
+
+  // A {Var} stored as a plain string is VAR-STRING-LITERAL-001 (major) — must NOT gate is_valid.
+  const MAJOR_ONLY_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject" name="Create" testItemId="1">
+      <arguments>
+        <argument id="Name"><value class="value" valueClass="string">{AccountId}</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  it('a critical best-practice violation (unknown apiId) flips is_valid=false and surfaces in issues[]', () => {
+    const r = validateTestCase(UNKNOWN_API_TC);
+    assert.equal(r.is_valid, false, 'unknown apiId is load-blocking → is_valid must be false');
+    const issue = r.issues.find((i) => i.rule_id === 'API-UNKNOWN-001');
+    assert.ok(issue, 'API-UNKNOWN-001 should be bridged into issues[]');
+    assert.equal(issue?.severity, 'ERROR');
+    // The bridged critical also remains in best_practices_violations[] for scoring parity.
+    assert.ok(
+      (r.best_practices_violations ?? []).some((v) => v.rule_id === 'API-UNKNOWN-001'),
+      'bridged critical stays in best_practices_violations[] (score parity)'
+    );
+  });
+
+  it('a major best-practice violation does NOT flip is_valid', () => {
+    const r = validateTestCase(MAJOR_ONLY_TC);
+    assert.equal(r.is_valid, true, 'a major (runtime) violation loads — is_valid stays true');
+    assert.ok(
+      (r.best_practices_violations ?? []).some((v) => v.rule_id === 'VAR-STRING-LITERAL-001'),
+      'the major violation is still reported'
+    );
+  });
+
+  it('a Layer-1-owned critical (empty <steps>) is NOT bridged — Layer-1 is authoritative', () => {
+    const r = validateTestCase(EMPTY_STEPS_TC);
+    // TC_020 only fires on a MISSING <steps>; an empty-but-present <steps> loads.
+    assert.equal(r.is_valid, true, 'empty-but-present <steps> loads — is_valid stays true');
+    assert.equal(
+      r.issues.find((i) => i.rule_id === 'VALID-STEPS-001'),
+      undefined,
+      'VALID-STEPS-001 must not be surfaced into issues[] (Layer-1 owns steps presence)'
+    );
+  });
+
+  it('bridging does not perturb quality_score (Lambda parity preserved)', () => {
+    const r = validateTestCase(UNKNOWN_API_TC);
+    const bp = runBestPractices(UNKNOWN_API_TC);
+    assert.equal(r.quality_score, bp.quality_score, 'quality_score is computed from the untouched BP list');
+  });
+});
+
 // ── Handler-level tests (registerTestCaseValidate) ────────────────────────────
 
 describe('registerTestCaseValidate handler', () => {
@@ -1141,6 +1457,79 @@ describe('registerTestCaseValidate handler', () => {
     const warning = String(result['validation_warning']);
     assert.ok(warning, 'Expected validation_warning to be set');
     assert.ok(warning.includes('Quality Hub'), 'Warning must mention Quality Hub');
+  });
+
+  describe('PDX-509 — tri-state status + quality_threshold', () => {
+    const BAD_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.bogus.NotARealApi" name="Bad" testItemId="1"/>
+  </steps>
+</testCase>`;
+
+    // Loadable (is_valid true) but carries a major (VAR-STRING-LITERAL-001) so quality_score < 100.
+    const NEEDS_IMPROVEMENT_TC = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase guid="${GUID_TC}" id="1">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.testapis.ApexCreateObject" name="Create" testItemId="1">
+      <arguments>
+        <argument id="Name"><value class="value" valueClass="string">{AccountId}</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+    async function validate(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+      const res = (await capServer.capturedHandler!(args)) as { content: Array<{ text: string }> };
+      return JSON.parse(res.content[0].text) as Record<string, unknown>;
+    }
+
+    it('status="invalid" + default quality_threshold 90 when a critical defect blocks loading', async () => {
+      const r = await validate({ content: BAD_TC });
+      assert.equal(r['is_valid'], false);
+      assert.equal(r['status'], 'invalid');
+      assert.equal(r['quality_threshold'], 90, 'default threshold is 90');
+    });
+
+    it('status="valid" when loadable and meets the threshold', async () => {
+      const r = await validate({ content: VALID_TC, quality_threshold: 0 });
+      assert.equal(r['is_valid'], true);
+      assert.equal(r['status'], 'valid');
+      assert.equal(r['meets_quality_threshold'], true);
+    });
+
+    it('status="needs_improvement" when loadable but below the threshold', async () => {
+      // Loadable, but a major violation keeps quality_score below the strict bar of 100.
+      const r = await validate({ content: NEEDS_IMPROVEMENT_TC, quality_threshold: 100 });
+      assert.equal(r['is_valid'], true);
+      assert.ok((r['quality_score'] as number) < 100, 'fixture must score below 100');
+      assert.equal(r['status'], 'needs_improvement');
+      assert.equal(r['meets_quality_threshold'], false);
+    });
+
+    it('per-call quality_threshold overrides the PROVAR_MCP_QUALITY_THRESHOLD env var', async () => {
+      const saved = process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      process.env.PROVAR_MCP_QUALITY_THRESHOLD = '50';
+      try {
+        const r = await validate({ content: VALID_TC, quality_threshold: 80 });
+        assert.equal(r['quality_threshold'], 80, 'per-call arg wins over the env var');
+      } finally {
+        if (saved !== undefined) process.env.PROVAR_MCP_QUALITY_THRESHOLD = saved;
+        else delete process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      }
+    });
+
+    it('PROVAR_MCP_QUALITY_THRESHOLD is used when no per-call arg is given', async () => {
+      const saved = process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      process.env.PROVAR_MCP_QUALITY_THRESHOLD = '75';
+      try {
+        const r = await validate({ content: VALID_TC });
+        assert.equal(r['quality_threshold'], 75, 'env var is the effective threshold');
+      } finally {
+        if (saved !== undefined) process.env.PROVAR_MCP_QUALITY_THRESHOLD = saved;
+        else delete process.env.PROVAR_MCP_QUALITY_THRESHOLD;
+      }
+    });
   });
 
   it('key + API success → validation_source "quality_hub" with local metadata', async () => {

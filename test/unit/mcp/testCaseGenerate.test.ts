@@ -407,17 +407,20 @@ describe('provar_testcase_generate', () => {
       assert.ok(!xml.includes('Test &amp;'), 'escaped name must not appear in XML');
     });
 
-    it('escapes XML special characters in step api_id and name', () => {
+    it('escapes XML special characters in the step name', () => {
+      // A real apiId never contains XML metacharacters (and an unknown apiId is now
+      // a load-blocking error via the bridge), so escaping is exercised through the
+      // step name — which legitimately can contain &, <, > and ".
       const result = server.call('provar_testcase_generate', {
         test_case_name: 'Escape Step Test',
-        steps: [{ api_id: 'Api<Id>', name: 'Step & "Name"', attributes: {} }],
+        steps: [{ api_id: 'UiConnect', name: 'Step & <Name>', attributes: {} }],
         dry_run: true,
         overwrite: false,
       });
 
       const xml = parseText(result)['xml_content'] as string;
-      assert.ok(xml.includes('&lt;') && xml.includes('&gt;'), 'Expected < > escaped in apiId');
       assert.ok(xml.includes('&amp;'), 'Expected & escaped in step name');
+      assert.ok(xml.includes('&lt;') && xml.includes('&gt;'), 'Expected < > escaped in step name');
     });
   });
 
@@ -498,6 +501,76 @@ describe('provar_testcase_generate', () => {
       });
 
       assert.equal(fs.existsSync(outPath), true, 'nested directories should be created');
+    });
+  });
+
+  // ── testCase id allocation (highest-in-use + 1 within an existing project) ──────
+  describe('testCase id allocation', () => {
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
+    /** Pull the root testCase id from emitted xml_content. */
+    function emittedId(result: unknown): string | undefined {
+      const xml = parseText(result)['xml_content'] as string;
+      return xml.match(/<testCase\b[^>]*?\bid="([^"]+)"/)?.[1];
+    }
+
+    function seedProject(): void {
+      fs.writeFileSync(path.join(tmpDir, '.testproject'), '<project/>', 'utf-8');
+      const testsDir = path.join(tmpDir, 'tests');
+      fs.mkdirSync(testsDir, { recursive: true });
+      const guid = '22222222-2222-4222-8222-222222222222';
+      fs.writeFileSync(
+        path.join(testsDir, 'Existing.testcase'),
+        `<testCase guid="${guid}" id="5" registryId="${guid}"><summary/><steps/></testCase>`,
+        'utf-8'
+      );
+    }
+
+    it('defaults to id="1" when output is not inside a project', () => {
+      const outPath = path.join(tmpDir, 'Loose.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Loose',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '1');
+      assert.equal(parseText(result)['test_case_id'], 1);
+    });
+
+    it('allocates highest-in-use + 1 when writing into an existing project', () => {
+      seedProject();
+      const outPath = path.join(tmpDir, 'tests', 'New.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'New',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '6', 'project max id is 5 → next is 6');
+      assert.equal(parseText(result)['test_case_id'], 6);
+    });
+
+    it('does not scan the project for a dry_run preview (keeps default id)', () => {
+      seedProject();
+      const outPath = path.join(tmpDir, 'tests', 'Preview.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Preview',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '1');
+      assert.equal(parseText(result)['test_case_id'], 1);
     });
   });
 
@@ -794,9 +867,10 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
+      // Provar stores dates as epoch milliseconds (UTC midnight), not an ISO string.
       assert.ok(
-        xml.includes('valueClass="date">2026-05-19</value>'),
-        `Expected valueClass="date" for ISO date; got: ${xml}`
+        xml.includes('valueClass="date">1779148800000</value>'),
+        `Expected valueClass="date" with epoch ms for ISO date; got: ${xml}`
       );
     });
 
@@ -815,10 +889,33 @@ describe('provar_testcase_generate', () => {
       });
 
       const xml = parseText(result)['xml_content'] as string;
+      // Provar uses camelCase valueClass="dateTime" with an epoch-ms value (UTC when no tz).
       assert.ok(
-        xml.includes('valueClass="datetime">2026-05-19T10:30:00</value>'),
-        `Expected valueClass="datetime" for ISO datetime; got: ${xml}`
+        xml.includes('valueClass="dateTime">1779186600000</value>'),
+        `Expected valueClass="dateTime" with epoch ms for ISO datetime; got: ${xml}`
       );
+    });
+
+    it('falls back to valueClass="string" for an ISO-shaped but invalid date (no load-breaking date)', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'BadDateField',
+        steps: [
+          {
+            api_id: 'ApexCreateObject',
+            name: 'Create',
+            attributes: { CloseDate: '2026-99-99' },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(
+        xml.includes('valueClass="string">2026-99-99</value>'),
+        `Unparseable date must emit valueClass="string", not a non-epoch date; got: ${xml}`
+      );
+      assert.ok(!xml.includes('valueClass="date"'), 'must not emit a load-breaking valueClass="date"');
     });
 
     it('emits valueClass="boolean" for "true" / "false" literals', () => {
@@ -1038,6 +1135,96 @@ describe('provar_testcase_generate', () => {
       assert.ok(
         !xml.includes('valueClass="string">sf:ui:locator'),
         'Must NOT emit locator URI as a plain string value'
+      );
+    });
+
+    // PDX-506: GENERATOR test — a UiDoAction interaction attribute must round-trip
+    // to typed class="uiInteraction" XML (not a plain string) and validate clean.
+    it('emits class="uiInteraction" uri="..." for the interaction argument', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'UI Interaction Test',
+        steps: [
+          {
+            api_id: 'UiDoAction',
+            name: 'Click button',
+            attributes: {
+              locator: 'sf:ui:locator:button?label=Save',
+              interaction: 'ui:interaction?name=action',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('class="uiInteraction"'), 'Expected class="uiInteraction"');
+      assert.ok(xml.includes('uri="ui:interaction?name=action"'), 'Expected uri attribute with interaction value');
+      assert.ok(
+        !xml.includes('valueClass="string">ui:interaction'),
+        'Must NOT emit interaction URI as a plain string value'
+      );
+
+      // Round-trip: the generated XML must pass the validator with no UI-INTERACTION-001.
+      const v = validateTestCase(xml);
+      assert.ok(
+        !v.issues.some((i) => i.rule_id === 'UI-INTERACTION-001'),
+        'Generated UiDoAction interaction must clear UI-INTERACTION-001'
+      );
+    });
+
+    // PDX-507: GENERATOR test — a UiAssert with flat field-assertion attributes
+    // must round-trip to the nested fieldAssertions/uiFieldAssertion structure
+    // (bare <fieldLocator uri/>, NO top-level fieldLocator argument, NO uiLocator)
+    // and validate clean. Shape confirmed against the AllPOCProjects corpus.
+    it('emits the nested fieldAssertions/uiFieldAssertion structure for UiAssert', () => {
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'UI Assert Structure Test',
+        steps: [
+          {
+            api_id: 'UiAssert',
+            name: 'Assert Priority error',
+            attributes: {
+              fieldLocator: 'ui:locator?name=Priority',
+              attributeName: 'error',
+              comparisonType: 'Contains',
+              expectedValue: 'Priority must be set',
+            },
+          },
+        ],
+        dry_run: true,
+        overwrite: false,
+        validate_after_edit: false,
+      });
+
+      const xml = parseText(result)['xml_content'] as string;
+      assert.ok(xml.includes('<argument id="fieldAssertions">'), 'Expected fieldAssertions argument');
+      assert.ok(xml.includes('<uiFieldAssertion resultName="Priority">'), 'Expected nested uiFieldAssertion');
+      assert.ok(
+        xml.includes('<fieldLocator uri="ui:locator?name=Priority"/>'),
+        'Expected bare fieldLocator element with uri attribute'
+      );
+      assert.ok(
+        xml.includes('<uiAttributeAssertion attributeName="error" comparisonType="Contains">'),
+        'Expected uiAttributeAssertion with attributeName + comparisonType'
+      );
+      assert.ok(
+        xml.includes('<argument id="columnAssertions">') && xml.includes('<argument id="pageAssertions">'),
+        'Expected empty columnAssertions/pageAssertions containers'
+      );
+      // Must NOT emit the flat shape or wrap the locator in uiLocator.
+      assert.ok(!xml.includes('<argument id="fieldLocator">'), 'Must NOT emit a flat fieldLocator argument');
+      assert.ok(
+        !xml.includes('class="uiLocator" uri="ui:locator?name=Priority"'),
+        'Must NOT wrap the field locator in class="uiLocator"'
+      );
+
+      // Round-trip: generated XML must clear UI-ASSERT-STRUCTURE-001.
+      const v = validateTestCase(xml);
+      assert.ok(
+        !v.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'Generated UiAssert must clear UI-ASSERT-STRUCTURE-001'
       );
     });
 

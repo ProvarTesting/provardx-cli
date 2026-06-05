@@ -75,6 +75,9 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar.loop.db](#provarloopdb)
 - [MCP Resources](#mcp-resources)
   - [provar://docs/step-reference](#provardocsstep-reference)
+  - [provar://schema/test-step](#provarschematest-step)
+  - [provar://docs/validation-rules](#provardocsvalidation-rules)
+  - [provar://docs/tool-guide](#provardocstool-guide)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
   - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
@@ -189,18 +192,19 @@ sf provar mcp start -a /workspace/project-a -a /workspace/project-b
 
 The MCP server reads the following environment variables at startup or during tool invocation. Internal/dev-only variables (license bypass, ALGAS dev credentials) are intentionally not documented here — they remain source-only and are not supported for production use.
 
-| Variable                     | Purpose                                                                                                                                                                                 | Default                                        |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `PROVAR_HOME`                | Provar Automation install root. Used to locate license files (`<PROVAR_HOME>/.licenses/*.properties`) and resolve home-relative tool defaults.                                          | `~/Provar` (`%USERPROFILE%\Provar` on Windows) |
-| `PROVAR_API_KEY`             | API key for Quality Hub validation. Takes priority over any stored key in `~/.provar/credentials.json`. Must start with `pv_k_` — any other value is ignored.                           | None — falls back to stored credentials        |
-| `PROVAR_QUALITY_HUB_URL`     | Override the Quality Hub API base URL. Set when pointing at a non-default Quality Hub environment.                                                                                      | Dev API Gateway URL (`/dev`)                   |
-| `PROVAR_MCP_TOOLS`           | Comma-separated list of tool groups to register at startup. Deep-dive: [Tool group filtering](#tool-group-filtering-provar_mcp_tools).                                                  | All groups registered                          |
-| `PROVAR_MCP_SCHEMA_MODE`     | Set to `compact` to shorten all tool descriptions. Deep-dive: [Compact descriptions](#compact-descriptions-provar_mcp_schema_mode).                                                     | Standard (full) descriptions                   |
-| `PROVAR_MCP_MAX_TOOL_DEPTH`  | Agentic loop guard — max tool calls per MCP session before further calls return `TOOL_BUDGET_EXCEEDED`. Deep-dive: [Agentic loop guard](#agentic-loop-guard-provar_mcp_max_tool_depth). | `50`                                           |
-| `PROVAR_MCP_EMIT_TOKEN_META` | When `true`, appends a `_meta` token-attribution block to every tool response. Deep-dive: [Per-call token attribution](#per-call-token-attribution-provar_mcp_emit_token_meta).         | unset (no `_meta` block)                       |
-| `PROVAR_MCP_VALIDATION_DIR`  | Override the directory where `provar_testcase_validate` writes validation diff artifacts.                                                                                               | `<repo>/.provar-mcp/validation/`               |
-| `PROVAR_NO_UPDATE_CHECK`     | When set (any non-empty value), skips the startup npm-registry update check. Same effect as `--no-update-check`.                                                                        | unset (check runs)                             |
-| `PROVAR_AUTO_DEFECTS`        | When `1`, enables the Quality Hub auto-defect creation flow. Normally set by passing the `--auto-defects` flag rather than directly.                                                    | unset (auto-defects disabled)                  |
+| Variable                       | Purpose                                                                                                                                                                                                                 | Default                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `PROVAR_HOME`                  | Provar Automation install root. Used to locate license files (`<PROVAR_HOME>/.licenses/*.properties`) and resolve home-relative tool defaults.                                                                          | `~/Provar` (`%USERPROFILE%\Provar` on Windows) |
+| `PROVAR_API_KEY`               | API key for Quality Hub validation. Takes priority over any stored key in `~/.provar/credentials.json`. Must start with `pv_k_` — any other value is ignored.                                                           | None — falls back to stored credentials        |
+| `PROVAR_QUALITY_HUB_URL`       | Override the Quality Hub API base URL. Set when pointing at a non-default Quality Hub environment.                                                                                                                      | Dev API Gateway URL (`/dev`)                   |
+| `PROVAR_MCP_TOOLS`             | Comma-separated list of tool groups to register at startup. Deep-dive: [Tool group filtering](#tool-group-filtering-provar_mcp_tools).                                                                                  | All groups registered                          |
+| `PROVAR_MCP_SCHEMA_MODE`       | Set to `compact` to shorten all tool descriptions. Deep-dive: [Compact descriptions](#compact-descriptions-provar_mcp_schema_mode).                                                                                     | Standard (full) descriptions                   |
+| `PROVAR_MCP_MAX_TOOL_DEPTH`    | Agentic loop guard — max tool calls per MCP session before further calls return `TOOL_BUDGET_EXCEEDED`. Deep-dive: [Agentic loop guard](#agentic-loop-guard-provar_mcp_max_tool_depth).                                 | `50`                                           |
+| `PROVAR_MCP_EMIT_TOKEN_META`   | When `true`, appends a `_meta` token-attribution block to every tool response. Deep-dive: [Per-call token attribution](#per-call-token-attribution-provar_mcp_emit_token_meta).                                         | unset (no `_meta` block)                       |
+| `PROVAR_MCP_VALIDATION_DIR`    | Override the directory where `provar_testcase_validate` writes validation diff artifacts.                                                                                                                               | `<repo>/.provar-mcp/validation/`               |
+| `PROVAR_MCP_QUALITY_THRESHOLD` | Minimum `quality_score` for a test case to count as `valid` (vs `needs_improvement`) across all validation tools. A per-call `quality_threshold` argument overrides it. Out-of-range or unparseable values are ignored. | `90`                                           |
+| `PROVAR_NO_UPDATE_CHECK`       | When set (any non-empty value), skips the startup npm-registry update check. Same effect as `--no-update-check`.                                                                                                        | unset (check runs)                             |
+| `PROVAR_AUTO_DEFECTS`          | When `1`, enables the Quality Hub auto-defect creation flow. Normally set by passing the `--auto-defects` flag rather than directly.                                                                                    | unset (auto-defects disabled)                  |
 
 ### Setting these in your MCP client config
 
@@ -561,7 +565,7 @@ Paste the [standard config](#the-standard-config-recommended) into either file u
 }
 ```
 
-> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
+> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 42 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
 
 </details>
 
@@ -892,13 +896,13 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<testCase guid="<uuid>" id="1" registryId="<uuid>">
+<testCase guid="<uuid>" id="<n>" registryId="<uuid>">
   <summary/>
   <steps>...</steps>
 </testCase>
 ```
 
-- `id` is always the integer literal `"1"` — Provar ignores any other value
+- `id` is a numeric integer **label**, not a uniqueness key — Provar identifies the test case by its `guid`. When the output path sits inside an existing Provar project (a directory tree containing a `.testproject` marker, within the allowed roots), the generator auto-allocates the next integer after the highest `id` already in use, so a new case does not land on a duplicate `id="1"`. With no surrounding project — preview/`dry_run` runs, or output outside the allowed roots — it defaults to `1`. Regenerating over an existing file preserves that file's id. The chosen value is echoed back as `test_case_id`.
 - No `name` attribute on `<testCase>` — Provar derives the name from the file name
 - `<summary/>` must appear before `<steps>`
 - `standalone="no"` is required in the XML declaration
@@ -954,7 +958,7 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 | Mode             | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `auto` (default) | When a `UiWithScreen` is followed by UI action siblings (any of `UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`), those siblings are absorbed into the screen's `<clause name="substeps">` block. The grouping run stops at the next `UiWithScreen`, any non-UI step (`SetValues`, `ApexConnect`, …), or end of list. `UiWithRow` plays a dual role: when it follows a `UiWithScreen` it is pulled in as a child container and absorbs its own following UI actions. When the payload contains screen containers but no `UiWithScreen` at root (e.g. starts with `UiWithRow`), the generator synthesizes a root `UiWithScreen` wrapper (`target` = `target_uri` or `sf:ui:target`) so the output still satisfies `UI-NEST-STRUCT-001` — without that wrapper, the root `UiWithRow` itself would fail validation. `testItemId`s are assigned depth-first: parent screen, then its substeps slot, then its children. Numbering remains sequential and gap-free. |
-| `flat`           | Legacy behaviour: every step is emitted as a root sibling, no `<clauses>` block is generated. Use this for payloads that are already structured correctly by the caller, or when debugging the pre-PDX-495 shape.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `flat`           | Legacy behaviour: every step is emitted as a root sibling, no `<clauses>` block is generated. Use this for payloads that are already structured correctly by the caller, or when debugging the legacy flat shape.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `single-screen`  | Wraps every step in one synthetic `UiWithScreen` whose `target` is `sf:ui:target` (or the URI passed via `target_uri`). Matches the existing `ui:pageobject:target` semantics. Use for tests that all live on a single screen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap takes precedence regardless of `grouping_mode` — this is the pre-existing non-SF nesting behaviour.
@@ -979,9 +983,9 @@ If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap take
 
 Validation rules: `UI-NITROX-CONNECT-ARGS-001` (critical, bans ApexConnect-only and cross-variant args), `UI-NITROX-VARIANT-ARG-001` (minor, requires variant-specific arg unless declared in `<generatedParameters>`).
 
-**Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
+**Output** — `{ xml_content: string, file_path?: string, written: boolean, test_case_id: number, validation?: ValidationResult }`
 
-`validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
+`test_case_id` is the `id` written into the `<testCase>` element (auto-allocated as highest-in-project + 1 on the write path; `1` for preview runs). `validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
 
 **Error codes**
 
@@ -1010,36 +1014,42 @@ Validates an XML test case for schema correctness (validity score) and best prac
 
 **Input**
 
-| Parameter         | Type                              | Required                                    | Description                                                                                                                                                                             |
-| ----------------- | --------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content`         | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (MCP field name)                                                                                                                                                |
-| `xml`             | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (API-compatible alias)                                                                                                                                          |
-| `file_path`       | string                            | one of `content`/`xml`/`file_path` required | Path to the `.testcase` XML file                                                                                                                                                        |
-| `detail`          | `summary` \| `standard` \| `full` | no                                          | Response verbosity. `"summary"`: is_valid, scores, and stop signal only. `"standard"`/`"full"`: full issues list (default).                                                             |
-| `baseline_run_id` | string                            | no                                          | `run_id` from a previous call. Returns only new/resolved issues since that run (`{ added, resolved, unchanged_count, run_id }`). Returns `BASELINE_NOT_FOUND` if the run ID is unknown. |
+| Parameter           | Type                              | Required                                    | Description                                                                                                                                                                                                          |
+| ------------------- | --------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`           | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (MCP field name)                                                                                                                                                                             |
+| `xml`               | string                            | one of `content`/`xml`/`file_path` required | XML content to validate (API-compatible alias)                                                                                                                                                                       |
+| `file_path`         | string                            | one of `content`/`xml`/`file_path` required | Path to the `.testcase` XML file                                                                                                                                                                                     |
+| `detail`            | `summary` \| `standard` \| `full` | no                                          | Response verbosity. `"summary"`: is_valid, scores, and stop signal only. `"standard"`/`"full"`: full issues list (default).                                                                                          |
+| `quality_threshold` | number (0–100)                    | no                                          | Minimum `quality_score` for `status` to be `"valid"` rather than `"needs_improvement"`. Does **not** affect `is_valid` (only critical defects do). Precedence: this arg → `PROVAR_MCP_QUALITY_THRESHOLD` env → `90`. |
+| `baseline_run_id`   | string                            | no                                          | `run_id` from a previous call. Returns only new/resolved issues since that run (`{ added, resolved, unchanged_count, run_id }`). Returns `BASELINE_NOT_FOUND` if the run ID is unknown.                              |
 
 **Output**
 
-| Field                            | Type           | Description                                                                                                                    |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `run_id`                         | string         | Stable identifier for this validation run. Pass as `baseline_run_id` in the next call to receive only new/resolved issues.     |
-| `completeness_score`             | number (0–1)   | Ratio of valid test cases to total test cases validated (`0.0`–`1.0`).                                                         |
-| `recommended_next_action`        | string         | `"stop"` (all passing), `"continue"` (issues remain), or `"escalate"` (no baseline yet — run without `baseline_run_id` first). |
-| `is_valid`                       | boolean        | `true` if zero ERROR-level schema violations                                                                                   |
-| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                                                |
-| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                                              |
-| `error_count`                    | integer        | Schema error count                                                                                                             |
-| `warning_count`                  | integer        | Schema warning count                                                                                                           |
-| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                                                    |
-| `test_case_id`                   | string         | Value of the `id` attribute                                                                                                    |
-| `test_case_name`                 | string         | Value of the `name` attribute                                                                                                  |
-| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                                            |
-| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                                                      |
-| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                                                     |
-| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                                                       |
-| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed)                         |
+| Field                            | Type           | Description                                                                                                                                                                                     |
+| -------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run_id`                         | string         | Stable identifier for this validation run. Pass as `baseline_run_id` in the next call to receive only new/resolved issues.                                                                      |
+| `completeness_score`             | number (0–1)   | Ratio of valid test cases to total test cases validated (`0.0`–`1.0`).                                                                                                                          |
+| `recommended_next_action`        | string         | `"stop"` (all passing), `"continue"` (issues remain), or `"escalate"` (no baseline yet — run without `baseline_run_id` first).                                                                  |
+| `is_valid`                       | boolean        | `true` if the test case will load in Provar — i.e. zero ERROR-level schema violations **and** zero `critical` best-practice violations (the latter are bridged into `issues[]`; see note below) |
+| `status`                         | string         | Tri-state verdict: `"invalid"` (a critical defect — will not load), `"needs_improvement"` (loads but `quality_score` is below `quality_threshold`), or `"valid"` (loads and clears the bar)     |
+| `quality_threshold`              | number (0–100) | The effective threshold applied (resolved from the `quality_threshold` arg, the `PROVAR_MCP_QUALITY_THRESHOLD` env var, or the default `90`)                                                    |
+| `meets_quality_threshold`        | boolean        | `true` when `quality_score >= quality_threshold`                                                                                                                                                |
+| `validity_score`                 | number (0–100) | Schema compliance score (100 − errorCount × 20)                                                                                                                                                 |
+| `quality_score`                  | number (0–100) | Best-practices score (weighted deduction formula)                                                                                                                                               |
+| `error_count`                    | integer        | Schema error count                                                                                                                                                                              |
+| `warning_count`                  | integer        | Schema warning count                                                                                                                                                                            |
+| `step_count`                     | integer        | Number of `<apiCall>` steps                                                                                                                                                                     |
+| `test_case_id`                   | string         | Value of the `id` attribute                                                                                                                                                                     |
+| `test_case_name`                 | string         | Value of the `name` attribute                                                                                                                                                                   |
+| `issues`                         | array          | Schema issues with `rule_id`, `severity`, `message`                                                                                                                                             |
+| `best_practices_violations`      | array          | Best-practices violations with `rule_id`, `severity`, `weight`, `message`                                                                                                                       |
+| `best_practices_rules_evaluated` | integer        | How many best-practices rules were checked                                                                                                                                                      |
+| `validation_source`              | string         | `quality_hub`, `local`, or `local_fallback` — see Authentication section                                                                                                                        |
+| `validation_warning`             | string         | Present when `validation_source` is `local` (onboarding) or `local_fallback` (explains why API failed)                                                                                          |
 
 **Key schema rules:** TC_001 (missing XML declaration), TC_002 (malformed XML), TC_003 (wrong root element), TC_010/011/012 (missing/invalid id/guid), TC_031 (invalid apiCall guid), TC_034/035 (non-integer testItemId).
+
+**Validity bridge.** A `critical` best-practice violation means "Provar will not load/render the test case" (e.g. an unknown/hallucinated `apiId`, a missing required control or connection argument, an invalid render value-class). These now gate `is_valid` the same way a structural schema error does — each is surfaced into `issues[]` as an `ERROR` and flips `is_valid` to `false`. `major` (runtime ERROR), `minor` (warning), and `info` violations do **not** flip `is_valid`; they affect `quality_score` and therefore the `needs_improvement` verdict. Best-practice rules covering concepts the schema rules already own (root element, identifier, steps presence, `testItemId` integers, comparisonType enums) are intentionally **not** double-reported — the hand-coded schema rule is authoritative there.
 
 **Warning rules:**
 
@@ -1047,6 +1057,8 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **ASSERT-001** — An `AssertValues` step uses the `argument id="values"` (namedValues) format, which is designed for UI element attribute assertions. For Apex/SOQL result or variable comparisons this silently passes as `null=null`. Use separate `expectedValue`, `actualValue`, and `comparisonType` arguments instead.
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A locator-bearing UI step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`) has a `locator` argument that uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
+- **UI-INTERACTION-001** (ERROR) — A UI action step (e.g. `UiDoAction`) has an `interaction` argument that uses the wrong XML class (e.g. `class="value"`). Must be `class="uiInteraction"` (`<value class="uiInteraction" uri="ui:interaction?name=action"/>`). A plain string runs green from the CLI but renders the Action field blank in the Provar IDE step editor. The `interaction` attribute is converted automatically by `provar_testcase_generate`.
+- **UI-ASSERT-STRUCTURE-001** (ERROR) — A `UiAssert` step carries a flat top-level field-assertion argument (`fieldLocator`, `attributeName`, `comparisonType`, or `expectedValue`) instead of the nested `fieldAssertions` → `uiFieldAssertion` structure the Provar IDE Result Assertions tab binds from. The flat shape runs green from the CLI but renders the Result Assertions tab blank in the IDE. The correct form nests a `<uiFieldAssertion resultName="…">` containing a **bare** `<fieldLocator uri="…"/>` element (NOT `class="uiLocator"`) and `<attributeAssertions>`, plus empty `columnAssertions`/`pageAssertions`. `provar_testcase_generate` builds this structure automatically when you pass `fieldLocator`/`attributeName`/`comparisonType`/`expectedValue` as flat attributes.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
 - **COMPARISON-TYPE-001** (ERROR) — A `comparisonType` value is used outside the subset its step type allows. `comparisonType` is a single Provar enum but each step type accepts only a subset: **AssertValues** accepts the 16-value set (`EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo, LessThan, LessThanOrEqualTo, IsPresent, IsEmpty, Matches, NotMatches, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith`); a **UI Assert** (`uiAttributeAssertion`) accepts only the 6-value set (`EqualTo, Contains, StartsWith, EndsWith, Matches, None`). A value outside the step's subset (e.g. `NotEqualTo` on a UI Assert) is load-blocking — the whole test case fails to load at runtime with `IllegalArgumentException: No enum constant com.provar.core.model.base.java.ComparisonType.<value>`. This local check runs even offline / in `local_fallback`, so the load-blocker is caught without the Quality Hub back-end. Only literal `comparisonType` values are checked; variable / compound references are skipped. See [`provar://docs/step-reference`](#resources) for the full step-scoped tables.
 - **UI-NEST-STRUCT-001** (severity `major`, weight 7, category `XMLSchema`) — A UI action step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, or `UiHandleAlert`) is emitted outside a screen ancestor. To pass, every UI action must descend from a `UiWithScreen` or `UiWithRow` `apiCall` through a `<clause name="substeps">` path. Control-flow wrappers (`If`/`ForEach`/`DoWhile`/`WaitFor`/`Switch`) between the screen ancestor and the UI action are allowed; steps inside `<clause name="hidden">` are exempt (disabled / settings blocks). One violation is emitted per offending step, so `(rule_id, test_item_id)` de-duplicates cleanly against the Quality Hub API. Provar IDE cannot bind flat-emitted UI actions to a screen context and they will not render in the editor. Wrap each offending step in the canonical chain:
@@ -1066,6 +1078,39 @@ Validates an XML test case for schema correctness (validity score) and best prac
   `UiWithRow` plays a dual role: it is itself a UI action that must be nested, and a container whose `<clause name="substeps">` satisfies the rule for its descendants. Mirrors Quality Hub's `UiActionNestingStructureValidator`.
 - **VAR-REF-001** — An argument value looks like a variable reference (`{VarName}` or `{Obj.Field}`) but is stored as `class="value" valueClass="string"`. Provar will treat it as a literal string, not resolve the variable. Replace with `class="variable"` and `<path>` elements.
 - **VAR-REF-002** — A `{VarName}` token is embedded inside a larger plain string (e.g. `SELECT Id FROM Account WHERE Id = '{AccountId}'`). Provar does not perform `{…}` interpolation in string values at runtime; the braces are emitted literally. Use `class="compound"` with `<parts>` children to split the literal text and variable references. In `provar_testcase_generate`, pass the value with `{VarName}` placeholders — the generator emits compound XML automatically.
+- **Required-argument rules** (`mustContainArgument`) — A step type that requires a named argument is flagged when that argument is absent **or present but empty** (a self-closing `<argument/>`, an empty `<value/>`, or a bare `<value class="variable"/>` with no `<path>`). A value counts as present when it has text, a `funcCall`, a comparison/logic operator (`gt`/`lt`/`eq`/…), a `variable` with a `<path>`, or a `compound` with `<parts>`. Each rule pins one `(step apiId, required argument)` pair; apiId matching is exact, steps nested inside control-flow containers are checked, and disabled steps are **not** exempt (a missing required argument is load/exec-blocking regardless). `If`/`DoWhile` steps that carry the condition in the step `title` (legacy `If: {expr}` format) instead of a `condition` argument are accepted. One violation per rule (the message names every offending step) — matching the Quality Hub back-end, so the weighted-deduction score stays in parity with the Lambda. These rules run offline / in `local_fallback` so the missing argument is caught without the back-end. Currently enforced:
+  - **Control flow** — `CONTROL-IF-001` (`If` → `condition`), `CONTROL-WHILE-001` (`DoWhile` → `condition`), `CONTROL-WAITFOR-001`/`-002` (`WaitFor` → `condition` / `maxIterations`), `CONTROL-FOREACH-001`/`-002` (`ForEach` → `list` / `valueName`), `CONTROL-SWITCH-001` (`Switch` → `value`), `CONTROL-SLEEP-002` (`Sleep` → `sleepSecs`).
+  - **Assertions** — `ASSERT-COMPARISON-001` (`AssertValues` → `comparisonType`), `ASSERT-EXPECTED-001` (`AssertValues` → `expectedValue`).
+  - **BDD** — `BDD-GIVEN-001` / `BDD-WHEN-001` / `BDD-THEN-001` (`Given`/`When`/`Then` → `description`).
+  - **Apex / database** — `SOQL-QUERY-001` (`ApexSoqlQuery` → `soqlQuery`), `DB-CONNECT-001`/`-002` (`DbConnect` → `connectionName` / `resultName`), `SQL-QUERY-001`/`-002` (`SqlQuery` → `query` / `dbConnectionName`).
+  - **Web service** — `REST-CONN-001`/`-002` (`WebConnect` → `connectionName` / `resultName`), `REST-REQUEST-001` (`RestRequest` → `connectionName`).
+- **Render / load-blocking rules** — Structural checks that catch XML which prevents a test case from rendering or loading in the Provar IDE. They run offline / in `local_fallback` and emit one violation per rule (the message names the first offender; `count` is set only when more than one element offends), matching the Quality Hub back-end so the weighted-deduction score stays in parity with the Lambda. Currently enforced:
+  - **`RENDER-CASE-001`** (`valueClassCasing`, critical) — a `valueClass` spelled with the wrong case (e.g. `Boolean` instead of `boolean`). Only a known class with bad casing fires; an unknown class does not.
+  - **`RENDER-BOOL-001`** (`booleanCasing`, critical) — a `<value valueClass="boolean">` whose text is `True`/`False`/`TRUE`/`FALSE`; it must be lowercase `true`/`false`.
+  - **`VALUE-CLASS-001`** (`invalidValueClass`, critical) — a `<value class="…">` whose `class` is not a recognised Provar value class (e.g. the hallucinated `class="null"`), or a `class="value"` whose `valueClass` is not one of `string`/`boolean`/`decimal`/`id`/`date`/`dateTime`. Empty/optional arguments must omit the `<value>` entirely.
+  - **`RENDER-DATE-VALUECLASS-001`** (`dateValueClassFormat`, critical) — a `valueClass="date"`/`"dateTime"` value whose text is an ISO date string (e.g. `2025-01-15`) instead of an epoch-milliseconds integer; store dates as `valueClass="string"` or convert to epoch millis.
+  - **`SETVALUES-INVALID-ELEMENT-001`** (`setValuesInvalidElements`, critical) — a `SetValues` step containing hallucinated `<namedValueSet>` or `<name>` elements, or a `<namedValues>` child other than `<namedValue>`. The correct shape is `<namedValues mutable="Mutable">` with `<namedValue name="valuePath|value|valueScope">` children.
+  - **`APEX-CONNECT-ARGS-001`** (`apexConnectValidArguments`, critical) — an `ApexConnect` step using an argument id outside the 20-id whitelist (overridable per rule via `check.validArgumentIds`).
+  - **`APEX-CONNECT-CONNID-001`** (`apexConnectConnectionIdValueClass`, critical) — an `ApexConnect` `connectionId` value that uses `valueClass="string"` (or any non-`id` class) instead of `valueClass="id"`; leave it empty if there is no GUID.
+  - **`APEX-REUSE-CONN-001`** (`apexConnectReuseConnection`, major) — an `ApexConnect` `reuseConnectionName` argument that carries a value; it must be left blank.
+- **Runtime anti-pattern rules** — Major (`weight 5`) checks for XML that loads but silently misbehaves at runtime — typically variable references or expressions written as plain string literals. Like the rules above they run offline / in `local_fallback` and keep score parity with the Quality Hub back-end. Currently enforced:
+  - **`VAR-STRING-LITERAL-001`** (`varStringLiteral`) — an argument value is a whole-token `{VarName}` / `{Obj.Field}` stored as `class="value" valueClass="string"`; Provar passes the literal text instead of resolving the variable. Use `<value class="variable">`. (The interpolation-tolerant target args `sfUiTargetObjectId` / `sfUiTargetResultName` are exempt.) Emits one violation per offending value.
+  - **`ASSERT-STR-VAR-001`** (`assertValuesStringExpr`) — an `AssertValues` `expectedValue`/`actualValue` is a whole `{…}` string literal, so the assertion compares the literal text instead of the variable's value. Use `class="variable"`.
+  - **`SETVALUES-FUNC-STR-001`** (`setValuesFuncCallString`) — a `SetValues` assigned value embeds a `{Func(args)}` call as a string literal; Provar will not evaluate it. Use a `class="funcCall"` value.
+  - **`SETVALUES-ZERO-IDX-001`** (`setValuesZeroIndexString`) — a `SetValues` string-template expression uses a `[0]` index; Provar string templates are 1-indexed, so this is out-of-bounds at runtime. Use `[1]` for the first item (or the XML variable-path structure).
+  - **`CONN-DB-002`** (`dbConnectResultNameMismatch`) — a DB operation (`SqlQuery`/`DbRead`/`DbInsert`/`DbUpdate`/`DbDelete`) sets a `dbConnectionName` that does not match any `DbConnect` `resultName` in the test, so the open connection can't be found. Defers to `CONN-DB-001` when there is no `DbConnect` at all.
+  - **`UI-LOCATOR-BUTTON-CASING-001`** (`uiLocatorButtonCasing`) — a `UiDoAction` locator uses a wrong-cased standard-button name: `name=Cancel` (use lowercase `name=cancel`) or `name=Continue`/`name=continue` on the record-type screen (use `name=save&path=selectRecordType`).
+  - **`UI-LOCATOR-RECORDTYPE-001`** (`uiLocatorRecordTypeField`) — a `UiDoAction` Record Type picker locator uses `name=recordTypeId`/`name=recordType` instead of `name=RecordType` with `field=RecordTypeId` in the binding.
+- **Structural correctness rules** — Checks on element shape / required structure that the Provar IDE depends on to render and run a step. Mostly critical; like the rules above they run offline / in `local_fallback` and keep score parity with the Quality Hub back-end. Currently enforced:
+  - **`SETVALUES-STRUCTURE-001`** (`setValuesStructure`, critical) — a `SetValues` step has no `<namedValues>` container.
+  - **`SETVALUES-NAME-001`** (`namedValueName`, critical) — a `<namedValue>` inside a `SetValues` step is missing its `name` attribute.
+  - **`SETVALUES-VALUE-001`** (`namedValueValue`, critical) — a `<namedValue>` inside a `SetValues` step is missing its child `<value>` element.
+  - **`UI-ASSERT-STRUCT-002`** (`uiAssertHallucinatedGeneratedParameters`, critical) — a `UiAssert` step contains a `<generatedParameters>` element, which is never valid on `UiAssert` and blocks validation.
+  - **`UI-ASSERT-STRUCT-001`** (`uiAssertMissingArguments`, critical) — a `UiAssert` step is missing one or more required arguments (`fieldAssertions`, `columnAssertions`, `pageAssertions`, `resultScope`, `captureAfter`, `beforeWait`, `autoRetry` — present even if empty).
+  - **`UI-BINDING-ORDER-001`** (`bindingParameterOrder`, critical) — a `uiLocator` binding URI lists `action=`/`field=` before `object=`; the corpus-majority convention is `object=` first.
+  - **`UI-CONN-LITERAL-001`** (`uiConnectionNameLiteral`, critical) — a UI step's `uiConnectionName` uses a `class="variable"` value; it must be a literal connection name.
+  - **`FUNCCALL-VALID-001`** (`validFuncCallId`, major) — a `<value class="funcCall">` uses an `id` that is not one of Provar's built-in functions (e.g. the hallucinated `Concatenate`/`Substring`); use the documented set (`Count`, `DateAdd`, `StringReplace`, …) or `class="compound"` for concatenation.
+  - **`RENDER-ROOT-001`** (`rootAttributes`, minor) — the root `<testCase>` element carries an attribute outside the allowed set (`guid`, `id`, `name`, `visibility`, `registryId`, `failureBehaviour`).
 
 **Error codes**
 
@@ -1084,15 +1129,15 @@ Validates a Provar test suite — checks for empty suites, duplicate names (with
 
 **Input**
 
-| Parameter           | Type                              | Required | Description                                                                                                                                      |
-| ------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `suite_name`        | string                            | yes      | Name of the test suite                                                                                                                           |
-| `test_cases`        | array                             | no       | Test cases directly in this suite. Each item: `{ name, xml_content \| xml }`                                                                     |
-| `child_suites`      | array                             | no       | Child suites (up to 2 levels of nesting). Each item: `{ name, test_cases?, test_suites?, test_case_count? }`                                     |
-| `test_case_count`   | integer                           | no       | Override total count for the size check (useful when not sending full XML)                                                                       |
-| `quality_threshold` | number (0–100)                    | no       | Minimum quality score for a test case to be "valid" (default: 80)                                                                                |
-| `detail`            | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: name, scores, and stop signal only. `"standard"`/`"full"`: full violations and per-test-case results (default). |
-| `baseline_run_id`   | string                            | no       | `run_id` from a previous call. Returns only new/resolved violations since that run. Returns `BASELINE_NOT_FOUND` if the run ID is unknown.       |
+| Parameter           | Type                              | Required | Description                                                                                                                                            |
+| ------------------- | --------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `suite_name`        | string                            | yes      | Name of the test suite                                                                                                                                 |
+| `test_cases`        | array                             | no       | Test cases directly in this suite. Each item: `{ name, xml_content \| xml }`                                                                           |
+| `child_suites`      | array                             | no       | Child suites (up to 2 levels of nesting). Each item: `{ name, test_cases?, test_suites?, test_case_count? }`                                           |
+| `test_case_count`   | integer                           | no       | Override total count for the size check (useful when not sending full XML)                                                                             |
+| `quality_threshold` | number (0–100)                    | no       | Minimum quality score for a test case to be `valid` rather than `needs_improvement`. Precedence: this arg → `PROVAR_MCP_QUALITY_THRESHOLD` env → `90`. |
+| `detail`            | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: name, scores, and stop signal only. `"standard"`/`"full"`: full violations and per-test-case results (default).       |
+| `baseline_run_id`   | string                            | no       | `run_id` from a previous call. Returns only new/resolved violations since that run. Returns `BASELINE_NOT_FOUND` if the run ID is unknown.             |
 
 **Output** — `{ run_id, completeness_score, recommended_next_action, name, level: "suite", quality_score, violations[], test_cases[], test_suites[], summary }`
 
@@ -1119,7 +1164,7 @@ Validates a Provar test plan — checks for empty plans, duplicate suite names, 
 | `test_cases`        | array                             | no       | Test cases directly in this plan                                                                                                             |
 | `test_suite_count`  | integer                           | no       | Override suite count for the size check                                                                                                      |
 | `metadata`          | object                            | no       | Plan completeness metadata (see below)                                                                                                       |
-| `quality_threshold` | number (0–100)                    | no       | Minimum quality score (default: 80)                                                                                                          |
+| `quality_threshold` | number (0–100)                    | no       | Minimum quality score for `valid` vs `needs_improvement`. Precedence: this arg → `PROVAR_MCP_QUALITY_THRESHOLD` env → `90`.                  |
 | `detail`            | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: name, scores, and stop signal only. `"standard"`/`"full"`: full violations and hierarchy results (default). |
 
 **`metadata` fields**
@@ -1157,7 +1202,7 @@ Validates a Provar project directly from its directory on disk. Reads the plan/s
 | Parameter              | Type                              | Required | Description                                                                                                                                                                       |
 | ---------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `project_path`         | string                            | yes      | Absolute path to the Provar project root (directory containing `.testproject`)                                                                                                    |
-| `quality_threshold`    | number (0–100)                    | no       | Minimum quality score for a test case to be considered valid (default: 80)                                                                                                        |
+| `quality_threshold`    | number (0–100)                    | no       | Minimum quality score for a test case to be considered valid. Precedence: this arg → `PROVAR_MCP_QUALITY_THRESHOLD` env → `90`.                                                   |
 | `save_results`         | boolean                           | no       | Write a QH-compatible JSON report to `{project_path}/provardx/validation/` (default: true)                                                                                        |
 | `results_dir`          | string                            | no       | Override the output directory for the saved report (must be within `allowed-paths`)                                                                                               |
 | `detail`               | `summary` \| `standard` \| `full` | no       | Response verbosity. `"summary"`: key scores and stop signal only. `"standard"`: slim violation summary (default). `"full"`: full per-suite and per-test-case data.                |
@@ -1962,7 +2007,7 @@ This produces silent-pass behaviour that is hard to spot from a log: the run exi
 The plan-mode resolver consults the properties file registered by [`provar_automation_config_load`](#provar_automation_config_load) (`PROVARDX_PROPERTIES_FILE_PATH` in `~/.sf/config.json`), reads `projectPath`, then:
 
 1. Walks `<projectPath>/plans/**/*.testinstance` for any `testCasePath="..."` referencing the test under validation. If found → `plan` mode → DATA-001 suppressed.
-2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the PDX-489 advisory.
+2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the direct-mode advisory.
 3. Falls back to `unknown` mode when no project context is resolvable — DATA-001 still fires (structural fallback) so authors editing a test case in isolation are still warned.
 
 **Recommended workaround**
@@ -2506,6 +2551,41 @@ Canonical reference for all Provar XML test step API IDs, argument formats, vali
 **MIME type:** `text/markdown`
 
 The resource content is the same as `docs/PROVAR_TEST_STEP_REFERENCE.md` in this repository, compiled into the package at build time.
+
+---
+
+### `provar://schema/test-step`
+
+Structured JSON reference describing the full Provar test case XML structure: the `<testCase>` root, the generic `<apiCall>` shape, and every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with its required/optional arguments and validation rules, plus the value-class types and common patterns. Where `provar://docs/step-reference` is the prose reference, this resource is the structured contract a client can parse to drive generation or validation programmatically.
+
+This is a **Provar-specific schema reference** — its top-level keys (`testCase`, `apiCall`, `apiCalls`, `value_types`, `common_patterns`) are Provar domain entities, not JSON-Schema keywords. Although the file carries a `$schema: draft-07` declaration inherited from its source, it is **not** a standards-compliant constraint JSON Schema; do not load it into a JSON-Schema validator expecting it to constrain documents.
+
+**URI:** `provar://schema/test-step`  
+**MIME type:** `application/json`
+
+The resource content is the bundled `src/mcp/rules/provar_test_step_schema.json`, compiled into the package at build time. It is the same schema the local best-practices validator's API-ID and value-class checks are derived from, so step structures that satisfy it are consistent with what `provar_testcase_validate` enforces. The handler parses the file once to confirm it is valid JSON before serving it; if the file is missing or unparseable, the resource returns a small `{ "error": "schema_not_found", "message": … }` object instead.
+
+---
+
+### `provar://docs/validation-rules`
+
+The single canonical registry of every Provar test-case validation rule across both layers — the structural validity rules (**Layer 1**, hand-coded, gate `is_valid`) and the best-practice rules (**Layer 2**, the 178-rule engine, weighted `quality_score`). For each rule it lists the id, severity, weight, what it checks, and **whether it gates `is_valid`**. A `critical` best-practice violation gates `is_valid` via the validity bridge (except where a Layer-1 check already owns the concept); `major`/`minor`/`info` affect `quality_score` (and the `needs_improvement` status) only. Read this to understand why `provar_testcase_validate` returned a given issue, or why it marked a test `invalid` vs `needs_improvement`.
+
+**URI:** `provar://docs/validation-rules`  
+**MIME type:** `text/markdown`
+
+The resource content is `docs/VALIDATION_RULE_REGISTRY.md`, generated from the rule sources by `scripts/build-validation-rule-registry.cjs` and compiled into the package at build time. Re-run that script after changing any rule; a unit test guards the registry against drift.
+
+---
+
+### `provar://docs/tool-guide`
+
+Tool-selection guide for the Provar MCP server, organised by what you want to accomplish (run tests, author tests, debug failures, manage config, …) rather than by tool name. Read this to choose the right tool and understand correct sequencing — e.g. which prerequisite tool must run before another — before making calls.
+
+**URI:** `provar://docs/tool-guide`  
+**MIME type:** `text/markdown`
+
+The resource content is the same as `docs/PROVAR_TOOL_GUIDE.md` in this repository, compiled into the package at build time. If the file is missing, the resource returns a short placeholder telling the client to reinstall or upgrade the plugin.
 
 ---
 

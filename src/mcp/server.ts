@@ -177,7 +177,9 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   registerAllPrompts(server);
 
   // ── Documentation resources ──────────────────────────────────────────────────
-  const docsDir = resolveDocsDir(dirname(fileURLToPath(import.meta.url)));
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const docsDir = resolveDocsDir(moduleDir);
+  const rulesDir = resolveRulesDir(moduleDir);
 
   server.resource(
     'provar-nitrox-component-catalog',
@@ -258,6 +260,50 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
   );
 
   server.resource(
+    'provar-validation-rules',
+    'provar://docs/validation-rules',
+    {
+      description:
+        'Canonical registry of every Provar test-case validation rule across both layers: the structural validity rules (Layer 1, gate is_valid) and the best-practice rules (Layer 2, weighted quality_score). For each rule it lists the id, severity, weight, what it checks, and whether it gates is_valid (a critical best-practice violation does, via the validity bridge). Read this to understand why provar_testcase_validate returned a given issue or marked a test invalid vs needs_improvement.',
+      mimeType: 'text/markdown',
+    },
+    () => {
+      try {
+        const text = readFileSync(join(docsDir, 'VALIDATION_RULE_REGISTRY.md'), 'utf-8');
+        return {
+          contents: [{ uri: 'provar://docs/validation-rules', mimeType: 'text/markdown', text }],
+        };
+      } catch {
+        return {
+          contents: [
+            {
+              uri: 'provar://docs/validation-rules',
+              mimeType: 'text/markdown',
+              text: '# Provar Validation Rule Registry\n\nRegistry not found. If you are developing from source, run `node scripts/build-validation-rule-registry.cjs` then rebuild. Otherwise, reinstall or upgrade the plugin/package and try again.',
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  server.resource(
+    'provar-test-step-schema',
+    'provar://schema/test-step',
+    {
+      description:
+        'Structured JSON reference describing the full Provar test case XML structure: the <testCase> root, the generic <apiCall> shape, every supported step type organised by category (Control, Data, Design, ProvarAI, ProvarLabs, Salesforce, UI, Utility) with required/optional arguments and validation rules, plus value-class types and common patterns. This is a Provar-specific schema reference (domain-keyed: testCase / apiCalls / value_types), NOT a standards-compliant constraint JSON Schema — read it to author or validate test-step XML with exact argument names and structures, not to drive a JSON-Schema validator.',
+      mimeType: 'application/json',
+    },
+    () => {
+      const text = readTestStepSchema(rulesDir);
+      return {
+        contents: [{ uri: 'provar://schema/test-step', mimeType: 'application/json', text }],
+      };
+    }
+  );
+
+  server.resource(
     'provar-tool-guide',
     'provar://docs/tool-guide',
     {
@@ -329,6 +375,42 @@ export function readCatalogSource(docsDir: string): string {
         commitSha: null,
         fetchedAt: null,
         schemasUpdated: null,
+      },
+      null,
+      2
+    );
+  }
+}
+
+/**
+ * Resolve the rules directory for bundled MCP JSON resources. The rules/ dir is
+ * a sibling of this module in both compiled output (lib/mcp/rules) and dev mode
+ * (src/mcp/rules); fall back one level up if a future layout moves it.
+ */
+export function resolveRulesDir(currentDir: string): string {
+  const sibling = join(currentDir, 'rules');
+  return existsSync(sibling) ? sibling : join(currentDir, '..', 'rules');
+}
+
+/**
+ * Read provar_test_step_schema.json from the rules directory and return it as a
+ * JSON string. The file is parsed once to verify it is valid JSON before being
+ * returned verbatim, so the resource never advertises `application/json` while
+ * serving a truncated/corrupted body; on a missing or unparseable file it
+ * returns a small `schema_not_found` fallback object, mirroring the
+ * graceful-degradation shape of the other resource handlers.
+ */
+export function readTestStepSchema(rulesDir: string): string {
+  try {
+    const raw = readFileSync(join(rulesDir, 'provar_test_step_schema.json'), 'utf-8');
+    JSON.parse(raw); // validate only — return the original text untouched if it parses
+    return raw;
+  } catch {
+    return JSON.stringify(
+      {
+        error: 'schema_not_found',
+        message:
+          'provar_test_step_schema.json not found. If you are developing from source, rebuild the package; otherwise reinstall or upgrade the plugin and try again.',
       },
       null,
       2
