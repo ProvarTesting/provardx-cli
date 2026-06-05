@@ -14,12 +14,12 @@
     "url": "https://github.com/ProvarTesting/provardx-cli",
     "source": "github"
   },
-  "version": "1.5.4",
+  "version": "1.6.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@provartesting/provardx-cli",
-      "version": "1.5.4",
+      "version": "1.6.0",
       "transport": {
         "type": "stdio"
       },

@@ -16,6 +16,7 @@ Project & inspection:
 - provar_project_inspect — inspect project folder inventory
 - provar_project_validate — validate full project from disk: coverage, quality scores
 - provar_connection_list — list connections and named environments from the project
+- provar_org_describe — describe Salesforce objects from the Provar workspace .metadata cache
 
 Page Object:
 

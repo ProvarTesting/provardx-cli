@@ -100,7 +100,7 @@ sf provar auth login
 claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 ```
 
-📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 35+ tools, 11 MCP prompts, troubleshooting.**
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 42 tools, 6 resources, 11 MCP prompts, troubleshooting.**
 
 ---
 
@@ -251,42 +251,10 @@ DESCRIPTION
   Note: --json is not available on this command — stdout is reserved for MCP traffic.
 
 TOOLS EXPOSED
-  provar.project.inspect               — inspect project folder inventory
-  provar.pageobject.generate           — generate Java Page Object skeleton
-  provar.pageobject.validate           — validate Page Object quality (30+ rules)
-  provar.testcase.generate             — generate XML test case skeleton
-  provar.testcase.validate             — validate test case XML (validity + best-practices scores)
-  provar.testsuite.validate            — validate test suite hierarchy
-  provar.testplan.validate             — validate test plan with metadata completeness checks
-  provar.project.validate              — validate full project: cross-cutting rules, connections, environments
-  provar.properties.generate           — generate provardx-properties.json from the standard template
-  provar.properties.read               — read and parse a provardx-properties.json file
-  provar.properties.set                — update fields in a provardx-properties.json file
-  provar.properties.validate           — validate a provardx-properties.json file against the schema
-  provar.ant.generate                  — generate an ANT build.xml for CI/CD pipeline execution
-  provar.ant.validate                  — validate an ANT build.xml for structural correctness
-  provar.qualityhub.connect            — connect to a Quality Hub org
-  provar.qualityhub.display            — display connected Quality Hub org info
-  provar.qualityhub.testrun            — trigger a Quality Hub test run
-  provar.qualityhub.testrun.report     — poll test run status
-  provar.qualityhub.testrun.abort      — abort an in-progress test run
-  provar.qualityhub.testcase.retrieve  — retrieve test cases by user story / component
-  provar.automation.setup              — detect or download/install Provar Automation binaries
-  provar.automation.testrun            — trigger a Provar Automation test run (LOCAL)
-  provar.automation.compile            — compile Page Objects after changes
-  provar.automation.config.load        — register a provardx-properties.json as the active config (required before compile/testrun)
-  provar.automation.metadata.download  — download Salesforce metadata into the project
-  provar.qualityhub.defect.create      — create Quality Hub defects from failed test executions
-  provar.testrun.report.locate         — resolve artifact paths (JUnit.xml, HTML reports) for a completed test run
-  provar.testrun.rca                   — analyse a completed test run: classify failures, extract page objects, detect pre-existing issues
-  provar.testplan.add-instance         — wire a test case into a plan suite by writing a .testinstance file
-  provar.testplan.create-suite         — create a new test suite directory with .planitem inside a plan
-  provar.testplan.remove-instance      — remove a .testinstance file from a plan suite
-  provar.nitrox.discover               — discover projects containing NitroX (Hybrid Model) page objects
-  provar.nitrox.read                   — read NitroX .po.json files and return parsed content
-  provar.nitrox.validate               — validate a NitroX .po.json against schema rules
-  provar.nitrox.generate               — generate a new NitroX .po.json from a component description
-  provar.nitrox.patch                  — apply a JSON merge-patch to an existing NitroX .po.json file
+  42 tools across: project inspection & org describe, Page Object and test-case
+  authoring/validation, test-suite/plan validation, properties files, Quality Hub
+  (test runs, defects, corpus examples), Provar Automation, ANT build, and NitroX
+  components. See docs/mcp.md for the full catalogue with schemas and examples.
 
 EXAMPLES
   Start MCP server (accepts stdio connections from Claude Desktop / Cursor):
