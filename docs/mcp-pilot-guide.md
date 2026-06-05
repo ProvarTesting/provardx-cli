@@ -238,6 +238,9 @@ Prompt your AI assistant:
 **What to look for:**
 
 - `validity_score` and `quality_score` both returned (0–100)
+- A tri-state `status` — `valid`, `needs_improvement` (structurally valid but `quality_score` below the threshold), or `invalid` (a critical issue gates validity)
+- `quality_threshold` (the effective threshold, default **90**) and `meets_quality_threshold` returned alongside the score
+- Critical best-practice violations surface as `is_valid: false` issues (the validity bridge) — e.g. a hallucinated `apiId` or a non-integer `testItemId`
 - Specific rule violations called out (e.g. TC_010 missing test case ID, TC_001 missing XML declaration)
 - Best-practices suggestions (e.g. hardcoded credentials, missing step descriptions)
 - `validation_source: "local"` if no API key is configured, `"quality_hub"` if authenticated

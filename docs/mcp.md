@@ -77,6 +77,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
   - [provar://docs/step-reference](#provardocsstep-reference)
   - [provar://schema/test-step](#provarschematest-step)
   - [provar://docs/validation-rules](#provardocsvalidation-rules)
+  - [provar://docs/tool-guide](#provardocstool-guide)
   - [provar://nitrox/component-catalog](#provarnitroxcomponent-catalog)
   - [provar://nitrox/catalog-source](#provarnitroxcatalog-source)
 - [AI loop pattern](#ai-loop-pattern)
@@ -564,7 +565,7 @@ Paste the [standard config](#the-standard-config-recommended) into either file u
 }
 ```
 
-> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 38 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
+> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 42 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
 
 </details>
 
@@ -957,7 +958,7 @@ AssertValues uses **flat** argument structure (`expectedValue`, `actualValue`, `
 | Mode             | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `auto` (default) | When a `UiWithScreen` is followed by UI action siblings (any of `UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, `UiHandleAlert`), those siblings are absorbed into the screen's `<clause name="substeps">` block. The grouping run stops at the next `UiWithScreen`, any non-UI step (`SetValues`, `ApexConnect`, …), or end of list. `UiWithRow` plays a dual role: when it follows a `UiWithScreen` it is pulled in as a child container and absorbs its own following UI actions. When the payload contains screen containers but no `UiWithScreen` at root (e.g. starts with `UiWithRow`), the generator synthesizes a root `UiWithScreen` wrapper (`target` = `target_uri` or `sf:ui:target`) so the output still satisfies `UI-NEST-STRUCT-001` — without that wrapper, the root `UiWithRow` itself would fail validation. `testItemId`s are assigned depth-first: parent screen, then its substeps slot, then its children. Numbering remains sequential and gap-free. |
-| `flat`           | Legacy behaviour: every step is emitted as a root sibling, no `<clauses>` block is generated. Use this for payloads that are already structured correctly by the caller, or when debugging the pre-PDX-495 shape.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `flat`           | Legacy behaviour: every step is emitted as a root sibling, no `<clauses>` block is generated. Use this for payloads that are already structured correctly by the caller, or when debugging the legacy flat shape.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `single-screen`  | Wraps every step in one synthetic `UiWithScreen` whose `target` is `sf:ui:target` (or the URI passed via `target_uri`). Matches the existing `ui:pageobject:target` semantics. Use for tests that all live on a single screen.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap takes precedence regardless of `grouping_mode` — this is the pre-existing non-SF nesting behaviour.
@@ -2006,7 +2007,7 @@ This produces silent-pass behaviour that is hard to spot from a log: the run exi
 The plan-mode resolver consults the properties file registered by [`provar_automation_config_load`](#provar_automation_config_load) (`PROVARDX_PROPERTIES_FILE_PATH` in `~/.sf/config.json`), reads `projectPath`, then:
 
 1. Walks `<projectPath>/plans/**/*.testinstance` for any `testCasePath="..."` referencing the test under validation. If found → `plan` mode → DATA-001 suppressed.
-2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the PDX-489 advisory.
+2. Otherwise checks `testCase` / `testCases` for a direct reference. If found → `direct` mode → DATA-001 with the direct-mode advisory.
 3. Falls back to `unknown` mode when no project context is resolvable — DATA-001 still fires (structural fallback) so authors editing a test case in isolation are still warned.
 
 **Recommended workaround**
@@ -2574,6 +2575,17 @@ The single canonical registry of every Provar test-case validation rule across b
 **MIME type:** `text/markdown`
 
 The resource content is `docs/VALIDATION_RULE_REGISTRY.md`, generated from the rule sources by `scripts/build-validation-rule-registry.cjs` and compiled into the package at build time. Re-run that script after changing any rule; a unit test guards the registry against drift.
+
+---
+
+### `provar://docs/tool-guide`
+
+Tool-selection guide for the Provar MCP server, organised by what you want to accomplish (run tests, author tests, debug failures, manage config, …) rather than by tool name. Read this to choose the right tool and understand correct sequencing — e.g. which prerequisite tool must run before another — before making calls.
+
+**URI:** `provar://docs/tool-guide`  
+**MIME type:** `text/markdown`
+
+The resource content is the same as `docs/PROVAR_TOOL_GUIDE.md` in this repository, compiled into the package at build time. If the file is missing, the resource returns a short placeholder telling the client to reinstall or upgrade the plugin.
 
 ---
 
