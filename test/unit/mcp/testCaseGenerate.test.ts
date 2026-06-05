@@ -504,6 +504,76 @@ describe('provar_testcase_generate', () => {
     });
   });
 
+  // ── testCase id allocation (highest-in-use + 1 within an existing project) ──────
+  describe('testCase id allocation', () => {
+    const SMOKE_STEPS = [{ api_id: 'UiConnect', name: 'Connect', attributes: {} }];
+
+    /** Pull the root testCase id from emitted xml_content. */
+    function emittedId(result: unknown): string | undefined {
+      const xml = parseText(result)['xml_content'] as string;
+      return xml.match(/<testCase\b[^>]*?\bid="([^"]+)"/)?.[1];
+    }
+
+    function seedProject(): void {
+      fs.writeFileSync(path.join(tmpDir, '.testproject'), '<project/>', 'utf-8');
+      const testsDir = path.join(tmpDir, 'tests');
+      fs.mkdirSync(testsDir, { recursive: true });
+      const guid = '22222222-2222-4222-8222-222222222222';
+      fs.writeFileSync(
+        path.join(testsDir, 'Existing.testcase'),
+        `<testCase guid="${guid}" id="5" registryId="${guid}"><summary/><steps/></testCase>`,
+        'utf-8'
+      );
+    }
+
+    it('defaults to id="1" when output is not inside a project', () => {
+      const outPath = path.join(tmpDir, 'Loose.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Loose',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '1');
+      assert.equal(parseText(result)['test_case_id'], 1);
+    });
+
+    it('allocates highest-in-use + 1 when writing into an existing project', () => {
+      seedProject();
+      const outPath = path.join(tmpDir, 'tests', 'New.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'New',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: false,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '6', 'project max id is 5 → next is 6');
+      assert.equal(parseText(result)['test_case_id'], 6);
+    });
+
+    it('does not scan the project for a dry_run preview (keeps default id)', () => {
+      seedProject();
+      const outPath = path.join(tmpDir, 'tests', 'Preview.testcase');
+      const result = server.call('provar_testcase_generate', {
+        test_case_name: 'Preview',
+        steps: SMOKE_STEPS,
+        output_path: outPath,
+        dry_run: true,
+        overwrite: false,
+      });
+
+      assert.equal(isError(result), false);
+      assert.equal(emittedId(result), '1');
+      assert.equal(parseText(result)['test_case_id'], 1);
+    });
+  });
+
   // ── PDX-483 runtime guard: reject empty steps[] on non-dry-run with output_path ──
   // The PDX-479 regression class arose from agents calling generate with steps:[]
   // intending to append later via step_edit. The passive contract (PDX-482) lives in

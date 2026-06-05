@@ -895,13 +895,13 @@ The tool's chip-level `title` — `Generate Test Case (full steps in one call)` 
 
 ```xml
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<testCase guid="<uuid>" id="1" registryId="<uuid>">
+<testCase guid="<uuid>" id="<n>" registryId="<uuid>">
   <summary/>
   <steps>...</steps>
 </testCase>
 ```
 
-- `id` is always the integer literal `"1"` — Provar ignores any other value
+- `id` is a numeric integer **label**, not a uniqueness key — Provar identifies the test case by its `guid`. When the output path sits inside an existing Provar project (a directory tree containing a `.testproject` marker, within the allowed roots), the generator auto-allocates the next integer after the highest `id` already in use, so a new case does not land on a duplicate `id="1"`. With no surrounding project — preview/`dry_run` runs, or output outside the allowed roots — it defaults to `1`. Regenerating over an existing file preserves that file's id. The chosen value is echoed back as `test_case_id`.
 - No `name` attribute on `<testCase>` — Provar derives the name from the file name
 - `<summary/>` must appear before `<steps>`
 - `standalone="no"` is required in the XML declaration
@@ -982,9 +982,9 @@ If `target_uri` is `ui:pageobject:target?pageId=…` the single-screen wrap take
 
 Validation rules: `UI-NITROX-CONNECT-ARGS-001` (critical, bans ApexConnect-only and cross-variant args), `UI-NITROX-VARIANT-ARG-001` (minor, requires variant-specific arg unless declared in `<generatedParameters>`).
 
-**Output** — `{ xml_content: string, file_path?: string, written: boolean, validation?: ValidationResult }`
+**Output** — `{ xml_content: string, file_path?: string, written: boolean, test_case_id: number, validation?: ValidationResult }`
 
-`validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
+`test_case_id` is the `id` written into the `<testCase>` element (auto-allocated as highest-in-project + 1 on the write path; `1` for preview runs). `validation` is present when `validate_after_edit=true` (default). If the generated XML fails validation the tool returns `TESTCASE_INVALID` with the `validation` field in `details`.
 
 **Error codes**
 
