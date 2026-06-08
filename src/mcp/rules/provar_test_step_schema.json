@@ -2523,7 +2523,7 @@
       },
 
       "ListCompare": {
-        "apiId": "com.provar.plugins.bundled.apis.list.ListCompareListCompare",
+        "apiId": "com.provar.plugins.bundled.apis.list.ListCompare",
         "description": "Compare two lists",
         "category": "Utility",
         "required_arguments": [

@@ -80,7 +80,7 @@ Follow these steps in order:
    - The first UiWithScreen must use navigate="Always"
    - UiAssert requires columnAssertions, pageAssertions, resultScope, captureAfter, beforeWait, autoRetry
    - Use ApexConnect for the connection step (first step in the test)
-   - Wrap test body in TryCatchFinally if cleanup is needed (ApexDeleteObject in the finally clause)
+   - Wrap test body in a Finally block (try/catch/finally) if cleanup is needed (ApexDeleteObject in the finally clause)
 
 5. **Write the file** — save the XML to the tests/ directory in the Provar project.
    ${projectHint(projectPath)}
@@ -252,7 +252,7 @@ Follow these steps in order:
 
    **Cleanup**
    - [ ] Is cleanup handled? Either autoCleanup=true on the connection, or ApexDeleteObject steps, or
-         a TryCatchFinally with cleanup in the finally clause?
+         a Finally block with cleanup in the finally clause?
 
    **Structure**
    - [ ] Does the first UiWithScreen use navigate="Always" or "IfNecessary"?

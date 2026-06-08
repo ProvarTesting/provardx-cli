@@ -1627,3 +1627,62 @@ ${stepsXml}
     });
   });
 });
+
+// ── reference doc ⇄ validator apiId parity (PDX-512) ──────────────────────────
+// Regression guard: every api ID published in docs/PROVAR_TEST_STEP_REFERENCE.md
+// (served verbatim as an MCP resource) must be recognised by the validator's
+// VALID_API_IDS allow-list. The bogus `...control.TryCatchFinally` slipped
+// through precisely because the doc and the allow-list agreed on the same wrong
+// value, so existing tests stayed green. This ties the two sources together: any
+// future drift fails the build instead of shipping a step Provar cannot load.
+describe('reference doc ⇄ validator apiId parity (PDX-512)', () => {
+  function unknownApiIdViolations(apiId: string): BPViolation[] {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-apiid" guid="${GUID_TC}" registryId="tc-apiid" name="ApiId Coverage">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="${apiId}" name="Step" testItemId="1"/>
+  </steps>
+</testCase>`;
+    return runBestPractices(xml).violations.filter((v) => v.rule_id === 'API-UNKNOWN-001');
+  }
+
+  it('recognises every apiId documented in PROVAR_TEST_STEP_REFERENCE.md', async () => {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const url = await import('node:url');
+    const here = path.dirname(url.fileURLToPath(import.meta.url));
+    const docPath = path.join(here, '..', '..', '..', 'docs', 'PROVAR_TEST_STEP_REFERENCE.md');
+    const doc = fs.readFileSync(docPath, 'utf-8');
+
+    // Reference-table rows are shaped `| Name | `com.provar...` |`; section-header
+    // rows have an empty 2nd cell and are skipped. The captured token keeps any
+    // NitroX `:ms-*` variant suffix so those resolve against the allow-list too.
+    const documented = [...new Set([...doc.matchAll(/^\|[^|]+\|\s*`(com\.provar[^`]+)`\s*\|/gm)].map((m) => m[1]))];
+
+    assert.ok(
+      documented.length >= 50,
+      `Expected to parse >=50 apiIds from the reference table, got ${documented.length} — table format may have changed`
+    );
+
+    const offenders = documented.filter((apiId) => unknownApiIdViolations(apiId).length > 0);
+    assert.deepEqual(
+      offenders,
+      [],
+      `Documented apiIds missing from VALID_API_IDS (doc/validator drift): ${offenders.join(', ')}`
+    );
+  });
+
+  it('still flags the bogus control.TryCatchFinally apiId (the bug this guards)', () => {
+    const vs = unknownApiIdViolations('com.provar.plugins.bundled.apis.control.TryCatchFinally');
+    assert.equal(vs.length, 1, 'API-UNKNOWN-001 must flag the non-existent TryCatchFinally apiId');
+    assert.ok(vs[0].message.includes('TryCatchFinally'), `Violation should name the offending apiId: ${vs[0].message}`);
+  });
+
+  it('accepts the canonical control.Finally apiId', () => {
+    assert.equal(
+      unknownApiIdViolations('com.provar.plugins.bundled.apis.control.Finally').length,
+      0,
+      'control.Finally is the canonical try/catch/finally step and must be recognised'
+    );
+  });
+});
