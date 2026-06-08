@@ -258,6 +258,29 @@ describe('qualityHubTools', () => {
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
 
+    it('translates a residual ENOBUFS into an actionable error with a suggestion', () => {
+      // Quality Hub shares the same runSfCommand + handleSpawnError as automation,
+      // so a residual ENOBUFS here must get the same actionable translation.
+      const enobufs = Object.assign(new Error('spawnSync C:\\WINDOWS\\system32\\cmd.exe ENOBUFS'), {
+        code: 'ENOBUFS',
+      });
+      spawnStub.callsFake(() => ({
+        stdout: '',
+        stderr: '',
+        status: null,
+        error: enobufs,
+        pid: undefined,
+        output: [],
+        signal: null,
+      }));
+      const result = server.call('provar_qualityhub_testrun', { target_org: 'myorg', flags: [] });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'ENOBUFS');
+      assert.match(String(body.message), /written to disk|--json|verbosity/);
+      assert.ok((body.details as { suggestion?: string }).suggestion, 'should include an actionable suggestion');
+    });
+
     it('adds wildcard warning when flags contain * glob pattern', () => {
       spawnStub.callsFake(makeSpawnResult('run started', '', 0));
       const result = server.call('provar_qualityhub_testrun', {

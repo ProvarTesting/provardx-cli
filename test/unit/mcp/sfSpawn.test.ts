@@ -442,6 +442,38 @@ describe('runSfCommand', () => {
   });
 });
 
+// ── runSfCommand — real subprocess (integration) ──────────────────────────────
+// The unit tests above stub sfSpawnHelper.spawnSync, so they exercise the temp-file
+// capture but not real OS process stdio. This block spawns a real `node` child that
+// writes well over the retired 50 MB cap, proving the streaming fix end-to-end: real
+// fd inheritance, the child's own flush-on-exit, and read-back — the exact path that
+// used to abort with ENOBUFS under the in-memory maxBuffer.
+describe('runSfCommand — real subprocess (integration)', () => {
+  beforeEach(() => {
+    setSfPathCacheForTesting(undefined);
+    setSfPlatformForTesting(undefined);
+  });
+  afterEach(() => {
+    setSfPathCacheForTesting(undefined);
+    setSfPlatformForTesting(undefined);
+  });
+
+  it('streams >50 MB of real child stdout through temp files without ENOBUFS', function () {
+    this.timeout(30_000);
+    const bytes = 60 * 1024 * 1024; // 60 MB — well over the retired 50 MB maxBuffer cap
+    // Pass `node` as the executable explicitly (bypasses sf discovery) and have it
+    // write a raw 60 MB buffer to stdout, which runSfCommand inherits onto the
+    // temp-file descriptor. With the old maxBuffer capture this aborted with ENOBUFS.
+    const script = `process.stdout.write(Buffer.alloc(${bytes}, 0x78));`;
+    let result: ReturnType<typeof runSfCommand> | undefined;
+    assert.doesNotThrow(() => {
+      result = runSfCommand(['-e', script], process.execPath);
+    });
+    assert.equal(result?.exitCode, 0);
+    assert.equal(result?.stdout.length, bytes, 'full over-cap output must round-trip from the real child');
+  });
+});
+
 // ── ProvarPluginNotFoundError ───────────────────────────────────────────────
 
 describe('ProvarPluginNotFoundError', () => {

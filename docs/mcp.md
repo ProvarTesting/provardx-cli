@@ -1665,7 +1665,7 @@ Triggers a Provar Automation test run using the currently loaded properties file
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
-**Output handling:** the child process's `stdout`/`stderr` are streamed to temporary files rather than buffered in memory, so a verbose run (e.g. `testOutputLevel: "DETAILED"`) completes regardless of output size and does **not** fail with `ENOBUFS`. If a residual OS-level `ENOBUFS` ever surfaces, the tool returns an actionable `ENOBUFS` error (with a `details.suggestion`) pointing to the on-disk results and `sf provar automation test run --json` rather than the opaque `spawnSync … ENOBUFS`.
+**Output handling:** the child process's `stdout`/`stderr` are streamed to temporary files rather than buffered in memory, so a verbose run (e.g. `testOutputLevel: "DETAILED"`) no longer fails with `ENOBUFS` from an output-buffer overflow, even for tens-of-MB logs that previously exceeded the in-memory cap. (The captured output is still read back into the response after the run, so an extreme multi-hundred-MB run can hit Node's max string length — far above the old 50 MB boundary.) If a residual OS-level `ENOBUFS` ever surfaces, the tool returns an actionable `ENOBUFS` error (with a `details.suggestion`) pointing to the on-disk results and the `--json` re-run path rather than the opaque `spawnSync … ENOBUFS`.
 
 After each run, the tool scans the results directory for JUnit XML files and adds a `steps` array when results are found:
 

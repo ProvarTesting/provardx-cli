@@ -288,11 +288,15 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
  * call with `ENOBUFS` the moment that ceiling is crossed — a verbose Provar run
  * (e.g. testOutputLevel DETAILED) routinely overflowed even a 50 MB cap and lost
  * the run. Streaming straight to file descriptors removes the in-memory ceiling
- * entirely, so `maxBuffer`-induced ENOBUFS is structurally impossible. Because
- * the child writes directly to a file descriptor there is also no pipe to fill,
- * which avoids the OS-level `ENOBUFS` seen on Windows under `shell: true`.
+ * during capture, so `maxBuffer`-induced ENOBUFS is structurally impossible.
+ * Because the child writes directly to a file descriptor there is also no pipe to
+ * fill, which avoids the OS-level `ENOBUFS` seen on Windows under `shell: true`.
  *
- * The temp directory is always removed in `finally`. Throws SfNotFoundError on
+ * (The captured output is still read back into a string after the child exits, so
+ * an extreme multi-hundred-MB run can hit Node's max string length — far above the
+ * 50 MB pipe boundary this removes. Bounding that read is tracked separately.)
+ *
+ * The temp directory is removed on a best-effort basis. Throws SfNotFoundError on
  * ENOENT (sf missing) and rethrows any other spawn error.
  */
 function captureSpawnToFiles(
@@ -302,10 +306,46 @@ function captureSpawnToFiles(
   resolvedSfPath: string | undefined
 ): SpawnResult {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-sf-'));
+  try {
+    return spawnCapturingToDir(dir, spawnExecutable, spawnArgs, useShell, resolvedSfPath);
+  } finally {
+    // Best-effort cleanup: a temp-dir removal failure (e.g. Windows EBUSY/EPERM
+    // from an antivirus/indexer handle, which `force: true` does NOT suppress)
+    // must never overwrite the real return value or mask the real spawn error.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* leave the dir; the OS reclaims its temp directory eventually */
+    }
+  }
+}
+
+/**
+ * Open the capture files in `dir`, run the child with its stdout/stderr inherited
+ * onto those descriptors, and read the captured output back. Split out from
+ * captureSpawnToFiles so the temp-dir removal in its `finally` also covers the
+ * case where opening the second descriptor fails.
+ */
+function spawnCapturingToDir(
+  dir: string,
+  spawnExecutable: string,
+  spawnArgs: string[],
+  useShell: boolean,
+  resolvedSfPath: string | undefined
+): SpawnResult {
   const outPath = path.join(dir, 'stdout.log');
   const errPath = path.join(dir, 'stderr.log');
   const outFd = fs.openSync(outPath, 'w');
-  const errFd = fs.openSync(errPath, 'w');
+  let errFd: number;
+  try {
+    errFd = fs.openSync(errPath, 'w');
+  } catch (openErr) {
+    // The first descriptor is already open; close it before unwinding so a
+    // failure to open the second (e.g. EMFILE) doesn't leak it.
+    fs.closeSync(outFd);
+    throw openErr;
+  }
+
   let fdsClosed = false;
   const closeFds = (): void => {
     if (fdsClosed) return;
@@ -329,7 +369,8 @@ function captureSpawnToFiles(
       shell: useShell,
       stdio: ['ignore', outFd, errFd],
     });
-    // Close our copies before reading so the child's writes are flushed to disk.
+    // spawnSync has already reaped the child, so its writes are flushed to disk;
+    // close our inherited copies of the descriptors before reading the files back.
     closeFds();
 
     if (result.error) {
@@ -347,7 +388,6 @@ function captureSpawnToFiles(
     };
   } finally {
     closeFds();
-    fs.rmSync(dir, { recursive: true, force: true });
   }
 }
 
