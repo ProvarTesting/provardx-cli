@@ -1665,6 +1665,8 @@ Triggers a Provar Automation test run using the currently loaded properties file
 
 The `stdout` field is filtered before returning: Java schema-validator lines (`com.networknt.schema.*`) and stale logger-lock `SEVERE` warnings are stripped. If any lines were suppressed, `output_lines_suppressed` contains the count.
 
+**Output handling:** the child process's `stdout`/`stderr` are streamed to temporary files rather than buffered in memory, so a verbose run (e.g. `testOutputLevel: "DETAILED"`) completes regardless of output size and does **not** fail with `ENOBUFS`. If a residual OS-level `ENOBUFS` ever surfaces, the tool returns an actionable `ENOBUFS` error (with a `details.suggestion`) pointing to the on-disk results and `sf provar automation test run --json` rather than the opaque `spawnSync … ENOBUFS`.
+
 After each run, the tool scans the results directory for JUnit XML files and adds a `steps` array when results are found:
 
 ```json
@@ -1693,7 +1695,7 @@ warning is additive and never flips exitCode or sets isError; the failure surfac
 ▎ what ran". In those cases the response carries details.warning (explaining why structured step data is missing) and RUN-001 is suppressed to
 ▎ avoid misdirecting the agent toward a typo when the real issue is a missing/unreadable results dir.
 
-Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND, PROVAR_PLUGIN_NOT_FOUND
+Error codes: AUTOMATION_TESTRUN_FAILED, SF_NOT_FOUND, PROVAR_PLUGIN_NOT_FOUND, ENOBUFS (residual; output is streamed to disk so this is now rare)
 Warning codes: RUN-001 (zero tests executed despite success)
 ```
 

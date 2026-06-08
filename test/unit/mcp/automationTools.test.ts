@@ -50,19 +50,45 @@ type FakeSpawnResult = {
   stdout: string;
   stderr: string;
   status: number | null;
-  error: Error | undefined;
+  error: (Error & { code?: string }) | undefined;
   pid: number | undefined;
   output: string[];
   signal: null;
 };
+type SpawnFake = (...callArgs: unknown[]) => FakeSpawnResult;
 
-function makeSpawnResult(stdout: string, stderr: string, status: number): FakeSpawnResult {
-  return { stdout, stderr, status, error: undefined, pid: 1, output: [], signal: null };
+// runSfCommand streams the child's stdout/stderr to temp files rather than
+// buffering them in memory, so the stub for sfSpawnHelper.spawnSync mimics a real
+// child: it writes the captured output to the file descriptors passed via
+// `stdio: ['ignore', outFd, errFd]`, then returns the spawn result. The in-memory
+// probe path (encoding/maxBuffer, no fd stdio) just receives the object.
+function spawnFake(result: FakeSpawnResult): SpawnFake {
+  return (...callArgs) => {
+    const stdio = (callArgs[2] as { stdio?: unknown[] } | undefined)?.stdio;
+    const outFd = stdio?.[1];
+    const errFd = stdio?.[2];
+    if (typeof outFd === 'number' && typeof errFd === 'number') {
+      fs.writeSync(outFd, result.stdout);
+      fs.writeSync(errFd, result.stderr);
+    }
+    return result;
+  };
 }
 
-function makeEnoentResult(): FakeSpawnResult {
+function makeSpawnResult(stdout: string, stderr: string, status: number): SpawnFake {
+  return spawnFake({ stdout, stderr, status, error: undefined, pid: 1, output: [], signal: null });
+}
+
+function makeEnoentResult(): SpawnFake {
   const err = Object.assign(new Error('spawn sf ENOENT'), { code: 'ENOENT' });
-  return { stdout: '', stderr: '', status: null, error: err, pid: undefined, output: [], signal: null };
+  return spawnFake({ stdout: '', stderr: '', status: null, error: err, pid: undefined, output: [], signal: null });
+}
+
+// A raw spawn-result object carrying a spawn-level error (e.g. ENOBUFS / EPIPE).
+// runSfCommand throws on `result.error` before reading the temp files, so this is
+// returned directly rather than wrapped as a file-writing fake.
+function makeSpawnResultRaw(error: Error & { code?: string }): FakeSpawnResult {
+  return { stdout: '', stderr: '', status: null, error, pid: undefined, output: [], signal: null };
 }
 
 function parseBody(result: unknown): Record<string, unknown> {
@@ -100,7 +126,7 @@ describe('automationTools', () => {
 
   describe('provar_automation_testrun', () => {
     it('calls sf with correct args and returns stdout', () => {
-      spawnStub.returns(makeSpawnResult('tests passed', '', 0));
+      spawnStub.callsFake(makeSpawnResult('tests passed', '', 0));
       const result = server.call('provar_automation_testrun', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.exitCode, 0);
@@ -111,7 +137,7 @@ describe('automationTools', () => {
     });
 
     it('forwards extra flags to sf', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_testrun', { flags: ['--project-path', '/my/project'] });
       const args = spawnStub.firstCall.args[1] as string[];
       assert.ok(args.includes('--project-path'));
@@ -119,7 +145,7 @@ describe('automationTools', () => {
     });
 
     it('returns isError and AUTOMATION_TESTRUN_FAILED on non-zero exit', () => {
-      spawnStub.returns(makeSpawnResult('', 'compilation error', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'compilation error', 1));
       const result = server.call('provar_automation_testrun', { flags: [] });
       assert.ok(isError(result));
       const body = parseBody(result);
@@ -128,19 +154,44 @@ describe('automationTools', () => {
     });
 
     it('uses stdout as message when stderr is empty', () => {
-      spawnStub.returns(makeSpawnResult('test failed: assertion error', '', 1));
+      spawnStub.callsFake(makeSpawnResult('test failed: assertion error', '', 1));
       const result = server.call('provar_automation_testrun', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.message, 'test failed: assertion error');
     });
 
     it('returns SF_NOT_FOUND on ENOENT with actionable message', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_testrun', { flags: [] });
       assert.ok(isError(result));
       const body = parseBody(result);
       assert.equal(body.error_code, 'SF_NOT_FOUND');
       assert.ok((body.message as string).includes('npm install -g @salesforce/cli'));
+    });
+
+    it('translates a residual ENOBUFS into an actionable message with a suggestion', () => {
+      // runSfCommand now streams to disk so maxBuffer can no longer raise ENOBUFS,
+      // but if an OS-level ENOBUFS ever surfaces, handleSpawnError must make it
+      // actionable instead of echoing the opaque `spawnSync … ENOBUFS`.
+      const enobufs = Object.assign(new Error('spawnSync C:\\WINDOWS\\system32\\cmd.exe ENOBUFS'), {
+        code: 'ENOBUFS',
+      });
+      spawnStub.callsFake(() => makeSpawnResultRaw(enobufs));
+      const result = server.call('provar_automation_testrun', { flags: [] });
+      assert.ok(isError(result));
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'ENOBUFS');
+      assert.match(String(body.message), /written to disk|testOutputLevel/);
+      assert.ok((body.details as { suggestion?: string }).suggestion, 'should include an actionable suggestion');
+    });
+
+    it('does not rewrite a non-ENOBUFS spawn error', () => {
+      const generic = Object.assign(new Error('something else broke'), { code: 'EPIPE' });
+      spawnStub.callsFake(() => makeSpawnResultRaw(generic));
+      const result = server.call('provar_automation_testrun', { flags: [] });
+      const body = parseBody(result);
+      assert.equal(body.error_code, 'EPIPE');
+      assert.equal(body.message, 'something else broke');
     });
 
     it('strips schema-validator noise from stdout and sets output_lines_suppressed', () => {
@@ -149,7 +200,7 @@ describe('automationTools', () => {
         'INFO Starting test run',
         'Tests: 5 passed, 0 failed',
       ].join('\n');
-      spawnStub.returns(makeSpawnResult(noisy, '', 0));
+      spawnStub.callsFake(makeSpawnResult(noisy, '', 0));
       const result = server.call('provar_automation_testrun', { flags: [] });
       const body = parseBody(result);
       assert.ok(!(body.stdout as string).includes('networknt'), 'Filtered stdout should not contain schema noise');
@@ -158,7 +209,7 @@ describe('automationTools', () => {
     });
 
     it('does not set output_lines_suppressed when stdout has no noise', () => {
-      spawnStub.returns(makeSpawnResult('Tests: 3 passed, 0 failed', '', 0));
+      spawnStub.callsFake(makeSpawnResult('Tests: 3 passed, 0 failed', '', 0));
       const result = server.call('provar_automation_testrun', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.output_lines_suppressed, undefined, 'output_lines_suppressed should be absent');
@@ -180,7 +231,7 @@ describe('automationTools', () => {
       setSfResultsPathForTesting(tmpDir);
 
       try {
-        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
         const result = server.call('provar_automation_testrun', { flags: [] });
         const body = parseBody(result);
         assert.ok(Array.isArray(body.steps), 'steps should be an array');
@@ -207,7 +258,7 @@ describe('automationTools', () => {
       setSfResultsPathForTesting(tmpDir);
 
       try {
-        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
         const result = server.call('provar_automation_testrun', { flags: [] });
         const body = parseBody(result);
         assert.equal(body.steps, undefined, 'steps should be absent when no XML found');
@@ -233,7 +284,7 @@ describe('automationTools', () => {
       setSfResultsPathForTesting(tmpDir);
 
       try {
-        spawnStub.returns(makeSpawnResult('tests done', '', 0));
+        spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
         const result = server.call('provar_automation_testrun', { flags: [] });
         const body = parseBody(result);
         assert.equal(body.steps, undefined, 'steps should be absent when XML is malformed');
@@ -266,7 +317,7 @@ describe('automationTools', () => {
         setSfResultsPathForTesting(tmpDir);
 
         try {
-          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
           const result = server.call('provar_automation_testrun', { flags: [] });
           assert.ok(!isError(result), 'tool should still report success — RUN-001 is additive');
           const body = parseBody(result);
@@ -293,7 +344,7 @@ describe('automationTools', () => {
         setSfResultsPathForTesting(tmpDir);
 
         try {
-          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
           const result = server.call('provar_automation_testrun', { flags: [] });
           const body = parseBody(result);
           assert.equal(body.exitCode, 0);
@@ -315,7 +366,7 @@ describe('automationTools', () => {
         setSfResultsPathForTesting(tmpDir);
 
         try {
-          spawnStub.returns(makeSpawnResult('', 'compilation error', 1));
+          spawnStub.callsFake(makeSpawnResult('', 'compilation error', 1));
           const result = server.call('provar_automation_testrun', { flags: [] });
           assert.ok(isError(result), 'should report error on non-zero exit');
           const body = parseBody(result);
@@ -338,7 +389,7 @@ describe('automationTools', () => {
         setSfResultsPathForTesting(null);
 
         try {
-          spawnStub.returns(makeSpawnResult('tests done', '', 0));
+          spawnStub.callsFake(makeSpawnResult('tests done', '', 0));
           const result = server.call('provar_automation_testrun', { flags: [] });
           const body = parseBody(result);
           assert.equal(body.exitCode, 0);
@@ -354,7 +405,7 @@ describe('automationTools', () => {
 
   describe('provar_automation_compile', () => {
     it('calls sf with project compile args', () => {
-      spawnStub.returns(makeSpawnResult('compiled ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('compiled ok', '', 0));
       const result = server.call('provar_automation_compile', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.exitCode, 0);
@@ -363,21 +414,21 @@ describe('automationTools', () => {
     });
 
     it('forwards project-path flag', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_compile', { flags: ['--project-path', '/my/project'] });
       const args = spawnStub.firstCall.args[1] as string[];
       assert.ok(args.includes('/my/project'));
     });
 
     it('returns AUTOMATION_COMPILE_FAILED on non-zero exit', () => {
-      spawnStub.returns(makeSpawnResult('', 'syntax error in TestCase.testcase', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'syntax error in TestCase.testcase', 1));
       const result = server.call('provar_automation_compile', { flags: [] });
       assert.ok(isError(result));
       assert.equal(parseBody(result).error_code, 'AUTOMATION_COMPILE_FAILED');
     });
 
     it('returns SF_NOT_FOUND on ENOENT', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_compile', { flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
@@ -403,6 +454,13 @@ describe('automationTools', () => {
       existsStub = sinon.stub(fs, 'existsSync').returns(false);
       readdirStub = sinon.stub(fs, 'readdirSync').throws(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
       readFileStub = sinon.stub(fs, 'readFileSync').throws(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+      // runSfCommand captures child stdout/stderr to its own temp files (provar-sf-*)
+      // and reads them back with fs.readFileSync. Let those reads through so the
+      // ENOENT default above only models the absent Provar install files, not the
+      // capture buffer that the streaming fix relies on.
+      readFileStub
+        .withArgs(sinon.match((p: unknown) => typeof p === 'string' && p.includes('provar-sf-')))
+        .callThrough();
       sinon.stub(process, 'cwd').returns(fakeCwd);
     });
 
@@ -487,7 +545,7 @@ describe('automationTools', () => {
 
     it('force: true downloads even when a local install is already present', () => {
       makeValidInstall(localProvarHome);
-      spawnStub.returns(makeSpawnResult('setup complete', '', 0));
+      spawnStub.callsFake(makeSpawnResult('setup complete', '', 0));
 
       const body = parseBody(server.call('provar_automation_setup', { force: true }));
 
@@ -508,9 +566,9 @@ describe('automationTools', () => {
         }
         return false;
       });
-      spawnStub.callsFake(() => {
+      spawnStub.callsFake((...callArgs: unknown[]) => {
         installExists = true; // "download" creates the directory
-        return makeSpawnResult('Provar downloaded successfully', '', 0);
+        return makeSpawnResult('Provar downloaded successfully', '', 0)(...callArgs);
       });
 
       const result = server.call('provar_automation_setup', {});
@@ -524,7 +582,7 @@ describe('automationTools', () => {
     });
 
     it('forwards --version flag to sf when version is specified', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
 
       server.call('provar_automation_setup', { version: '2.10.0' });
 
@@ -534,7 +592,7 @@ describe('automationTools', () => {
     });
 
     it('does not forward --version flag when version is omitted', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
 
       server.call('provar_automation_setup', {});
 
@@ -543,7 +601,7 @@ describe('automationTools', () => {
     });
 
     it('returns AUTOMATION_SETUP_FAILED when sf exits non-zero', () => {
-      spawnStub.returns(makeSpawnResult('', 'Provided version is not a valid version.', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'Provided version is not a valid version.', 1));
 
       const result = server.call('provar_automation_setup', { version: '0.0.0' });
 
@@ -553,7 +611,7 @@ describe('automationTools', () => {
     });
 
     it('uses stdout as error message when stderr is empty', () => {
-      spawnStub.returns(makeSpawnResult('Network timeout', '', 1));
+      spawnStub.callsFake(makeSpawnResult('Network timeout', '', 1));
 
       const body = parseBody(server.call('provar_automation_setup', {}));
 
@@ -561,7 +619,7 @@ describe('automationTools', () => {
     });
 
     it('returns SF_NOT_FOUND when sf CLI is not installed', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
 
       const result = server.call('provar_automation_setup', {});
 
@@ -622,7 +680,7 @@ describe('automationTools', () => {
 
   describe('provar_automation_metadata_download', () => {
     it('calls sf with metadata download args', () => {
-      spawnStub.returns(makeSpawnResult('downloaded', '', 0));
+      spawnStub.callsFake(makeSpawnResult('downloaded', '', 0));
       const result = server.call('provar_automation_metadata_download', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.exitCode, 0);
@@ -631,7 +689,7 @@ describe('automationTools', () => {
     });
 
     it('forwards --target-org flag', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_metadata_download', { flags: ['--target-org', 'myorg'] });
       const args = spawnStub.firstCall.args[1] as string[];
       assert.ok(args.includes('--target-org'));
@@ -639,20 +697,20 @@ describe('automationTools', () => {
     });
 
     it('returns AUTOMATION_METADATA_FAILED on non-zero exit', () => {
-      spawnStub.returns(makeSpawnResult('', 'auth failed', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'auth failed', 1));
       const result = server.call('provar_automation_metadata_download', { flags: [] });
       assert.ok(isError(result));
       assert.equal(parseBody(result).error_code, 'AUTOMATION_METADATA_FAILED');
     });
 
     it('returns SF_NOT_FOUND on ENOENT', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_metadata_download', { flags: [] });
       assert.equal(parseBody(result).error_code, 'SF_NOT_FOUND');
     });
 
     it('includes suggestion in details when [DOWNLOAD_ERROR] is in the message', () => {
-      spawnStub.returns(makeSpawnResult('', 'Error (1): [DOWNLOAD_ERROR] ERROR\n', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'Error (1): [DOWNLOAD_ERROR] ERROR\n', 1));
       const result = server.call('provar_automation_metadata_download', { flags: ['-c', 'MyOrg'] });
       assert.ok(isError(result));
       const body = parseBody(result);
@@ -664,7 +722,7 @@ describe('automationTools', () => {
     });
 
     it('does NOT include suggestion for other failure messages', () => {
-      spawnStub.returns(makeSpawnResult('', 'Error (2): Nonexistent flag: --properties-file\n', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'Error (2): Nonexistent flag: --properties-file\n', 1));
       const result = server.call('provar_automation_metadata_download', { flags: [] });
       assert.ok(isError(result));
       const body = parseBody(result);
@@ -679,7 +737,7 @@ describe('automationTools', () => {
 
   describe('provar_automation_config_load', () => {
     it('calls sf with config load args and the given properties_path', () => {
-      spawnStub.returns(makeSpawnResult('', '', 0));
+      spawnStub.callsFake(makeSpawnResult('', '', 0));
       server.call('provar_automation_config_load', { properties_path: '/my/project/provardx-properties.json' });
       const [cmd, args] = spawnStub.firstCall.args as [string, string[]];
       assert.equal(cmd, 'sf');
@@ -694,7 +752,7 @@ describe('automationTools', () => {
     });
 
     it('returns properties_path in the response', () => {
-      spawnStub.returns(makeSpawnResult('Config loaded', '', 0));
+      spawnStub.callsFake(makeSpawnResult('Config loaded', '', 0));
       const result = server.call('provar_automation_config_load', {
         properties_path: '/my/project/provardx-properties.json',
       });
@@ -704,14 +762,14 @@ describe('automationTools', () => {
     });
 
     it('returns AUTOMATION_CONFIG_LOAD_FAILED on non-zero exit', () => {
-      spawnStub.returns(makeSpawnResult('', 'INVALID_PATH', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'INVALID_PATH', 1));
       const result = server.call('provar_automation_config_load', { properties_path: '/missing.json' });
       assert.ok(isError(result));
       assert.equal(parseBody(result).error_code, 'AUTOMATION_CONFIG_LOAD_FAILED');
     });
 
     it('returns SF_NOT_FOUND on ENOENT', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_config_load', {
         properties_path: '/my/project/provardx-properties.json',
       });
@@ -719,7 +777,7 @@ describe('automationTools', () => {
     });
 
     it('uses the explicit sf_path when provided', () => {
-      spawnStub.returns(makeSpawnResult('', '', 0));
+      spawnStub.callsFake(makeSpawnResult('', '', 0));
       server.call('provar_automation_config_load', { properties_path: '/proj/props.json', sf_path: '/custom/bin/sf' });
       const [cmd] = spawnStub.firstCall.args as [string, string[]];
       assert.equal(cmd, '/custom/bin/sf');
@@ -759,7 +817,7 @@ describe('automationTools', () => {
       });
 
       it('allows properties_path within allowed paths', () => {
-        spawnStub.returns(makeSpawnResult('', '', 0));
+        spawnStub.callsFake(makeSpawnResult('', '', 0));
         const allowed = path.join(allowedDir, 'provardx-properties.json');
         const result = restrictedServer.call('provar_automation_config_load', {
           properties_path: allowed,
@@ -813,7 +871,7 @@ describe('automationTools', () => {
     });
 
     it('passes shell: true when sf_path is a .cmd file', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_compile', { flags: [], sf_path: 'C:\\npm\\sf.cmd' });
       const opts = spawnStub.firstCall.args[2] as { shell: boolean };
       assert.ok(opts.shell === true, 'shell should be true for a .cmd executable');
@@ -822,21 +880,21 @@ describe('automationTools', () => {
     it('passes shell: false when sf_path is a .exe binary', () => {
       // .exe has an explicit extension that is neither .cmd nor .bat, so no
       // shell is required even on Windows.
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_compile', { flags: [], sf_path: 'C:\\Program Files\\sf.exe' });
       const opts = spawnStub.firstCall.args[2] as { shell: boolean };
       assert.ok(opts.shell === false, 'shell should be false for a .exe executable');
     });
 
     it('passes shell: false for a .js node script path', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_testrun', { flags: [], sf_path: 'C:\\npm\\sf.js' });
       const opts = spawnStub.firstCall.args[2] as { shell: boolean };
       assert.ok(opts.shell === false, 'shell should be false for a .js script');
     });
 
     it('passes shell: true when sf_path is a .bat file', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_testrun', { flags: [], sf_path: 'C:\\tools\\sf.bat' });
       const opts = spawnStub.firstCall.args[2] as { shell: boolean };
       assert.ok(opts.shell === true, 'shell should be true for a .bat executable');
@@ -858,8 +916,8 @@ describe('automationTools', () => {
     });
 
     it('phase 1 uses shell:false for the --version probe', () => {
-      spawnStub.onFirstCall().returns(makeSpawnResult('sf/2.0.0 linux-x64 node-v18', '', 0)); // probe
-      spawnStub.onSecondCall().returns(makeSpawnResult('testrun ok', '', 0)); // actual command
+      spawnStub.onFirstCall().callsFake(makeSpawnResult('sf/2.0.0 linux-x64 node-v18', '', 0)); // probe
+      spawnStub.onSecondCall().callsFake(makeSpawnResult('testrun ok', '', 0)); // actual command
       server.call('provar_automation_testrun', { flags: [] });
       const probeArgs = spawnStub.firstCall.args as [string, string[], { shell: boolean }];
       assert.deepEqual(probeArgs[1], ['--version']);
@@ -867,8 +925,8 @@ describe('automationTools', () => {
     });
 
     it('phase 1 success — does not attempt phase 2', () => {
-      spawnStub.onFirstCall().returns(makeSpawnResult('sf/2.0.0', '', 0)); // probe succeeds
-      spawnStub.onSecondCall().returns(makeSpawnResult('ok', '', 0)); // actual command
+      spawnStub.onFirstCall().callsFake(makeSpawnResult('sf/2.0.0', '', 0)); // probe succeeds
+      spawnStub.onSecondCall().callsFake(makeSpawnResult('ok', '', 0)); // actual command
       server.call('provar_automation_testrun', { flags: [] });
       // Exactly 2 spawns: phase 1 probe + actual command; no phase 2 retry
       const versionProbes = Array.from({ length: spawnStub.callCount }, (_, i) => spawnStub.getCall(i)).filter((c) =>
@@ -879,9 +937,9 @@ describe('automationTools', () => {
 
     it('win32 ENOENT on phase 1 triggers a shell:true phase 2 probe', () => {
       setSfPlatformForTesting('win32');
-      spawnStub.onFirstCall().returns(makeEnoentResult()); // phase 1 ENOENT
-      spawnStub.onSecondCall().returns(makeSpawnResult('sf/2.0.0 win32', '', 0)); // phase 2 success
-      spawnStub.onThirdCall().returns(makeSpawnResult('testrun ok', '', 0)); // actual command
+      spawnStub.onFirstCall().callsFake(makeEnoentResult()); // phase 1 ENOENT
+      spawnStub.onSecondCall().callsFake(makeSpawnResult('sf/2.0.0 win32', '', 0)); // phase 2 success
+      spawnStub.onThirdCall().callsFake(makeSpawnResult('testrun ok', '', 0)); // actual command
       server.call('provar_automation_testrun', { flags: [] });
       assert.ok(spawnStub.callCount >= 2, 'phase 2 probe should have been called');
       const phase2Args = spawnStub.secondCall.args as [string, string[], { shell: boolean }];
@@ -891,9 +949,9 @@ describe('automationTools', () => {
 
     it('non-win32 ENOENT on phase 1 does not trigger a phase 2 probe', () => {
       setSfPlatformForTesting('linux');
-      spawnStub.onFirstCall().returns(makeEnoentResult()); // probe ENOENT
+      spawnStub.onFirstCall().callsFake(makeEnoentResult()); // probe ENOENT
       // Safe default for any subsequent calls (e.g. if sf is found via common-path fallback)
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_testrun', { flags: [] });
       // Only one --version probe; no shell:true retry on non-win32
       const versionProbes = Array.from({ length: spawnStub.callCount }, (_, i) => spawnStub.getCall(i)).filter((c) =>
@@ -930,14 +988,14 @@ describe('automationTools', () => {
     });
 
     it('accepts a clean Windows .cmd path', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       const result = server.call('provar_automation_testrun', { flags: [], sf_path: 'C:\\npm\\sf.cmd' });
       assert.ok(!isError(result));
     });
 
     it('does not check path safety on non-Windows (shell:false, no injection risk)', () => {
       setSfPlatformForTesting('linux');
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       // On linux needsWindowsShell returns false → assertShellSafePath is never called
       const result = server.call('provar_automation_testrun', { flags: [], sf_path: '/usr/bin/sf' });
       assert.ok(!isError(result));
@@ -948,19 +1006,19 @@ describe('automationTools', () => {
 
   describe('sf_path explicit executable', () => {
     it('testrun uses sf_path as the executable', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_testrun', { flags: [], sf_path: '/opt/sf/bin/sf' });
       assert.equal(spawnStub.firstCall.args[0], '/opt/sf/bin/sf');
     });
 
     it('compile uses sf_path as the executable', () => {
-      spawnStub.returns(makeSpawnResult('ok', '', 0));
+      spawnStub.callsFake(makeSpawnResult('ok', '', 0));
       server.call('provar_automation_compile', { flags: [], sf_path: '/opt/sf/bin/sf' });
       assert.equal(spawnStub.firstCall.args[0], '/opt/sf/bin/sf');
     });
 
     it('SF_NOT_FOUND message names the explicit path when sf_path is provided and missing', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_compile', { flags: [], sf_path: '/missing/sf' });
       const body = parseBody(result);
       assert.equal(body.error_code, 'SF_NOT_FOUND');
@@ -968,7 +1026,7 @@ describe('automationTools', () => {
     });
 
     it('SF_NOT_FOUND message mentions sf_path option when no explicit path was given', () => {
-      spawnStub.returns(makeEnoentResult());
+      spawnStub.callsFake(makeEnoentResult());
       const result = server.call('provar_automation_testrun', { flags: [] });
       const body = parseBody(result);
       assert.equal(body.error_code, 'SF_NOT_FOUND');
@@ -1066,7 +1124,7 @@ describe('filterTestRunOutput', () => {
     });
 
     it('config_load surfaces PROVAR_PLUGIN_NOT_FOUND with remediation when the provar topic is missing', () => {
-      spawnStub.returns(makeSpawnResult('', 'Warning: provar is not a sf command.\nDid you mean a typo?', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'Warning: provar is not a sf command.\nDid you mean a typo?', 1));
       const result = server.call('provar_automation_config_load', {
         properties_path: '/proj/provardx-properties.json',
       });
@@ -1080,7 +1138,7 @@ describe('filterTestRunOutput', () => {
     });
 
     it('detects the "command provar not found" phrasing', () => {
-      spawnStub.returns(makeSpawnResult('', 'command provar not found', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'command provar not found', 1));
       const result = server.call('provar_automation_config_load', {
         properties_path: '/proj/provardx-properties.json',
       });
@@ -1088,7 +1146,7 @@ describe('filterTestRunOutput', () => {
     });
 
     it('does NOT fire for a generic config-load failure (stays AUTOMATION_CONFIG_LOAD_FAILED)', () => {
-      spawnStub.returns(makeSpawnResult('', 'Error: properties file not found at /proj/x.json', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'Error: properties file not found at /proj/x.json', 1));
       const result = server.call('provar_automation_config_load', {
         properties_path: '/proj/provardx-properties.json',
       });
@@ -1096,13 +1154,13 @@ describe('filterTestRunOutput', () => {
     });
 
     it('maps a missing provar topic on testrun too', () => {
-      spawnStub.returns(makeSpawnResult('', 'command provar:automation:test:run not found', 1));
+      spawnStub.callsFake(makeSpawnResult('', 'command provar:automation:test:run not found', 1));
       const result = server.call('provar_automation_testrun', { flags: [] });
       assert.equal(parseBody(result).error_code, 'PROVAR_PLUGIN_NOT_FOUND');
     });
 
     it('does not fire on a successful command (exit 0)', () => {
-      spawnStub.returns(makeSpawnResult('properties file loaded successfully', '', 0));
+      spawnStub.callsFake(makeSpawnResult('properties file loaded successfully', '', 0));
       const result = server.call('provar_automation_config_load', {
         properties_path: '/proj/provardx-properties.json',
       });

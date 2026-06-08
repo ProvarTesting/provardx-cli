@@ -56,6 +56,18 @@ function provarPluginErrorResponse(
   };
 }
 
+// Defense in depth: runSfCommand now streams child output to disk, so a
+// maxBuffer overflow can no longer raise ENOBUFS. Should a residual ENOBUFS
+// still surface (e.g. an exotic OS-level pipe condition), translate the opaque
+// `spawnSync … ENOBUFS` into something the agent can act on rather than retry.
+const ENOBUFS_MESSAGE =
+  'Provar produced more output than could be captured. The full run results (JUnit XML + logs) ' +
+  'are written to disk in the resultsPath configured in your provardx-properties.json. ' +
+  'Re-run directly with `sf provar automation test run --json` in a terminal, or lower ' +
+  'testOutputLevel (e.g. DETAILED → BASIC) to reduce output volume.';
+const ENOBUFS_SUGGESTION =
+  'Lower testOutputLevel in provardx-properties.json, or run `sf provar automation test run --json` in a terminal.';
+
 function handleSpawnError(
   err: unknown,
   requestId: string,
@@ -63,6 +75,19 @@ function handleSpawnError(
 ): { isError: true; content: Array<{ type: 'text'; text: string }> } {
   const error = err as Error & { code?: string };
   log('error', `${toolName} failed`, { requestId, error: error.message });
+  if (error.code === 'ENOBUFS') {
+    return {
+      isError: true as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(
+            makeError('ENOBUFS', ENOBUFS_MESSAGE, requestId, false, { suggestion: ENOBUFS_SUGGESTION })
+          ),
+        },
+      ],
+    };
+  }
   return {
     isError: true as const,
     content: [
@@ -306,8 +331,7 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
           'Use provar_automation_setup first if Provar is not yet installed.',
           'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
-          'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
-          'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
+          'Output handling: the child stdout/stderr are streamed to disk (not buffered in memory), so a verbose run (e.g. testOutputLevel DETAILED) will not fail with ENOBUFS regardless of size.',
           'Zero-tests guard: if the sf exit code is 0, the results directory was located, and at least one JUnit XML file parsed successfully but contains zero executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json. When no JUnit data is available (dir missing or all XML unparseable), `details.warning` is set instead and RUN-001 stays silent.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
           'Each failed step in `steps[]` may include optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',
