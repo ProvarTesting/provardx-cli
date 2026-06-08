@@ -61,6 +61,10 @@ mochawesome-report
 AGENTS.md
 # .claude/commands/ is intentionally tracked — project slash commands for Claude Code
 
+# Local-only working docs — bug reports / investigations stay on the author's machine,
+# their rationale belongs in commit messages and PR descriptions, not the repo tree
+docs/bug-reports/
+
 # NitroX schema files — do not commit until IP/licensing confirmed with Provar team
 # See: src/mcp/tools/nitroXTools.ts and plan notes
 src/mcp/rules/FactComponent.schema.json
