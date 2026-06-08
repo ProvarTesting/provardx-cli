@@ -13,25 +13,8 @@ import { log } from '../logging/logger.js';
 import { applyDetailLevel, type DetailLevel } from '../utils/detailLevel.js';
 import { maskFields, parseFieldsParam } from '../utils/fieldMask.js';
 import { runSfCommand } from './sfSpawn.js';
+import { handleSpawnError } from './spawnErrors.js';
 import { desc } from './descHelper.js';
-
-function handleSpawnError(
-  err: unknown,
-  requestId: string,
-  toolName: string
-): { isError: true; content: Array<{ type: 'text'; text: string }> } {
-  const error = err as Error & { code?: string };
-  log('error', `${toolName} failed`, { requestId, error: error.message });
-  return {
-    isError: true as const,
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)),
-      },
-    ],
-  };
-}
 
 const QH_SUMMARY_FIELDS = ['requestId', 'exitCode'];
 

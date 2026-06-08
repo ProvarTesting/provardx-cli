@@ -18,6 +18,7 @@ import { assertPathAllowed, PathPolicyError } from '../security/pathPolicy.js';
 import { WARNING_CODES, formatWarning } from '../utils/warningCodes.js';
 import { parseJUnitResults } from './antTools.js';
 import { runSfCommand, isProvarPluginMissing, PROVAR_PLUGIN_INSTALL_HINT } from './sfSpawn.js';
+import { handleSpawnError } from './spawnErrors.js';
 import { desc } from './descHelper.js';
 
 // Re-export sf resolution helpers so existing test imports from automationTools continue to work
@@ -51,24 +52,6 @@ function provarPluginErrorResponse(
             { suggestion: PROVAR_PLUGIN_INSTALL_HINT }
           )
         ),
-      },
-    ],
-  };
-}
-
-function handleSpawnError(
-  err: unknown,
-  requestId: string,
-  toolName: string
-): { isError: true; content: Array<{ type: 'text'; text: string }> } {
-  const error = err as Error & { code?: string };
-  log('error', `${toolName} failed`, { requestId, error: error.message });
-  return {
-    isError: true as const,
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(makeError(error.code ?? 'SF_ERROR', error.message, requestId, false)),
       },
     ],
   };
@@ -306,8 +289,7 @@ export function registerAutomationTestRun(server: McpServer, config: ServerConfi
           'Requires Provar to be installed locally and provarHome set correctly in the properties file.',
           'Use provar_automation_setup first if Provar is not yet installed.',
           'For grid/CI execution via Provar Quality Hub instead of running locally, use provar_qualityhub_testrun.',
-          'Output buffer: a 50 MB maxBuffer is set so ENOBUFS on verbose Provar runs is now rare.',
-          'If ENOBUFS still occurs (extremely verbose logging), run `sf provar automation test run --json` directly in the terminal and pipe or tail the output instead of retrying this tool.',
+          'Output handling: the child stdout/stderr are streamed to disk (not buffered in memory), so a verbose run (e.g. testOutputLevel DETAILED) no longer fails with ENOBUFS from an output-buffer overflow.',
           'Zero-tests guard: if the sf exit code is 0, the results directory was located, and at least one JUnit XML file parsed successfully but contains zero executed tests, a RUN-001 warning is added to `warnings[]` — usually a typo such as `testCase` vs `testCases` in provardx-properties.json. When no JUnit data is available (dir missing or all XML unparseable), `details.warning` is set instead and RUN-001 stays silent.',
           'Typical local AI loop: config.load → compile → testrun → inspect results.',
           'Each failed step in `steps[]` may include optional error_category (INFRASTRUCTURE|ASSERTION|LOCATOR|TIMEOUT|OTHER)',

@@ -7,6 +7,7 @@
 
 /* eslint-disable camelcase */
 import { strict as assert } from 'node:assert';
+import fs from 'node:fs';
 import sinon from 'sinon';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { sfSpawnHelper } from '../../../src/mcp/tools/sfSpawn.js';
@@ -46,13 +47,40 @@ type SpawnResult = {
   signal: NodeJS.Signals | null;
 };
 
-function makeSpawnResult(stdout: string, status = 0): SpawnResult {
-  return { stdout, stderr: '', status, error: undefined, pid: 1, output: [null, stdout, ''], signal: null };
+type SpawnFake = (...callArgs: unknown[]) => SpawnResult;
+
+// runSfCommand streams the child's stdout/stderr to temp files rather than
+// buffering them in memory, so the stub for sfSpawnHelper.spawnSync mimics a real
+// child: it writes the captured output to the file descriptors passed via
+// `stdio: ['ignore', outFd, errFd]`, then returns the spawn result.
+function spawnFake(result: SpawnResult): SpawnFake {
+  return (...callArgs) => {
+    const stdio = (callArgs[2] as { stdio?: unknown[] } | undefined)?.stdio;
+    const outFd = stdio?.[1];
+    const errFd = stdio?.[2];
+    if (typeof outFd === 'number' && typeof errFd === 'number') {
+      fs.writeSync(outFd, result.stdout);
+      fs.writeSync(errFd, result.stderr);
+    }
+    return result;
+  };
 }
 
-function makeEnoentResult(): SpawnResult {
+function makeSpawnResult(stdout: string, status = 0): SpawnFake {
+  return spawnFake({ stdout, stderr: '', status, error: undefined, pid: 1, output: [null, stdout, ''], signal: null });
+}
+
+function makeEnoentResult(): SpawnFake {
   const err = Object.assign(new Error('spawn sf ENOENT'), { code: 'ENOENT' });
-  return { stdout: '', stderr: '', status: null, error: err, pid: undefined, output: [null, '', ''], signal: null };
+  return spawnFake({
+    stdout: '',
+    stderr: '',
+    status: null,
+    error: err,
+    pid: undefined,
+    output: [null, '', ''],
+    signal: null,
+  });
 }
 
 function queryResult(records: object[], totalSize?: number): string {
@@ -94,9 +122,9 @@ const ORG = 'my-qh-org';
 
 function makeHappyPathStub(stub: sinon.SinonStub): void {
   // Call 0: job query
-  stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+  stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
   // Call 1: cycle query
-  stub.onCall(1).returns(
+  stub.onCall(1).callsFake(
     makeSpawnResult(
       queryResult([
         {
@@ -109,7 +137,7 @@ function makeHappyPathStub(stub: sinon.SinonStub): void {
     )
   );
   // Call 2: failed executions query
-  stub.onCall(2).returns(
+  stub.onCall(2).callsFake(
     makeSpawnResult(
       queryResult([
         {
@@ -121,7 +149,7 @@ function makeHappyPathStub(stub: sinon.SinonStub): void {
     )
   );
   // Call 3: failed step query
-  stub.onCall(3).returns(
+  stub.onCall(3).callsFake(
     makeSpawnResult(
       queryResult([
         {
@@ -135,11 +163,11 @@ function makeHappyPathStub(stub: sinon.SinonStub): void {
     )
   );
   // Call 4: create Defect__c
-  stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
+  stub.onCall(4).callsFake(makeSpawnResult(createResult(DEFECT_ID)));
   // Call 5: create Test_Case_Defect__c
-  stub.onCall(5).returns(makeSpawnResult(createResult(TC_DEFECT_ID)));
+  stub.onCall(5).callsFake(makeSpawnResult(createResult(TC_DEFECT_ID)));
   // Call 6: create Test_Execution_Defect__c
-  stub.onCall(6).returns(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
+  stub.onCall(6).callsFake(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
 }
 
 // ── Tests: createDefectsForRun (unit) ─────────────────────────────────────────
@@ -178,8 +206,8 @@ describe('createDefectsForRun', () => {
   });
 
   it('returns empty result when no failed executions exist', () => {
-    stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+    stub.onCall(1).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -191,7 +219,7 @@ describe('createDefectsForRun', () => {
         ])
       )
     );
-    stub.onCall(2).returns(makeSpawnResult(queryResult([], 0)));
+    stub.onCall(2).callsFake(makeSpawnResult(queryResult([], 0)));
 
     const result = createDefectsForRun(RUN_ID, ORG);
     assert.equal(result.created.length, 0);
@@ -200,7 +228,7 @@ describe('createDefectsForRun', () => {
   });
 
   it('throws when job not found by tracking ID', () => {
-    stub.onCall(0).returns(makeSpawnResult(queryResult([], 0)));
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([], 0)));
 
     assert.throws(
       () => createDefectsForRun(RUN_ID, ORG),
@@ -209,8 +237,8 @@ describe('createDefectsForRun', () => {
   });
 
   it('throws when no Test_Cycle__c found for job', () => {
-    stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(makeSpawnResult(queryResult([], 0)));
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+    stub.onCall(1).callsFake(makeSpawnResult(queryResult([], 0)));
 
     assert.throws(
       () => createDefectsForRun(RUN_ID, ORG),
@@ -221,8 +249,8 @@ describe('createDefectsForRun', () => {
   it('filters executions by failedTestFilter substring', () => {
     // Two failed executions; filter keeps only the one matching TC_ID
     const OTHER_TC = 'a0t000000000OTH';
-    stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+    stub.onCall(1).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -234,7 +262,7 @@ describe('createDefectsForRun', () => {
         ])
       )
     );
-    stub.onCall(2).returns(
+    stub.onCall(2).callsFake(
       makeSpawnResult(
         queryResult([
           { Id: EXEC_ID, provar__Test_Case__c: TC_ID, provar__Tester__c: 'tester@example.com' },
@@ -243,7 +271,7 @@ describe('createDefectsForRun', () => {
       )
     );
     // step query for the one kept execution
-    stub.onCall(3).returns(
+    stub.onCall(3).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -256,9 +284,9 @@ describe('createDefectsForRun', () => {
         ])
       )
     );
-    stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
-    stub.onCall(5).returns(makeSpawnResult(createResult(TC_DEFECT_ID)));
-    stub.onCall(6).returns(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
+    stub.onCall(4).callsFake(makeSpawnResult(createResult(DEFECT_ID)));
+    stub.onCall(5).callsFake(makeSpawnResult(createResult(TC_DEFECT_ID)));
+    stub.onCall(6).callsFake(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
 
     const result = createDefectsForRun(RUN_ID, ORG, [TC_ID]);
     assert.equal(result.created.length, 1);
@@ -267,8 +295,8 @@ describe('createDefectsForRun', () => {
   });
 
   it('handles missing step gracefully (no step found for execution)', () => {
-    stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+    stub.onCall(1).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -280,7 +308,7 @@ describe('createDefectsForRun', () => {
         ])
       )
     );
-    stub.onCall(2).returns(
+    stub.onCall(2).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -291,10 +319,10 @@ describe('createDefectsForRun', () => {
         ])
       )
     );
-    stub.onCall(3).returns(makeSpawnResult(queryResult([], 0))); // no steps
-    stub.onCall(4).returns(makeSpawnResult(createResult(DEFECT_ID)));
-    stub.onCall(5).returns(makeSpawnResult(createResult(TC_DEFECT_ID)));
-    stub.onCall(6).returns(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
+    stub.onCall(3).callsFake(makeSpawnResult(queryResult([], 0))); // no steps
+    stub.onCall(4).callsFake(makeSpawnResult(createResult(DEFECT_ID)));
+    stub.onCall(5).callsFake(makeSpawnResult(createResult(TC_DEFECT_ID)));
+    stub.onCall(6).callsFake(makeSpawnResult(createResult(EXEC_DEFECT_ID)));
 
     const result = createDefectsForRun(RUN_ID, ORG);
     assert.equal(result.created.length, 1);
@@ -302,7 +330,7 @@ describe('createDefectsForRun', () => {
   });
 
   it('throws SfNotFoundError (SF_NOT_FOUND) when sf is not in PATH', () => {
-    stub.returns(makeEnoentResult());
+    stub.callsFake(makeEnoentResult());
 
     assert.throws(
       () => createDefectsForRun(RUN_ID, ORG),
@@ -352,7 +380,7 @@ describe('provar_qualityhub_defect_create (MCP tool)', () => {
   });
 
   it('returns isError with DEFECT_CREATE_FAILED on job-not-found error', () => {
-    stub.onCall(0).returns(makeSpawnResult(queryResult([], 0)));
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([], 0)));
     const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
@@ -363,7 +391,7 @@ describe('provar_qualityhub_defect_create (MCP tool)', () => {
   });
 
   it('returns isError with SF_NOT_FOUND when sf CLI is missing', () => {
-    stub.returns(makeEnoentResult());
+    stub.callsFake(makeEnoentResult());
     const result = server.call('provar_qualityhub_defect_create', {
       run_id: RUN_ID,
       target_org: ORG,
@@ -375,8 +403,8 @@ describe('provar_qualityhub_defect_create (MCP tool)', () => {
 
   it('passes failed_tests filter through to createDefectsForRun', () => {
     // Return empty executions - filtered out
-    stub.onCall(0).returns(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
-    stub.onCall(1).returns(
+    stub.onCall(0).callsFake(makeSpawnResult(queryResult([{ Id: JOB_ID }])));
+    stub.onCall(1).callsFake(
       makeSpawnResult(
         queryResult([
           {
@@ -388,7 +416,7 @@ describe('provar_qualityhub_defect_create (MCP tool)', () => {
         ])
       )
     );
-    stub.onCall(2).returns(
+    stub.onCall(2).callsFake(
       makeSpawnResult(
         queryResult([
           {

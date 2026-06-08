@@ -6,6 +6,7 @@
  */
 
 import { strict as assert } from 'node:assert';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sinon from 'sinon';
@@ -26,31 +27,45 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeSpawnOk(
-  stdout = '',
-  stderr = ''
-): { stdout: string; stderr: string; status: number; error: undefined; pid: number; output: never[]; signal: null } {
-  return { stdout, stderr, status: 0, error: undefined, pid: 1, output: [], signal: null };
-}
-
-function makeSpawnFail(
-  exitCode = 1,
-  stdout = '',
-  stderr = ''
-): { stdout: string; stderr: string; status: number; error: undefined; pid: number; output: never[]; signal: null } {
-  return { stdout, stderr, status: exitCode, error: undefined, pid: 1, output: [], signal: null };
-}
-
-function makeEnoent(): {
+// runSfCommand streams the child's stdout/stderr to temp files instead of
+// buffering them in memory, so the stub for sfSpawnHelper.spawnSync must mimic a
+// real child: write the captured output to the file descriptors passed via
+// `stdio: ['ignore', outFd, errFd]`, then return the spawn result. The in-memory
+// probe path (encoding/maxBuffer, no fd stdio) simply receives the object.
+type FakeSpawnResult = {
   stdout: string;
   stderr: string;
-  status: null;
-  error: Error & { code: string };
-  pid: undefined;
+  status: number | null;
+  error: (Error & { code?: string }) | undefined;
+  pid: number | undefined;
   output: never[];
   signal: null;
-} {
-  return {
+};
+type SpawnFake = (...callArgs: unknown[]) => FakeSpawnResult;
+
+function spawnFake(result: FakeSpawnResult): SpawnFake {
+  return (...callArgs) => {
+    const stdio = (callArgs[2] as { stdio?: unknown[] } | undefined)?.stdio;
+    const outFd = stdio?.[1];
+    const errFd = stdio?.[2];
+    if (typeof outFd === 'number' && typeof errFd === 'number') {
+      fs.writeSync(outFd, result.stdout);
+      fs.writeSync(errFd, result.stderr);
+    }
+    return result;
+  };
+}
+
+function makeSpawnOk(stdout = '', stderr = ''): SpawnFake {
+  return spawnFake({ stdout, stderr, status: 0, error: undefined, pid: 1, output: [], signal: null });
+}
+
+function makeSpawnFail(exitCode = 1, stdout = '', stderr = ''): SpawnFake {
+  return spawnFake({ stdout, stderr, status: exitCode, error: undefined, pid: 1, output: [], signal: null });
+}
+
+function makeEnoent(): SpawnFake {
+  return spawnFake({
     stdout: '',
     stderr: '',
     status: null,
@@ -58,7 +73,7 @@ function makeEnoent(): {
     pid: undefined,
     output: [],
     signal: null,
-  };
+  });
 }
 
 // ── SfNotFoundError ───────────────────────────────────────────────────────────
@@ -205,7 +220,7 @@ describe('runSfCommand', () => {
   });
 
   it('returns stdout, stderr, and exitCode on success', () => {
-    spawnStub.returns(makeSpawnOk('output', 'warn'));
+    spawnStub.callsFake(makeSpawnOk('output', 'warn'));
     const result = runSfCommand(['data', 'query']);
     assert.equal(result.stdout, 'output');
     assert.equal(result.stderr, 'warn');
@@ -213,7 +228,7 @@ describe('runSfCommand', () => {
   });
 
   it('passes args array to spawnSync', () => {
-    spawnStub.returns(makeSpawnOk());
+    spawnStub.callsFake(makeSpawnOk());
     runSfCommand(['provar', 'quality-hub', 'connect', '--target-org', 'myorg']);
     const [cmd, args] = spawnStub.firstCall.args as [string, string[]];
     assert.equal(cmd, 'sf');
@@ -221,7 +236,7 @@ describe('runSfCommand', () => {
   });
 
   it('uses explicit sfPath instead of cached path', () => {
-    spawnStub.returns(makeSpawnOk());
+    spawnStub.callsFake(makeSpawnOk());
     runSfCommand(['--version'], '/custom/path/sf');
     const [cmd] = spawnStub.firstCall.args as [string, string[]];
     assert.equal(cmd, '/custom/path/sf');
@@ -229,14 +244,14 @@ describe('runSfCommand', () => {
 
   it('falls through to auto-discovery when sfPath is empty string', () => {
     // Empty string is not a valid path — should behave as if sfPath was absent
-    spawnStub.returns(makeSpawnOk('ok'));
+    spawnStub.callsFake(makeSpawnOk('ok'));
     runSfCommand(['--version'], '');
     const [cmd] = spawnStub.firstCall.args as [string, string[]];
     assert.equal(cmd, 'sf'); // uses the cached path, not the empty string
   });
 
   it('falls through to auto-discovery when sfPath is whitespace only', () => {
-    spawnStub.returns(makeSpawnOk('ok'));
+    spawnStub.callsFake(makeSpawnOk('ok'));
     runSfCommand(['--version'], '   ');
     const [cmd] = spawnStub.firstCall.args as [string, string[]];
     assert.equal(cmd, 'sf');
@@ -255,7 +270,7 @@ describe('runSfCommand', () => {
   });
 
   it('throws SfNotFoundError with path hint when explicit sfPath gives ENOENT', () => {
-    spawnStub.returns(makeEnoent());
+    spawnStub.callsFake(makeEnoent());
     assert.throws(
       () => runSfCommand(['--version'], '/bad/path/sf'),
       (err) => {
@@ -287,10 +302,28 @@ describe('runSfCommand', () => {
   });
 
   it('returns non-zero exitCode from failed command', () => {
-    spawnStub.returns(makeSpawnFail(2, '', 'error text'));
+    spawnStub.callsFake(makeSpawnFail(2, '', 'error text'));
     const result = runSfCommand(['bad', 'command']);
     assert.equal(result.exitCode, 2);
     assert.equal(result.stderr, 'error text');
+  });
+
+  // Regression (PDX-513): pre-streaming, spawnSync({ maxBuffer: 50 MB }) aborted
+  // the whole call with ENOBUFS the moment combined child output crossed the cap.
+  // Streaming stdout/stderr to temp files removes the in-memory ceiling entirely,
+  // so an over-cap payload must round-trip with no throw. makeSpawnOk writes the
+  // payload to the inherited fd, exercising the exact file-backed capture path.
+  it('captures output larger than the retired 50 MB cap without ENOBUFS (file-backed)', function () {
+    this.timeout(15_000);
+    const huge = 'x'.repeat(51 * 1024 * 1024); // 51 MB — comfortably over the old 50 MB cap
+    spawnStub.callsFake(makeSpawnOk(huge));
+
+    let result: ReturnType<typeof runSfCommand> | undefined;
+    assert.doesNotThrow(() => {
+      result = runSfCommand(['provar', 'automation', 'test', 'run']);
+    });
+    assert.equal(result?.exitCode, 0);
+    assert.equal(result?.stdout.length, huge.length, 'full over-cap output should round-trip through the temp file');
   });
 
   describe('Windows shell path injection guard', () => {
@@ -308,7 +341,7 @@ describe('runSfCommand', () => {
     });
 
     it('accepts clean .cmd path on win32', () => {
-      spawnStub.returns(makeSpawnOk('ok'));
+      spawnStub.callsFake(makeSpawnOk('ok'));
       // Should not throw — clean path
       const result = runSfCommand(['--version'], 'C:\\Program Files\\sf\\bin\\sf.cmd');
       assert.equal(result.exitCode, 0);
@@ -322,7 +355,7 @@ describe('runSfCommand', () => {
     });
 
     it('caches "sf" when shell:false probe succeeds', () => {
-      spawnStub.returns(makeSpawnOk('sf/2.0.0'));
+      spawnStub.callsFake(makeSpawnOk('sf/2.0.0'));
       runSfCommand(['--version']);
       const [, args, opts] = spawnStub.firstCall.args as [string, string[], { shell: boolean }];
       assert.deepEqual(args, ['--version']); // probe call
@@ -331,7 +364,7 @@ describe('runSfCommand', () => {
 
     it('returns SF_NOT_FOUND when probe fails and no common path exists', () => {
       // Both probe attempts fail with ENOENT, no common paths match
-      spawnStub.returns(makeEnoent());
+      spawnStub.callsFake(makeEnoent());
       assert.throws(
         () => runSfCommand(['--version']),
         (err) => {
@@ -344,11 +377,11 @@ describe('runSfCommand', () => {
     it('Windows two-phase probe: retries with shell:true on ENOENT', () => {
       setSfPlatformForTesting('win32');
       // First call (shell:false) → ENOENT
-      spawnStub.onFirstCall().returns(makeEnoent());
+      spawnStub.onFirstCall().callsFake(makeEnoent());
       // Second call (shell:true) → success
-      spawnStub.onSecondCall().returns(makeSpawnOk('sf/2.0.0'));
+      spawnStub.onSecondCall().callsFake(makeSpawnOk('sf/2.0.0'));
       // Third call → the actual command
-      spawnStub.onThirdCall().returns(makeSpawnOk('result'));
+      spawnStub.onThirdCall().callsFake(makeSpawnOk('result'));
 
       const result = runSfCommand(['--version']);
       assert.equal(result.stdout, 'result');
@@ -362,7 +395,7 @@ describe('runSfCommand', () => {
   describe('Windows shell quoting (spaced executable & args not split)', () => {
     beforeEach(() => {
       setSfPlatformForTesting('win32');
-      spawnStub.returns(makeSpawnOk('ok'));
+      spawnStub.callsFake(makeSpawnOk('ok'));
     });
 
     it('(a) does not split an auto-resolved Program Files path', () => {
@@ -402,10 +435,42 @@ describe('runSfCommand', () => {
     it('still rejects a user sf_path with shell metacharacters (spaces are now allowed)', () => {
       assert.throws(() => runSfCommand(['--version'], 'C:\\sf & evil\\sf.cmd'), /unsafe for shell execution/);
       // A spaced-but-clean user path is accepted and quoted.
-      spawnStub.returns(makeSpawnOk('ok'));
+      spawnStub.callsFake(makeSpawnOk('ok'));
       const result = runSfCommand(['--version'], 'C:\\Program Files\\sf\\bin\\sf.cmd');
       assert.equal(result.exitCode, 0);
     });
+  });
+});
+
+// ── runSfCommand — real subprocess (integration) ──────────────────────────────
+// The unit tests above stub sfSpawnHelper.spawnSync, so they exercise the temp-file
+// capture but not real OS process stdio. This block spawns a real `node` child that
+// writes well over the retired 50 MB cap, proving the streaming fix end-to-end: real
+// fd inheritance, the child's own flush-on-exit, and read-back — the exact path that
+// used to abort with ENOBUFS under the in-memory maxBuffer.
+describe('runSfCommand — real subprocess (integration)', () => {
+  beforeEach(() => {
+    setSfPathCacheForTesting(undefined);
+    setSfPlatformForTesting(undefined);
+  });
+  afterEach(() => {
+    setSfPathCacheForTesting(undefined);
+    setSfPlatformForTesting(undefined);
+  });
+
+  it('streams >50 MB of real child stdout through temp files without ENOBUFS', function () {
+    this.timeout(30_000);
+    const bytes = 60 * 1024 * 1024; // 60 MB — well over the retired 50 MB maxBuffer cap
+    // Pass `node` as the executable explicitly (bypasses sf discovery) and have it
+    // write a raw 60 MB buffer to stdout, which runSfCommand inherits onto the
+    // temp-file descriptor. With the old maxBuffer capture this aborted with ENOBUFS.
+    const script = `process.stdout.write(Buffer.alloc(${bytes}, 0x78));`;
+    let result: ReturnType<typeof runSfCommand> | undefined;
+    assert.doesNotThrow(() => {
+      result = runSfCommand(['-e', script], process.execPath);
+    });
+    assert.equal(result?.exitCode, 0);
+    assert.equal(result?.stdout.length, bytes, 'full over-cap output must round-trip from the real child');
   });
 });
 
@@ -466,12 +531,12 @@ describe('probeProvarTopic', () => {
   });
 
   it('returns true when `sf provar --help` succeeds', () => {
-    spawnStub.returns(makeSpawnOk('USAGE\n  $ sf provar COMMAND'));
+    spawnStub.callsFake(makeSpawnOk('USAGE\n  $ sf provar COMMAND'));
     assert.equal(probeProvarTopic(), true);
   });
 
   it('returns false when the provar topic is missing', () => {
-    spawnStub.returns(makeSpawnFail(1, '', 'command provar not found'));
+    spawnStub.callsFake(makeSpawnFail(1, '', 'command provar not found'));
     assert.equal(probeProvarTopic(), false);
   });
 
