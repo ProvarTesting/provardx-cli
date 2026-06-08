@@ -92,8 +92,6 @@ export interface SpawnResult {
   exitCode: number;
 }
 
-const MAX_BUFFER = 50 * 1024 * 1024; // 50 MB — prevents ENOBUFS on verbose Provar runs
-
 // ── SF CLI discovery ──────────────────────────────────────────────────────────
 
 /**
@@ -279,25 +277,118 @@ export function runSfCommand(args: string[], sfPath?: string): SpawnResult {
   const spawnExecutable = useShell ? quoteWindowsToken(executable) : executable;
   const spawnArgs = useShell ? args.map(quoteWindowsToken) : args;
 
-  const result = sfSpawnHelper.spawnSync(spawnExecutable, spawnArgs, {
-    encoding: 'utf-8',
-    shell: useShell,
-    maxBuffer: MAX_BUFFER,
-  });
+  return captureSpawnToFiles(spawnExecutable, spawnArgs, useShell, resolvedSfPath);
+}
 
-  if (result.error) {
-    const err = result.error as NodeJS.ErrnoException;
-    if (err.code === 'ENOENT') {
-      throw new SfNotFoundError(resolvedSfPath);
+/**
+ * Run spawnSync capturing the child's stdout/stderr to temp files instead of an
+ * in-memory pipe, then read them back after the child exits.
+ *
+ * spawnSync's `maxBuffer` buffers all child output in RAM and aborts the whole
+ * call with `ENOBUFS` the moment that ceiling is crossed — a verbose Provar run
+ * (e.g. testOutputLevel DETAILED) routinely overflowed even a 50 MB cap and lost
+ * the run. Streaming straight to file descriptors removes the in-memory ceiling
+ * during capture, so `maxBuffer`-induced ENOBUFS is structurally impossible.
+ * Because the child writes directly to a file descriptor there is also no pipe to
+ * fill, which avoids the OS-level `ENOBUFS` seen on Windows under `shell: true`.
+ *
+ * (The captured output is still read back into a string after the child exits, so
+ * an extreme multi-hundred-MB run can hit Node's max string length — far above the
+ * 50 MB pipe boundary this removes. Bounding that read is tracked separately.)
+ *
+ * The temp directory is removed on a best-effort basis. Throws SfNotFoundError on
+ * ENOENT (sf missing) and rethrows any other spawn error.
+ */
+function captureSpawnToFiles(
+  spawnExecutable: string,
+  spawnArgs: string[],
+  useShell: boolean,
+  resolvedSfPath: string | undefined
+): SpawnResult {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'provar-sf-'));
+  try {
+    return spawnCapturingToDir(dir, spawnExecutable, spawnArgs, useShell, resolvedSfPath);
+  } finally {
+    // Best-effort cleanup: a temp-dir removal failure (e.g. Windows EBUSY/EPERM
+    // from an antivirus/indexer handle, which `force: true` does NOT suppress)
+    // must never overwrite the real return value or mask the real spawn error.
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* leave the dir; the OS reclaims its temp directory eventually */
     }
-    throw result.error;
+  }
+}
+
+/**
+ * Open the capture files in `dir`, run the child with its stdout/stderr inherited
+ * onto those descriptors, and read the captured output back. Split out from
+ * captureSpawnToFiles so the temp-dir removal in its `finally` also covers the
+ * case where opening the second descriptor fails.
+ */
+function spawnCapturingToDir(
+  dir: string,
+  spawnExecutable: string,
+  spawnArgs: string[],
+  useShell: boolean,
+  resolvedSfPath: string | undefined
+): SpawnResult {
+  const outPath = path.join(dir, 'stdout.log');
+  const errPath = path.join(dir, 'stderr.log');
+  const outFd = fs.openSync(outPath, 'w');
+  let errFd: number;
+  try {
+    errFd = fs.openSync(errPath, 'w');
+  } catch (openErr) {
+    // The first descriptor is already open; close it before unwinding so a
+    // failure to open the second (e.g. EMFILE) doesn't leak it.
+    fs.closeSync(outFd);
+    throw openErr;
   }
 
-  return {
-    stdout: result.stdout ?? '',
-    stderr: result.stderr ?? '',
-    exitCode: result.status ?? 1,
+  let fdsClosed = false;
+  const closeFds = (): void => {
+    if (fdsClosed) return;
+    fdsClosed = true;
+    try {
+      fs.closeSync(outFd);
+    } catch {
+      /* already closed */
+    }
+    try {
+      fs.closeSync(errFd);
+    } catch {
+      /* already closed */
+    }
   };
+
+  try {
+    // No `encoding`/`maxBuffer`: stdout/stderr are streamed to the inherited file
+    // descriptors rather than captured in memory, so there is no buffer to overflow.
+    const result = sfSpawnHelper.spawnSync(spawnExecutable, spawnArgs, {
+      shell: useShell,
+      stdio: ['ignore', outFd, errFd],
+    });
+    // spawnSync has already reaped the child, so its writes are flushed to disk;
+    // close our inherited copies of the descriptors before reading the files back.
+    closeFds();
+
+    if (result.error) {
+      const err = result.error as NodeJS.ErrnoException;
+      if (err.code === 'ENOENT') {
+        throw new SfNotFoundError(resolvedSfPath);
+      }
+      throw result.error;
+    }
+
+    return {
+      stdout: fs.readFileSync(outPath, 'utf-8'),
+      stderr: fs.readFileSync(errPath, 'utf-8'),
+      exitCode: result.status ?? 1,
+    };
+  } finally {
+    closeFds();
+  }
 }
 
 // ── SOQL safety ───────────────────────────────────────────────────────────────
