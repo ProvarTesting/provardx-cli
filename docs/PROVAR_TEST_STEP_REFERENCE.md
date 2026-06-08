@@ -49,7 +49,7 @@
 | ForEach                                          | `com.provar.plugins.bundled.apis.control.ForEach`                        |
 | DoWhile                                          | `com.provar.plugins.bundled.apis.control.DoWhile`                        |
 | WaitFor                                          | `com.provar.plugins.bundled.apis.control.WaitFor`                        |
-| TryCatchFinally                                  | `com.provar.plugins.bundled.apis.control.TryCatchFinally`                |
+| Finally                                          | `com.provar.plugins.bundled.apis.control.Finally`                        |
 | Switch                                           | `com.provar.plugins.bundled.apis.Switch`                                 |
 | Sleep                                            | `com.provar.plugins.bundled.apis.control.Sleep`                          |
 | Fail                                             | `com.provar.plugins.bundled.apis.control.Fail`                           |
@@ -1118,13 +1118,13 @@ Iterates over a list variable. `list` must reference an existing variable. `valu
 </apiCall>
 ```
 
-### TryCatchFinally
+### Finally
 
 Wraps steps with error handling. The `finally` clause always runs, making it the right place for cleanup steps (e.g., delete records created during the test).
 
 ```xml
-<apiCall apiId="com.provar.plugins.bundled.apis.control.TryCatchFinally"
-         name="TryCatchFinally" testItemId="1"
+<apiCall apiId="com.provar.plugins.bundled.apis.control.Finally"
+         name="Finally" testItemId="1"
          title="Try/Catch/Finally">
   <clauses>
     <clause name="try" testItemId="2">
@@ -1616,5 +1616,5 @@ A callable test (used by `CallTest`) declares its interface via `<params>`, `<ou
 - [ ] **Control flow** — `If` has `condition`; `ForEach` has `list` and `valueName`; `WaitFor` has `maxIterations`
 - [ ] **SetValues structure** — `values` argument contains `<value class="valueList">` wrapping `<namedValues>` wrapping `<namedValue>` elements
 - [ ] **Data types** — booleans are string `"true"`/`"false"` inside `valueClass="boolean"`; numbers use `valueClass="decimal"`
-- [ ] **Cleanup** — either `autoCleanup="true"` on the connection, or explicit `ApexDeleteObject` / `TryCatchFinally` finally block
+- [ ] **Cleanup** — either `autoCleanup="true"` on the connection, or explicit `ApexDeleteObject` / `Finally` finally block
 - [ ] **No hallucinated arguments** — see the Common AI Hallucinations table at the top of this doc

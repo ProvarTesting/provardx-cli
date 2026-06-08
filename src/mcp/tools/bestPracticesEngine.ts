@@ -113,7 +113,6 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.bundled.apis.control.ActualResult',
   'com.provar.plugins.bundled.apis.control.DesignStep',
   'com.provar.plugins.bundled.apis.control.CallTest',
-  'com.provar.plugins.bundled.apis.control.TryCatchFinally',
   // Bundled — database
   'com.provar.plugins.bundled.apis.db.DbConnect',
   'com.provar.plugins.bundled.apis.db.DbDelete',
@@ -237,7 +236,7 @@ function toArr<T>(v: T | T[] | undefined | null): T[] {
 
 /**
  * Recursively collect every <apiCall> element in the parsed tree.
- * Works for flat and deeply nested structures (StepGroup, BDD, TryCatch…).
+ * Works for flat and deeply nested structures (StepGroup, BDD, Finally…).
  */
 function getAllApiCalls(node: XmlNode): XmlNode[] {
   const results: XmlNode[] = [];
