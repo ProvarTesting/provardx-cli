@@ -11,6 +11,7 @@ import {
   wrapWithDepthGuard,
   attachMeta,
   estimateTokens,
+  estimateResultTokens,
   type ToolResult,
   type AnyToolCallback,
 } from '../../../src/mcp/utils/tokenMeta.js';
@@ -210,16 +211,27 @@ describe('attachMeta', () => {
     });
   });
 
-  it('estimated_tokens is within ±50% of actual JSON length / 4', () => {
+  it('estimatedTokens reflects content[].text length, not the whole result', () => {
     withMeta(true, () => {
       const result = attachMeta(okResponse, 'my_tool', 'standard');
       const meta = (result.structuredContent as Record<string, unknown>)['_meta'] as Record<string, unknown>;
       const estimate = meta['estimatedTokens'] as number;
-      const actual = Math.ceil(JSON.stringify(okResponse).length / 4);
-      assert.ok(
-        estimate >= actual * 0.5 && estimate <= actual * 1.5,
-        `estimate ${estimate} should be within ±50% of ${actual}`
-      );
+      const actual = Math.ceil(okResponse.content.map((c) => c.text).join('').length / 4);
+      assert.strictEqual(estimate, actual);
+    });
+  });
+
+  it('does not count structuredContent — tiny content + huge structuredContent stays tiny', () => {
+    withMeta(true, () => {
+      const fat: ToolResult = {
+        content: [{ type: 'text', text: 'ok' }],
+        structuredContent: { blob: 'x'.repeat(100_000) },
+      };
+      const result = attachMeta(fat, 'my_tool', 'standard');
+      const meta = (result.structuredContent as Record<string, unknown>)['_meta'] as Record<string, unknown>;
+      const estimate = meta['estimatedTokens'] as number;
+      // content text is "ok" (2 chars) → ceil(2/4) = 1, regardless of the 100k-char structuredContent.
+      assert.strictEqual(estimate, 1);
     });
   });
 });
@@ -238,6 +250,36 @@ describe('estimateTokens', () => {
     const obj = { a: 1 };
     const expected = Math.ceil(JSON.stringify(obj).length / 4);
     assert.strictEqual(estimateTokens(obj), expected);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// estimateResultTokens
+// ---------------------------------------------------------------------------
+
+describe('estimateResultTokens', () => {
+  it('sums content[].text lengths and ignores structuredContent', () => {
+    const result: ToolResult = {
+      content: [
+        { type: 'text', text: 'aaaa' },
+        { type: 'text', text: 'bbbb' },
+      ],
+      structuredContent: { ignored: 'z'.repeat(10_000) },
+    };
+    // 8 chars of content text → ceil(8/4) = 2.
+    assert.strictEqual(estimateResultTokens(result), 2);
+  });
+
+  it('returns 0 for empty content', () => {
+    const result: ToolResult = { content: [], structuredContent: { a: 1 } };
+    assert.strictEqual(estimateResultTokens(result), 0);
+  });
+
+  it('does not double-count the payload the way estimateTokens(result) would', () => {
+    // The payload lives in both content[0].text (escaped JSON) and structuredContent,
+    // so estimateTokens over the whole result counts it twice; estimateResultTokens
+    // counts the content text only.
+    assert.ok(estimateResultTokens(okResponse) < estimateTokens(okResponse));
   });
 });
 
