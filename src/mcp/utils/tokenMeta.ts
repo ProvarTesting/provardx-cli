@@ -90,7 +90,7 @@ export function wrapWithDepthGuard(
     const result = await handler(args, extra);
 
     if (process.env['PROVAR_MCP_EMIT_TOKEN_META'] === 'true') {
-      entry.totalEstimatedTokens += estimateTokens(result);
+      entry.totalEstimatedTokens += estimateResultTokens(result);
     }
 
     const detailLevel = typeof args['detail'] === 'string' ? args['detail'] : 'standard';
@@ -104,6 +104,19 @@ export function wrapWithDepthGuard(
 
 export function estimateTokens(payload: unknown): number {
   return Math.ceil(JSON.stringify(payload).length / 4);
+}
+
+/**
+ * Estimate the tokens an LLM client actually consumes from a tool result.
+ * Clients read `content[].text` only; `structuredContent` carries the same payload
+ * for programmatic consumers and is not tokenized into the model context. Estimating
+ * over the whole ToolResult double-counts the payload — it lives in both
+ * `content[0].text` (as escaped JSON) and `structuredContent` (as an object) — inflating
+ * the figure ~2x. Summing `content[].text` is the faithful per-call context-cost signal.
+ */
+export function estimateResultTokens(result: ToolResult): number {
+  const chars = result.content.reduce((sum, item) => sum + item.text.length, 0);
+  return Math.ceil(chars / 4);
 }
 
 /**
@@ -125,7 +138,7 @@ export function attachMeta(
   const meta: Record<string, unknown> = {
     tool: toolName,
     detailLevel,
-    estimatedTokens: estimateTokens(response),
+    estimatedTokens: estimateResultTokens(response),
   };
 
   if (sessionTotalTokens !== undefined) {

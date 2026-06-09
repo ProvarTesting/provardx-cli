@@ -2745,11 +2745,11 @@ On `TOOL_BUDGET_EXCEEDED` errors the meta also includes the session cumulative t
 }
 ```
 
-| Field                         | Description                                                                                  |
-| ----------------------------- | -------------------------------------------------------------------------------------------- |
-| `tool`                        | Name of the tool that produced this response                                                 |
-| `detailLevel`                 | Value of the `detail` argument passed by the caller (`"summary"`, `"standard"`, or `"full"`) |
-| `estimatedTokens`             | `ceil(len(JSON.stringify(response)) / 4)` — a rough character-to-token estimate              |
-| `sessionTotalEstimatedTokens` | Cumulative estimate for the session; only present on budget-exceeded errors                  |
+| Field                         | Description                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `tool`                        | Name of the tool that produced this response                                                                                           |
+| `detailLevel`                 | Value of the `detail` argument passed by the caller (`"summary"`, `"standard"`, or `"full"`)                                           |
+| `estimatedTokens`             | `ceil(len(content[].text) / 4)` — rough char-to-token estimate of the text an LLM client reads; `structuredContent` is **not** counted |
+| `sessionTotalEstimatedTokens` | Cumulative estimate for the session; only present on budget-exceeded errors                                                            |
 
-> **Implementation note:** `_meta` is intentionally placed only in `structuredContent`, never in `content[0].text`. LLM clients read `content[0].text`; including observability data there would waste tokens on every response.
+> **Implementation note:** `_meta` is intentionally placed only in `structuredContent`, never in `content[0].text`. LLM clients read `content[0].text`; including observability data there would waste tokens on every response. For the same reason, `estimatedTokens` is measured over `content[].text` only — the payload is duplicated in both `content[0].text` (as escaped JSON) and `structuredContent` (as an object), so estimating over the whole result would double-count it (~2x). The figure therefore reflects what the model actually consumes, not the duplicated `structuredContent`.
