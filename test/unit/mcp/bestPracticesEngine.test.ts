@@ -440,20 +440,25 @@ describe('runBestPractices', () => {
     }
 
     // ─ POSITIVE: constructed bad fixture (assert under action=New, after Save) fires ─
-    it('fires on the constructed bad fixture (UiAssert under action=New, after Save)', async () => {
+    // The UiAssert (testItemId=14) trips BOTH heuristics; the validator must de-dup
+    // to exactly ONE violation for that step so the local score matches a single
+    // major × weight 5 deduction (100 − 5×0.75 = 96.25), not a double penalty.
+    it('fires exactly once (de-duped) on the constructed bad fixture (UiAssert under action=New, after Save)', async () => {
       const xml = await readFixture('opportunity-create-verify-bad.testcase');
       const result = runBestPractices(xml);
       const vs = screenViolations(result.violations);
-      assert.ok(vs.length >= 1, `Expected UI-SCREEN-CONTEXT-001 to fire; got ${vs.length}`);
+      assert.equal(
+        vs.length,
+        1,
+        `Expected exactly one (de-duped) violation; got ${JSON.stringify(vs.map((v) => v.message))}`
+      );
       assert.equal(vs[0].severity, 'major');
       assert.equal(vs[0].weight, 5);
       assert.ok(
-        vs.some((v) => v.message.includes('testItemId=14')),
-        `Expected a violation naming the offending UiAssert (testItemId=14): ${JSON.stringify(
-          vs.map((v) => v.message)
-        )}`
+        vs[0].message.includes('testItemId=14'),
+        `Expected the violation to name the offending UiAssert (testItemId=14): ${vs[0].message}`
       );
-      assert.ok(result.quality_score < 100, `Expected quality_score < 100, got ${result.quality_score}`);
+      assert.equal(result.quality_score, 96.25, `Expected quality_score 96.25, got ${result.quality_score}`);
     });
 
     // ─ NEGATIVE: good fixture (assert under action=View) does NOT fire ─
@@ -576,6 +581,88 @@ describe('runBestPractices', () => {
 </testCase>`;
       const vs = screenViolations(runBestPractices(xml).violations);
       assert.equal(vs.length, 0, `Expected no UI-SCREEN-CONTEXT-001; got: ${JSON.stringify(vs.map((v) => v.message))}`);
+    });
+
+    // ─ False-positive guard (a): a post-save step/assert under action=Edit must NOT fire ─
+    // On an Edit screen the record page is NOT torn down, so asserting / acting after
+    // Save on the same page is a normal, valid pattern. Heuristic 2 is scoped to New.
+    it('does not fire for a step or assert that follows Save under an action=Edit screen', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-edit" name="Post-save under Edit">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Edit screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=Edit&amp;recordId=%7BopportunityId%7D"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="4" title="Verify after save on Edit"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        0,
+        `Expected no UI-SCREEN-CONTEXT-001 under action=Edit; got: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+    });
+
+    // ─ False-positive guard (b): a "Save & New" continuation under action=New must NOT fire ─
+    // "Save & New" (action=saveAndNew) keeps the user on a fresh create screen, so filling
+    // the next record after it is legitimate. The exact-token match must exclude saveAndNew.
+    it('does not fire for a fill that follows a "Save & New" button under action=New (exact-token Save match)', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-savenew" name="Save and New continuation">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save and New" testItemId="3" title="Click Save and New">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=saveAndNew&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3DsaveAndNew"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Set the Name field" testItemId="4" title="Set next Opportunity Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        0,
+        `Expected no UI-SCREEN-CONTEXT-001 after Save & New; got: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
     });
   });
 

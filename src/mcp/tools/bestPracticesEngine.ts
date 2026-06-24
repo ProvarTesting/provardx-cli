@@ -950,9 +950,11 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
 // A UiAssert / UiRead that verifies a persisted record while still nested under
 // the `action=New` create screen is almost always wrong context: the create
 // screen tears down after Save, so the assertion runs against the wrong page.
-// Likewise any UI action that follows a Save (`action=save`) inside the SAME
-// UiWithScreen substeps block is suspect — Save navigates away, so trailing
-// steps belong in a fresh UiWithScreen (typically `action=View`).
+// Likewise any UI action that follows a plain Save (`action=save`, compared
+// exactly so `Save & New` is excluded) inside the SAME `action=New` screen block
+// is suspect — the create screen is torn down, so trailing steps belong in a
+// fresh UiWithScreen (typically `action=View`). Both heuristics are scoped to
+// `action=New`; post-save steps under `action=Edit`/`View` are a valid pattern.
 
 // UI action apiIds whose presence AFTER a Save (in the same screen block) is suspect.
 const POST_SAVE_SUSPECT_APIS = UI_ACTION_API_IDS;
@@ -999,16 +1001,39 @@ function getArgUri(call: XmlNode, argId: string): string | undefined {
 }
 
 /**
- * True when a UiDoAction is a Save click. The locator binding encodes the action
- * percent-encoded (`action%3Dsave`); some authoring paths instead use a `name=save`
- * locator with an `action` interaction. Either signature counts as a Save.
+ * Decode the `action` token a UiDoAction locator targets, lower-cased, or undefined.
+ *
+ * The locator URI looks like `ui:locator?name=save&binding=<percent-encoded URI>`,
+ * where the decoded binding is itself a query string (`sf:ui:binding:object?object=Opportunity&action=save`).
+ * We parse the outer locator for `binding`, decode it, and read its `action` param;
+ * we also accept the `name` param as a fallback when no binding action is present.
+ * Both are returned as EXACT tokens (no substring matching) so `saveAndNew`,
+ * `savedSearch`, `savepoint`, etc. never masquerade as a plain `save`.
+ */
+function getLocatorActionToken(call: XmlNode): string | undefined {
+  const locatorUri = getArgUri(call, 'locator');
+  if (!locatorUri || !locatorUri.includes('?')) return undefined;
+  const locatorParams = new URLSearchParams(locatorUri.slice(locatorUri.indexOf('?') + 1));
+  const binding = locatorParams.get('binding');
+  if (binding && binding.includes('?')) {
+    // URLSearchParams already percent-decodes the binding value; parse its own query string.
+    const bindingAction = new URLSearchParams(binding.slice(binding.indexOf('?') + 1)).get('action');
+    if (bindingAction) return bindingAction.toLowerCase();
+  }
+  const nameToken = locatorParams.get('name');
+  return nameToken ? nameToken.toLowerCase() : undefined;
+}
+
+/**
+ * True when a UiDoAction is a plain Save click. The action token is compared
+ * EXACTLY (case-insensitive) against `save`, so continuation buttons such as
+ * `Save & New` (`action=saveAndNew` / `name=saveAndNew`) and inline-edit
+ * variants do NOT count — they keep the user on the create screen, so steps
+ * after them are legitimate.
  */
 function isSaveAction(call: XmlNode): boolean {
   if (call['@_apiId'] !== 'com.provar.plugins.forcedotcom.core.ui.UiDoAction') return false;
-  const locator = getArgUri(call, 'locator')?.toLowerCase() ?? '';
-  if (locator.includes('action%3dsave') || locator.includes('action=save')) return true;
-  const interaction = getArgUri(call, 'interaction')?.toLowerCase() ?? '';
-  return /[?&]name=save(&|$)/.test(locator) && interaction.includes('name=action');
+  return getLocatorActionToken(call) === 'save';
 }
 
 /** The direct <apiCall> steps inside a UiWithScreen's `<clause name="substeps"><steps>` block (in document order). */
@@ -1053,11 +1078,16 @@ function flagAssertsOnNewScreen(screen: XmlNode, rule: BPRule, out: BPViolation[
 }
 
 /**
- * Heuristic 2 — any UI action step that appears AFTER a Save click inside the SAME
- * UiWithScreen substeps block. Save navigates away, so trailing steps are suspect.
+ * Heuristic 2 — any UI action step that appears AFTER a plain Save click inside the
+ * SAME create-screen (`action=New`) substeps block. Scoped to `action=New` because
+ * the rationale is screen teardown: the create form is destroyed on Save and the
+ * user lands on the saved record's View screen. On `action=Edit`/`View` a post-save
+ * step on the same record page is a normal, valid pattern and must NOT fire.
  * Emits one violation per offending trailing step.
  */
 function flagStepsAfterSave(screen: XmlNode, rule: BPRule, out: BPViolation[]): void {
+  const action = (getScreenAction(getUiWithScreenTargetUri(screen)) ?? '').toLowerCase();
+  if (action !== 'new') return;
   const calls = getScreenSubstepCalls(screen);
   let sawSave = false;
   for (const step of calls) {
@@ -1070,29 +1100,47 @@ function flagStepsAfterSave(screen: XmlNode, rule: BPRule, out: BPViolation[]): 
     out.push(
       makeViolation(
         rule,
-        `${describeStep(step)} appears after a Save (action=save) inside the same UiWithScreen block. ` +
-          'Save navigates away from the screen, so this step runs in stale context. Move it into a new ' +
+        `${describeStep(step)} appears after a Save (action=save) inside the same action=New screen block. ` +
+          'Save tears down the create screen, so this step runs in stale context. Move it into a new ' +
           'UiWithScreen targeting action=View (or the appropriate post-save screen).'
       )
     );
   }
 }
 
+/** The testItemId an offending step is associated with, parsed from a violation message (`testItemId=N`). */
+function violationTestItemId(v: BPViolation): string {
+  return /testItemId=([^\s)]+)/.exec(v.message)?.[1] ?? v.message;
+}
+
 /**
  * UI-SCREEN-CONTEXT-001 — flag UiAssert/UiRead steps left under the `action=New`
- * create screen, and any UI action that follows a Save within the same screen
- * block. Both heuristics read data already present in the XML (target URIs and
- * locator bindings) and emit ONE violation per offending step so that
- * (rule_id, test_item_id) de-dups cleanly.
+ * create screen (heuristic 1), and any UI action that follows a plain Save within
+ * the same create-screen block (heuristic 2). Both heuristics read data already
+ * present in the XML (target URIs and locator bindings).
+ *
+ * The canonical defect (a UiAssert placed after Save inside the create screen)
+ * trips BOTH heuristics for the SAME step. Because this local engine sums every
+ * BPViolation when scoring (it has no test_item_id field to de-dup on, unlike the
+ * Quality Hub API), we de-dup here and emit AT MOST ONE violation per offending
+ * testItemId so the step is penalised once (major × weight 5), not twice.
  */
 function validateUiAssertScreenContext(tc: XmlNode, rule: BPRule): BPViolation[] {
-  const violations: BPViolation[] = [];
+  const raw: BPViolation[] = [];
   for (const call of getAllApiCalls(tc)) {
     if (call['@_apiId'] !== UI_WITH_SCREEN_API_ID) continue;
-    flagAssertsOnNewScreen(call, rule, violations);
-    flagStepsAfterSave(call, rule, violations);
+    flagAssertsOnNewScreen(call, rule, raw);
+    flagStepsAfterSave(call, rule, raw);
   }
-  return violations;
+  const seen = new Set<string>();
+  const deduped: BPViolation[] = [];
+  for (const v of raw) {
+    const key = violationTestItemId(v);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(v);
+  }
+  return deduped;
 }
 
 // ── NitroX MS variant validators (UI-NITROX-CONNECT-ARGS-001, UI-NITROX-VARIANT-ARG-001) ───

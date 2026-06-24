@@ -2963,7 +2963,7 @@
       "id": "UI-SCREEN-CONTEXT-001",
       "category": "TestCaseDesign",
       "name": "UI verification or post-save step left under the wrong screen context",
-      "description": "A UiAssert or UiRead nested under a create screen (UiWithScreen target action=New), or any UI action placed after a Save (action=save) inside the same UiWithScreen substeps block, is almost certainly bound to the wrong screen. Salesforce tears down the create form on Save and navigates to the saved record's View screen, so a verification still nested under action=New asserts against a page that no longer exists, and steps following a Save in the same wrapper run in stale context. The test case still loads and may even score 100, so this is a runtime/logic correctness issue (major), not a load failure.",
+      "description": "A UiAssert or UiRead nested under a create screen (UiWithScreen target action=New), or any UI action placed after a plain Save (action=save) inside the same action=New substeps block, is almost certainly bound to the wrong screen. Salesforce tears down the create form on Save and navigates to the saved record's View screen, so a verification still nested under action=New asserts against a page that no longer exists, and steps following the Save in the same create wrapper run in stale context. Both checks are scoped to action=New: post-save steps under action=Edit/View are a valid same-record pattern and do not fire, and continuation buttons like Save & New (action=saveAndNew) are not treated as a Save. The test case still loads and may even score 100, so this is a runtime/logic correctness issue (major), not a load failure.",
       "appliesTo": ["Step", "TestCase"],
       "severity": "major",
       "weight": 5,
@@ -2972,7 +2972,7 @@
         "type": "uiAssertScreenContext",
         "target": "step"
       },
-      "notes": "Two heuristics over data already in the XML: (1) UiAssert/UiRead whose nearest enclosing UiWithScreen target URI carries action=New; (2) any UI action that appears after a Save UiDoAction (locator binding action%3Dsave, percent-encoded in the URI) within the same <clause name=\"substeps\"> block. Emits one violation per offending step so (rule_id, test_item_id) de-dups cleanly. Coverage limit: this is a structural heuristic — a passing run confirms the create/verify split is structured correctly, not that the assertion logic itself is correct.",
+      "notes": "Two heuristics over data already in the XML, both scoped to UiWithScreen target action=New: (1) UiAssert/UiRead nested directly under the create screen; (2) any UI action that appears after a plain Save UiDoAction within the same <clause name=\"substeps\"> block. Save is detected by parsing the locator binding's decoded action token and comparing it EXACTLY to 'save' (case-insensitive), so saveAndNew / savedSearch / savepoint never match. A step that trips both heuristics (assert placed after Save under New) is de-duped to a single violation per offending testItemId inside the local engine before scoring, so it is penalised once (major x weight 5); this matters because the local score sums every BPViolation and has no test_item_id field of its own. Coverage limit: this is a structural heuristic — a passing run confirms the create/verify split is structured correctly, not that the assertion logic itself is correct.",
       "source": "Field observation: AI-generated create-and-verify tests leave the UiAssert under the action=New screen, scoring 100 while asserting against the wrong page at runtime"
     },
     {
