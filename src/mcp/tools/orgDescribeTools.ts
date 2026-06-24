@@ -52,12 +52,17 @@ export interface OrgDescribeResult {
  * On-disk cache schema (one file per object) consumed by this tool.
  * The cache writer is Provar IDE; this tool is read-only.
  *
- * Layout: <workspace>/.metadata/<connection_name>/<ObjectApiName>.json
+ * Two layouts are supported, IDE layout first (preferred), then the legacy/native layout:
  *
- * Each JSON file contains: { name: "Account", fields: [ { name, type, defaultValue, nillable }, ... ] }
+ *  1. Provar IDE SfObject layout (what the IDE actually writes today):
+ *       <workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection>/<env>/SfObject/<Object>.xml
+ *     One file per object, root element <sfObject>, fields under <sfObject><fields><sfField .../>.
+ *     `<env>` is the test environment name (e.g. "default", "UAT"); defaults to "default".
  *
- * As a fallback, .xml / .object files (CustomObject metadata) are also accepted
- * to ease migration from the legacy Provar IDE Eclipse cache layout.
+ *  2. Legacy / native layout (kept for backward compatibility):
+ *       <workspace>/.metadata/<connection_name>/<ObjectApiName>.{json,xml,object}
+ *     JSON files contain { name, fields: [ { name, type, defaultValue, nillable }, ... ] };
+ *     .xml / .object files are CustomObject / toolingObjectInfo metadata.
  */
 interface CachedField {
   name: string;
@@ -133,11 +138,17 @@ export function discoverWorkspace(projectPath: string, allowedPaths: string[] = 
 
 // ── Cache reading ─────────────────────────────────────────────────────────────
 
+// Single parser instance handles BOTH on-disk XML formats:
+//   - legacy CustomObject / toolingObjectInfo: <fields> repeats directly under the root,
+//     so `fields` must always be coerced to an array.
+//   - Provar IDE SfObject: a single <fields> container holds repeated <sfField> elements,
+//     so `sfField` must also be coerced to an array.
+// The two element names never collide within one document, so arraying both is safe.
 const XML_PARSER = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: '@_',
   parseAttributeValue: false,
-  isArray: (name): boolean => name === 'fields',
+  isArray: (name): boolean => name === 'fields' || name === 'sfField',
 });
 
 /** Parse a JSON cache file into the canonical CachedObject shape. */
@@ -147,15 +158,57 @@ function readJsonCacheFile(filePath: string): CachedObject {
 }
 
 /**
- * Parse a legacy .object XML file (CustomObject metadata) into the canonical shape.
+ * Parse the Provar IDE SfObject XML format into the canonical shape.
+ *
+ * Layout: <sfObject n="..." t="..."><fields><sfField n="..." type="..." required="..."/></fields>...
+ * Attribute mapping (fast-xml-parser prefixes attributes with `@_`):
+ * name ← `@_n` (required; a field with no name is skipped).
+ * type ← `@_type` (may be absent → 'unknown'; SF booleans appear as '_boolean').
+ * nillable ← NOT(`@_required === 'true'`) (required="true" → nillable=false).
+ * default_value ← null (this format carries no defaultValue attribute).
+ * The display name is taken from the sfObject `@_t`, else `@_n`, else the file basename.
+ * Stub files (detailsLoaded="false", no <fields>) yield an empty field list — exists=true,
+ * field_count=0 — rather than an error.
+ */
+function readSfObjectXml(sfObject: Record<string, unknown>, fallbackName: string): CachedObject {
+  // `name` is the object API name (@_n, e.g. "provar__Person__c"), mirroring a Salesforce
+  // describeSObjectResult and the native-JSON cache path. The IDE's @_t is a human display
+  // label that embeds the key prefix ("Person (a0D)") and must not be used as the API name.
+  const objectApiName =
+    (sfObject['@_n'] as string | undefined) ?? (sfObject['@_t'] as string | undefined) ?? fallbackName;
+
+  // <fields> is arrayed by XML_PARSER; the (single) container holds the <sfField> children.
+  const fieldsContainers = sfObject['fields'];
+  if (!Array.isArray(fieldsContainers) || fieldsContainers.length === 0) {
+    return { name: objectApiName, fields: [] };
+  }
+  const container = fieldsContainers[0] as Record<string, unknown>;
+  const sfFieldsRaw = container['sfField'];
+  if (!Array.isArray(sfFieldsRaw)) return { name: objectApiName, fields: [] };
+
+  const fields: CachedField[] = [];
+  for (const f of sfFieldsRaw as Array<Record<string, unknown>>) {
+    const name = f['@_n'] as string | undefined;
+    if (!name) continue; // skip nameless container artefacts
+    // required="true" → nillable=false; absent → nillable=true (optional).
+    const isRequired = f['@_required'] === 'true' || f['@_required'] === true;
+    fields.push({
+      name,
+      type: (f['@_type'] as string | undefined) ?? 'unknown',
+      defaultValue: null,
+      nillable: !isRequired,
+    });
+  }
+  return { name: objectApiName, fields };
+}
+
+/**
+ * Parse a legacy CustomObject / toolingObjectInfo .xml/.object file into the canonical shape.
  * Only extracts the bare minimum the tool needs: field name, type, nillable.
  */
-function readXmlCacheFile(filePath: string): CachedObject {
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  const parsed = XML_PARSER.parse(raw) as Record<string, unknown>;
-  const root = (parsed['CustomObject'] ?? parsed['toolingObjectInfo'] ?? {}) as Record<string, unknown>;
+function readCustomObjectXml(root: Record<string, unknown>, fallbackName: string): CachedObject {
   const fieldsRaw = root['fields'];
-  if (!Array.isArray(fieldsRaw)) return { name: path.basename(filePath, path.extname(filePath)), fields: [] };
+  if (!Array.isArray(fieldsRaw)) return { name: fallbackName, fields: [] };
 
   const fields: CachedField[] = [];
   for (const f of fieldsRaw as Array<Record<string, unknown>>) {
@@ -175,7 +228,26 @@ function readXmlCacheFile(filePath: string): CachedObject {
       nillable: !isRequired,
     });
   }
-  return { name: path.basename(filePath, path.extname(filePath)), fields };
+  return { name: fallbackName, fields };
+}
+
+/**
+ * Parse an XML cache file into the canonical CachedObject shape. Detects the format from
+ * the root element: <sfObject> (Provar IDE layout) vs <CustomObject>/<toolingObjectInfo>
+ * (legacy/native layout).
+ */
+function readXmlCacheFile(filePath: string): CachedObject {
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const parsed = XML_PARSER.parse(raw) as Record<string, unknown>;
+  const fallbackName = path.basename(filePath, path.extname(filePath));
+
+  const sfObject = parsed['sfObject'];
+  if (sfObject && typeof sfObject === 'object') {
+    return readSfObjectXml(sfObject as Record<string, unknown>, fallbackName);
+  }
+
+  const root = (parsed['CustomObject'] ?? parsed['toolingObjectInfo'] ?? {}) as Record<string, unknown>;
+  return readCustomObjectXml(root, fallbackName);
 }
 
 /** Look up the cache file for one object, trying .json then .xml. */
@@ -275,45 +347,129 @@ function cacheMissSuggestion(connectionName: string): string {
 interface DescribeArgs {
   project_path: string;
   connection_name: string;
+  environment?: string;
   objects?: string[];
   field_filter?: 'required' | 'all';
 }
 
+/** Eclipse plugin id under which the Provar IDE writes its SfObject metadata cache. */
+const ECLIPSE_UI_PLUGIN = 'com.provar.eclipse.ui';
+const DEFAULT_ENVIRONMENT = 'default';
+
+/** True when dir exists and is a directory (any error → false). */
+function isExistingDir(dir: string): boolean {
+  try {
+    return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Resolve & policy-check the workspace + connection directory.
- * Returns the connection directory if it exists and is allowed, otherwise null.
+ * Reject path-shaped connection / environment names outright. A real connection or
+ * environment name is an identifier (e.g. "MyOrg", "UAT"); any separator or traversal
+ * segment is almost certainly a misuse or injection attempt.
+ */
+function assertIdentifier(value: string, fieldName: string): void {
+  const hasSeparator = value.includes('/') || value.includes('\\');
+  const hasTraversal = value === '..' || value.split(/[/\\]+/).includes('..');
+  if (hasSeparator || hasTraversal) {
+    throw new PathPolicyError(
+      'PATH_TRAVERSAL',
+      `Invalid ${fieldName} (must not contain path separators or directory-traversal segments ('..')): ${value}`
+    );
+  }
+}
+
+/**
+ * Resolve the Provar IDE SfObject cache directory for a connection + environment, if present.
+ *
+ * Layout: <workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection>/<env>/SfObject
+ * Resolution: try the requested <env> first; if its SfObject dir is missing, scan the
+ * connection dir for ANY <envDir>/SfObject that exists (preferring `default`).
+ *
+ * Path policy is enforced on the eclipse.ui dir, the connection dir, and every candidate
+ * SfObject dir before any further filesystem call against it. Returns null when no usable
+ * SfObject directory exists under policy.
+ */
+function resolveSfObjectDir(
+  resolvedWorkspace: string,
+  connectionName: string,
+  environment: string,
+  allowedPaths: string[]
+): string | null {
+  const pluginDir = path.resolve(resolvedWorkspace, '.metadata', '.plugins', ECLIPSE_UI_PLUGIN);
+  assertPathAllowed(pluginDir, allowedPaths);
+
+  const connectionDir = path.resolve(pluginDir, connectionName);
+  assertPathAllowed(connectionDir, allowedPaths);
+  if (!isExistingDir(connectionDir)) return null;
+
+  // Build ordered env candidates: requested env first, then `default`, then any others.
+  const requested = path.resolve(connectionDir, environment, 'SfObject');
+  assertPathAllowed(requested, allowedPaths);
+  if (isExistingDir(requested)) return requested;
+
+  let envDirs: string[];
+  try {
+    envDirs = fs.readdirSync(connectionDir);
+  } catch {
+    return null;
+  }
+  // Prefer `default`, then alphabetical for determinism.
+  const ordered = [...envDirs].sort((a, b) => {
+    if (a === DEFAULT_ENVIRONMENT) return -1;
+    if (b === DEFAULT_ENVIRONMENT) return 1;
+    return a.localeCompare(b);
+  });
+  for (const env of ordered) {
+    if (env === environment) continue; // already tried
+    const candidate = path.resolve(connectionDir, env, 'SfObject');
+    try {
+      assertPathAllowed(candidate, allowedPaths);
+    } catch {
+      continue; // outside policy — skip silently
+    }
+    if (isExistingDir(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Resolve & policy-check the workspace + cache directory.
+ *
+ * Prefers the Provar IDE SfObject layout
+ * (`<workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection>/<env>/SfObject`),
+ * falling back to the legacy/native layout (`<workspace>/.metadata/<connection_name>`).
+ * Returns the cache directory if one exists and is allowed, otherwise null.
  */
 function resolveConnectionDir(
   workspacePath: string | null,
   connectionName: string,
+  environment: string,
   allowedPaths: string[]
 ): { connectionDir: string | null; resolvedWorkspace: string | null } {
   if (!workspacePath) return { connectionDir: null, resolvedWorkspace: null };
 
-  // Reject path-shaped connection names outright. A real connection name from a
-  // .testproject is an identifier (e.g. "MyOrg"); any separator or traversal
-  // segment is almost certainly a misuse or injection attempt.
-  const hasSeparator = connectionName.includes('/') || connectionName.includes('\\');
-  const hasTraversal = connectionName === '..' || connectionName.split(/[/\\]+/).includes('..');
-  if (hasSeparator || hasTraversal) {
-    throw new PathPolicyError(
-      'PATH_TRAVERSAL',
-      `Invalid connection_name (must not contain path separators or directory-traversal segments ('..')): ${connectionName}`
-    );
-  }
+  assertIdentifier(connectionName, 'connection_name');
+  assertIdentifier(environment, 'environment');
 
   // Path policy: workspace MUST be inside allowed paths before any fs call against it.
   const resolvedWorkspace = path.resolve(workspacePath);
   assertPathAllowed(resolvedWorkspace, allowedPaths);
 
-  const connectionDir = path.resolve(resolvedWorkspace, '.metadata', connectionName);
-  // Belt-and-braces check after composition.
-  assertPathAllowed(connectionDir, allowedPaths);
+  // Preferred: Provar IDE SfObject layout.
+  const sfObjectDir = resolveSfObjectDir(resolvedWorkspace, connectionName, environment, allowedPaths);
+  if (sfObjectDir) return { connectionDir: sfObjectDir, resolvedWorkspace };
 
-  if (!fs.existsSync(connectionDir) || !fs.statSync(connectionDir).isDirectory()) {
+  // Fallback: legacy/native <workspace>/.metadata/<connection_name>.
+  const legacyDir = path.resolve(resolvedWorkspace, '.metadata', connectionName);
+  // Belt-and-braces check after composition.
+  assertPathAllowed(legacyDir, allowedPaths);
+  if (!isExistingDir(legacyDir)) {
     return { connectionDir: null, resolvedWorkspace };
   }
-  return { connectionDir, resolvedWorkspace };
+  return { connectionDir: legacyDir, resolvedWorkspace };
 }
 
 function buildCacheMissResponse(
@@ -364,9 +520,13 @@ export function registerOrgDescribe(server: McpServer, config: ServerConfig): vo
         [
           'Read cached Salesforce describe data for one connection from the Provar workspace .metadata cache.',
           'Prerequisite: the project must have been opened in Provar IDE at least once with the named connection loaded',
-          '— this tool is read-only and does NOT trigger a metadata download.',
+          '(and, for the named test environment, the relevant objects expanded) — this tool is read-only and does NOT trigger a metadata download.',
           'Workspace discovery tries in order: <parent>/workspace-<basename>, ',
           '<parent>/Provar_Workspaces/workspace-<name-dashes>, then ~/Provar/workspace-<name-dashes>.',
+          'Within the workspace it prefers the Provar IDE SfObject cache at',
+          '.metadata/.plugins/com.provar.eclipse.ui/<connection>/<environment>/SfObject/<Object>.xml',
+          '(environment defaults to "default"; if the requested environment is absent it falls back to any cached environment),',
+          'and falls back to the legacy .metadata/<connection_name>/<Object>.{json,xml,object} layout.',
           'Returns an empty result with details.suggestion when the cache is missing.',
           'Distinct from the runtime .provarCaches cache used by test execution.',
         ].join(' '),
@@ -385,8 +545,18 @@ export function registerOrgDescribe(server: McpServer, config: ServerConfig): vo
           .string()
           .describe(
             desc(
-              'Connection name as defined in the .testproject file (e.g. "MyOrg"). The .metadata cache subdirectory must match this exactly.',
+              'Connection name as defined in the .testproject file (e.g. "MyOrg"). The cache subdirectory must match this exactly. String identifier, NOT a file path — path separators or ".." are rejected (PATH_TRAVERSAL).',
               'string, connection name as defined in .testproject'
+            )
+          ),
+        environment: z
+          .string()
+          .optional()
+          .default('default')
+          .describe(
+            desc(
+              'Test environment name whose cached metadata to read in the Provar IDE SfObject layout (e.g. "default", "UAT"). Defaults to "default". If the requested environment has no cached metadata, the tool falls back to any environment that does (preferring "default"). Ignored for the legacy .metadata/<connection_name> layout. String identifier, NOT a file path — path separators or ".." are rejected (PATH_TRAVERSAL).',
+              "string, test environment name; default 'default'"
             )
           ),
         objects: z
@@ -424,6 +594,7 @@ export function registerOrgDescribe(server: McpServer, config: ServerConfig): vo
         const { connectionDir, resolvedWorkspace } = resolveConnectionDir(
           workspacePath,
           args.connection_name,
+          args.environment ?? DEFAULT_ENVIRONMENT,
           config.allowedPaths
         );
 
