@@ -690,7 +690,11 @@ describe('provar_org_describe — Provar IDE SfObject layout', () => {
     assert.equal(objects[0].exists, true);
     // 5 sfFields; the <string> children of <referenceTos> must NOT be counted.
     assert.equal(objects[0].field_count, 5, 'container children must not be double-counted');
-    assert.equal(objects[0].name, 'Person', 'display name comes from sfObject @t');
+    assert.equal(
+      objects[0].name,
+      'provar__Person__c',
+      'object name is the API name from sfObject @n, not the @t label'
+    );
 
     const byName = new Map(objects[0].required_fields.map((f) => [f.name, f]));
     assert.equal(byName.get('Name')?.type, 'unknown', 'field with no type attribute → "unknown"');

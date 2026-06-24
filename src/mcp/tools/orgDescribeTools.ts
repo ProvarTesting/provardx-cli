@@ -171,17 +171,20 @@ function readJsonCacheFile(filePath: string): CachedObject {
  * field_count=0 — rather than an error.
  */
 function readSfObjectXml(sfObject: Record<string, unknown>, fallbackName: string): CachedObject {
-  const displayName =
-    (sfObject['@_t'] as string | undefined) ?? (sfObject['@_n'] as string | undefined) ?? fallbackName;
+  // `name` is the object API name (@_n, e.g. "provar__Person__c"), mirroring a Salesforce
+  // describeSObjectResult and the native-JSON cache path. The IDE's @_t is a human display
+  // label that embeds the key prefix ("Person (a0D)") and must not be used as the API name.
+  const objectApiName =
+    (sfObject['@_n'] as string | undefined) ?? (sfObject['@_t'] as string | undefined) ?? fallbackName;
 
   // <fields> is arrayed by XML_PARSER; the (single) container holds the <sfField> children.
   const fieldsContainers = sfObject['fields'];
   if (!Array.isArray(fieldsContainers) || fieldsContainers.length === 0) {
-    return { name: displayName, fields: [] };
+    return { name: objectApiName, fields: [] };
   }
   const container = fieldsContainers[0] as Record<string, unknown>;
   const sfFieldsRaw = container['sfField'];
-  if (!Array.isArray(sfFieldsRaw)) return { name: displayName, fields: [] };
+  if (!Array.isArray(sfFieldsRaw)) return { name: objectApiName, fields: [] };
 
   const fields: CachedField[] = [];
   for (const f of sfFieldsRaw as Array<Record<string, unknown>>) {
@@ -196,7 +199,7 @@ function readSfObjectXml(sfObject: Record<string, unknown>, fallbackName: string
       nillable: !isRequired,
     });
   }
-  return { name: displayName, fields };
+  return { name: objectApiName, fields };
 }
 
 /**
