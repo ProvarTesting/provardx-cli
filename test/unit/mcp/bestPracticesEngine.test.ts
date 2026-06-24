@@ -233,6 +233,19 @@ describe('runBestPractices', () => {
       assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
     });
 
+    it('passes for a CPQ Visualforce-page SF target (sf:ui:target?page=SBQQ__sb&pageObject=pageobjects.EditQuote)', () => {
+      // PDX-518: real Salesforce CPQ test cases navigate to Visualforce pages via
+      // page=/pageObject= with no object/action key; these must NOT false-fire.
+      const result = runBestPractices(
+        buildUwsAttrXml('sf:ui:target?page=SBQQ__sb&amp;pageObject=pageobjects.EditQuote')
+      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(
+        !uwsViolation,
+        `Expected no uiWithScreenTarget violation for CPQ page target, got: ${uwsViolation?.message}`
+      );
+    });
+
     it('fires for an SF target in the uri attribute with no recognised SF params', () => {
       const result = runBestPractices(buildUwsAttrXml('sf:ui:target?foo=bar'));
       const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
