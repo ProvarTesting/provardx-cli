@@ -946,6 +946,203 @@ function validateUiActionNestingStructure(tc: XmlNode, rule: BPRule): BPViolatio
   return violations;
 }
 
+// ── UI-SCREEN-CONTEXT-001 — assert/post-save steps under the wrong screen ─────
+// A UiAssert / UiRead that verifies a persisted record while still nested under
+// the `action=New` create screen is almost always wrong context: the create
+// screen tears down after Save, so the assertion runs against the wrong page.
+// Likewise any UI action that follows a plain Save (`action=save`, compared
+// exactly so `Save & New` is excluded) inside the SAME `action=New` screen block
+// is suspect — the create screen is torn down, so trailing steps belong in a
+// fresh UiWithScreen (typically `action=View`). Both heuristics are scoped to
+// `action=New`; post-save steps under `action=Edit`/`View` are a valid pattern.
+
+// UI action apiIds whose presence AFTER a Save (in the same screen block) is suspect.
+const POST_SAVE_SUSPECT_APIS = UI_ACTION_API_IDS;
+// Read-only verification steps that should not run on the create (`action=New`) screen.
+const ASSERT_ON_NEW_SUSPECT_APIS = new Set<string>([
+  'com.provar.plugins.forcedotcom.core.ui.UiAssert',
+  'com.provar.plugins.forcedotcom.core.ui.UiRead',
+]);
+const UI_WITH_SCREEN_API_ID = 'com.provar.plugins.forcedotcom.core.ui.UiWithScreen';
+
+/**
+ * Read the URI string carried by a UiWithScreen `target` argument. The value is
+ * stored either as the `uri` attribute (`<value class="uiTarget" uri="…"/>`) or,
+ * for hand-authored XML, as element text. Returns undefined when absent.
+ */
+function getUiWithScreenTargetUri(call: XmlNode): string | undefined {
+  for (const arg of getCallArguments(call)) {
+    if (arg['@_id'] !== 'target') continue;
+    const valElem = arg['value'] as XmlNode | undefined;
+    if (!valElem || typeof valElem !== 'object') return undefined;
+    const uriAttr = valElem['@_uri'] as string | undefined;
+    if (uriAttr) return uriAttr;
+    return (valElem['#text'] as string | undefined) ?? undefined;
+  }
+  return undefined;
+}
+
+/** Parse the `action` query parameter from a UiWithScreen target URI (e.g. `…?object=Opportunity&action=New`). */
+function getScreenAction(targetUri: string | undefined): string | undefined {
+  if (!targetUri || !targetUri.includes('?')) return undefined;
+  const qs = targetUri.slice(targetUri.indexOf('?') + 1);
+  return new URLSearchParams(qs).get('action') ?? undefined;
+}
+
+/** Read the `uri` attribute of a named argument's `<value>` element (e.g. locator / interaction). */
+function getArgUri(call: XmlNode, argId: string): string | undefined {
+  for (const arg of getCallArguments(call)) {
+    if (arg['@_id'] !== argId) continue;
+    const valElem = arg['value'] as XmlNode | undefined;
+    if (!valElem || typeof valElem !== 'object') return undefined;
+    return (valElem['@_uri'] as string | undefined) ?? undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Decode the `action` token a UiDoAction locator targets, lower-cased, or undefined.
+ *
+ * The locator URI looks like `ui:locator?name=save&binding=<percent-encoded URI>`,
+ * where the decoded binding is itself a query string (`sf:ui:binding:object?object=Opportunity&action=save`).
+ * We parse the outer locator for `binding`, decode it, and read its `action` param;
+ * we also accept the `name` param as a fallback when no binding action is present.
+ * Both are returned as EXACT tokens (no substring matching) so `saveAndNew`,
+ * `savedSearch`, `savepoint`, etc. never masquerade as a plain `save`.
+ */
+function getLocatorActionToken(call: XmlNode): string | undefined {
+  const locatorUri = getArgUri(call, 'locator');
+  if (!locatorUri || !locatorUri.includes('?')) return undefined;
+  const locatorParams = new URLSearchParams(locatorUri.slice(locatorUri.indexOf('?') + 1));
+  const binding = locatorParams.get('binding');
+  if (binding && binding.includes('?')) {
+    // URLSearchParams already percent-decodes the binding value; parse its own query string.
+    const bindingAction = new URLSearchParams(binding.slice(binding.indexOf('?') + 1)).get('action');
+    if (bindingAction) return bindingAction.toLowerCase();
+  }
+  const nameToken = locatorParams.get('name');
+  return nameToken ? nameToken.toLowerCase() : undefined;
+}
+
+/**
+ * True when a UiDoAction is a plain Save click. The action token is compared
+ * EXACTLY (case-insensitive) against `save`, so continuation buttons such as
+ * `Save & New` (`action=saveAndNew` / `name=saveAndNew`) and inline-edit
+ * variants do NOT count — they keep the user on the create screen, so steps
+ * after them are legitimate.
+ */
+function isSaveAction(call: XmlNode): boolean {
+  if (call['@_apiId'] !== 'com.provar.plugins.forcedotcom.core.ui.UiDoAction') return false;
+  return getLocatorActionToken(call) === 'save';
+}
+
+/** The direct <apiCall> steps inside a UiWithScreen's `<clause name="substeps"><steps>` block (in document order). */
+function getScreenSubstepCalls(screen: XmlNode): XmlNode[] {
+  const clauses = screen['clauses'] as XmlNode | undefined;
+  if (!clauses || typeof clauses !== 'object') return [];
+  for (const clause of toArr(clauses['clause'] as XmlNode | XmlNode[])) {
+    if (!clause || typeof clause !== 'object') continue;
+    if (clause['@_name'] !== 'substeps') continue;
+    const steps = clause['steps'] as XmlNode | undefined;
+    if (!steps || typeof steps !== 'object') continue;
+    return toArr(steps['apiCall'] as XmlNode | XmlNode[]).filter((c) => c && typeof c === 'object');
+  }
+  return [];
+}
+
+/** Human-readable label for an offending step (`'Title' (testItemId=N)`). */
+function describeStep(call: XmlNode): string {
+  const ctx = stepContext(call);
+  return `${ctx.apiName} '${ctx.title}' (testItemId=${ctx.tid})`;
+}
+
+/**
+ * Heuristic 1 — a UiAssert/UiRead whose nearest enclosing UiWithScreen targets the
+ * create screen (`action=New`). Emits one violation per offending verification step.
+ */
+function flagAssertsOnNewScreen(screen: XmlNode, rule: BPRule, out: BPViolation[]): void {
+  const action = (getScreenAction(getUiWithScreenTargetUri(screen)) ?? '').toLowerCase();
+  if (action !== 'new') return;
+  for (const step of getScreenSubstepCalls(screen)) {
+    const apiId = step['@_apiId'] as string | undefined;
+    if (!apiId || !ASSERT_ON_NEW_SUSPECT_APIS.has(apiId)) continue;
+    out.push(
+      makeViolation(
+        rule,
+        `${describeStep(step)} verifies a persisted record while nested under the create screen ` +
+          '(action=New). The create screen is torn down after Save, so the assertion runs against the ' +
+          'wrong page context. Move it into a new UiWithScreen targeting action=View (or the appropriate post-save screen).'
+      )
+    );
+  }
+}
+
+/**
+ * Heuristic 2 — any UI action step that appears AFTER a plain Save click inside the
+ * SAME create-screen (`action=New`) substeps block. Scoped to `action=New` because
+ * the rationale is screen teardown: the create form is destroyed on Save and the
+ * user lands on the saved record's View screen. On `action=Edit`/`View` a post-save
+ * step on the same record page is a normal, valid pattern and must NOT fire.
+ * Emits one violation per offending trailing step.
+ */
+function flagStepsAfterSave(screen: XmlNode, rule: BPRule, out: BPViolation[]): void {
+  const action = (getScreenAction(getUiWithScreenTargetUri(screen)) ?? '').toLowerCase();
+  if (action !== 'new') return;
+  const calls = getScreenSubstepCalls(screen);
+  let sawSave = false;
+  for (const step of calls) {
+    if (!sawSave) {
+      if (isSaveAction(step)) sawSave = true;
+      continue;
+    }
+    const apiId = step['@_apiId'] as string | undefined;
+    if (!apiId || !POST_SAVE_SUSPECT_APIS.has(apiId)) continue;
+    out.push(
+      makeViolation(
+        rule,
+        `${describeStep(step)} appears after a Save (action=save) inside the same action=New screen block. ` +
+          'Save tears down the create screen, so this step runs in stale context. Move it into a new ' +
+          'UiWithScreen targeting action=View (or the appropriate post-save screen).'
+      )
+    );
+  }
+}
+
+/** The testItemId an offending step is associated with, parsed from a violation message (`testItemId=N`). */
+function violationTestItemId(v: BPViolation): string {
+  return /testItemId=([^\s)]+)/.exec(v.message)?.[1] ?? v.message;
+}
+
+/**
+ * UI-SCREEN-CONTEXT-001 — flag UiAssert/UiRead steps left under the `action=New`
+ * create screen (heuristic 1), and any UI action that follows a plain Save within
+ * the same create-screen block (heuristic 2). Both heuristics read data already
+ * present in the XML (target URIs and locator bindings).
+ *
+ * The canonical defect (a UiAssert placed after Save inside the create screen)
+ * trips BOTH heuristics for the SAME step. Because this local engine sums every
+ * BPViolation when scoring (it has no test_item_id field to de-dup on, unlike the
+ * Quality Hub API), we de-dup here and emit AT MOST ONE violation per offending
+ * testItemId so the step is penalised once (major × weight 5), not twice.
+ */
+function validateUiAssertScreenContext(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const raw: BPViolation[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    if (call['@_apiId'] !== UI_WITH_SCREEN_API_ID) continue;
+    flagAssertsOnNewScreen(call, rule, raw);
+    flagStepsAfterSave(call, rule, raw);
+  }
+  const seen = new Set<string>();
+  const deduped: BPViolation[] = [];
+  for (const v of raw) {
+    const key = violationTestItemId(v);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(v);
+  }
+  return deduped;
+}
+
 // ── NitroX MS variant validators (UI-NITROX-CONNECT-ARGS-001, UI-NITROX-VARIANT-ARG-001) ───
 
 /**
@@ -2200,6 +2397,7 @@ type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
 
 const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
   uiActionNestingStructure: validateUiActionNestingStructure,
+  uiAssertScreenContext: validateUiAssertScreenContext,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,
   nitroxVariantArgRequired: validateNitroxVariantArgRequired,
   // Tier 4 — emits one violation per offending value (back-end returns a list)
