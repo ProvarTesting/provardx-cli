@@ -11,7 +11,7 @@ Provar test-case validation runs in two layers. This registry is the single cano
 
 **The validity bridge (PDX-509):** a `critical` best-practice violation is surfaced into `issues[]` as an `ERROR` and therefore gates `is_valid` — EXCEPT where a Layer-1 check already owns the concept (then it is suppressed to avoid double-reporting). `major`/`minor`/`info` affect `quality_score` (and the `needs_improvement` status) only. The `status` field is tri-state: `invalid` (a critical) / `needs_improvement` (loads but `quality_score < quality_threshold`) / `valid`.
 
-**Counts:** Layer 1 — 23 rules (18 gating). Layer 2 — 178 rules (critical 64 / major 67 / minor 29 / info 18; 58 bridged to `is_valid`).
+**Counts:** Layer 1 — 23 rules (18 gating). Layer 2 — 179 rules (critical 64 / major 68 / minor 29 / info 18; 58 bridged to `is_valid`).
 
 ## Layer 1 — Structural validity rules
 
@@ -194,6 +194,7 @@ Provar test-case validation runs in two layers. This registry is the single cano
 | `UI-LOCATOR-SAVE-001`                    | TestCaseDesign             | major    | 5      | No              | Save button locator must use correct pattern.                                                        |
 | `UI-LOOKUP-ID-001`                       | TestCaseDesign             | major    | 6      | No              | UiDoAction lookup fields should use Name values, not IDs.                                            |
 | `UI-NAVIGATE-PREFER-SCREEN-001`          | TestCaseDesign             | info     | 1      | No              | Prefer UiWithScreen over UiNavigate for Salesforce.                                                  |
+| `UI-SCREEN-CONTEXT-001`                  | TestCaseDesign             | major    | 5      | No              | UI verification or post-save step left under the wrong screen context.                               |
 | `UI-SCREEN-NAV-001`                      | TestCaseDesign             | major    | 5      | No              | First UiWithScreen must use navigate=Always or IfNeccessary.                                         |
 | `UI-SCREEN-NAV-002`                      | TestCaseDesign             | minor    | 2      | No              | First UiWithScreen should prefer navigate=Always over IfNeccessary.                                  |
 | `UI-SCREEN-OBJID-001`                    | TestCaseDesign             | major    | 5      | No              | UiWithScreen with navigate=Always for Edit/View must have sfUiTargetObjectId.                        |

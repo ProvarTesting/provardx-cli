@@ -1101,6 +1101,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
   - **`CONN-DB-002`** (`dbConnectResultNameMismatch`) — a DB operation (`SqlQuery`/`DbRead`/`DbInsert`/`DbUpdate`/`DbDelete`) sets a `dbConnectionName` that does not match any `DbConnect` `resultName` in the test, so the open connection can't be found. Defers to `CONN-DB-001` when there is no `DbConnect` at all.
   - **`UI-LOCATOR-BUTTON-CASING-001`** (`uiLocatorButtonCasing`) — a `UiDoAction` locator uses a wrong-cased standard-button name: `name=Cancel` (use lowercase `name=cancel`) or `name=Continue`/`name=continue` on the record-type screen (use `name=save&path=selectRecordType`).
   - **`UI-LOCATOR-RECORDTYPE-001`** (`uiLocatorRecordTypeField`) — a `UiDoAction` Record Type picker locator uses `name=recordTypeId`/`name=recordType` instead of `name=RecordType` with `field=RecordTypeId` in the binding.
+  - **`UI-SCREEN-CONTEXT-001`** (`uiAssertScreenContext`) — a `UiAssert`/`UiRead` left nested under a create screen (`UiWithScreen` whose target URI carries `action=New`), or any UI action placed **after a plain Save** inside the same `action=New` `<clause name="substeps">` block. Save is detected by parsing the `UiDoAction` locator binding's decoded `action` token and matching it **exactly** to `save` (case-insensitive), so continuation buttons like **Save & New** (`action=saveAndNew`) are not treated as a Save. Salesforce tears down the create form on Save and navigates to the saved record's View screen, so a verification still under `action=New` asserts against a page that no longer exists, and steps following the Save in the same create wrapper run in stale context. **Both checks are scoped to `action=New`** — post-save steps/asserts under `action=Edit`/`View` are a valid same-record pattern and do **not** fire. The test still loads and may score 100, so this is a runtime/logic correctness issue. Fix: close the create screen at the Save step and open a new `UiWithScreen` targeting `action=View` (capturing the new record id via `sfUiTargetResultName`) for the verification or follow-up action. A step that trips both checks (assert placed after Save under New) is **de-duped to one violation per offending step** inside the local engine before scoring, so it is penalised once (major × weight 5 → score 96.25), not twice — this matters because the local engine sums every violation and has no `test_item_id` field of its own. **Coverage limit:** this is a structural heuristic — a passing run confirms the create/verify split is structured correctly, not that the assertion logic itself is correct.
 - **Structural correctness rules** — Checks on element shape / required structure that the Provar IDE depends on to render and run a step. Mostly critical; like the rules above they run offline / in `local_fallback` and keep score parity with the Quality Hub back-end. Currently enforced:
   - **`SETVALUES-STRUCTURE-001`** (`setValuesStructure`, critical) — a `SetValues` step has no `<namedValues>` container.
   - **`SETVALUES-NAME-001`** (`namedValueName`, critical) — a `<namedValue>` inside a `SetValues` step is missing its `name` attribute.
@@ -2029,13 +2030,13 @@ The constraint is also referenced in the [`provar_testcase_generate`](#provar_te
 
 Tools that surface Salesforce org metadata to authoring tools without making a live API call. These read from data that has already been written to disk by the Provar IDE — they do **not** trigger metadata downloads themselves and they do **not** require an authenticated session.
 
-> **Distinct from `.provarCaches`:** the runtime cache used by `provar_automation_testrun` lives at `<resultsPath>/.provarCaches/` and is regenerated per run. The cache read by `provar_org_describe` lives in the Provar IDE **workspace** (`<workspace>/.metadata/<connection_name>/`) and is updated when a user opens the project and loads a connection in the IDE.
+> **Distinct from `.provarCaches`:** the runtime cache used by `provar_automation_testrun` lives at `<resultsPath>/.provarCaches/` and is regenerated per run. The cache read by `provar_org_describe` lives in the Provar IDE **workspace** `.metadata` directory and is updated when a user opens the project and loads a connection in the IDE.
 
 ### `provar_org_describe`
 
 Read cached Salesforce describe data for one connection from the Provar workspace `.metadata` cache. Returns the object list, required-field schema, and a cache age. Use this before calling `provar_testcase_generate` so the generator can produce steps with correctly-typed field values.
 
-**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
+**Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded, and (for the chosen test environment) the relevant objects expanded so their metadata is written to disk. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
 
 **Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that exists:
 
@@ -2045,12 +2046,20 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 
 `<name-dashes>` is the project's basename with whitespace collapsed to single dashes and lowercased: `"My Project"` → `"my-project"`.
 
-| Input             | Type                    | Required | Default      | Description                                                                                                                                                                    |
-| ----------------- | ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `project_path`    | string                  | yes      | —            | Absolute path to the Provar test project root (the directory containing `.testproject`). Must be within `--allowed-paths`.                                                     |
-| `connection_name` | string                  | yes      | —            | Connection name as defined in `.testproject` (e.g. `"MyOrg"`). Must match the `.metadata` subdirectory exactly. Path separators in this value are rejected (`PATH_TRAVERSAL`). |
-| `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the connection directory.                                                  |
-| `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                           |
+**Cache layout resolution (within the discovered workspace).** The tool prefers the Provar IDE SfObject cache and falls back to the legacy/native layout:
+
+1. **Provar IDE SfObject layout (preferred):** `<workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection_name>/<environment>/SfObject/<Object>.xml` — one XML file per object, written by the IDE when a connection's objects are expanded. `<environment>` is the test environment name (e.g. `default`, `UAT`). The tool tries the requested `environment` first; if that environment has no `SfObject` directory, it falls back to any environment that does, preferring `default`.
+2. **Legacy / native layout (fallback):** `<workspace>/.metadata/<connection_name>/<Object>.{json,xml,object}` — used only when the IDE SfObject layout is absent.
+
+`cache_age_ms` reflects the `mtime` of whichever cache directory was used (the `SfObject` directory for the IDE layout).
+
+| Input             | Type                    | Required | Default      | Description                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------- | ----------------------- | -------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project_path`    | string                  | yes      | —            | Absolute path to the Provar test project root (the directory containing `.testproject`). Must be within `--allowed-paths`.                                                                                                                                                                                                                                                      |
+| `connection_name` | string                  | yes      | —            | Connection name as defined in `.testproject` (e.g. `"MyOrg"`). Must match the cache subdirectory exactly. String identifier, **not** a file path — path separators or `..` in this value are rejected (`PATH_TRAVERSAL`).                                                                                                                                                       |
+| `environment`     | string                  | no       | `'default'`  | Test environment name whose cached metadata to read in the Provar IDE SfObject layout (e.g. `"default"`, `"UAT"`). If the requested environment has no cached metadata the tool falls back to any environment that does, preferring `default`. Ignored for the legacy layout. String identifier, **not** a file path — path separators or `..` are rejected (`PATH_TRAVERSAL`). |
+| `objects`         | string[]                | no       | all          | Filter — only return data for these object API names. When omitted, lists every object cached under the resolved cache directory.                                                                                                                                                                                                                                               |
+| `field_filter`    | `'required'` \| `'all'` | no       | `'required'` | Which fields to return. `'required'` includes only fields with `nillable=false`; `'all'` returns every cached field.                                                                                                                                                                                                                                                            |
 
 | Output field              | Description                                                                                                                                                                                                                              |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -2133,7 +2142,27 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 }
 ```
 
-**On-disk cache schema (one file per object).** The tool reads `.json` first, then `.xml`, then `.object` as a fallback:
+**On-disk cache schema (one file per object).**
+
+The **preferred** format is the Provar IDE SfObject XML at `<workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection_name>/<environment>/SfObject/<Object>.xml`. Fields live under `<sfObject><fields><sfField .../></fields>`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<sfObject n="provar__Person__c" t="Person" label="Person" keyPrefix="a0D">
+  <fields>
+    <sfField n="Id" type="id"/>
+    <sfField n="provar__Email__c" type="email" required="true"/>   <!-- required="true" → nillable=false -->
+    <sfField n="Name" length="80"/>                                <!-- no type attribute → type "unknown" -->
+    <sfField n="OwnerId" type="reference" relationshipName="Owner">
+      <referenceTos><string>User</string></referenceTos>           <!-- container field; children are NOT counted -->
+    </sfField>
+  </fields>
+</sfObject>
+```
+
+Field mapping: `name` ← `n` (a field with no `n` is skipped); `type` ← `type` (absent → `"unknown"`; Salesforce booleans appear as `_boolean`); `nillable` ← `NOT(required="true")`; `default_value` is always `null` (this format carries no default). The object display name comes from the `sfObject` `t` attribute, else `n`. A **stub** file (`detailsLoaded="false"` with no `<fields>`) is reported as `exists: true, field_count: 0` — not an error.
+
+The **legacy/native** format (read only when the SfObject layout is absent) lives at `<workspace>/.metadata/<connection_name>/<Object>.{json,xml,object}`. JSON is tried first, then `.xml` / `.object` (CustomObject / toolingObjectInfo metadata):
 
 ```jsonc
 // <workspace>/.metadata/<connection_name>/Account.json

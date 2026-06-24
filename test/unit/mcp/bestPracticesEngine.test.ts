@@ -206,6 +206,57 @@ describe('runBestPractices', () => {
       );
       assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for missing pageobjects. prefix');
     });
+
+    // PDX-518: real Provar IDE test cases store the target in the uri= ATTRIBUTE
+    // of <value class="uiTarget" uri="…"/>, not in element #text. These tests
+    // exercise the attribute form so the rule actually fires on IDE-authored XML.
+    function buildUwsAttrXml(uri: string): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-uwsattr" guid="${GUID_TC2}" registryId="tc-uwsattr" name="UWS Attr Target Test">
+  <steps>
+    <apiCall guid="${GUID_UWS}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="With page" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="${uri}"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    }
+
+    it('passes for a valid SF target in the uri attribute (sf:ui:target?object=Opportunity&action=New)', () => {
+      const result = runBestPractices(
+        buildUwsAttrXml('sf:ui:target?object=Opportunity&amp;action=New&amp;noOverride=true')
+      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
+    });
+
+    it('passes for a CPQ Visualforce-page SF target (sf:ui:target?page=SBQQ__sb&pageObject=pageobjects.EditQuote)', () => {
+      // PDX-518: real Salesforce CPQ test cases navigate to Visualforce pages via
+      // page=/pageObject= with no object/action key; these must NOT false-fire.
+      const result = runBestPractices(
+        buildUwsAttrXml('sf:ui:target?page=SBQQ__sb&amp;pageObject=pageobjects.EditQuote')
+      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(
+        !uwsViolation,
+        `Expected no uiWithScreenTarget violation for CPQ page target, got: ${uwsViolation?.message}`
+      );
+    });
+
+    it('fires for an SF target in the uri attribute with no recognised SF params', () => {
+      const result = runBestPractices(buildUwsAttrXml('sf:ui:target?foo=bar'));
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for SF target with no recognised params');
+    });
+
+    it('fires for a page object target in the uri attribute with bad pageId prefix', () => {
+      const result = runBestPractices(buildUwsAttrXml('ui:pageobject:target?pageId=LoginPage'));
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for missing pageobjects. prefix in uri attribute');
+    });
   });
 
   // ── UI-NEST-STRUCT-001 — UI action nesting structure ──
@@ -418,6 +469,296 @@ describe('runBestPractices', () => {
         );
       });
     }
+  });
+
+  // ── UI-SCREEN-CONTEXT-001 — assert / post-save under the wrong screen ──
+  describe('UI-SCREEN-CONTEXT-001 — uiAssertScreenContext validator', () => {
+    const GUID_TCSC = '550e8400-e29b-41d4-a716-446655440050';
+    const GUID_UWSSC = '550e8400-e29b-41d4-a716-446655440051';
+    const GUID_DOSC = '550e8400-e29b-41d4-a716-446655440052';
+    const GUID_XSC = '550e8400-e29b-41d4-a716-446655440053';
+
+    function screenViolations(violations: BPViolation[]): BPViolation[] {
+      return violations.filter((v) => v.rule_id === 'UI-SCREEN-CONTEXT-001');
+    }
+
+    async function readFixture(name: string): Promise<string> {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const url = await import('node:url');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      return fs.readFileSync(path.join(here, '..', '..', 'fixtures', name), 'utf-8');
+    }
+
+    // ─ POSITIVE: constructed bad fixture (assert under action=New, after Save) fires ─
+    // The UiAssert (testItemId=14) trips BOTH heuristics; the validator must de-dup
+    // to exactly ONE violation for that step so the local score matches a single
+    // major × weight 5 deduction (100 − 5×0.75 = 96.25), not a double penalty.
+    it('fires exactly once (de-duped) on the constructed bad fixture (UiAssert under action=New, after Save)', async () => {
+      const xml = await readFixture('opportunity-create-verify-bad.testcase');
+      const result = runBestPractices(xml);
+      const vs = screenViolations(result.violations);
+      assert.equal(
+        vs.length,
+        1,
+        `Expected exactly one (de-duped) violation; got ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+      assert.equal(vs[0].severity, 'major');
+      assert.equal(vs[0].weight, 5);
+      assert.ok(
+        vs[0].message.includes('testItemId=14'),
+        `Expected the violation to name the offending UiAssert (testItemId=14): ${vs[0].message}`
+      );
+      assert.equal(result.quality_score, 96.25, `Expected quality_score 96.25, got ${result.quality_score}`);
+    });
+
+    // ─ NEGATIVE: good fixture (assert under action=View) does NOT fire ─
+    it('does not fire on the good fixture (UiAssert under action=View)', async () => {
+      const xml = await readFixture('opportunity-create-verify-good.testcase');
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 0, `Expected no UI-SCREEN-CONTEXT-001; got: ${JSON.stringify(vs.map((v) => v.message))}`);
+    });
+
+    // ─ Heuristic 1: UiAssert directly under an action=New screen fires ─
+    it('fires for a UiAssert nested under an action=New screen', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-new" name="Assert under New">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="3" title="Verify Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 1, `Expected one violation; got ${JSON.stringify(vs.map((v) => v.message))}`);
+      assert.ok(vs[0].message.includes('action=New'), `Message should mention action=New: ${vs[0].message}`);
+      assert.ok(vs[0].message.includes('testItemId=3'), `Message should name the step: ${vs[0].message}`);
+    });
+
+    // ─ Heuristic 2: any UI action after a Save in the same screen block fires ─
+    it('fires for a step that follows a Save within the same UiWithScreen block', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-aftersave" name="Step after Save">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click after save" testItemId="4" title="Click Edit"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.ok(
+        vs.some((v) => v.message.includes('testItemId=4') && v.message.includes('after a Save')),
+        `Expected a post-save violation for the trailing step (testItemId=4): ${JSON.stringify(
+          vs.map((v) => v.message)
+        )}`
+      );
+    });
+
+    // ─ Clean minimal: assert under action=View, nothing after Save → no violation ─
+    it('does not fire when the assert is under an action=View screen and nothing follows Save', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-view" name="Assert under View">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+    <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="View screen" testItemId="4">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=View&amp;recordId=%7BopportunityId%7D"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="5">
+          <steps>
+            <apiCall guid="${GUID_TCSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="6" title="Verify Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 0, `Expected no UI-SCREEN-CONTEXT-001; got: ${JSON.stringify(vs.map((v) => v.message))}`);
+    });
+
+    // ─ False-positive guard (a): a post-save step/assert under action=Edit must NOT fire ─
+    // On an Edit screen the record page is NOT torn down, so asserting / acting after
+    // Save on the same page is a normal, valid pattern. Heuristic 2 is scoped to New.
+    it('does not fire for a step or assert that follows Save under an action=Edit screen', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-edit" name="Post-save under Edit">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Edit screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=Edit&amp;recordId=%7BopportunityId%7D"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="4" title="Verify after save on Edit"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        0,
+        `Expected no UI-SCREEN-CONTEXT-001 under action=Edit; got: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+    });
+
+    // ─ False-positive guard (b): a "Save & New" continuation under action=New must NOT fire ─
+    // "Save & New" (action=saveAndNew) keeps the user on a fresh create screen, so filling
+    // the next record after it is legitimate. The exact-token match must exclude saveAndNew.
+    it('does not fire for a fill that follows a "Save & New" button under action=New (exact-token Save match)', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-savenew" name="Save and New continuation">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save and New" testItemId="3" title="Click Save and New">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=saveAndNew&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3DsaveAndNew"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Set the Name field" testItemId="4" title="Set next Opportunity Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        0,
+        `Expected no UI-SCREEN-CONTEXT-001 after Save & New; got: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+    });
+
+    // ─ Regression: two DISTINCT offending steps that both lack a testItemId must NOT merge ─
+    // Both UiAsserts render `testItemId=N/A`, so the old message-parse dedup collapsed them
+    // onto the shared `N/A` key (silent under-count). With structured de-dup on
+    // BPViolation.test_item_id, an absent/'N/A' id is treated as unique → BOTH are reported.
+    it('reports BOTH distinct offending steps when neither has a testItemId (no N/A collision)', () => {
+      const GUID_DOSC2 = '550e8400-e29b-41d4-a716-446655440054';
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-no-tid" name="Two asserts without testItemId">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify A" title="Verify Name"/>
+            <apiCall guid="${GUID_DOSC2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify B" title="Verify Amount"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        2,
+        `Expected BOTH testItemId-less steps to be reported (no N/A merge); got ${JSON.stringify(
+          vs.map((v) => v.message)
+        )}`
+      );
+      assert.ok(
+        vs.every((v) => v.test_item_id === 'N/A'),
+        `Both violations should carry the structured N/A test_item_id: ${JSON.stringify(vs.map((v) => v.test_item_id))}`
+      );
+      assert.ok(
+        vs.some((v) => v.message.includes('Verify Name')) && vs.some((v) => v.message.includes('Verify Amount')),
+        `Each distinct step should be named: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+    });
   });
 
   // ── UI-NITROX-CONNECT-ARGS-001 / UI-NITROX-VARIANT-ARG-001 — NitroX MS variants ──
