@@ -206,6 +206,44 @@ describe('runBestPractices', () => {
       );
       assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for missing pageobjects. prefix');
     });
+
+    // PDX-518: real Provar IDE test cases store the target in the uri= ATTRIBUTE
+    // of <value class="uiTarget" uri="…"/>, not in element #text. These tests
+    // exercise the attribute form so the rule actually fires on IDE-authored XML.
+    function buildUwsAttrXml(uri: string): string {
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-uwsattr" guid="${GUID_TC2}" registryId="tc-uwsattr" name="UWS Attr Target Test">
+  <steps>
+    <apiCall guid="${GUID_UWS}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="With page" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="${uri}"/>
+        </argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    }
+
+    it('passes for a valid SF target in the uri attribute (sf:ui:target?object=Opportunity&action=New)', () => {
+      const result = runBestPractices(
+        buildUwsAttrXml('sf:ui:target?object=Opportunity&amp;action=New&amp;noOverride=true')
+      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
+    });
+
+    it('fires for an SF target in the uri attribute with no recognised SF params', () => {
+      const result = runBestPractices(buildUwsAttrXml('sf:ui:target?foo=bar'));
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for SF target with no recognised params');
+    });
+
+    it('fires for a page object target in the uri attribute with bad pageId prefix', () => {
+      const result = runBestPractices(buildUwsAttrXml('ui:pageobject:target?pageId=LoginPage'));
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
+      assert.ok(uwsViolation, 'Expected uiWithScreenTarget violation for missing pageobjects. prefix in uri attribute');
+    });
   });
 
   // ── UI-NEST-STRUCT-001 — UI action nesting structure ──

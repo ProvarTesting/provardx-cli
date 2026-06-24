@@ -768,20 +768,6 @@ const VALID_SF_UI_PARAMS = new Set([
   'tab',
 ]);
 
-/** Read the "target" argument from a UiWithScreen call via the <arguments> wrapper. */
-function getUiWithScreenTarget(call: XmlNode): string | undefined {
-  const argsNode = call['arguments'] as XmlNode | undefined;
-  if (!argsNode || typeof argsNode !== 'object') return undefined;
-  for (const arg of toArr(argsNode['argument'] as XmlNode | XmlNode[])) {
-    if (!arg || typeof arg !== 'object') continue;
-    if (arg['@_id'] !== 'target') continue;
-    const valElem = arg['value'] as XmlNode | undefined;
-    if (!valElem || typeof valElem !== 'object') return undefined;
-    return (valElem['#text'] as string | undefined) ?? undefined;
-  }
-  return undefined;
-}
-
 /** UI-SCREEN-TARGET — validate UiWithScreen target URIs (SF and page object formats). */
 function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | null {
   const targetApiId = rule.check['apiId'] as string | undefined;
@@ -792,7 +778,7 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
     if (!apiId) continue;
     if (targetApiId && !apiId.includes(targetApiId)) continue;
 
-    const target = getUiWithScreenTarget(call);
+    const target = getUiWithScreenTargetUri(call);
     if (!target) continue;
 
     if (target.startsWith('sf:')) {
