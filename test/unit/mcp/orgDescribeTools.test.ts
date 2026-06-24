@@ -90,6 +90,68 @@ function writeXmlCache(
   fs.writeFileSync(path.join(connectionDir, `${objectName}${ext}`), xml, 'utf-8');
 }
 
+/**
+ * Resolve the Provar IDE SfObject cache directory for a connection + environment:
+ * <workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection>/<env>/SfObject
+ */
+function sfObjectDir(workspace: string, connection: string, env: string): string {
+  return path.join(workspace, '.metadata', '.plugins', 'com.provar.eclipse.ui', connection, env, 'SfObject');
+}
+
+/** A single <sfField> spec for the IDE SfObject fixture format. */
+interface SfFieldSpec {
+  name: string;
+  type?: string; // omit → no `type` attribute (reader should default to 'unknown')
+  required?: boolean; // required="true" → nillable=false
+  /** Emit a child <referenceTos> so the field is a container — children must NOT be counted. */
+  referenceTo?: string;
+}
+
+/**
+ * Write a Provar IDE SfObject XML file (sanitized shape based on the real IDE output) into
+ * <workspace>/.metadata/.plugins/com.provar.eclipse.ui/<connection>/<env>/SfObject/<Object>.xml.
+ * When `detailsLoaded` is false the file is a self-closing stub with no <fields> element.
+ */
+function writeSfObjectCache(
+  workspace: string,
+  connection: string,
+  env: string,
+  objectName: string,
+  displayName: string,
+  fields: SfFieldSpec[],
+  detailsLoaded = true
+): void {
+  const dir = sfObjectDir(workspace, connection, env);
+  fs.mkdirSync(dir, { recursive: true });
+
+  let xml: string;
+  if (!detailsLoaded) {
+    xml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
+      `<sfObject detailsLoaded="false" keyPrefix="001" label="${displayName}" n="${objectName}" t="${displayName}"/>\n`;
+  } else {
+    const sfFieldsXml = fields
+      .map((f) => {
+        const attrs = [`n="${f.name}"`];
+        if (f.type !== undefined) attrs.push(`type="${f.type}"`);
+        if (f.required) attrs.push('required="true"');
+        if (f.referenceTo) attrs.push('relationshipName="Owner"');
+        const open = `      <sfField ${attrs.join(' ')}`;
+        if (f.referenceTo) {
+          return `${open}>\n        <referenceTos>\n          <string>${f.referenceTo}</string>\n        </referenceTos>\n      </sfField>`;
+        }
+        return `${open}/>`;
+      })
+      .join('\n');
+    xml =
+      '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n' +
+      `<sfObject keyPrefix="a0D" label="${displayName}" n="${objectName}" t="${displayName}">\n` +
+      `  <fields>\n${sfFieldsXml}\n  </fields>\n` +
+      '</sfObject>\n';
+  }
+  fs.writeFileSync(path.join(dir, `${objectName}.xml`), xml, 'utf-8');
+}
+
 // ── Test setup ─────────────────────────────────────────────────────────────────
 
 let tmpRoot: string;
@@ -590,5 +652,226 @@ describe('provar_org_describe — connection_name validation', () => {
       /path separators/i.test(msg) && msg.includes('..'),
       `error message should mention both path separators and '..'; got: ${msg}`
     );
+  });
+});
+
+// ── (k) Provar IDE SfObject layout ────────────────────────────────────────────
+
+describe('provar_org_describe — Provar IDE SfObject layout', () => {
+  it('(k.1) parses <sfObject>/<fields>/<sfField> and reports field_count + required_fields', () => {
+    // Fixture modelled on the real provar__Person__c.xml: a mix of typed fields, a
+    // required field, a type-less field, and a container field with <referenceTos>.
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'UAT', 'provar__Person__c', 'Person', [
+      { name: 'Id', type: 'id' },
+      { name: 'OwnerId', type: 'reference', referenceTo: 'User' }, // container: child must not count
+      { name: 'Name' }, // no type → 'unknown'
+      { name: 'provar__Email__c', type: 'email', required: true }, // the only required field
+      { name: 'provar__Start_Date__c', type: 'date' },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      environment: 'UAT',
+      objects: ['provar__Person__c'],
+      field_filter: 'all',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{
+      name: string;
+      exists: boolean | null;
+      required_fields: Array<{ name: string; type: string; nillable: boolean; default_value: string | null }>;
+      field_count: number;
+    }>;
+    assert.equal(objects.length, 1);
+    assert.equal(objects[0].exists, true);
+    // 5 sfFields; the <string> children of <referenceTos> must NOT be counted.
+    assert.equal(objects[0].field_count, 5, 'container children must not be double-counted');
+    assert.equal(objects[0].name, 'Person', 'display name comes from sfObject @t');
+
+    const byName = new Map(objects[0].required_fields.map((f) => [f.name, f]));
+    assert.equal(byName.get('Name')?.type, 'unknown', 'field with no type attribute → "unknown"');
+    assert.equal(byName.get('provar__Email__c')?.nillable, false, 'required="true" → nillable=false');
+    assert.equal(byName.get('Id')?.nillable, true, 'absent required → nillable=true');
+    assert.equal(byName.get('provar__Email__c')?.default_value, null, 'SfObject format has no defaultValue');
+  });
+
+  it('(k.2) field_filter=required returns only the required field', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'UAT', 'provar__Person__c', 'Person', [
+      { name: 'Id', type: 'id' },
+      { name: 'provar__Email__c', type: 'email', required: true },
+      { name: 'Name' },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      environment: 'UAT',
+      objects: ['provar__Person__c'],
+      field_filter: 'required',
+    });
+
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{ required_fields: Array<{ name: string }>; field_count: number }>;
+    assert.equal(objects[0].field_count, 3, 'field_count reports all fields, not the filtered subset');
+    const names = objects[0].required_fields.map((f) => f.name);
+    assert.deepEqual(names, ['provar__Email__c'], 'only the required field passes field_filter=required');
+  });
+
+  it('(k.3) falls back to an existing env (default) when requested env missing', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    // Only `default` has cached metadata; the request asks for `UAT`.
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [
+      { name: 'Name', type: 'string', required: true },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      environment: 'UAT',
+      objects: ['Account'],
+      field_filter: 'all',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{ name: string; exists: boolean | null; field_count: number }>;
+    assert.equal(objects[0].exists, true, 'should fall back to the default environment cache');
+    assert.equal(objects[0].field_count, 1);
+  });
+
+  it('(k.4) defaults environment to "default" when omitted', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [
+      { name: 'Name', type: 'string', required: true },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      objects: ['Account'],
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{ name: string; exists: boolean | null }>;
+    assert.equal(objects[0].exists, true);
+  });
+
+  it('(k.5) treats a stub (detailsLoaded=false, no <fields>) as exists=true, field_count=0', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [], false);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      objects: ['Account'],
+      field_filter: 'all',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{
+      name: string;
+      exists: boolean | null;
+      field_count: number;
+      error_message?: string;
+    }>;
+    assert.equal(objects[0].exists, true, 'stub file exists');
+    assert.equal(objects[0].field_count, 0, 'stub has no loaded fields');
+    assert.equal(objects[0].error_message, undefined, 'a stub is not a parse error');
+  });
+
+  it('(k.6) lists all cached objects in the SfObject dir when objects omitted', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [{ name: 'Name', type: 'string' }]);
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Contact', 'Contact', [
+      { name: 'LastName', type: 'string' },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+    });
+
+    const body = parseText(result);
+    assert.ok(typeof body['cache_age_ms'] === 'number', 'cache_age_ms reflects the SfObject dir mtime');
+    const objects = body['objects'] as Array<{ name: string }>;
+    // Display names come from sfObject @t; both objects use their own name here.
+    const names = objects.map((o) => o.name).sort();
+    assert.deepEqual(names, ['Account', 'Contact']);
+  });
+
+  it('(k.7) prefers the IDE SfObject layout over the legacy .metadata/<connection> layout', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    // Legacy layout has 1 field; IDE layout has 2. IDE must win.
+    writeJsonCache(path.join(siblingWorkspace, '.metadata', 'Admin'), 'Account', [
+      { name: 'LegacyOnly', type: 'string', defaultValue: null, nillable: false },
+    ]);
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [
+      { name: 'Name', type: 'string', required: true },
+      { name: 'Phone', type: 'phone' },
+    ]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      objects: ['Account'],
+      field_filter: 'all',
+    });
+
+    const body = parseText(result);
+    const objects = body['objects'] as Array<{ field_count: number; required_fields: Array<{ name: string }> }>;
+    assert.equal(objects[0].field_count, 2, 'IDE SfObject layout should be preferred over legacy');
+    const names = objects[0].required_fields.map((f) => f.name).sort();
+    assert.deepEqual(names, ['Name', 'Phone']);
+  });
+
+  it('(k.8) rejects an environment containing a path separator with PATH_TRAVERSAL', () => {
+    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
+    writeSfObjectCache(siblingWorkspace, 'Admin', 'default', 'Account', 'Account', [{ name: 'Name', type: 'string' }]);
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'Admin',
+      environment: '../../escape',
+      objects: ['Account'],
+    });
+
+    assert.equal(isError(result), true);
+    const code = parseText(result)['error_code'] as string;
+    assert.ok(code === 'PATH_TRAVERSAL' || code === 'PATH_NOT_ALLOWED', `Unexpected error_code: ${code}`);
+  });
+
+  it('(k.9) rejects a workspace SfObject path outside allowedPaths', () => {
+    // Build a workspace OUTSIDE the allowed root and point project discovery at it via a
+    // sibling whose parent is outside tmpRoot. The IDE-layout SfObject dir then sits
+    // outside allowedPaths and must be rejected by the path policy.
+    const outsideRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'org-describe-out-')));
+    try {
+      const outsideProject = path.join(outsideRoot, 'OutProject');
+      fs.mkdirSync(outsideProject, { recursive: true });
+      const outsideWorkspace = path.join(outsideRoot, 'workspace-OutProject');
+      writeSfObjectCache(outsideWorkspace, 'Admin', 'default', 'Account', 'Account', [
+        { name: 'Name', type: 'string' },
+      ]);
+
+      // Server allows ONLY tmpRoot, but project_path/workspace live under outsideRoot.
+      const result = server.call('provar_org_describe', {
+        project_path: outsideProject,
+        connection_name: 'Admin',
+        objects: ['Account'],
+      });
+
+      assert.equal(isError(result), true, 'a workspace outside allowedPaths must be rejected');
+      const code = parseText(result)['error_code'] as string;
+      assert.ok(code === 'PATH_NOT_ALLOWED' || code === 'PATH_TRAVERSAL', `Unexpected error_code: ${code}`);
+    } finally {
+      fs.rmSync(outsideRoot, { recursive: true, force: true });
+    }
   });
 });
