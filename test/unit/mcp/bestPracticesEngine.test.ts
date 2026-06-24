@@ -420,6 +420,165 @@ describe('runBestPractices', () => {
     }
   });
 
+  // ── UI-SCREEN-CONTEXT-001 — assert / post-save under the wrong screen ──
+  describe('UI-SCREEN-CONTEXT-001 — uiAssertScreenContext validator', () => {
+    const GUID_TCSC = '550e8400-e29b-41d4-a716-446655440050';
+    const GUID_UWSSC = '550e8400-e29b-41d4-a716-446655440051';
+    const GUID_DOSC = '550e8400-e29b-41d4-a716-446655440052';
+    const GUID_XSC = '550e8400-e29b-41d4-a716-446655440053';
+
+    function screenViolations(violations: BPViolation[]): BPViolation[] {
+      return violations.filter((v) => v.rule_id === 'UI-SCREEN-CONTEXT-001');
+    }
+
+    async function readFixture(name: string): Promise<string> {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const url = await import('node:url');
+      const here = path.dirname(url.fileURLToPath(import.meta.url));
+      return fs.readFileSync(path.join(here, '..', '..', 'fixtures', name), 'utf-8');
+    }
+
+    // ─ POSITIVE: constructed bad fixture (assert under action=New, after Save) fires ─
+    it('fires on the constructed bad fixture (UiAssert under action=New, after Save)', async () => {
+      const xml = await readFixture('opportunity-create-verify-bad.testcase');
+      const result = runBestPractices(xml);
+      const vs = screenViolations(result.violations);
+      assert.ok(vs.length >= 1, `Expected UI-SCREEN-CONTEXT-001 to fire; got ${vs.length}`);
+      assert.equal(vs[0].severity, 'major');
+      assert.equal(vs[0].weight, 5);
+      assert.ok(
+        vs.some((v) => v.message.includes('testItemId=14')),
+        `Expected a violation naming the offending UiAssert (testItemId=14): ${JSON.stringify(
+          vs.map((v) => v.message)
+        )}`
+      );
+      assert.ok(result.quality_score < 100, `Expected quality_score < 100, got ${result.quality_score}`);
+    });
+
+    // ─ NEGATIVE: good fixture (assert under action=View) does NOT fire ─
+    it('does not fire on the good fixture (UiAssert under action=View)', async () => {
+      const xml = await readFixture('opportunity-create-verify-good.testcase');
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 0, `Expected no UI-SCREEN-CONTEXT-001; got: ${JSON.stringify(vs.map((v) => v.message))}`);
+    });
+
+    // ─ Heuristic 1: UiAssert directly under an action=New screen fires ─
+    it('fires for a UiAssert nested under an action=New screen', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-new" name="Assert under New">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="3" title="Verify Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 1, `Expected one violation; got ${JSON.stringify(vs.map((v) => v.message))}`);
+      assert.ok(vs[0].message.includes('action=New'), `Message should mention action=New: ${vs[0].message}`);
+      assert.ok(vs[0].message.includes('testItemId=3'), `Message should name the step: ${vs[0].message}`);
+    });
+
+    // ─ Heuristic 2: any UI action after a Save in the same screen block fires ─
+    it('fires for a step that follows a Save within the same UiWithScreen block', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-aftersave" name="Step after Save">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+            <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click after save" testItemId="4" title="Click Edit"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.ok(
+        vs.some((v) => v.message.includes('testItemId=4') && v.message.includes('after a Save')),
+        `Expected a post-save violation for the trailing step (testItemId=4): ${JSON.stringify(
+          vs.map((v) => v.message)
+        )}`
+      );
+    });
+
+    // ─ Clean minimal: assert under action=View, nothing after Save → no violation ─
+    it('does not fire when the assert is under an action=View screen and nothing follows Save', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-view" name="Assert under View">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Save" testItemId="3" title="Click Save">
+              <arguments>
+                <argument id="locator">
+                  <value class="uiLocator" uri="ui:locator?name=save&amp;binding=sf%3Aui%3Abinding%3Aobject%3Fobject%3DOpportunity%26action%3Dsave"/>
+                </argument>
+                <argument id="interaction">
+                  <value class="uiInteraction" uri="ui:interaction?name=action"/>
+                </argument>
+              </arguments>
+            </apiCall>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+    <apiCall guid="${GUID_XSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="View screen" testItemId="4">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=View&amp;recordId=%7BopportunityId%7D"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="5">
+          <steps>
+            <apiCall guid="${GUID_TCSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify" testItemId="6" title="Verify Name"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(vs.length, 0, `Expected no UI-SCREEN-CONTEXT-001; got: ${JSON.stringify(vs.map((v) => v.message))}`);
+    });
+  });
+
   // ── UI-NITROX-CONNECT-ARGS-001 / UI-NITROX-VARIANT-ARG-001 — NitroX MS variants ──
 
   describe('NitroX MS variants (Dynamics 365 + Power Platform)', () => {

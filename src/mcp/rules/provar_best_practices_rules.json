@@ -2960,6 +2960,22 @@
       "source": "Field observation: flat-emitted UI actions (sibling of UiWithScreen) fail to render in Provar IDE despite scoring 100/94 in earlier local validation"
     },
     {
+      "id": "UI-SCREEN-CONTEXT-001",
+      "category": "TestCaseDesign",
+      "name": "UI verification or post-save step left under the wrong screen context",
+      "description": "A UiAssert or UiRead nested under a create screen (UiWithScreen target action=New), or any UI action placed after a Save (action=save) inside the same UiWithScreen substeps block, is almost certainly bound to the wrong screen. Salesforce tears down the create form on Save and navigates to the saved record's View screen, so a verification still nested under action=New asserts against a page that no longer exists, and steps following a Save in the same wrapper run in stale context. The test case still loads and may even score 100, so this is a runtime/logic correctness issue (major), not a load failure.",
+      "appliesTo": ["Step", "TestCase"],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Close the create UiWithScreen at the Save step and open a new UiWithScreen targeting the post-save screen for any verification or follow-up action. For Salesforce record creation, assert the saved record under a UiWithScreen with target sf:ui:target?object=<Object>&action=View&recordId={<idVar>}, capturing the created record id via sfUiTargetResultName on the create screen. Do not place UiAssert/UiRead steps under an action=New screen, and do not leave steps after a Save inside the create screen's substeps block.",
+      "check": {
+        "type": "uiAssertScreenContext",
+        "target": "step"
+      },
+      "notes": "Two heuristics over data already in the XML: (1) UiAssert/UiRead whose nearest enclosing UiWithScreen target URI carries action=New; (2) any UI action that appears after a Save UiDoAction (locator binding action%3Dsave, percent-encoded in the URI) within the same <clause name=\"substeps\"> block. Emits one violation per offending step so (rule_id, test_item_id) de-dups cleanly. Coverage limit: this is a structural heuristic — a passing run confirms the create/verify split is structured correctly, not that the assertion logic itself is correct.",
+      "source": "Field observation: AI-generated create-and-verify tests leave the UiAssert under the action=New screen, scoring 100 while asserting against the wrong page at runtime"
+    },
+    {
       "id": "VAR-STRING-LITERAL-001",
       "category": "TestCaseDesign",
       "name": "Variable reference stored as plain string",
