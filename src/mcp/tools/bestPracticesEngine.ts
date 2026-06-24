@@ -764,6 +764,15 @@ function validateUniqueResultNames(tc: XmlNode, rule: BPRule): BPViolation | nul
 
 // ── UiWithScreen target URI validator ─────────────────────────────────────────
 
+// Recognised query-param keys on an `sf:ui:target?…` URI. A UiWithScreen SF
+// target is treated as valid when it carries AT LEAST ONE of these keys. The set
+// is corpus-verified against real Provar IDE test cases (CPQ / Billing / sales
+// flows) — a target whose only keys are outside this set (e.g. `?foo=bar`) is
+// flagged as having no recognised SF parameters. PDX-518: extended with the
+// FlexiPage / Visualforce / record-type navigation params the IDE actually emits
+// (`page`, `pageObject`, `flexiPage`, `flexiPath`, `recordType`, `listView`,
+// `quickAction`, `relatedList`, `noOverride`) so activating the attribute reader
+// does not false-positive on legitimate IDE-authored screens.
 const VALID_SF_UI_PARAMS = new Set([
   'object',
   'action',
@@ -774,21 +783,22 @@ const VALID_SF_UI_PARAMS = new Set([
   'lookup',
   'fieldService',
   'tab',
+  // Visualforce-page navigation (e.g. SBQQ__sb, blng__creditInvoice).
+  'page',
+  'pageObject',
+  // Lightning record-page (FlexiPage) targeting.
+  'flexiPage',
+  'flexiPath',
+  // Record-type-scoped navigation.
+  'recordType',
+  // List-view, quick-action and related-list navigation.
+  'listView',
+  'quickAction',
+  'relatedList',
+  // Standard-action override flag carried on `action=New&noOverride=true` forms;
+  // legitimate on its own as a recognised SF nav parameter.
+  'noOverride',
 ]);
-
-/** Read the "target" argument from a UiWithScreen call via the <arguments> wrapper. */
-function getUiWithScreenTarget(call: XmlNode): string | undefined {
-  const argsNode = call['arguments'] as XmlNode | undefined;
-  if (!argsNode || typeof argsNode !== 'object') return undefined;
-  for (const arg of toArr(argsNode['argument'] as XmlNode | XmlNode[])) {
-    if (!arg || typeof arg !== 'object') continue;
-    if (arg['@_id'] !== 'target') continue;
-    const valElem = arg['value'] as XmlNode | undefined;
-    if (!valElem || typeof valElem !== 'object') return undefined;
-    return (valElem['#text'] as string | undefined) ?? undefined;
-  }
-  return undefined;
-}
 
 /** UI-SCREEN-TARGET — validate UiWithScreen target URIs (SF and page object formats). */
 function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | null {
@@ -800,7 +810,7 @@ function validateUiWithScreenTarget(tc: XmlNode, rule: BPRule): BPViolation | nu
     if (!apiId) continue;
     if (targetApiId && !apiId.includes(targetApiId)) continue;
 
-    const target = getUiWithScreenTarget(call);
+    const target = getUiWithScreenTargetUri(call);
     if (!target) continue;
 
     if (target.startsWith('sf:')) {
