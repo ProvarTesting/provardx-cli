@@ -63,6 +63,13 @@ export interface BPViolation {
   recommendation: string;
   applies_to: string[];
   count?: number;
+  /**
+   * The offending step's testItemId, when a rule attaches its violation to a
+   * specific step. Used as a structured de-dup key (e.g. UI-SCREEN-CONTEXT-001)
+   * instead of parsing the id out of the human-readable message. Absent/`'N/A'`/
+   * empty means "no stable id" — such violations are never merged together.
+   */
+  test_item_id?: string;
 }
 
 export interface BPEngineResult {
@@ -333,7 +340,7 @@ export function calculateBPScore(violations: BPViolation[]): number {
 
 // ── Violation factory ─────────────────────────────────────────────────────────
 
-function makeViolation(rule: BPRule, message: string, count?: number): BPViolation {
+function makeViolation(rule: BPRule, message: string, count?: number, testItemId?: string): BPViolation {
   const v: BPViolation = {
     rule_id: rule.id,
     name: rule.name,
@@ -346,6 +353,7 @@ function makeViolation(rule: BPRule, message: string, count?: number): BPViolati
     applies_to: rule.appliesTo ?? [],
   };
   if (count !== undefined && count > 1) v.count = count;
+  if (testItemId !== undefined) v.test_item_id = testItemId;
   return v;
 }
 
@@ -1071,7 +1079,9 @@ function flagAssertsOnNewScreen(screen: XmlNode, rule: BPRule, out: BPViolation[
         rule,
         `${describeStep(step)} verifies a persisted record while nested under the create screen ` +
           '(action=New). The create screen is torn down after Save, so the assertion runs against the ' +
-          'wrong page context. Move it into a new UiWithScreen targeting action=View (or the appropriate post-save screen).'
+          'wrong page context. Move it into a new UiWithScreen targeting action=View (or the appropriate post-save screen).',
+        undefined,
+        stepContext(step).tid
       )
     );
   }
@@ -1102,16 +1112,16 @@ function flagStepsAfterSave(screen: XmlNode, rule: BPRule, out: BPViolation[]): 
         rule,
         `${describeStep(step)} appears after a Save (action=save) inside the same action=New screen block. ` +
           'Save tears down the create screen, so this step runs in stale context. Move it into a new ' +
-          'UiWithScreen targeting action=View (or the appropriate post-save screen).'
+          'UiWithScreen targeting action=View (or the appropriate post-save screen).',
+        undefined,
+        stepContext(step).tid
       )
     );
   }
 }
 
-/** The testItemId an offending step is associated with, parsed from a violation message (`testItemId=N`). */
-function violationTestItemId(v: BPViolation): string {
-  return /testItemId=([^\s)]+)/.exec(v.message)?.[1] ?? v.message;
-}
+/** testItemId values that do not stably identify a step, so must never be merged across violations. */
+const UNSTABLE_TEST_ITEM_IDS = new Set<string>(['', 'N/A']);
 
 /**
  * UI-SCREEN-CONTEXT-001 — flag UiAssert/UiRead steps left under the `action=New`
@@ -1121,9 +1131,16 @@ function violationTestItemId(v: BPViolation): string {
  *
  * The canonical defect (a UiAssert placed after Save inside the create screen)
  * trips BOTH heuristics for the SAME step. Because this local engine sums every
- * BPViolation when scoring (it has no test_item_id field to de-dup on, unlike the
- * Quality Hub API), we de-dup here and emit AT MOST ONE violation per offending
- * testItemId so the step is penalised once (major × weight 5), not twice.
+ * BPViolation when scoring (unlike the Quality Hub API, which de-dups by
+ * test_item_id), we de-dup here on the structured `BPViolation.test_item_id`
+ * the flag* helpers attach (the offending step's testItemId), emitting AT MOST
+ * ONE violation per stable testItemId so the step is penalised once (major ×
+ * weight 5), not twice.
+ *
+ * Steps with no stable id (`test_item_id` absent / `'N/A'` / empty) are treated
+ * as unique and NEVER merged: two genuinely-different offending steps that both
+ * lack a testItemId must each be reported, rather than collapsing onto a shared
+ * `N/A` key (the old message-parse dedup silently under-counted them).
  */
 function validateUiAssertScreenContext(tc: XmlNode, rule: BPRule): BPViolation[] {
   const raw: BPViolation[] = [];
@@ -1135,9 +1152,14 @@ function validateUiAssertScreenContext(tc: XmlNode, rule: BPRule): BPViolation[]
   const seen = new Set<string>();
   const deduped: BPViolation[] = [];
   for (const v of raw) {
-    const key = violationTestItemId(v);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const id = v.test_item_id ?? '';
+    if (UNSTABLE_TEST_ITEM_IDS.has(id)) {
+      // No stable id — never merge; report each occurrence.
+      deduped.push(v);
+      continue;
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
     deduped.push(v);
   }
   return deduped;
