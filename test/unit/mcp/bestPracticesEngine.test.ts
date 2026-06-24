@@ -664,6 +664,50 @@ describe('runBestPractices', () => {
         `Expected no UI-SCREEN-CONTEXT-001 after Save & New; got: ${JSON.stringify(vs.map((v) => v.message))}`
       );
     });
+
+    // ─ Regression: two DISTINCT offending steps that both lack a testItemId must NOT merge ─
+    // Both UiAsserts render `testItemId=N/A`, so the old message-parse dedup collapsed them
+    // onto the shared `N/A` key (silent under-count). With structured de-dup on
+    // BPViolation.test_item_id, an absent/'N/A' id is treated as unique → BOTH are reported.
+    it('reports BOTH distinct offending steps when neither has a testItemId (no N/A collision)', () => {
+      const GUID_DOSC2 = '550e8400-e29b-41d4-a716-446655440054';
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="1" guid="${GUID_TCSC}" registryId="tc-screen-no-tid" name="Two asserts without testItemId">
+  <steps>
+    <apiCall guid="${GUID_UWSSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="New screen" testItemId="1">
+      <arguments>
+        <argument id="target">
+          <value class="uiTarget" uri="sf:ui:target?object=Opportunity&amp;action=New"/>
+        </argument>
+      </arguments>
+      <clauses>
+        <clause name="substeps" testItemId="2">
+          <steps>
+            <apiCall guid="${GUID_DOSC}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify A" title="Verify Name"/>
+            <apiCall guid="${GUID_DOSC2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Verify B" title="Verify Amount"/>
+          </steps>
+        </clause>
+      </clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+      const vs = screenViolations(runBestPractices(xml).violations);
+      assert.equal(
+        vs.length,
+        2,
+        `Expected BOTH testItemId-less steps to be reported (no N/A merge); got ${JSON.stringify(
+          vs.map((v) => v.message)
+        )}`
+      );
+      assert.ok(
+        vs.every((v) => v.test_item_id === 'N/A'),
+        `Both violations should carry the structured N/A test_item_id: ${JSON.stringify(vs.map((v) => v.test_item_id))}`
+      );
+      assert.ok(
+        vs.some((v) => v.message.includes('Verify Name')) && vs.some((v) => v.message.includes('Verify Amount')),
+        `Each distinct step should be named: ${JSON.stringify(vs.map((v) => v.message))}`
+      );
+    });
   });
 
   // ── UI-NITROX-CONNECT-ARGS-001 / UI-NITROX-VARIANT-ARG-001 — NitroX MS variants ──
