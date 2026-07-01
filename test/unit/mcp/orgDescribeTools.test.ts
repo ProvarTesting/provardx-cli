@@ -182,15 +182,19 @@ afterEach(() => {
 // ── workspaceCandidates ───────────────────────────────────────────────────────
 
 describe('workspaceCandidates', () => {
-  it('returns three candidates in expected order', () => {
+  it('returns four candidates in order: parent, sibling, Provar_Workspaces, home', () => {
     const cands = workspaceCandidates('/Users/alice/projects/My Project');
-    assert.equal(cands.length, 3);
+    assert.equal(cands.length, 4);
     assert.equal(cands[0], path.resolve('/Users/alice/projects'), `Expected project parent first, got: ${cands[0]}`);
     assert.ok(
-      cands[1].includes('Provar_Workspaces') && cands[1].endsWith('workspace-My Project'),
-      `Expected Provar_Workspaces second, got: ${cands[1]}`
+      cands[1].endsWith(`${path.sep}workspace-My Project`) && !cands[1].includes('Provar_Workspaces'),
+      `Expected sibling <parent>/workspace-<basename> second, got: ${cands[1]}`
     );
-    assert.ok(cands[2].endsWith(`${path.sep}Provar${path.sep}workspace-My Project`));
+    assert.ok(
+      cands[2].includes('Provar_Workspaces') && cands[2].endsWith('workspace-My Project'),
+      `Expected Provar_Workspaces third, got: ${cands[2]}`
+    );
+    assert.ok(cands[3].endsWith(`${path.sep}Provar${path.sep}workspace-My Project`));
   });
 });
 
@@ -211,6 +215,33 @@ describe('provar_org_describe — workspace discovery', () => {
     assert.equal(isError(result), false);
     const body = parseText(result);
     assert.equal(body['workspace_path'], workspace, 'should discover the project-parent workspace');
+    const objects = body['objects'] as Array<{ name: string; exists: boolean | null; field_count: number }>;
+    assert.equal(objects.length, 1);
+    assert.equal(objects[0].name, 'Account');
+    assert.equal(objects[0].exists, true);
+    assert.equal(objects[0].field_count, 1);
+  });
+
+  it('(a2) falls back to the sibling <parent>/workspace-<basename> workspace (back-compat)', () => {
+    // Back-compat layout: the project's parent is NOT itself a workspace, but a sibling
+    // dir named workspace-<basename> is. beforeEach leaves the parent (<tmpRoot>/workspace-MyProject)
+    // without a .metadata dir, so candidate 1 (parent) falls through to candidate 2 (sibling).
+    const parent = path.dirname(projectPath); // <tmpRoot>/workspace-MyProject
+    const sibling = path.join(parent, 'workspace-MyProject'); // <parent>/workspace-<basename>
+    const connectionDir = path.join(sibling, '.metadata', 'MyOrg');
+    writeJsonCache(connectionDir, 'Account', [{ name: 'Name', type: 'string', defaultValue: null, nillable: false }]);
+
+    // Sanity: the parent must NOT be a workspace here, otherwise candidate 1 would win.
+    assert.equal(fs.existsSync(path.join(parent, '.metadata')), false, 'parent must not have .metadata for this test');
+
+    const result = server.call('provar_org_describe', {
+      project_path: projectPath,
+      connection_name: 'MyOrg',
+    });
+
+    assert.equal(isError(result), false);
+    const body = parseText(result);
+    assert.equal(body['workspace_path'], sibling, 'should discover the sibling workspace-<basename> workspace');
     const objects = body['objects'] as Array<{ name: string; exists: boolean | null; field_count: number }>;
     assert.equal(objects.length, 1);
     assert.equal(objects[0].name, 'Account');
