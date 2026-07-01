@@ -48,6 +48,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.nodeversion }}
+      - name: 'Disable Windows Defender real-time monitoring (CI speed)'
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
       - name: 'Cache node_modules'
         uses: actions/cache@v5
         with:
@@ -55,7 +59,15 @@ jobs:
           key: ${{ runner.os }}-node-v${{ matrix.nodeversion }}-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-node-v${{ matrix.nodeversion }}-
+      - name: 'Cache sf CLI (Windows)'
+        if: matrix.os == 'windows-latest'
+        uses: actions/cache@v5
+        id: cache-sf-cli
+        with:
+          path: C:\Users\runneradmin\AppData\Roaming\npm
+          key: sf-cli-windows-${{ hashFiles('package.json') }}
       - name: 'sf installation'
+        if: steps.cache-sf-cli.outputs.cache-hit != 'true'
         run: |
           npm install -g @salesforce/cli
 
@@ -87,7 +99,7 @@ jobs:
             let branchExists = false;
             try {
               await github.rest.repos.getBranch({
-                owner: 'ProvarTesting', 
+                owner: 'ProvarTesting',
                 repo: 'provardx-plugins-utils',
                 branch: branch,
               });
@@ -134,9 +146,9 @@ jobs:
       - name: Change permissions
         run: |
           if [ "$RUNNER_OS" == "Linux" ]; then
-               chmod 777 ./bin/run.js
+                chmod 777 ./bin/run.js
           elif [ "$RUNNER_OS" == "macOS" ]; then
-               chmod 777 ./bin/run.js
+                chmod 777 ./bin/run.js
           fi
         shell: bash
       - name: Execute NUTS
