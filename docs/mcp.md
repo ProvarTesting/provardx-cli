@@ -2038,13 +2038,13 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 
 **Prerequisite:** the project must have been opened in Provar IDE at least once with the named connection loaded, and (for the chosen test environment) the relevant objects expanded so their metadata is written to disk. If the cache is missing, the tool returns a structured response with `details.suggestion` rather than an error.
 
-**Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that exists:
+**Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that is a Provar workspace (i.e. contains a `.metadata` directory):
 
-1. `<parent-of-project>/workspace-<basename>/` — sibling workspace pattern (default for Provar IDE in this workspace layout).
-2. `<parent-of-project>/Provar_Workspaces/workspace-<name-dashes>/` — shared `Provar_Workspaces` directory.
-3. `~/Provar/workspace-<name-dashes>/` — user-home fallback.
+1. `<parent-of-project>/` — the project's parent directory (the project lives inside its workspace; default for the Provar IDE layout).
+2. `<parent-of-project>/Provar_Workspaces/workspace-<basename>/` — shared `Provar_Workspaces` directory.
+3. `~/Provar/workspace-<basename>/` — user-home fallback.
 
-`<name-dashes>` is the project's basename with whitespace collapsed to single dashes and lowercased: `"My Project"` → `"my-project"`.
+`<basename>` is the project directory's name verbatim (e.g. `"MyProject"`). A candidate is skipped unless it contains a `.metadata` directory, so candidate 1 (which almost always exists) falls through to the fallbacks when the parent is not itself a workspace. Each candidate is also checked against `--allowed-paths` before any filesystem access; candidates outside the policy are silently skipped.
 
 **Cache layout resolution (within the discovered workspace).** The tool prefers the Provar IDE SfObject cache and falls back to the legacy/native layout:
 

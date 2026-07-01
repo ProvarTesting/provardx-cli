@@ -79,43 +79,41 @@ interface CachedObject {
 // ── Workspace discovery ───────────────────────────────────────────────────────
 
 /**
- * Normalise a project basename for use in fallback workspace dir names:
- * "My Project Path " → "my-project-path".
- */
-export function projectNameDashes(projectPath: string): string {
-  return path.basename(projectPath).trim().replace(/\s+/g, '-').toLowerCase();
-}
-
-/**
  * Build the ordered list of candidate workspace directories.
  * First existing wins.
- * 1. <parent>/workspace-<basename>/ — sibling workspace pattern.
- * 2. <parent>/Provar_Workspaces/workspace-<name-dashes>/
- * 3. ~/Provar/workspace-<name-dashes>/ — user-home fallback.
+ * 1. <parent>/ — the project's parent directory.
+ * 2. <parent>/Provar_Workspaces/workspace-<basename>/
+ * 3. ~/Provar/workspace-<basename>/ — user-home fallback.
  */
 export function workspaceCandidates(projectPath: string): string[] {
   const resolved = path.resolve(projectPath);
   const parent = path.dirname(resolved);
   const basename = path.basename(resolved);
-  const dashes = projectNameDashes(resolved);
   return [
-    path.join(parent, `workspace-${basename}`),
-    path.join(parent, 'Provar_Workspaces', `workspace-${dashes}`),
-    path.join(os.homedir(), 'Provar', `workspace-${dashes}`),
+    parent,
+    path.join(parent, 'Provar_Workspaces', `workspace-${basename}`),
+    path.join(os.homedir(), 'Provar', `workspace-${basename}`),
   ];
 }
 
 /**
- * Returns the first candidate workspace that exists AND is within allowedPaths, or null.
+ * Returns the first candidate that is a real Provar workspace AND is within
+ * allowedPaths, or null.
+ *
+ * A candidate qualifies only if it is a directory that contains a `.metadata`
+ * subdirectory — the marker of a Provar/Eclipse workspace. This matters now that
+ * candidate 1 is the project's parent directory, which almost always exists: the
+ * `.metadata` requirement lets discovery fall through to the Provar_Workspaces and
+ * ~/Provar fallbacks when the parent is not itself a workspace.
  *
  * Path policy is enforced PER CANDIDATE before any filesystem call: a candidate that
  * sits outside `--allowed-paths` is silently skipped (it is not an error — discovery
  * just moves on to the next). This means we never call fs.existsSync / fs.statSync
  * against directories that the operator has explicitly placed off-limits, including
- * the user-home fallback (~/Provar/...) when home sits outside the policy.
+ * the user-home fallback (~/Provar/workspace-<basename>/) when home sits outside the policy.
  *
  * When allowedPaths is empty (unrestricted mode), assertPathAllowed is a no-op and
- * all candidates are probed exactly as before.
+ * all candidates are probed.
  */
 export function discoverWorkspace(projectPath: string, allowedPaths: string[] = []): string | null {
   for (const candidate of workspaceCandidates(projectPath)) {
@@ -125,12 +123,10 @@ export function discoverWorkspace(projectPath: string, allowedPaths: string[] = 
       // Candidate outside policy — skip without touching the filesystem.
       continue;
     }
-    try {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-        return candidate;
-      }
-    } catch {
-      // Permission errors etc. — skip and try next candidate
+    // A candidate qualifies only if it holds a `.metadata` subdirectory; this
+    // also implies the candidate itself is an existing directory.
+    if (isExistingDir(path.join(candidate, '.metadata'))) {
+      return candidate;
     }
   }
   return null;

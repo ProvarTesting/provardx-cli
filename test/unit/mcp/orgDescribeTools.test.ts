@@ -14,7 +14,6 @@ import { describe, it, beforeEach, afterEach } from 'mocha';
 import {
   registerOrgDescribe,
   discoverWorkspace,
-  projectNameDashes,
   workspaceCandidates,
 } from '../../../src/mcp/tools/orgDescribeTools.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
@@ -163,11 +162,14 @@ beforeEach(() => {
   // Use realpathSync to canonicalise the path on macOS (/var → /private/var) so
   // assertPathAllowed comparisons match the realpath the policy resolves to.
   tmpRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'org-describe-test-')));
-  projectPath = path.join(tmpRoot, 'MyProject');
+  // The project lives INSIDE its workspace directory; discovery resolves the workspace
+  // as the project's parent (<parent>/). Naming the parent workspace-MyProject lets the
+  // per-test fixtures keep writing caches under <tmpRoot>/workspace-MyProject.
+  projectPath = path.join(tmpRoot, 'workspace-MyProject', 'MyProject');
   fs.mkdirSync(projectPath, { recursive: true });
 
   server = new MockMcpServer();
-  // tmpRoot must be allowed so both the project path and any sibling workspace
+  // tmpRoot must be allowed so both the project path and any workspace
   // candidate (also under tmpRoot) pass the path policy check.
   config = { allowedPaths: [tmpRoot] };
   registerOrgDescribe(server as never, config);
@@ -177,38 +179,28 @@ afterEach(() => {
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-// ── projectNameDashes / workspaceCandidates ───────────────────────────────────
-
-describe('projectNameDashes', () => {
-  it('lowercases and replaces whitespace with single dashes', () => {
-    assert.equal(projectNameDashes('/x/My Project Path'), 'my-project-path');
-    assert.equal(projectNameDashes('/x/  Spaced  Name  '), 'spaced-name');
-  });
-});
+// ── workspaceCandidates ───────────────────────────────────────────────────────
 
 describe('workspaceCandidates', () => {
   it('returns three candidates in expected order', () => {
     const cands = workspaceCandidates('/Users/alice/projects/My Project');
     assert.equal(cands.length, 3);
+    assert.equal(cands[0], path.resolve('/Users/alice/projects'), `Expected project parent first, got: ${cands[0]}`);
     assert.ok(
-      cands[0].endsWith(`${path.sep}workspace-My Project`),
-      `Expected sibling workspace first, got: ${cands[0]}`
-    );
-    assert.ok(
-      cands[1].includes('Provar_Workspaces') && cands[1].endsWith('workspace-my-project'),
+      cands[1].includes('Provar_Workspaces') && cands[1].endsWith('workspace-My Project'),
       `Expected Provar_Workspaces second, got: ${cands[1]}`
     );
-    assert.ok(cands[2].endsWith(`${path.sep}Provar${path.sep}workspace-my-project`));
+    assert.ok(cands[2].endsWith(`${path.sep}Provar${path.sep}workspace-My Project`));
   });
 });
 
-// ── (a) Workspace discovery — sibling pattern ─────────────────────────────────
+// ── (a) Workspace discovery — project parent ──────────────────────────────────
 
 describe('provar_org_describe — workspace discovery', () => {
-  it('(a) finds the sibling workspace at <parent>/workspace-<basename>', () => {
-    // <tmpRoot>/workspace-MyProject is the sibling pattern
-    const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
-    const connectionDir = path.join(siblingWorkspace, '.metadata', 'MyOrg');
+  it('(a) finds the workspace at the project parent (<parent>/)', () => {
+    // The project's parent dir (<tmpRoot>/workspace-MyProject) is the workspace.
+    const workspace = path.join(tmpRoot, 'workspace-MyProject');
+    const connectionDir = path.join(workspace, '.metadata', 'MyOrg');
     writeJsonCache(connectionDir, 'Account', [{ name: 'Name', type: 'string', defaultValue: null, nillable: false }]);
 
     const result = server.call('provar_org_describe', {
@@ -218,7 +210,7 @@ describe('provar_org_describe — workspace discovery', () => {
 
     assert.equal(isError(result), false);
     const body = parseText(result);
-    assert.equal(body['workspace_path'], siblingWorkspace, 'should discover sibling workspace');
+    assert.equal(body['workspace_path'], workspace, 'should discover the project-parent workspace');
     const objects = body['objects'] as Array<{ name: string; exists: boolean | null; field_count: number }>;
     assert.equal(objects.length, 1);
     assert.equal(objects[0].name, 'Account');
@@ -226,14 +218,14 @@ describe('provar_org_describe — workspace discovery', () => {
     assert.equal(objects[0].field_count, 1);
   });
 
-  it('(b) falls back to user-home workspace when sibling missing (via override)', () => {
+  it('(b) falls back to user-home workspace when project parent is not a workspace (via override)', () => {
     // Stand in for ~/Provar by using a HOME override. The tool uses os.homedir(),
     // and we override $HOME for this test only. Set the home to a tmp dir so the
     // path is inside allowed paths.
     const fakeHome = path.join(tmpRoot, 'fakehome');
     fs.mkdirSync(fakeHome, { recursive: true });
 
-    const homeWorkspace = path.join(fakeHome, 'Provar', 'workspace-myproject');
+    const homeWorkspace = path.join(fakeHome, 'Provar', 'workspace-MyProject');
     const connectionDir = path.join(homeWorkspace, '.metadata', 'MyOrg');
     writeJsonCache(connectionDir, 'Contact', [
       { name: 'LastName', type: 'string', defaultValue: null, nillable: false },
@@ -270,20 +262,17 @@ describe('provar_org_describe — workspace discovery', () => {
   });
 
   it('discoverWorkspace skips candidates outside allowedPaths without touching the filesystem', () => {
-    // Create a sibling workspace that DOES exist on disk but lies outside the allowed root.
-    // We force this by creating a parallel tmp tree and only allowing tmpRoot.
-    // The sibling pattern resolves to <parent>/workspace-<basename>; the parent of
-    // projectPath is tmpRoot, so the sibling itself is inside the allowed set —
-    // which is what we want for the happy case. To exercise the policy skip we use
-    // a separate "outside" project path whose sibling candidate lives outside.
+    // Create a real workspace (with .metadata) that DOES exist on disk but lies outside
+    // the allowed root. The project parent (candidate 1) resolves to outsideRoot, so it
+    // would otherwise qualify — but it must be skipped because it is outside policy.
     const outsideRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'org-describe-outside-')));
     try {
       const outsideProject = path.join(outsideRoot, 'OtherProject');
       fs.mkdirSync(outsideProject, { recursive: true });
-      const outsideSibling = path.join(outsideRoot, 'workspace-OtherProject');
-      fs.mkdirSync(outsideSibling, { recursive: true });
+      // outsideRoot is the project parent (candidate 1); make it a genuine workspace.
+      fs.mkdirSync(path.join(outsideRoot, '.metadata'), { recursive: true });
 
-      // With only tmpRoot allowed, discoverWorkspace MUST NOT return the outside sibling
+      // With only tmpRoot allowed, discoverWorkspace MUST NOT return the outside workspace
       // even though it exists on disk.
       assert.equal(discoverWorkspace(outsideProject, [tmpRoot]), null);
     } finally {
@@ -296,7 +285,7 @@ describe('provar_org_describe — workspace discovery', () => {
 
 describe('provar_org_describe — cache miss', () => {
   it('(c) returns suggestion when workspace exists but .metadata/<connection> absent', () => {
-    // Create the sibling workspace dir but NOT the connection subdir
+    // The project parent is the workspace; create its .metadata but NOT the connection subdir
     const siblingWorkspace = path.join(tmpRoot, 'workspace-MyProject');
     fs.mkdirSync(path.join(siblingWorkspace, '.metadata'), { recursive: true });
 
