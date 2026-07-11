@@ -80,10 +80,15 @@ interface CachedObject {
 
 /**
  * Build the ordered list of candidate workspace directories.
- * First existing wins.
- * 1. <parent>/ — the project's parent directory.
- * 2. <parent>/Provar_Workspaces/workspace-<basename>/
- * 3. ~/Provar/workspace-<basename>/ — user-home fallback.
+ * The first candidate that is a real Provar workspace (contains `.metadata`) wins.
+ * 1. <parent>/ — the project lives INSIDE its workspace (the Provar IDE layout).
+ * 2. <parent>/workspace-<basename>/ — sibling-workspace layout (kept for backward compatibility).
+ * 3. <parent>/Provar_Workspaces/workspace-<basename>/ — shared Provar_Workspaces directory.
+ * 4. ~/Provar/workspace-<basename>/ — user-home fallback.
+ *
+ * The parent and sibling candidates are BOTH probed: parent is the current IDE layout,
+ * the sibling is the layout an earlier release assumed. Probing both keeps existing
+ * sibling-layout workspaces discoverable while preferring the parent layout when both exist.
  */
 export function workspaceCandidates(projectPath: string): string[] {
   const resolved = path.resolve(projectPath);
@@ -91,6 +96,7 @@ export function workspaceCandidates(projectPath: string): string[] {
   const basename = path.basename(resolved);
   return [
     parent,
+    path.join(parent, `workspace-${basename}`),
     path.join(parent, 'Provar_Workspaces', `workspace-${basename}`),
     path.join(os.homedir(), 'Provar', `workspace-${basename}`),
   ];
@@ -101,10 +107,10 @@ export function workspaceCandidates(projectPath: string): string[] {
  * allowedPaths, or null.
  *
  * A candidate qualifies only if it is a directory that contains a `.metadata`
- * subdirectory — the marker of a Provar/Eclipse workspace. This matters now that
+ * subdirectory — the marker of a Provar/Eclipse workspace. This matters because
  * candidate 1 is the project's parent directory, which almost always exists: the
- * `.metadata` requirement lets discovery fall through to the Provar_Workspaces and
- * ~/Provar fallbacks when the parent is not itself a workspace.
+ * `.metadata` requirement lets discovery fall through to the sibling-workspace,
+ * Provar_Workspaces, and ~/Provar fallbacks when the parent is not itself a workspace.
  *
  * Path policy is enforced PER CANDIDATE before any filesystem call: a candidate that
  * sits outside `--allowed-paths` is silently skipped (it is not an error — discovery
@@ -517,8 +523,9 @@ export function registerOrgDescribe(server: McpServer, config: ServerConfig): vo
           'Read cached Salesforce describe data for one connection from the Provar workspace .metadata cache.',
           'Prerequisite: the project must have been opened in Provar IDE at least once with the named connection loaded',
           '(and, for the named test environment, the relevant objects expanded) — this tool is read-only and does NOT trigger a metadata download.',
-          'Workspace discovery tries in order: <parent>/workspace-<basename>, ',
-          '<parent>/Provar_Workspaces/workspace-<name-dashes>, then ~/Provar/workspace-<name-dashes>.',
+          'Workspace discovery uses the first of these directories that contains a .metadata dir (and is within --allowed-paths):',
+          '<parent> (project inside its workspace), <parent>/workspace-<basename>,',
+          '<parent>/Provar_Workspaces/workspace-<basename>, then ~/Provar/workspace-<basename>.',
           'Within the workspace it prefers the Provar IDE SfObject cache at',
           '.metadata/.plugins/com.provar.eclipse.ui/<connection>/<environment>/SfObject/<Object>.xml',
           '(environment defaults to "default"; if the requested environment is absent it falls back to any cached environment),',

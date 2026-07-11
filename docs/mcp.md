@@ -2041,8 +2041,9 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 **Workspace discovery heuristic** — the tool walks candidate directories in this order and uses the first one that is a Provar workspace (i.e. contains a `.metadata` directory):
 
 1. `<parent-of-project>/` — the project's parent directory (the project lives inside its workspace; default for the Provar IDE layout).
-2. `<parent-of-project>/Provar_Workspaces/workspace-<basename>/` — shared `Provar_Workspaces` directory.
-3. `~/Provar/workspace-<basename>/` — user-home fallback.
+2. `<parent-of-project>/workspace-<basename>/` — sibling-workspace layout (kept for backward compatibility with earlier releases).
+3. `<parent-of-project>/Provar_Workspaces/workspace-<basename>/` — shared `Provar_Workspaces` directory.
+4. `~/Provar/workspace-<basename>/` — user-home fallback.
 
 `<basename>` is the project directory's name verbatim (e.g. `"MyProject"`). A candidate is skipped unless it contains a `.metadata` directory, so candidate 1 (which almost always exists) falls through to the fallbacks when the parent is not itself a workspace. Each candidate is also checked against `--allowed-paths` before any filesystem access; candidates outside the policy are silently skipped.
 
@@ -2064,7 +2065,7 @@ Read cached Salesforce describe data for one connection from the Provar workspac
 | Output field              | Description                                                                                                                                                                                                                              |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `requestId`               | UUID for this invocation. Echoed in MCP server logs for cross-correlation. Consistent with the rest of the MCP tool surface.                                                                                                             |
-| `workspace_path`          | Absolute resolved path to the discovered workspace, or `null` when none of the three candidate directories exists (or all candidates were outside `--allowed-paths`).                                                                    |
+| `workspace_path`          | Absolute resolved path to the discovered workspace, or `null` when none of the four candidate directories is a Provar workspace (contains `.metadata`), or all candidates were outside `--allowed-paths`.                                |
 | `cache_age_ms`            | `mtime` delta in milliseconds of the connection cache directory, or `null` when the cache is missing.                                                                                                                                    |
 | `objects[]`               | Array of `{ name, exists, required_fields, field_count, error_message? }`. `exists` is `true` (cache file present), `false` (requested but not cached), or `null` (cache miss — the whole `.metadata/<connection>` directory is absent). |
 | `objects[].error_message` | Present **only** when a cache file existed but failed to parse (`exists: true, field_count: 0`). Lets the agent distinguish a corrupt / unsupported cache file from a missing one.                                                       |
