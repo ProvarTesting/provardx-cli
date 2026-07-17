@@ -2625,6 +2625,22 @@
       "source": "Corpus analysis: All valid value class patterns from InternalProjects"
     },
     {
+      "id": "STEP-REQUIRED-ARGS-001",
+      "category": "StructureAndGrouping",
+      "name": "Steps must declare all schema-required arguments",
+      "description": "Every step type has a set of arguments Provar requires it to declare (even if empty). This rule derives that set for each apiId from provar_test_step_schema.json and flags any step missing one. It generalises the UiAssert-only UI-ASSERT-STRUCT-001 check to all step types (UiConnect, UiWithScreen, UiDoAction, UiFill, DB/Apex/REST steps, etc.), so a test case can no longer score 100 while omitting required arguments on non-UiAssert steps. Runs at major severity because the schema is a bundled reference, not the authoritative Quality Hub ruleset; UiAssert and the NitroX MS connect variants are excluded here as they have dedicated rules.",
+      "appliesTo": ["Step"],
+      "severity": "major",
+      "weight": 5,
+      "recommendation": "Add the missing argument(s) to the step. Arguments that carry no value should still be declared as empty self-closing tags (e.g. <argument id=\"beforeWait\"/>). See the provar://schema/test-step resource for each step type's required arguments.",
+      "check": {
+        "type": "schemaRequiredArguments",
+        "target": "step"
+      },
+      "notes": "Schema-driven: the required-argument list is read from provar_test_step_schema.json at runtime, so correcting the schema automatically corrects this rule. No per-argument list is hardcoded here.",
+      "source": "Derived from provar_test_step_schema.json (validated against docs/PROVAR_TEST_STEP_REFERENCE.md)"
+    },
+    {
       "id": "UI-ASSERT-STRUCT-001",
       "category": "StructureAndGrouping",
       "name": "UiAssert steps must include all required arguments",

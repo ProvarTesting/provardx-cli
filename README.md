@@ -100,7 +100,7 @@ sf provar auth login
 claude mcp add provar -s user -- sf provar mcp start --allowed-paths /path/to/your/provar/project
 ```
 
-📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 42 tools, 6 resources, 11 MCP prompts, troubleshooting.**
+📖 **[docs/mcp.md](https://github.com/ProvarTesting/provardx-cli/blob/main/docs/mcp.md) — full setup, all 43 tools, 6 resources, 11 MCP prompts, troubleshooting.**
 
 ---
 
@@ -251,7 +251,7 @@ DESCRIPTION
   Note: --json is not available on this command — stdout is reserved for MCP traffic.
 
 TOOLS EXPOSED
-  42 tools across: project inspection & org describe, Page Object and test-case
+  43 tools across: project inspection & org describe, Page Object and test-case
   authoring/validation, test-suite/plan validation, properties files, Quality Hub
   (test runs, defects, corpus examples), Provar Automation, ANT build, and NitroX
   components. See docs/mcp.md for the full catalogue with schemas and examples.

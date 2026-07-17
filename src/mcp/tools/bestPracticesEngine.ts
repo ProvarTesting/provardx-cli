@@ -2304,6 +2304,82 @@ function validateUiAssertMissingArguments(tc: XmlNode, rule: BPRule): BPViolatio
   );
 }
 
+// STEP-REQUIRED-ARGS-001 — schema-driven required-argument check for ALL step types.
+//
+// The dedicated hardcoded UiAssert rule (UI-ASSERT-STRUCT-001, above) only ever fired
+// for UiAssert, so a test case could omit required arguments on UiConnect, UiWithScreen,
+// UiDoAction, etc. and still score 100/100. This rule derives the required-argument set
+// for every apiId from provar_test_step_schema.json and flags any step missing one — the
+// same data source read by the provar://schema/test-step resource, so the validator and
+// the schema reference can never drift apart. It runs at `major` severity (docks
+// quality_score, does not gate is_valid), because the schema is a doc-derived reference
+// rather than the authoritative Quality Hub ruleset.
+//
+// Step types with a dedicated required-argument rule are excluded here to avoid
+// double-reporting: UiAssert (UI-ASSERT-STRUCT-001) and the NitroX MS connect variants
+// (UI-NITROX-VARIANT-ARG-001).
+const REQUIRED_ARGS_EXCLUDED_API_IDS: ReadonlySet<string> = new Set([UI_ASSERT_API_ID]);
+
+/** Build apiId → required-argument-id[] from the bundled step schema. Cached after first read. */
+let schemaRequiredArgs: Map<string, readonly string[]> | null = null;
+function getSchemaRequiredArgs(): Map<string, readonly string[]> {
+  if (schemaRequiredArgs) return schemaRequiredArgs;
+  const map = new Map<string, readonly string[]>();
+  try {
+    const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_test_step_schema.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { apiCalls?: Record<string, unknown> };
+    const categories = parsed.apiCalls ?? {};
+    for (const category of Object.values(categories)) {
+      if (!category || typeof category !== 'object') continue;
+      for (const entry of Object.values(category as Record<string, unknown>)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const e = entry as { apiId?: unknown; required_arguments?: unknown };
+        if (typeof e.apiId !== 'string') continue;
+        const req = Array.isArray(e.required_arguments) ? e.required_arguments : [];
+        const ids = req
+          .map((r) => (r && typeof r === 'object' ? (r as { id?: unknown }).id : undefined))
+          .filter((id): id is string => typeof id === 'string');
+        if (ids.length) map.set(e.apiId, ids);
+      }
+    }
+  } catch {
+    // Schema missing/corrupt → empty map → rule silently passes (graceful degradation).
+  }
+  schemaRequiredArgs = map;
+  return schemaRequiredArgs;
+}
+
+/** STEP-REQUIRED-ARGS-001 — one violation per step missing a schema-required argument. */
+function validateSchemaRequiredArguments(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const required = getSchemaRequiredArgs();
+  if (required.size === 0) return [];
+  const violations: BPViolation[] = [];
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || REQUIRED_ARGS_EXCLUDED_API_IDS.has(apiId) || apiId.includes('NitroXConnect')) continue;
+    const req = required.get(apiId);
+    if (!req || req.length === 0) continue;
+    const present = new Set<string>();
+    for (const a of getCallArguments(call)) {
+      const id = a['@_id'] as string | undefined;
+      if (id) present.add(id);
+    }
+    const missing = req.filter((r) => !present.has(r));
+    if (!missing.length) continue;
+    const ctx = stepContext(call);
+    violations.push(
+      makeViolation(
+        rule,
+        `${ctx.apiName} step '${ctx.title}' is missing required argument(s): ${missing.join(', ')}. ` +
+          `The Provar step schema lists these as required for ${apiId} (testItemId=${ctx.tid})`,
+        undefined,
+        ctx.tid
+      )
+    );
+  }
+  return violations;
+}
+
 // UI-BINDING-ORDER-001 — binding URIs must list object= before action=/field= (percent-encoded).
 const BINDING_WRONG_ACTION_FIRST = /object%3Faction%3D[^%]+%26object%3D/;
 const BINDING_WRONG_FIELD_FIRST = /object%3Ffield%3D[^%]+%26object%3D/;
@@ -2428,6 +2504,7 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
 type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
 
 const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
+  schemaRequiredArguments: validateSchemaRequiredArguments,
   uiActionNestingStructure: validateUiActionNestingStructure,
   uiAssertScreenContext: validateUiAssertScreenContext,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,

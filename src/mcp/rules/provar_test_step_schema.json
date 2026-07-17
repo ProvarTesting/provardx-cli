@@ -1861,7 +1861,12 @@
             "default": "Chrome_Headless"
           }
         ],
-        "validation_rules": ["Should be first UI step", "connectionName must be unique"],
+        "validation_rules": [
+          "Browser-only: UiConnect opens a UI session but has NO Salesforce credential of its own — it reuses an existing ApexConnect result. For a Salesforce UI test use ApexConnect (with quickUiLogin=true, uiApplicationName=LightningSales), NOT UiConnect (rule SF-CONNECT-TYPE-001).",
+          "Add UiConnect only for a SECOND, browser-only session alongside an ApexConnect.",
+          "connectionName must be unique",
+          "Downstream steps reference this connection via uiConnectionName = this step's resultName (defaults to connectionName)."
+        ],
         "best_practices": [
           "Use headless mode for CI/CD",
           "Reuse connections when possible",
@@ -2050,11 +2055,6 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "screenName",
-            "type": "string",
-            "description": "Screen name (e.g., 'Account Home', 'Account New')"
-          },
-          {
             "id": "uiConnectionName",
             "type": "string"
           },
@@ -2153,7 +2153,8 @@
         "parent_required": "UiWithScreen",
         "validation_rules": [
           "Must be inside UiWithScreen substeps",
-          "value required for set/select interactions",
+          "interaction name MUST be one of: action (click a button or link), set (fill a field or pick a picklist value), file (upload a file). NEVER use name=click/type/select/enter — those are not valid Provar interactions and render the IDE Action widget blank (rule UI-INTERACTION-002).",
+          "value required for set interactions (a literal or a class=variable reference); omit value for action interactions",
           "Picklist: use ui:interaction?name=set",
           "Lead Conversion buttons: MUST use name=submitConvert and action=submitConvert (NOT Convert, ConvertButton, or action=convert)",
           "Dialog fields (e.g., OpportunityName): MUST bind to the TARGET object (object=Opportunity with field=name, NOT object=Lead with field=OpportunityName)"
@@ -2192,29 +2193,52 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "locator",
-            "type": "uiLocator"
+            "id": "fieldAssertions",
+            "type": "valueList",
+            "description": "Field-level assertions as namedValues (empty valueList when unused)"
           },
           {
-            "id": "assertionType",
+            "id": "columnAssertions",
+            "type": "valueList",
+            "description": "Column-level assertions (empty valueList when unused)"
+          },
+          {
+            "id": "pageAssertions",
+            "type": "valueList",
+            "description": "Page-level assertions (empty valueList when unused)"
+          },
+          {
+            "id": "resultScope",
             "type": "string",
-            "description": "Type of assertion (EqualTo, Contains, etc.)"
+            "default": "Test"
+          },
+          {
+            "id": "captureAfter",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "beforeWait",
+            "type": "string",
+            "description": "Include even if empty (<argument id=\"beforeWait\"/>)"
+          },
+          {
+            "id": "autoRetry",
+            "type": "string",
+            "description": "Include even if empty (<argument id=\"autoRetry\"/>)"
           }
         ],
         "optional_arguments": [
           {
-            "id": "expectedValue",
-            "type": "value"
-          },
-          {
-            "id": "continueOnFailure",
-            "type": "boolean",
-            "default": "false"
+            "id": "resultName",
+            "type": "string"
           }
         ],
         "parent_required": "UiWithScreen",
         "validation_rules": [
           "Must be inside UiWithScreen substeps",
+          "fieldAssertions MUST nest a <uiFieldAssertion resultName=\"Field\"> containing a BARE <fieldLocator uri=\"ui:locator?name=Field&binding=...\"/> (NOT class=\"uiLocator\") and an <attributeAssertions> with a <uiAttributeAssertion attributeName=\"value\" comparisonType=\"EqualTo\"> holding the expected <value>. Do NOT use a <namedValues>/<namedValue> block (that is the UiFill/SetValues shape) or flat fieldLocator/attributeName arguments — either renders the IDE Result Assertions tab blank (rule UI-ASSERT-STRUCTURE-001).",
+          "comparisonType (UI Assert) must be one of: EqualTo, Contains, StartsWith, EndsWith, Matches, None.",
           "Currency fields: format as $1,000.00",
           "Phone fields: format as (123) 456-7890",
           "Date/time: use Contains or EqualTo based on format"
@@ -2230,14 +2254,13 @@
         "apiId": "com.provar.plugins.forcedotcom.core.ui.UiNavigate",
         "description": "Navigate to URL",
         "category": "UI",
-        "required_arguments": [
+        "required_arguments": [],
+        "optional_arguments": [
           {
             "id": "url",
             "type": "string",
             "description": "URL to navigate to"
-          }
-        ],
-        "optional_arguments": [
+          },
           {
             "id": "uiConnectionName",
             "type": "string"
@@ -2257,16 +2280,21 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "formLocator",
+            "id": "locator",
             "type": "uiLocator",
-            "description": "Form container locator"
+            "description": "Form/field locator"
           }
         ],
         "optional_arguments": [
           {
             "id": "fieldValues",
-            "type": "object",
-            "description": "Field name/value pairs"
+            "type": "valueList",
+            "description": "Field name/value pairs as namedValues"
+          },
+          {
+            "id": "value",
+            "type": "value",
+            "description": "Single value when filling one field via locator"
           }
         ],
         "parent_required": "UiWithScreen",
@@ -2280,14 +2308,14 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "tableLocator",
+            "id": "locator",
             "type": "uiLocator",
             "description": "Table/list locator"
           },
           {
-            "id": "rowSelector",
-            "type": "string",
-            "description": "Row selection criteria"
+            "id": "uiRowLocator",
+            "type": "uiLocator",
+            "description": "Row selection locator"
           }
         ],
         "optional_arguments": [],
@@ -2311,9 +2339,9 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "action",
-            "type": "string",
-            "description": "Action to take (Accept, Dismiss, GetText)"
+            "id": "alerts",
+            "type": "valueList",
+            "description": "Alert handling entries (action per alert: Accept, Dismiss, GetText)"
           }
         ],
         "optional_arguments": [
@@ -2678,8 +2706,8 @@
       "category": "UI",
       "steps": [
         {
-          "step": "UiConnect",
-          "purpose": "Establish UI connection"
+          "step": "ApexConnect (quickUiLogin=true, uiApplicationName=LightningSales)",
+          "purpose": "Establish the Salesforce connection (API + Lightning UI). Use ApexConnect for Salesforce UI tests — NOT UiConnect, which is browser-only and needs an existing ApexConnect result as its credential. Downstream UI steps set uiConnectionName to this step's resultName (which defaults to connectionName)."
         },
         {
           "step": "UiWithScreen (navigate=Always)",

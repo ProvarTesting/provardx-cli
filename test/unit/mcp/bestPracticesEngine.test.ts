@@ -177,16 +177,14 @@ describe('runBestPractices', () => {
 
     it('passes for a valid SF target URI (sf:ui:target?object=Account&action=view)', () => {
       const result = runBestPractices(buildUwsXml('sf:ui:target?object=Account&amp;action=view'));
-      const uwsViolation = result.violations.find(
-        (v) => v.rule_id.includes('UI-SCREEN') || v.message.includes('UiWithScreen')
-      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
       assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
     });
 
     it('passes for a valid page object target URI (ui:pageobject:target?pageId=pageobjects.LoginPage)', () => {
       const result = runBestPractices(buildUwsXml('ui:pageobject:target?pageId=pageobjects.LoginPage'));
       const uwsViolation = result.violations.find(
-        (v) => v.message.includes('UiWithScreen') || v.message.includes('pageId')
+        (v) => v.rule_id.includes('UI-SCREEN-TARGET') || v.message.includes('pageId')
       );
       assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
     });
@@ -2025,5 +2023,108 @@ describe('reference doc ⇄ validator apiId parity (PDX-512)', () => {
       0,
       'control.Finally is the canonical try/catch/finally step and must be recognised'
     );
+  });
+});
+
+// ── STEP-REQUIRED-ARGS-001 (schema-driven required arguments, all step types) ──
+
+describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
+  const TC = '550e8400-e29b-41d4-a716-4466554409a0';
+  const G = (n: number): string => `550e8400-e29b-41d4-a716-4466554409${String(n).padStart(2, '0')}`;
+
+  const stepArgsViolations = (xml: string): BPViolation[] =>
+    runBestPractices(xml).violations.filter((v) => v.rule_id === 'STEP-REQUIRED-ARGS-001');
+
+  it('fires when UiConnect uses `connection` instead of the required `connectionName` (the Appendix A bug)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(1)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1">
+      <arguments><argument id="connection"><value class="value" valueClass="string">AdminOauth</value></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 1, 'UiConnect missing connectionName should raise exactly one violation');
+    assert.ok(vs[0].message.includes('connectionName'), `should name the missing arg: ${vs[0].message}`);
+    assert.equal(vs[0].severity, 'major', 'rule must be major (does not gate is_valid)');
+  });
+
+  it('fires per-step: UiWithScreen missing uiConnectionName AND UiDoAction missing interaction', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(2)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument></arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${G(3)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="3">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:ui:locator?type=button&amp;label=New"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 2, 'both incomplete steps should be flagged (one violation each)');
+    assert.ok(vs.some((v) => v.message.includes('uiConnectionName')), 'UiWithScreen missing uiConnectionName');
+    assert.ok(vs.some((v) => v.message.includes('interaction')), 'UiDoAction missing interaction');
+  });
+
+  it('does NOT fire when every required argument is present (no false positive on a correct file)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(4)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">AdminOauth</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${G(5)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">UiConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument>
+      </arguments>
+      <clauses><clause name="substeps" testItemId="3"><steps>
+        <apiCall guid="${G(6)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="4">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:field:target?object=Account&amp;field=Name"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    assert.deepEqual(stepArgsViolations(xml), [], 'complete steps must not be flagged');
+  });
+
+  it('does NOT resurrect the removed phantom args (screenName on UiWithScreen, formLocator on UiFill)', () => {
+    // A UiWithScreen with target+uiConnectionName but NO screenName, and a UiFill with locator (not formLocator),
+    // are correct Provar steps — the pre-fix schema would have flagged both. Regression guard.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(7)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">UiConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=Edit"/></argument>
+      </arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${G(8)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="3">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:field:target?object=Account&amp;field=Name"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 0, `must not flag screenName/formLocator: ${vs.map((v) => v.message).join(' | ')}`);
+  });
+
+  it('excludes UiAssert (covered by the dedicated UI-ASSERT-STRUCT-001 rule)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(9)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert" testItemId="1">
+      <arguments><argument id="fieldAssertions"><value class="valueList" mutable="Mutable"/></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    assert.deepEqual(stepArgsViolations(xml), [], 'UiAssert must not be double-reported by STEP-REQUIRED-ARGS-001');
   });
 });

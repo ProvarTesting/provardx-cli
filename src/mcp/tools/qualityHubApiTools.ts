@@ -18,21 +18,26 @@ import {
   QualityHubRateLimitError,
   REQUEST_ACCESS_URL,
 } from '../../services/qualityHub/client.js';
+import { selectBundledExamples } from '../examples/bundledExamples.js';
 import { desc } from './descHelper.js';
 
 const CORPUS_FALLBACK_HINT =
-  'Fallback: read the provar://docs/step-reference MCP resource for step types and attribute formats, then continue.';
+  'Fallback: call the provar_step_schema tool (api_id or category) for step types and their required/optional arguments, then continue.';
+
+const BUNDLED_NOTE =
+  'These are offline, bundled reference examples (quality_tier="bundled", source="bundled"), NOT corpus-retrieved ' +
+  'matches — use them as a structural pattern, adapting object/field/connection names to your project.';
 
 const CORPUS_ONBOARDING_WARNING =
-  'Corpus retrieval skipped — no Provar API key configured. Continuing without example grounding.\n' +
-  'To enable corpus retrieval: run sf provar auth login\n' +
+  'Corpus retrieval skipped — no Provar API key configured. Returning bundled offline examples instead.\n' +
+  'To enable full corpus retrieval: run sf provar auth login\n' +
   `No account? Request access at: ${REQUEST_ACCESS_URL}\n` +
-  CORPUS_FALLBACK_HINT;
+  BUNDLED_NOTE;
 
 const CORPUS_AUTH_WARNING =
-  'Corpus retrieval skipped — API key is invalid or expired. Continuing without example grounding.\n' +
+  'Corpus retrieval skipped — API key is invalid or expired. Returning bundled offline examples instead.\n' +
   `Run sf provar auth login to get a new key, or request access at: ${REQUEST_ACCESS_URL}\n` +
-  CORPUS_FALLBACK_HINT;
+  BUNDLED_NOTE;
 
 const CORPUS_RATE_LIMIT_WARNING =
   'Corpus retrieval skipped — rate limit reached. Continuing without example grounding. Try again shortly.\n' +
@@ -56,14 +61,16 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
           'Use this BEFORE writing any Provar .testcase XML — whether via provar_testcase_generate, Write, or Edit.',
           'Pass a user story, requirement, source test file content, or step type keywords as the query.',
           'Returns up to N example Provar XML test cases ordered by similarity score.',
-          'If retrieval fails (no auth, network error, rate limit), returns empty examples with a warning — the',
-          'generation workflow can still continue without grounding. Never hard-errors on API failure.',
+          'If no API key is configured (or the key is invalid), returns a small set of offline, known-correct',
+          'BUNDLED examples (quality_tier="bundled", source="bundled") so first-test-case generation still has',
+          'a structural pattern to follow. On transient failures (rate limit, network) returns empty with a',
+          'warning. Never hard-errors on API failure — the generation workflow can always continue.',
           '',
           'For org-specific field metadata: first call getObjectSchema from the Salesforce Hosted MCP',
           '(platform/sobject-reads — https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads),',
           'then include key field names in your query (e.g. "Opportunity: CloseDate, Amount, StageName").',
           '',
-          'Requires a Provar API key (sf provar auth login). Without a key, returns empty examples with onboarding instructions.',
+          'A Provar API key (sf provar auth login) unlocks full corpus retrieval; without one you still get bundled offline examples plus onboarding instructions.',
         ].join('\n'),
         'Retrieve similar Provar test case examples from the Quality Hub corpus.'
       ),
@@ -126,12 +133,14 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
       const apiKey = credentialsService.resolveApiKey();
 
       if (!apiKey) {
-        log('warn', 'provar_qualityhub_examples_retrieve: no api key', { requestId });
+        log('warn', 'provar_qualityhub_examples_retrieve: no api key — returning bundled examples', { requestId });
+        const examples = selectBundledExamples(query, n);
         const result = {
           requestId,
-          examples: [],
-          count: 0,
+          examples,
+          count: examples.length,
           query_truncated: false,
+          source: 'bundled' as const,
           warning: CORPUS_ONBOARDING_WARNING,
         };
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
@@ -160,11 +169,25 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
         const result = { requestId, ...response };
         return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
       } catch (err: unknown) {
-        let warning: string;
+        // On a bad/expired key, bundled examples are still useful grounding. On transient
+        // failures (rate limit, network) return empty — retrying is the right move, and
+        // bundled examples would mask a temporary outage as "no matches".
         if (err instanceof QualityHubAuthError) {
-          warning = CORPUS_AUTH_WARNING;
-          log('warn', 'provar_qualityhub_examples_retrieve: auth error', { requestId });
-        } else if (err instanceof QualityHubRateLimitError) {
+          log('warn', 'provar_qualityhub_examples_retrieve: auth error — returning bundled examples', { requestId });
+          const examples = selectBundledExamples(query, n);
+          const result = {
+            requestId,
+            examples,
+            count: examples.length,
+            query_truncated: false,
+            source: 'bundled' as const,
+            warning: CORPUS_AUTH_WARNING,
+          };
+          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
+        }
+
+        let warning: string;
+        if (err instanceof QualityHubRateLimitError) {
           warning = CORPUS_RATE_LIMIT_WARNING;
           log('warn', 'provar_qualityhub_examples_retrieve: rate limited', { requestId });
         } else {

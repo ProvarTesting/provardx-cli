@@ -955,6 +955,120 @@ describe('validateTestCase', () => {
         'UI-ASSERT-STRUCTURE-001 must only apply to UiAssert steps'
       );
     });
+
+    // Recursion coverage: UI steps live nested under UiWithScreen substeps. The
+    // per-call structural rules must run there too, not just at the top level.
+    it('fires for a NESTED UiAssert with the flat namedValues shape', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument></arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Nested Assert" testItemId="3">
+          <arguments><argument id="fieldAssertions"><value class="valueList" mutable="Mutable">
+            <namedValues><namedValue name="sf:field:target?object=Account&amp;field=Name"><value class="value" valueClass="string">X</value></namedValue></namedValues>
+          </value></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'nested UiAssert must be reached by the structural rule'
+      );
+    });
+  });
+
+  // Phase-2 generation-gap rules, dogfooded against the account-ui fixtures.
+  describe('generation-gap rules (account-ui fixtures)', () => {
+    const bad = fs.readFileSync(path.resolve(process.cwd(), 'test', 'fixtures', 'account-ui-gaps-bad.testcase'), 'utf-8');
+    const good = fs.readFileSync(path.resolve(process.cwd(), 'test', 'fixtures', 'account-ui-gaps-good.testcase'), 'utf-8');
+    const GAP_RULES = ['SF-CONNECT-TYPE-001', 'CONNECT-REF-CONSISTENCY-001', 'UI-INTERACTION-002', 'UI-ASSERT-STRUCTURE-001'];
+
+    it('bad fixture: all four gap rules fire and is_valid is false', () => {
+      const r = validateTestCase(bad);
+      for (const rule of GAP_RULES) {
+        assert.ok(r.issues.some((i) => i.rule_id === rule), `expected ${rule} to fire on the bad fixture`);
+      }
+      assert.equal(r.is_valid, false, 'ERROR-tier gap rules must gate is_valid');
+    });
+
+    it('good fixture: none of the gap rules fire and is_valid is true', () => {
+      const r = validateTestCase(good);
+      const fired = r.issues.filter((i) => GAP_RULES.includes(i.rule_id)).map((i) => i.rule_id);
+      assert.deepEqual([...new Set(fired)], [], `no gap rule should fire on the good fixture, got: ${fired.join(', ')}`);
+      assert.equal(r.is_valid, true);
+    });
+  });
+
+  describe('UI-INTERACTION-002 (invalid interaction name)', () => {
+    it('errors on interaction name="click" and suggests "action"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click New" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=New"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=click"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-002');
+      assert.ok(issue, 'expected UI-INTERACTION-002');
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('action'), 'should steer to name="action"');
+    });
+
+    it('does not fire for valid interaction names (action, set)', () => {
+      for (const name of ['action', 'set']) {
+        const r = validateTestCase(
+          `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Act" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=X"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=${name}"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+        );
+        assert.ok(
+          !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-002'),
+          `UI-INTERACTION-002 must not fire for valid name="${name}"`
+        );
+      }
+    });
+  });
+
+  describe('CONNECT-REF-CONSISTENCY-001', () => {
+    it('does not fire when no connect step exists (connection inherited from parent)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">Inherited</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'must not fire without a connect step in the test'
+      );
+    });
   });
 
   describe('SETVALUES-STRUCTURE-001', () => {
@@ -1842,13 +1956,13 @@ describe('provar_testcase_validate description', () => {
     }
   }
 
-  it('includes step-reference guidance', () => {
+  it('includes step-schema tool guidance', () => {
     const srv = new DescriptionCapturingServer();
     registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths: [] });
     assert.ok(srv.capturedDescription, 'description should be captured');
     assert.ok(
-      String(srv.capturedDescription).includes('provar://docs/step-reference'),
-      'description should include step-reference guidance'
+      String(srv.capturedDescription).includes('provar_step_schema'),
+      'description should point at the provar_step_schema tool for step attribute schemas'
     );
   });
 });

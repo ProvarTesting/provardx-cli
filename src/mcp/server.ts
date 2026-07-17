@@ -35,6 +35,7 @@ import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
 import { registerAllOrgDescribeTools } from './tools/orgDescribeTools.js';
+import { registerAllStepSchemaTools } from './tools/stepSchemaTools.js';
 import { registerAllPrompts } from './prompts/index.js';
 import {
   createDepthGuardState,
@@ -64,6 +65,7 @@ const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig
     registerPageObjectGenerate,
     registerAllTestCaseStepTools,
     registerAllTestPlanTools,
+    registerAllStepSchemaTools,
   ],
   inspect: [registerProjectInspect, registerAllOrgDescribeTools],
   connection: [registerAllConnectionTools],

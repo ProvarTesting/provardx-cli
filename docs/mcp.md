@@ -61,6 +61,7 @@ The Provar DX CLI ships with a built-in **Model Context Protocol (MCP) server** 
     - [provar_nitrox_patch](#provar_nitrox_patch)
   - [Quality Hub API tools](#quality-hub-api-tools)
     - [provar_qualityhub_examples_retrieve](#provar_qualityhub_examples_retrieve)
+    - [provar_step_schema](#provar_step_schema)
   - [Org metadata via Salesforce Hosted MCP](#org-metadata-via-salesforce-hosted-mcp)
 - [MCP Prompts](#mcp-prompts)
   - [Migration prompts](#migration-prompts)
@@ -565,7 +566,7 @@ Paste the [standard config](#the-standard-config-recommended) into either file u
 }
 ```
 
-> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 42 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
+> **Tool limit:** Agentforce Vibes loads approximately 20 tools per MCP server at runtime. The Provar MCP server exposes 43 tools — you may need to restart or re-enable the server between tasks if the active tool list gets out of date. Salesforce is tracking this limit; consult the [Agentforce Vibes MCP documentation](https://developer.salesforce.com/docs/platform/einstein-for-devs/guide/devagent-mcp.html) for the latest guidance.
 
 </details>
 
@@ -672,7 +673,7 @@ Restricts which tool groups are registered when the server starts. Only the grou
 | `automation` | `provar_automation_setup`, `provar_automation_config_load`, `provar_automation_metadata_download`, `provar_automation_compile`, `provar_automation_testrun`                                                                                                                   |
 | `qualityhub` | `provar_qualityhub_connect`, `provar_qualityhub_display`, `provar_qualityhub_testrun`, `provar_qualityhub_testrun_abort`, `provar_qualityhub_testrun_report`, `provar_qualityhub_examples_retrieve`, `provar_qualityhub_testcase_retrieve`, `provar_qualityhub_defect_create` |
 | `validation` | `provar_project_validate`, `provar_ant_generate`, `provar_ant_validate`, `provar_properties_*`, `provar_testcase_validate`, `provar_testsuite_validate`, `provar_testplan_validate`, `provar_pageobject_validate`                                                             |
-| `authoring`  | `provar_testcase_generate`, `provar_pageobject_generate`, `provar_testcase_step_edit`, `provar_testplan_*`                                                                                                                                                                    |
+| `authoring`  | `provar_testcase_generate`, `provar_pageobject_generate`, `provar_testcase_step_edit`, `provar_testplan_*`, `provar_step_schema`                                                                                                                                              |
 | `inspect`    | `provar_project_inspect`                                                                                                                                                                                                                                                      |
 | `connection` | `provar_connection_list`                                                                                                                                                                                                                                                      |
 | `rca`        | `provar_testrun_rca`, `provar_testrun_report_locate`                                                                                                                                                                                                                          |
@@ -1058,7 +1059,7 @@ Validates an XML test case for schema correctness (validity score) and best prac
 - **UI-TARGET-001** — A UiWithScreen or UiWithRow `target` argument uses the wrong XML class (e.g. `class="value"`). Must be `class="uiTarget"` or the screen binding is silently ignored at runtime.
 - **UI-LOCATOR-001** — A locator-bearing UI step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`) has a `locator` argument that uses the wrong XML class. Must be `class="uiLocator"` or Provar cannot resolve the element.
 - **UI-INTERACTION-001** (ERROR) — A UI action step (e.g. `UiDoAction`) has an `interaction` argument that uses the wrong XML class (e.g. `class="value"`). Must be `class="uiInteraction"` (`<value class="uiInteraction" uri="ui:interaction?name=action"/>`). A plain string runs green from the CLI but renders the Action field blank in the Provar IDE step editor. The `interaction` attribute is converted automatically by `provar_testcase_generate`.
-- **UI-ASSERT-STRUCTURE-001** (ERROR) — A `UiAssert` step carries a flat top-level field-assertion argument (`fieldLocator`, `attributeName`, `comparisonType`, or `expectedValue`) instead of the nested `fieldAssertions` → `uiFieldAssertion` structure the Provar IDE Result Assertions tab binds from. The flat shape runs green from the CLI but renders the Result Assertions tab blank in the IDE. The correct form nests a `<uiFieldAssertion resultName="…">` containing a **bare** `<fieldLocator uri="…"/>` element (NOT `class="uiLocator"`) and `<attributeAssertions>`, plus empty `columnAssertions`/`pageAssertions`. `provar_testcase_generate` builds this structure automatically when you pass `fieldLocator`/`attributeName`/`comparisonType`/`expectedValue` as flat attributes.
+- **UI-ASSERT-STRUCTURE-001** (ERROR) — A `UiAssert` step expresses its field assertion in a wrong shape instead of the nested `fieldAssertions` → `uiFieldAssertion` structure the Provar IDE Result Assertions tab binds from. Two wrong shapes are caught: (a) flat top-level field-assertion arguments (`fieldLocator`, `attributeName`, `comparisonType`, or `expectedValue`); and (b) a `fieldAssertions` argument filled with a `<namedValues>`/`<namedValue>` block (the shape an LLM reaches for by analogy with `UiFill`/`SetValues`). Both run green from the CLI but render the Result Assertions tab blank in the IDE. This rule now runs on **nested** UI steps too (UI actions/asserts live inside a `UiWithScreen` `<clause name="substeps">`), not just top-level steps. The correct form nests a `<uiFieldAssertion resultName="…">` containing a **bare** `<fieldLocator uri="…"/>` element (NOT `class="uiLocator"`) and `<attributeAssertions>`, plus empty `columnAssertions`/`pageAssertions`. `provar_testcase_generate` builds this structure automatically when you pass `fieldLocator`/`attributeName`/`comparisonType`/`expectedValue` as flat attributes.
 - **SETVALUES-STRUCTURE-001** (ERROR) — A `SetValues` step's `values` argument uses `class="value"` (plain string) instead of `class="valueList"` with `<namedValues>` children. This causes an immediate `ClassCastException` at runtime.
 - **COMPARISON-TYPE-001** (ERROR) — A `comparisonType` value is used outside the subset its step type allows. `comparisonType` is a single Provar enum but each step type accepts only a subset: **AssertValues** accepts the 16-value set (`EqualTo, NotEqualTo, GreaterThan, GreaterThanOrEqualTo, LessThan, LessThanOrEqualTo, IsPresent, IsEmpty, Matches, NotMatches, Contains, NotContains, StartsWith, NotStartsWith, EndsWith, NotEndsWith`); a **UI Assert** (`uiAttributeAssertion`) accepts only the 6-value set (`EqualTo, Contains, StartsWith, EndsWith, Matches, None`). A value outside the step's subset (e.g. `NotEqualTo` on a UI Assert) is load-blocking — the whole test case fails to load at runtime with `IllegalArgumentException: No enum constant com.provar.core.model.base.java.ComparisonType.<value>`. This local check runs even offline / in `local_fallback`, so the load-blocker is caught without the Quality Hub back-end. Only literal `comparisonType` values are checked; variable / compound references are skipped. See [`provar://docs/step-reference`](#resources) for the full step-scoped tables.
 - **UI-NEST-STRUCT-001** (severity `major`, weight 7, category `XMLSchema`) — A UI action step (`UiDoAction`, `UiAssert`, `UiRead`, `UiFill`, `UiNavigate`, `UiWithRow`, or `UiHandleAlert`) is emitted outside a screen ancestor. To pass, every UI action must descend from a `UiWithScreen` or `UiWithRow` `apiCall` through a `<clause name="substeps">` path. Control-flow wrappers (`If`/`ForEach`/`DoWhile`/`WaitFor`/`Switch`) between the screen ancestor and the UI action are allowed; steps inside `<clause name="hidden">` are exempt (disabled / settings blocks). One violation is emitted per offending step, so `(rule_id, test_item_id)` de-duplicates cleanly against the Quality Hub API. Provar IDE cannot bind flat-emitted UI actions to a screen context and they will not render in the editor. Wrap each offending step in the canonical chain:
@@ -1108,8 +1109,12 @@ Validates an XML test case for schema correctness (validity score) and best prac
   - **`SETVALUES-VALUE-001`** (`namedValueValue`, critical) — a `<namedValue>` inside a `SetValues` step is missing its child `<value>` element.
   - **`UI-ASSERT-STRUCT-002`** (`uiAssertHallucinatedGeneratedParameters`, critical) — a `UiAssert` step contains a `<generatedParameters>` element, which is never valid on `UiAssert` and blocks validation.
   - **`UI-ASSERT-STRUCT-001`** (`uiAssertMissingArguments`, critical) — a `UiAssert` step is missing one or more required arguments (`fieldAssertions`, `columnAssertions`, `pageAssertions`, `resultScope`, `captureAfter`, `beforeWait`, `autoRetry` — present even if empty).
+  - **`STEP-REQUIRED-ARGS-001`** (`schemaRequiredArguments`, major) — generalises the UiAssert-only check above to **every** step type: any step missing an argument that `provar_test_step_schema.json` lists as required for its `apiId` is flagged (one violation per step). This closes the gap where a test case could score 100 while omitting required arguments on `UiConnect`, `UiWithScreen`, `UiDoAction`, `UiFill`, DB/Apex/REST steps, etc. The required-argument set is read from the schema at runtime (the same data the `provar://schema/test-step` resource serves), so correcting the schema automatically corrects this rule — nothing is hardcoded. It is **major** (docks `quality_score`, does not gate `is_valid`) because the schema is a bundled reference rather than the authoritative Quality Hub ruleset. `UiAssert` (covered by `UI-ASSERT-STRUCT-001`) and the NitroX MS connect variants (dedicated rules) are excluded to avoid double-reporting.
   - **`UI-BINDING-ORDER-001`** (`bindingParameterOrder`, critical) — a `uiLocator` binding URI lists `action=`/`field=` before `object=`; the corpus-majority convention is `object=` first.
   - **`UI-CONN-LITERAL-001`** (`uiConnectionNameLiteral`, critical) — a UI step's `uiConnectionName` uses a `class="variable"` value; it must be a literal connection name.
+  - **`UI-INTERACTION-002`** (local, ERROR) — a `UiDoAction` `interaction` uses a name that is not a real Provar interaction. The valid names are `action` (click a button/link), `set` (fill a field / pick a picklist value) and `file` (upload). Common LLM hallucinations (`click`, `type`, `select`, …) render the IDE Action widget blank and do not run; the rule names the correct replacement (e.g. `click` → `action`). Complements `UI-INTERACTION-001`, which checks the value **class**.
+  - **`SF-CONNECT-TYPE-001`** (local, WARNING) — the test drives the Salesforce UI (`sf:ui:` targets) but connects with `UiConnect` and **no** `ApexConnect`. `UiConnect` opens a browser only and has no Salesforce credential of its own; a Salesforce UI test should connect via `ApexConnect` (which opens the API connection and, with `quickUiLogin=true`/`uiApplicationName=LightningSales`, the Lightning UI). Add `UiConnect` only for a second, browser-only session that reuses the `ApexConnect` result. WARNING, not ERROR, because the connection could in rare setups be supplied by a parent callable test.
+  - **`CONNECT-REF-CONSISTENCY-001`** (local, WARNING) — a step references a connection (`uiConnectionName` / `apexConnectionName` / `dbConnectionName` / `webConnectionName`) whose name no connect step in the test produces. Downstream steps reference the connect step's `resultName` (which defaults to `connectionName` when omitted); a reference that matches nothing is a dangling connection. Only fires when the test contains at least one connect step (so inherited connections do not false-fire).
   - **`FUNCCALL-VALID-001`** (`validFuncCallId`, major) — a `<value class="funcCall">` uses an `id` that is not one of Provar's built-in functions (e.g. the hallucinated `Concatenate`/`Substring`); use the documented set (`Count`, `DateAdd`, `StringReplace`, …) or `class="compound"` for concatenation.
   - **`RENDER-ROOT-001`** (`rootAttributes`, minor) — the root `<testCase>` element carries an attribute outside the allowed set (`guid`, `id`, `name`, `visibility`, `registryId`, `failureBehaviour`).
 
@@ -2378,7 +2383,7 @@ These tools call the Quality Hub HTTP API directly (no `sf` subprocess). They re
 
 Retrieve N similar Provar test case examples from the Quality Hub corpus (1000+ tests indexed in Bedrock). Use this **before** `provar_testcase_generate` to provide few-shot grounding examples.
 
-If retrieval fails for any reason (no key, invalid key, rate limit, network error), the tool returns `{ examples: [], count: 0, warning: "..." }` with `isError: false` so the generation workflow can continue without grounding. It **never** hard-errors on API failure.
+When **no API key** is configured (or the key is **invalid**), the tool returns a small set of offline, known-correct **bundled** examples (`source: "bundled"`, `quality_tier: "bundled"`) instead of an empty list, so first-test-case generation in a brand-new project still has a validated structural pattern to follow. On **transient** failures (rate limit, network error) it returns `{ examples: [], count: 0, warning: "..." }` so a retry is the obvious next move. In all cases `isError: false` — it **never** hard-errors on API failure. Bundled examples are validated in CI (`quality_score === 100`, zero violations) against the same rules `provar_testcase_validate` applies.
 
 | Input                 | Type    | Required | Default | Description                                                                    |
 | --------------------- | ------- | -------- | ------- | ------------------------------------------------------------------------------ |
@@ -2404,10 +2409,34 @@ Each element in `examples`:
 | `xml`               | Full Provar XML test case content                                 |
 | `similarity_score`  | Similarity score in [0, 1]                                        |
 | `salesforce_object` | Primary Salesforce object the test exercises                      |
-| `quality_tier`      | Corpus tier (`tier4`, `tier3`, `tier2`, `tier1`)                  |
+| `quality_tier`      | Corpus tier (`tier4`, `tier3`, `tier2`, `tier1`), or `bundled` for offline examples |
 | `full_content`      | `true` when the full XML was returned (not truncated server-side) |
+| `source`            | `bundled` on offline examples (absent for corpus matches)         |
 
 **Error codes:** `INVALID_QUERY` (empty query — only error that sets `isError: true`)
+
+---
+
+### `provar_step_schema`
+
+Returns the argument schema for Provar test-case step types, read from the bundled step reference (`provar_test_step_schema.json`). This is the **tool** form of the `provar://schema/test-step` MCP resource — agents that cannot read MCP resources can still reach the schema to ground test-case generation and hand-editing in exact argument names. Call it before `provar_testcase_generate` / `provar_testcase_step_edit`, or when `provar_testcase_validate` reports a structural error, to get a step type's required/optional arguments. Read-only and offline.
+
+| Input      | Type   | Required | Default | Description                                                                                                  |
+| ---------- | ------ | -------- | ------- | ------------------------------------------------------------------------------------------------------------ |
+| `api_id`   | string | no       | —       | Full apiId (`com.provar.plugins.forcedotcom.core.ui.UiConnect`) or short name (`UiConnect`). Returns that step's schema. |
+| `category` | string | no       | —       | Category to list (`UI`, `Salesforce`, `Control`, `Data`, `Utility`, `ProvarAI`, `ProvarLabs`).               |
+
+Precedence: `api_id` → single step; else `category` → steps in that category; else the full index.
+
+| Output field | Description                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------- |
+| `step`       | (with `api_id`) `{ apiId, description, category, required_arguments[], optional_arguments[], validation_rules[], best_practices[] }`. Each argument is `{ id, type, default?, description? }`. |
+| `steps`      | (with `category` or index) array of `{ name, apiId, category, required_arguments[] }`              |
+| `count`      | Number of step types returned (category/index modes)                                               |
+
+**Example** — `{ "api_id": "UiConnect" }` returns `step.required_arguments = [{ "id": "connectionName", "type": "string" }]`.
+
+**Error codes:** `STEP_TYPE_NOT_FOUND` (no step matches `api_id`; includes a `suggestion` with near matches), `STEP_SCHEMA_NOT_FOUND` (bundled schema unreadable — reinstall the plugin).
 
 ---
 

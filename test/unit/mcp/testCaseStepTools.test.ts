@@ -94,7 +94,7 @@ afterEach(() => {
 // ── tool description ──────────────────────────────────────────────────────────
 
 describe('provar_testcase_step_edit description', () => {
-  it('references corpus tool and step-reference fallback', () => {
+  it('references corpus tool and step-schema fallback', () => {
     const reg = server.registrations.find((r) => r.name === 'provar_testcase_step_edit');
     assert.ok(reg, 'tool should be registered');
     assert.ok(
@@ -102,8 +102,8 @@ describe('provar_testcase_step_edit description', () => {
       'description should reference corpus tool'
     );
     assert.ok(
-      reg.description.includes('provar://docs/step-reference'),
-      'description should include step-reference fallback'
+      reg.description.includes('provar_step_schema'),
+      'description should include the provar_step_schema fallback'
     );
   });
 
