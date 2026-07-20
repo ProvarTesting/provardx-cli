@@ -361,11 +361,20 @@ Valid `action` values: `ObjectHome` | `New` | `View` | `Edit` | `Delete` | `Clon
 
 Performs a single UI interaction on a field or button. The `interaction` URI determines the action type.
 
-**Interaction types:**
+**Interaction types (a common subset — the vocabulary is open, NOT limited to these):**
 
-- `ui:interaction?name=action` — click a button or link
+- `ui:interaction?name=action` — activate a button or link
 - `ui:interaction?name=set` — fill/type into a field or select a picklist value
+- `ui:interaction?name=click` — click a control; distinct from `action`, and both are valid
 - `ui:interaction?name=file` — upload a file (uses `fileLocation` instead of `value`)
+- `ui:interaction?name=check` / `name=uncheck` — tick or untick a checkbox
+- `ui:interaction?name=doubleClick`, `name=hover`, `name=invoke`, `name=clear`, `name=toggle`, `name=sfLookup`, `name=sfSelect` — long-tail interactions the IDE recorder emits
+
+> A corpus survey of real Provar projects found **39 distinct interaction names** in
+> well-formed `uiInteraction` nodes. Treat the list above as examples, not an
+> allow-list. Validation rejects only names borrowed from other frameworks
+> (`type`, `fill`, `enter`, `input`, `tap`, `press`): use `set` to type into a field,
+> and `action` or `click` to activate a control.
 
 **Locator URI format:** `ui:locator?name=FIELD_OR_BUTTON_NAME&binding=ENCODED_BINDING`
 

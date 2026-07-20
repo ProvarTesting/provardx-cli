@@ -149,6 +149,25 @@ describe('step schema generation guidance (drift guard)', () => {
     assert.ok(/\btype\b/.test(t) && /\bfill\b/.test(t), `guidance should name the borrowed-name pitfalls: ${t}`);
   });
 
+  // The BUNDLED REFERENCE DOC is a fourth surface an agent reads. Three successive
+  // fixes corrected the validator, the schema, the registry and the emitted
+  // suggestion, and each time this file was missed — it labelled a three-item list
+  // "Interaction types" with no qualifier, which reads as an allow-list excluding
+  // click. Guard it alongside the others.
+  it('the bundled step reference presents interactions as non-exhaustive and includes click', () => {
+    const doc = readFileSync(join(process.cwd(), 'docs', 'PROVAR_TEST_STEP_REFERENCE.md'), 'utf-8');
+    const section = doc.slice(doc.indexOf('**Interaction types'), doc.indexOf('**Locator URI format:**'));
+    assert.ok(section.length > 0, 'interaction section not found');
+    assert.ok(section.includes('name=click'), 'reference must list click as a real interaction');
+    assert.ok(
+      /not limited to|non-exhaustive|subset|examples, not an/i.test(section),
+      `reference must not present the list as exhaustive: ${section.slice(0, 200)}`
+    );
+    for (const bad of ['type', 'fill', 'enter', 'input', 'tap', 'press']) {
+      assert.ok(section.includes(bad), `reference should name the rejected borrowed name "${bad}"`);
+    }
+  });
+
   // Drift guard tying the schema to the validator's denylist, so the two can never
   // disagree about which interaction names are wrong.
   it('schema guidance and UI-INTERACTION-002 agree on the invalid names', () => {

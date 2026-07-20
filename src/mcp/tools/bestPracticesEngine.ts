@@ -79,6 +79,17 @@ export interface BPViolation {
    * every partial fix look like one finding resolved and a different one added.
    */
   details?: Record<string, unknown>;
+  /**
+   * Stable identity for baseline diffing, used INSTEAD of the rendered message when
+   * present (see validationDiff.violationKey).
+   *
+   * Aggregate rules emit one violation per file whose message necessarily changes as
+   * steps are fixed. Without a separate identity the diff treats each revision as a
+   * different finding and reports a resolution that has not happened. Set it to a
+   * value that is constant for "this rule, this file" — the message then stays free to
+   * carry the specifics a caller needs to act on.
+   */
+  diff_identity?: string;
 }
 
 export interface BPEngineResult {
@@ -2475,14 +2486,25 @@ function hasMeaningfulContent(node: unknown, depth = 0): boolean {
       continue;
     }
     if (key.startsWith('@_')) {
-      if (key === '@_class' || key === '@_mutable') continue;
-      if (child != null && String(child).trim().length > 0) return true;
+      // ALLOW-list, not a deny-list. Most attributes describe a node's shape or its
+      // destination rather than its content: `valueClass` is a type, and a
+      // `<namedValue name="Name"/>` names the field it would fill while assigning
+      // nothing. Denying only class/mutable let both count as values, so an inert
+      // UiFill still passed required_one_of.
+      if (PAYLOAD_ATTRIBUTES.has(key) && child != null && String(child).trim().length > 0) return true;
       continue;
     }
     if (hasMeaningfulContent(child, depth + 1)) return true;
   }
   return false;
 }
+
+/**
+ * Attributes that genuinely carry a value rather than describing shape or destination:
+ * `uri` on locator/target/interaction/wait nodes, and `element` on a variable's
+ * `<path>`. Everything else (class, mutable, valueClass, name, …) is metadata.
+ */
+const PAYLOAD_ATTRIBUTES: ReadonlySet<string> = new Set(['@_uri', '@_element']);
 
 /** Steps whose declared tier args are absent, plus the total offending-step count. */
 function collectMissingTierArgs(
@@ -2545,21 +2567,25 @@ function aggregateTierViolation(
   lead: string
 ): BPViolation[] {
   if (found.count === 0) return [];
-  // The MESSAGE is the baseline-diff identity (validationDiff keys on
-  // rule_id||applies_to||message), so for an aggregate it must be FULLY invariant:
-  // one violation of one rule over one file, resolved only when nothing is missing.
-  //
-  // Two earlier attempts leaked variable data into it. Occurrence counts meant fixing
-  // 1 of 13 steps looked like "resolved + added"; the sorted set of missing argument
-  // names had the same flaw one level up — fixing every `target` while `uiConnectionName`
-  // remained changed the set, so the diff again reported a resolution that had not
-  // happened. All variable detail now lives in `count` and `details`, which the diff
-  // does not key on.
+  // Identity and presentation are separated. `diff_identity` is what validationDiff
+  // keys on: constant for this rule over this file, so partial remediation reads as
+  // "still unresolved, fewer steps" instead of "resolved + added". The MESSAGE stays
+  // specific, because that is what a user or agent reads to decide the next fix —
+  // making it generic kept the diff honest but left partial-fix responses
+  // unactionable.
+  const missingArgs = [...found.missingByArg.keys()].sort();
   const more = found.count > found.steps.length ? ` …and ${found.count - found.steps.length} more step(s)` : '';
-  const v = makeViolation(rule, lead, found.count);
+  const v = makeViolation(
+    rule,
+    `${lead} ${found.count} step(s) affected. Missing argument(s): ${missingArgs.join(', ')}. Steps: ${found.steps.join(
+      '; '
+    )}${more}`,
+    found.count
+  );
+  v.diff_identity = 'aggregate';
   v.details = {
     affected_steps: found.count,
-    missing_arguments: [...found.missingByArg.keys()].sort(),
+    missing_arguments: missingArgs,
     missing_by_argument: Object.fromEntries([...found.missingByArg.entries()].sort((a, b) => b[1] - a[1])),
     steps: `${found.steps.join('; ')}${more}`,
   };

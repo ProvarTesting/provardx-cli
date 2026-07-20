@@ -2086,7 +2086,8 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     const two = stepArgsViolations(wrap(step(1) + step(2)));
     assert.equal(three.length, 1);
     assert.equal(two.length, 1);
-    assert.equal(three[0].message, two[0].message, 'message must not change when the step count changes');
+    assert.equal(three[0].diff_identity, two[0].diff_identity, 'diff identity must be stable across step counts');
+    assert.ok(three[0].message !== two[0].message, 'message stays specific and may differ');
     assert.equal(three[0].count, 3);
     assert.equal(two[0].count, 2);
     // The volatile detail still reaches the caller, just not through the diff key.
@@ -2113,7 +2114,9 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     );
     assert.equal(both.length, 1);
     assert.equal(one.length, 1);
-    assert.equal(both[0].message, one[0].message, 'message must not encode WHICH arguments are missing');
+    assert.equal(both[0].diff_identity, one[0].diff_identity, 'diff identity must survive a shrinking missing-arg set');
+    assert.ok(both[0].message.includes('target'), 'message stays actionable');
+    assert.ok(!one[0].message.includes('target'), 'message reflects what is actually still missing');
     assert.deepEqual((both[0].details as { missing_arguments: string[] }).missing_arguments, [
       'target',
       'uiConnectionName',
@@ -2133,6 +2136,19 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
 </steps></testCase>`;
     const fires = (inner: string): boolean => stepArgsViolations(uiFill(inner)).length > 0;
 
+    // Metadata-only shapes: `valueClass` is a type and a namedValue's `name` is the
+    // destination field — neither assigns anything. A deny-list excluding only
+    // class/mutable let both count as values, so an inert UiFill still passed.
+    assert.ok(
+      fires('<argument id="values"><value class="value" valueClass="string"/></argument>'),
+      'valueClass alone is a type, not a value'
+    );
+    assert.ok(
+      fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name"/></namedValues></value></argument>'
+      ),
+      'a namedValue naming a destination but assigning nothing'
+    );
     assert.ok(
       fires('<argument id="values"><value class="valueList"><namedValues/></value></argument>'),
       'empty namedValues'
@@ -2175,12 +2191,15 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
       JSON.stringify(empty[0].details)
     );
 
+    // A namedValue that only NAMES a destination assigns nothing — this assertion
+    // originally expected it to pass, encoding the very bypass the recursive check
+    // now closes. It must carry an actual value.
     const populated = stepArgsViolations(
       uiFill(
-        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name"/></namedValues></value></argument>'
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name">Acme Ltd</namedValue></namedValues></value></argument>'
       )
     );
-    assert.equal(populated.length, 0, 'a populated `values` satisfies the group');
+    assert.equal(populated.length, 0, 'a namedValue carrying a value satisfies the group');
 
     const viaLocator = stepArgsViolations(
       uiFill('<argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>')

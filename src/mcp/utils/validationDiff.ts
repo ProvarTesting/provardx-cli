@@ -53,12 +53,28 @@ function shortHash(input: string): string {
   return createHash('sha1').update(input).digest('hex').slice(0, 8);
 }
 
-/** Build a unique key for a violation so additions/resolutions can be detected. */
+/**
+ * Build a unique key for a violation so additions/resolutions can be detected.
+ *
+ * Prefers an explicit `diff_identity` when a rule supplies one. Aggregate rules emit
+ * one violation per file carrying a count, and those need an identity that survives
+ * partial remediation: keying on the rendered message made "13 steps missing X" and
+ * "12 steps missing X" two different findings, so the baseline diff reported a
+ * resolution that had not happened. Supplying `diff_identity` lets such a rule keep a
+ * specific, actionable message while remaining ONE stable finding across fixes.
+ *
+ * Falls back to the message for every rule that does not set it, preserving existing
+ * behaviour for per-step rules where the message is the natural identity.
+ */
 function violationKey(v: DiffableViolation): string {
   const rule_id = String(v['rule_id'] ?? '');
   const applies_to = Array.isArray(v['applies_to'])
     ? (v['applies_to'] as string[]).join(',')
     : String(v['applies_to'] ?? '');
+  const explicit = v['diff_identity'];
+  if (typeof explicit === 'string' && explicit.length > 0) {
+    return `${rule_id}||${applies_to}||${explicit}`;
+  }
   const message = String(v['message'] ?? '');
   return `${rule_id}||${applies_to}||${message}`;
 }
