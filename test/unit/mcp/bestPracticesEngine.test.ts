@@ -2124,6 +2124,37 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.deepEqual((one[0].details as { missing_arguments: string[] }).missing_arguments, ['uiConnectionName']);
   });
 
+  // PARITY GUARD. argumentHasMeaningfulValue mirrors the Quality Hub
+  // MustContainArgumentValidator, and every mustContainArgument rule shares it, so
+  // widening it silently desynchronises local and API scores. An earlier revision
+  // folded URI and container semantics into it: a uiLocator with text but no uri
+  // flipped to empty, a uri-only one flipped to meaningful. The corpus could not
+  // detect that — no real file carries those shapes in a rule-targeted argument —
+  // which is exactly why it needs a guard rather than a measurement.
+  it('the backend-parity helper is NOT widened by the schema tier', () => {
+    const assertStep = (valueXml: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(80)}" apiId="com.provar.plugins.bundled.apis.AssertValues" name="A" testItemId="1">
+    <arguments>
+      <argument id="actualValue"><value class="value" valueClass="string">x</value></argument>
+      <argument id="comparisonType"><value class="value" valueClass="string">EqualTo</value></argument>
+      <argument id="expectedValue">${valueXml}</argument>
+    </arguments>
+  </apiCall>
+</steps></testCase>`;
+    const expectedFires = (valueXml: string): boolean =>
+      runBestPractices(assertStep(valueXml)).violations.some((v) => v.rule_id === 'ASSERT-EXPECTED-001');
+
+    // Backend contract: a non-empty text value is meaningful whatever its class.
+    assert.ok(!expectedFires('<value class="uiLocator">some text</value>'), 'text is meaningful under parity rules');
+    // Backend contract: a uri-only value has no text, so the parity helper treats it
+    // as empty. The schema tier may disagree; ASSERT-EXPECTED-001 must not.
+    assert.ok(
+      expectedFires('<value class="uiLocator" uri="ui:locator?name=X"/>'),
+      'the parity helper must not start accepting uri-only values for mustContainArgument rules'
+    );
+  });
+
   // Recursion guard: an empty container is not a value. Without recursion,
   // `<namedValues/>` counted as populated and UiFill's one-of group passed on a step
   // that does nothing at runtime.

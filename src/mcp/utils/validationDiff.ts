@@ -25,14 +25,18 @@ export interface DiffResult {
   resolved: DiffableViolation[];
   unchanged_count: number;
   /**
-   * Findings still present, carrying their CURRENT message and details.
+   * Findings that survived the diff but whose CONTENT changed — same stable identity,
+   * different message, count or details.
    *
-   * `unchanged_count` alone is not actionable for aggregate rules: a rule that emits
-   * one violation per file with a stable identity stays "unchanged" while its
-   * remaining work shrinks, so without the current sample a caller iterating against a
-   * baseline can see that something is left but not what.
+   * `unchanged_count` alone is not actionable for aggregate rules: one violation per
+   * file with a stable identity stays "unchanged" while its remaining work shrinks, so
+   * a bare count says something is left but not what. Returning every surviving
+   * finding instead would make a large unchanged suite echo back its entire violation
+   * set — testsuite validation collects issues from every test case with no size
+   * bound. Only findings that actually moved are emitted, so this stays bounded by how
+   * much changed rather than by suite size.
    */
-  unchanged: DiffableViolation[];
+  updated: DiffableViolation[];
   run_id: string;
 }
 
@@ -86,6 +90,16 @@ function violationKey(v: DiffableViolation): string {
   }
   const message = String(v['message'] ?? '');
   return `${rule_id}||${applies_to}||${message}`;
+}
+
+/**
+ * True when two occurrences sharing a stable identity differ in what they report.
+ * Compares the fields a caller acts on; ignores ordering-insensitive metadata.
+ */
+function violationContentChanged(before: DiffableViolation, after: DiffableViolation): boolean {
+  if (String(before['message'] ?? '') !== String(after['message'] ?? '')) return true;
+  if (String(before['count'] ?? '') !== String(after['count'] ?? '')) return true;
+  return JSON.stringify(before['details'] ?? null) !== JSON.stringify(after['details'] ?? null);
 }
 
 function loadIndex(storageDir: string): RunsIndex {
@@ -249,19 +263,25 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
   }
 
   const added: DiffableViolation[] = [];
-  const unchanged: DiffableViolation[] = [];
+  const updated: DiffableViolation[] = [];
   const resolved: DiffableViolation[] = [];
   let unchanged_count = 0;
 
   // Tally additions: occurrences in current that exceed baseline count
   for (const [key, { count: curr, sample }] of currentCounts) {
-    const base = baselineCounts.get(key)?.count ?? 0;
+    const baseEntry = baselineCounts.get(key);
+    const base = baseEntry?.count ?? 0;
     unchanged_count += Math.min(base, curr);
-    // Carry the CURRENT sample for anything still present. A stable identity keeps a
-    // partially-fixed aggregate in unchanged_count, but a bare count tells the caller
-    // only that something remains — not which arguments or steps still need work.
-    // Emitting the current violation makes the next iteration actionable.
-    if (Math.min(base, curr) > 0) unchanged.push(sample);
+    // A finding that survived but whose CONTENT moved. Only these are emitted — not
+    // every surviving finding. A stable identity keeps a partially-fixed aggregate in
+    // unchanged_count, and a bare count cannot tell the caller what still needs work;
+    // but returning every unchanged finding made a large unchanged suite echo back its
+    // entire violation set, which is what the count exists to avoid. Emitting only the
+    // ones that actually changed solves the stale-message problem and stays bounded by
+    // the number of findings that moved, not the size of the suite.
+    if (baseEntry && Math.min(base, curr) > 0 && violationContentChanged(baseEntry.sample, sample)) {
+      updated.push(sample);
+    }
     const addedCount = curr - base;
     for (let i = 0; i < addedCount; i++) added.push(sample);
   }
@@ -273,5 +293,5 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
     for (let i = 0; i < resolvedCount; i++) resolved.push(sample);
   }
 
-  return { added, resolved, unchanged_count, unchanged };
+  return { added, resolved, unchanged_count, updated };
 }

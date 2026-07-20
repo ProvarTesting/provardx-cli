@@ -1409,16 +1409,40 @@ function valueNodeIsMeaningful(v: XmlNode): boolean {
     const parts = v['parts'];
     return Boolean(parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_')));
   }
-  // URI-bearing classes hold their entire payload in `uri` and legitimately carry no
-  // text. Checked PER CLASS, not as a global attribute: a plain `class="value"` does
-  // not consume `uri`, so `<value class="value" uri="junk"/>` stays meaningless.
-  if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
-    const uri = v['@_uri'];
-    return typeof uri === 'string' && uri.trim().length > 0;
-  }
-  // Containers are meaningful only when something inside them is.
-  if (vClass === 'valueList' || v['namedValues'] != null) return containerHasMeaningfulEntry(v);
   return text.length > 0;
+}
+
+/**
+ * Schema-tier content check for `required_one_of`.
+ *
+ * Layered ON TOP of {@link argumentHasMeaningfulValue} rather than folded into it.
+ * That helper mirrors the Quality Hub `MustContainArgumentValidator` exactly, and the
+ * `mustContainArgument` rules share it — so widening it changes Layer-2 scoring and
+ * breaks the parity that makes local and API results agree. An earlier revision did
+ * exactly that: a `uiLocator` with text but no `uri` flipped to empty, and a uri-only
+ * one flipped to meaningful, with no backend evidence for either. The corpus could not
+ * detect the divergence because no real file carries those shapes in a rule-targeted
+ * argument, which is precisely why it must not be assumed safe.
+ *
+ * The additions here are OURS, used only by the schema tier this branch introduces:
+ * URI-bearing classes, checked per class so a plain `value` cannot claim a `uri`; and
+ * `valueList` / `namedValues` containers, meaningful only when an entry inside is.
+ */
+function schemaArgumentHasValue(arg: XmlNode): boolean {
+  if (argumentHasMeaningfulValue(arg)) return true;
+  for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
+    if (value == null || typeof value !== 'object') continue;
+    const vClass = (value['@_class'] as string | undefined) ?? '';
+    if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
+      const uri = value['@_uri'];
+      if (typeof uri === 'string' && uri.trim().length > 0) return true;
+      continue;
+    }
+    if (vClass === 'valueList' || value['namedValues'] != null) {
+      if (containerHasMeaningfulEntry(value)) return true;
+    }
+  }
+  return false;
 }
 
 /** Value classes whose payload lives in the `uri` attribute rather than in text. */
@@ -2521,7 +2545,7 @@ function collectMissingTierArgs(
       const id = a['@_id'] as string | undefined;
       if (!id) continue;
       present.add(id);
-      if (argumentHasMeaningfulValue(a)) populated.add(id);
+      if (schemaArgumentHasValue(a)) populated.add(id);
     }
     const missing = wanted.filter((r) => !present.has(r) && !(covered && covered.has(`${apiId}::${r}`)));
     // A one-of group is satisfied only when a member is present AND carries a value.
