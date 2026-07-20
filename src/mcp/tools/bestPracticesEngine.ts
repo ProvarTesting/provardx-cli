@@ -1385,22 +1385,69 @@ function argumentHasMeaningfulValue(arg: XmlNode): boolean {
       continue;
     }
     if (typeof value !== 'object') continue;
-    const v = value;
-    const vClass = (v['@_class'] as string | undefined) ?? '';
-    // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
-    const text = nodeText(v);
+    if (valueNodeIsMeaningful(value)) return true;
+  }
+  return false;
+}
 
-    if (vClass === 'variable') {
-      if (v['path'] != null || text.length > 0) return true;
-      continue; // bare <value class="variable"/> — not meaningful
-    }
-    if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
-    if (vClass === 'compound') {
-      const parts = v['parts'];
-      if (parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_'))) return true;
+/**
+ * Class-aware content check for a single `<value>` node. Split out of
+ * {@link argumentHasMeaningfulValue} to keep that function within the complexity
+ * budget as the class table grew.
+ */
+function valueNodeIsMeaningful(v: XmlNode): boolean {
+  const vClass = (v['@_class'] as string | undefined) ?? '';
+  // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
+  const text = nodeText(v);
+
+  if (vClass === 'variable') {
+    // Quality Hub parity: the presence of a <path> makes the reference meaningful.
+    return v['path'] != null || text.length > 0;
+  }
+  if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
+  if (vClass === 'compound') {
+    const parts = v['parts'];
+    return Boolean(parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_')));
+  }
+  // URI-bearing classes hold their entire payload in `uri` and legitimately carry no
+  // text. Checked PER CLASS, not as a global attribute: a plain `class="value"` does
+  // not consume `uri`, so `<value class="value" uri="junk"/>` stays meaningless.
+  if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
+    const uri = v['@_uri'];
+    return typeof uri === 'string' && uri.trim().length > 0;
+  }
+  // Containers are meaningful only when something inside them is.
+  if (vClass === 'valueList' || v['namedValues'] != null) return containerHasMeaningfulEntry(v);
+  return text.length > 0;
+}
+
+/** Value classes whose payload lives in the `uri` attribute rather than in text. */
+const URI_PAYLOAD_VALUE_CLASSES: ReadonlySet<string> = new Set(['uiLocator', 'uiTarget', 'uiInteraction', 'uiWait']);
+
+/**
+ * True when a `valueList` / `namedValues` container holds at least one entry that
+ * itself carries a value. A `<namedValue name="Name"/>` names a destination without
+ * assigning anything, so a container of those is as inert as an empty one.
+ */
+function containerHasMeaningfulEntry(container: XmlNode, depth = 0): boolean {
+  if (depth > 6) return false;
+  for (const [key, child] of Object.entries(container)) {
+    if (key.startsWith('@_') || child == null) continue;
+    if (key === '#text') {
+      if (String(child).trim().length > 0) return true;
       continue;
     }
-    if (text.length > 0) return true;
+    for (const entry of toArr(child as XmlNode | string | Array<XmlNode | string>)) {
+      if (entry == null) continue;
+      if (typeof entry === 'string') {
+        if (entry.trim().length > 0) return true;
+        continue;
+      }
+      if (typeof entry !== 'object') continue;
+      // A nested <value> is judged by the same class-aware rules.
+      if (entry['value'] != null && argumentHasMeaningfulValue(entry)) return true;
+      if (containerHasMeaningfulEntry(entry, depth + 1)) return true;
+    }
   }
   return false;
 }
@@ -2448,64 +2495,6 @@ function getCoveredArgPairs(): Set<string> {
   return coveredArgPairs;
 }
 
-/**
- * True when an `<argument>` actually carries something Provar can use, as opposed to
- * being declared empty (`<argument id="values"/>`), which is the IDE's convention for
- * "this argument exists but is unset".
- *
- * Counts as carrying a value: a `<value>` child with text, a `uri` attribute (locator
- * / target / interaction / wait nodes hold their payload there), or any nested
- * element such as a `namedValues` / `valueList` container.
- */
-function argumentCarriesValue(arg: XmlNode): boolean {
-  return hasMeaningfulContent(arg['value']);
-}
-
-/**
- * Recursively decide whether a parsed XML value holds anything usable.
- *
- * Recursion is the point: an earlier revision treated "has a non-null child element"
- * as populated, so `<value class="valueList"><namedValues/></value>` counted as a real
- * value even though the container is empty — reinstating exactly the inert-step false
- * negative this check exists to catch. Terminal evidence is non-blank text, a non-blank
- * payload attribute (uri, element, name, valueClass …), or a descendant that itself
- * holds meaningful content. `class`/`mutable` are excluded: they describe the node's
- * shape, and an empty valueList still carries both.
- */
-function hasMeaningfulContent(node: unknown, depth = 0): boolean {
-  if (node == null || depth > 8) return false;
-  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') {
-    return String(node).trim().length > 0;
-  }
-  if (Array.isArray(node)) return node.some((n) => hasMeaningfulContent(n, depth + 1));
-  if (typeof node !== 'object') return false;
-
-  for (const [key, child] of Object.entries(node as XmlNode)) {
-    if (key === '#text') {
-      if (child != null && String(child).trim().length > 0) return true;
-      continue;
-    }
-    if (key.startsWith('@_')) {
-      // ALLOW-list, not a deny-list. Most attributes describe a node's shape or its
-      // destination rather than its content: `valueClass` is a type, and a
-      // `<namedValue name="Name"/>` names the field it would fill while assigning
-      // nothing. Denying only class/mutable let both count as values, so an inert
-      // UiFill still passed required_one_of.
-      if (PAYLOAD_ATTRIBUTES.has(key) && child != null && String(child).trim().length > 0) return true;
-      continue;
-    }
-    if (hasMeaningfulContent(child, depth + 1)) return true;
-  }
-  return false;
-}
-
-/**
- * Attributes that genuinely carry a value rather than describing shape or destination:
- * `uri` on locator/target/interaction/wait nodes, and `element` on a variable's
- * `<path>`. Everything else (class, mutable, valueClass, name, …) is metadata.
- */
-const PAYLOAD_ATTRIBUTES: ReadonlySet<string> = new Set(['@_uri', '@_element']);
-
 /** Steps whose declared tier args are absent, plus the total offending-step count. */
 function collectMissingTierArgs(
   tc: XmlNode,
@@ -2532,7 +2521,7 @@ function collectMissingTierArgs(
       const id = a['@_id'] as string | undefined;
       if (!id) continue;
       present.add(id);
-      if (argumentCarriesValue(a)) populated.add(id);
+      if (argumentHasMeaningfulValue(a)) populated.add(id);
     }
     const missing = wanted.filter((r) => !present.has(r) && !(covered && covered.has(`${apiId}::${r}`)));
     // A one-of group is satisfied only when a member is present AND carries a value.

@@ -261,7 +261,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           .optional()
           .describe(
             desc(
-              'run_id from a previous call. When provided, returns only issues that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.',
+              'run_id from a previous call. When provided, returns only issues that are new or resolved since that run: { added, resolved, unchanged, unchanged_count, run_id }. `unchanged` carries findings still present with their CURRENT message and details, so a partially-fixed aggregate finding still tells you what remains. If not found, returns error BASELINE_NOT_FOUND.',
               'string, optional; prev run_id for diff response'
             )
           ),

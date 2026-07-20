@@ -2160,7 +2160,15 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
       'empty namedValue'
     );
     assert.ok(fires('<argument id="locator"><value class="uiLocator"/></argument>'), 'uiLocator with no uri');
-    assert.ok(fires('<argument id="values"><value class="variable"><path/></value></argument>'), 'empty path element');
+    // NOT asserted as inert: argumentHasMeaningfulValue mirrors the Quality Hub
+    // MustContainArgumentValidator exactly, and there the presence of a <path> element
+    // makes a variable reference meaningful regardless of its contents. Diverging here
+    // would break the Layer-2 parity that makes local and API scores agree, so an empty
+    // <path/> is deliberately accepted — a different rule's concern, not this one's.
+    assert.ok(
+      !fires('<argument id="values"><value class="variable"><path/></value></argument>'),
+      'a <path> element is a variable reference (Quality Hub parity), so the one-of group is satisfied'
+    );
 
     assert.ok(
       !fires(

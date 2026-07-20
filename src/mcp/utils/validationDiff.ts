@@ -24,6 +24,15 @@ export interface DiffResult {
   added: DiffableViolation[];
   resolved: DiffableViolation[];
   unchanged_count: number;
+  /**
+   * Findings still present, carrying their CURRENT message and details.
+   *
+   * `unchanged_count` alone is not actionable for aggregate rules: a rule that emits
+   * one violation per file with a stable identity stays "unchanged" while its
+   * remaining work shrinks, so without the current sample a caller iterating against a
+   * baseline can see that something is left but not what.
+   */
+  unchanged: DiffableViolation[];
   run_id: string;
 }
 
@@ -240,6 +249,7 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
   }
 
   const added: DiffableViolation[] = [];
+  const unchanged: DiffableViolation[] = [];
   const resolved: DiffableViolation[] = [];
   let unchanged_count = 0;
 
@@ -247,6 +257,11 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
   for (const [key, { count: curr, sample }] of currentCounts) {
     const base = baselineCounts.get(key)?.count ?? 0;
     unchanged_count += Math.min(base, curr);
+    // Carry the CURRENT sample for anything still present. A stable identity keeps a
+    // partially-fixed aggregate in unchanged_count, but a bare count tells the caller
+    // only that something remains — not which arguments or steps still need work.
+    // Emitting the current violation makes the next iteration actionable.
+    if (Math.min(base, curr) > 0) unchanged.push(sample);
     const addedCount = curr - base;
     for (let i = 0; i < addedCount; i++) added.push(sample);
   }
@@ -258,5 +273,5 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
     for (let i = 0; i < resolvedCount; i++) resolved.push(sample);
   }
 
-  return { added, resolved, unchanged_count };
+  return { added, resolved, unchanged_count, unchanged };
 }
