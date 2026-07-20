@@ -1045,6 +1045,33 @@ describe('validateTestCase', () => {
       assert.ok(issue.message.includes('set'), 'should steer to name="set"');
     });
 
+    // The EMITTED suggestion is user-visible and is what an agent acts on. An earlier
+    // fix corrected the denylist, the schema and the docs but left this text saying
+    // "Valid UiDoAction interactions are: action, set, file" — exhaustive phrasing
+    // that still reads as declaring `click` invalid. The drift guard checked schema
+    // text only, so this escaped.
+    it('the emitted suggestion does not present an exhaustive list that excludes click', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Type" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=type"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-002');
+      assert.ok(issue?.suggestion, 'expected a suggestion');
+      const s = issue.suggestion;
+      assert.ok(!/valid[^.]*interactions are:/i.test(s), `suggestion must not read as exhaustive: ${s}`);
+      assert.ok(s.includes('click'), `suggestion should name click as valid: ${s}`);
+      assert.ok(s.includes('set'), `suggestion should still steer to the correction: ${s}`);
+    });
+
     // `click` is a REAL Provar interaction, not a hallucination: 1,240 well-formed
     // occurrences across the 2,701-file corpus, third only to action (15,983) and
     // set (11,787), emitted by the IDE recorder. Denylisting it flipped 164 real

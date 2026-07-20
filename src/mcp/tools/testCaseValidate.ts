@@ -834,12 +834,24 @@ function checkUiInteraction(call: Record<string, unknown>, stepName: string, iss
       severity: 'ERROR',
       message: `"${stepName}" uses interaction name="${interactionName}", which is not a valid Provar UI interaction — use name="${correction}" instead.`,
       applies_to: 'apiCall',
-      suggestion:
-        'Valid UiDoAction interactions are: name=action (click a button/link), name=set (fill a field or select a ' +
-        `picklist value), name=file (upload). Emit <value class="uiInteraction" uri="ui:interaction?name=${correction}"/>.`,
+      suggestion: `Emit <value class="uiInteraction" uri="ui:interaction?name=${correction}"/>. ${INTERACTION_VOCABULARY_HINT}`,
     });
   }
 }
+
+/**
+ * The single canonical description of Provar's interaction vocabulary, shared by every
+ * surface that mentions it so schema, registry and emitted suggestions cannot drift.
+ *
+ * Deliberately NON-exhaustive: an earlier revision listed "action, set, file" as if
+ * complete, which reads as declaring the other 36 real interactions invalid — `click`
+ * among them, contradicting the validator that now accepts it.
+ */
+export const INTERACTION_VOCABULARY_HINT =
+  'Provar interaction names are an open vocabulary — action, set, click, check/uncheck, ' +
+  'doubleClick, hover, invoke, clear, file and more are all real. Only names borrowed from ' +
+  'other frameworks (type, fill, enter, input, tap, press) are rejected: use set to type ' +
+  'into a field, and action or click to activate a control.';
 
 // Known-wrong interaction names → the correct Provar interaction they map to.
 //

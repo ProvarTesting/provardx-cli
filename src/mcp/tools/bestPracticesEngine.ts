@@ -2447,22 +2447,41 @@ function getCoveredArgPairs(): Set<string> {
  * element such as a `namedValues` / `valueList` container.
  */
 function argumentCarriesValue(arg: XmlNode): boolean {
-  const value = arg['value'];
-  if (value == null) return false;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return String(value).trim().length > 0;
+  return hasMeaningfulContent(arg['value']);
+}
+
+/**
+ * Recursively decide whether a parsed XML value holds anything usable.
+ *
+ * Recursion is the point: an earlier revision treated "has a non-null child element"
+ * as populated, so `<value class="valueList"><namedValues/></value>` counted as a real
+ * value even though the container is empty — reinstating exactly the inert-step false
+ * negative this check exists to catch. Terminal evidence is non-blank text, a non-blank
+ * payload attribute (uri, element, name, valueClass …), or a descendant that itself
+ * holds meaningful content. `class`/`mutable` are excluded: they describe the node's
+ * shape, and an empty valueList still carries both.
+ */
+function hasMeaningfulContent(node: unknown, depth = 0): boolean {
+  if (node == null || depth > 8) return false;
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'boolean') {
+    return String(node).trim().length > 0;
   }
-  if (typeof value !== 'object') return false;
-  const nodes = Array.isArray(value) ? (value as XmlNode[]) : [value as XmlNode];
-  return nodes.some((v) => {
-    if (!v || typeof v !== 'object') return false;
-    const uri = v['@_uri'];
-    if (typeof uri === 'string' && uri.trim().length > 0) return true;
-    const text = v['#text'];
-    if (text != null && String(text).trim().length > 0) return true;
-    // Any child element other than attributes means a populated container.
-    return Object.keys(v).some((k) => !k.startsWith('@_') && k !== '#text' && v[k] != null);
-  });
+  if (Array.isArray(node)) return node.some((n) => hasMeaningfulContent(n, depth + 1));
+  if (typeof node !== 'object') return false;
+
+  for (const [key, child] of Object.entries(node as XmlNode)) {
+    if (key === '#text') {
+      if (child != null && String(child).trim().length > 0) return true;
+      continue;
+    }
+    if (key.startsWith('@_')) {
+      if (key === '@_class' || key === '@_mutable') continue;
+      if (child != null && String(child).trim().length > 0) return true;
+      continue;
+    }
+    if (hasMeaningfulContent(child, depth + 1)) return true;
+  }
+  return false;
 }
 
 /** Steps whose declared tier args are absent, plus the total offending-step count. */
@@ -2527,19 +2546,20 @@ function aggregateTierViolation(
 ): BPViolation[] {
   if (found.count === 0) return [];
   // The MESSAGE is the baseline-diff identity (validationDiff keys on
-  // rule_id||applies_to||message), so it must stay invariant while the underlying
-  // defect set is unchanged. Occurrence counts and the offending-step list are
-  // deliberately NOT in it: with them, fixing 1 of 13 offending steps changed the
-  // message, so the baseline diff reported the old aggregate "resolved" and a new
-  // one "added" — hiding real incremental progress. Keyed on the sorted SET of
-  // missing argument names instead, so partial fixes read as unchanged and the
-  // violation resolves only when the last one is fixed. The volatile detail lives
-  // in `count` and `details`, which the diff does not key on.
-  const missingArgs = [...found.missingByArg.keys()].sort();
+  // rule_id||applies_to||message), so for an aggregate it must be FULLY invariant:
+  // one violation of one rule over one file, resolved only when nothing is missing.
+  //
+  // Two earlier attempts leaked variable data into it. Occurrence counts meant fixing
+  // 1 of 13 steps looked like "resolved + added"; the sorted set of missing argument
+  // names had the same flaw one level up — fixing every `target` while `uiConnectionName`
+  // remained changed the set, so the diff again reported a resolution that had not
+  // happened. All variable detail now lives in `count` and `details`, which the diff
+  // does not key on.
   const more = found.count > found.steps.length ? ` …and ${found.count - found.steps.length} more step(s)` : '';
-  const v = makeViolation(rule, `${lead} Missing argument(s): ${missingArgs.join(', ')}.`, found.count);
+  const v = makeViolation(rule, lead, found.count);
   v.details = {
     affected_steps: found.count,
+    missing_arguments: [...found.missingByArg.keys()].sort(),
     missing_by_argument: Object.fromEntries([...found.missingByArg.entries()].sort((a, b) => b[1] - a[1])),
     steps: `${found.steps.join('; ')}${more}`,
   };

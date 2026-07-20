@@ -2058,7 +2058,12 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.equal(vs.length, 1, 'one aggregated recommended-args violation');
     assert.equal(vs[0].severity, 'minor');
     assert.equal(vs[0].weight, 2);
-    assert.ok(vs[0].message.includes('to'), `should name the missing conventional arg(s): ${vs[0].message}`);
+    // Argument names live in `details`, not the message: the message is the
+    // baseline-diff identity and must stay invariant across partial fixes.
+    assert.ok(
+      (vs[0].details as { missing_arguments: string[] }).missing_arguments.includes('to'),
+      `should name the missing conventional arg(s): ${JSON.stringify(vs[0].details)}`
+    );
     // required args are satisfied, so the major rule must stay silent
     assert.equal(stepArgsViolations(xml).length, 0, 'required-args rule must not fire when required args are present');
   });
@@ -2089,6 +2094,70 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.equal((two[0].details as { affected_steps: number }).affected_steps, 2);
   });
 
+  // The partial-fix case one level up: fixing every instance of ONE missing argument
+  // while another remains shrinks the missing-name SET. An earlier fix keyed the
+  // message on that set, so this still reported a resolution that had not happened.
+  it('keeps the message stable when the SET of missing arguments shrinks', () => {
+    const wrap = (args: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(60)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S" testItemId="1">
+    <arguments>${args}</arguments>
+  </apiCall>
+</steps></testCase>`;
+
+    const both = stepArgsViolations(wrap(''));
+    const one = stepArgsViolations(
+      wrap(
+        '<argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument>'
+      )
+    );
+    assert.equal(both.length, 1);
+    assert.equal(one.length, 1);
+    assert.equal(both[0].message, one[0].message, 'message must not encode WHICH arguments are missing');
+    assert.deepEqual((both[0].details as { missing_arguments: string[] }).missing_arguments, [
+      'target',
+      'uiConnectionName',
+    ]);
+    assert.deepEqual((one[0].details as { missing_arguments: string[] }).missing_arguments, ['uiConnectionName']);
+  });
+
+  // Recursion guard: an empty container is not a value. Without recursion,
+  // `<namedValues/>` counted as populated and UiFill's one-of group passed on a step
+  // that does nothing at runtime.
+  it('required_one_of rejects empty nested containers', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(70)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+    const fires = (inner: string): boolean => stepArgsViolations(uiFill(inner)).length > 0;
+
+    assert.ok(
+      fires('<argument id="values"><value class="valueList"><namedValues/></value></argument>'),
+      'empty namedValues'
+    );
+    assert.ok(
+      fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue/></namedValues></value></argument>'
+      ),
+      'empty namedValue'
+    );
+    assert.ok(fires('<argument id="locator"><value class="uiLocator"/></argument>'), 'uiLocator with no uri');
+    assert.ok(fires('<argument id="values"><value class="variable"><path/></value></argument>'), 'empty path element');
+
+    assert.ok(
+      !fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name">x</namedValue></namedValues></value></argument>'
+      ),
+      'a populated namedValue is a real value'
+    );
+    assert.ok(
+      !fires('<argument id="values"><value class="variable"><path element="AccountId"/></value></argument>'),
+      'a variable reference with a path element is a real value'
+    );
+  });
+
   // required_one_of exists because a UiFill with neither `values` nor `locator` is
   // inert. An argument declared but left EMPTY is exactly as inert as an absent one.
   it('required_one_of is not satisfied by an empty argument', () => {
@@ -2101,7 +2170,10 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
 
     const empty = stepArgsViolations(uiFill('<argument id="values"/>'));
     assert.equal(empty.length, 1, 'an empty `values` must not satisfy the one-of group');
-    assert.ok(empty[0].message.includes('one of'), empty[0].message);
+    assert.ok(
+      (empty[0].details as { missing_arguments: string[] }).missing_arguments.some((m) => m.startsWith('one of')),
+      JSON.stringify(empty[0].details)
+    );
 
     const populated = stepArgsViolations(
       uiFill(
@@ -2150,7 +2222,10 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
 </testCase>`;
     const vs = stepArgsViolations(xml);
     assert.equal(vs.length, 1, 'UiConnect missing connectionName should raise exactly one violation');
-    assert.ok(vs[0].message.includes('connectionName'), `should name the missing arg: ${vs[0].message}`);
+    assert.ok(
+      (vs[0].details as { missing_arguments: string[] }).missing_arguments.includes('connectionName'),
+      `should name the missing arg: ${JSON.stringify(vs[0].details)}`
+    );
     assert.equal(vs[0].severity, 'major', 'rule must be major (does not gate is_valid)');
   });
 
@@ -2175,8 +2250,9 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     const vs = stepArgsViolations(xml);
     assert.equal(vs.length, 1, 'one aggregated violation, not one per step');
     assert.equal(vs[0].count, 2, 'count reflects both offending steps');
-    assert.ok(vs[0].message.includes('uiConnectionName'), 'UiWithScreen missing uiConnectionName');
-    assert.ok(vs[0].message.includes('interaction'), 'UiDoAction missing interaction');
+    const missing = (vs[0].details as { missing_arguments: string[] }).missing_arguments;
+    assert.ok(missing.includes('uiConnectionName'), 'UiWithScreen missing uiConnectionName');
+    assert.ok(missing.includes('interaction'), 'UiDoAction missing interaction');
   });
 
   it('scores one aggregated violation far below the per-step equivalent', () => {
