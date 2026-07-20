@@ -144,14 +144,19 @@ function buildConnectionMap(tp: Record<string, unknown>): Map<string, Connection
  * than throwing when the file is unreadable or malformed: absent project context
  * must degrade to "cannot tell", never to a false positive.
  */
-export function parseProjectConnectionNames(testProjectXml: string): Set<string> {
+export function parseProjectConnectionNames(testProjectXml: string): Set<string> | undefined {
   const names = new Set<string>();
   try {
     for (const info of buildConnectionMap(parseTestProjectXml(testProjectXml)).values()) {
       if (info.name) names.add(info.name);
     }
   } catch {
-    // Unparseable .testproject → empty set → rule stays silent.
+    // Unparseable → UNDEFINED, not an empty set. The two are not the same: an empty set
+    // is authoritative ("this project declares no connections", so a reference to one is
+    // genuinely dangling), whereas a parse failure means we simply do not know. Returning
+    // an empty set there made the validator emit dangling-reference warnings off a
+    // malformed project file, contradicting its own documented conservative policy.
+    return undefined;
   }
   return names;
 }

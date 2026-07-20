@@ -1093,6 +1093,25 @@ const REFERENCE_ARG_FAMILY: Record<string, string> = {
 };
 
 /**
+ * Which connect-step families can satisfy each reference.
+ *
+ * Not simple equality: `ApexConnect` with `quickUiLogin` opens the Lightning UI as well
+ * as the API connection, so a `uiConnectionName` legitimately resolves to an
+ * ApexConnect result — that is the canonical Salesforce pattern SF-CONNECT-TYPE-001
+ * actively steers people toward. Requiring an exact family match made these two rules
+ * contradict each other, flagging the very shape the other one recommends.
+ *
+ * `other` (an unclassified connect apiId) satisfies everything: an unknown connect type
+ * is a reason to stay quiet, not to accuse.
+ */
+const REFERENCE_ARG_ACCEPTS: Record<string, ReadonlySet<string>> = {
+  uiConnectionName: new Set(['ui', 'apex', 'other']),
+  apexConnectionName: new Set(['apex', 'other']),
+  dbConnectionName: new Set(['db', 'other']),
+  webConnectionName: new Set(['web', 'other']),
+};
+
+/**
  * The connection family a connect step produces, derived from its apiId. Used to scope
  * "this step's result is unresolvable" to the references it could actually satisfy,
  * instead of silencing the rule for the whole file.
@@ -1152,6 +1171,46 @@ function validateSalesforceConnectType(tc: Record<string, unknown>, issues: Vali
 // connectionName when resultName is omitted). A reference to a name no connect
 // step produced is a dangling connection. WARNING, since the connection could be
 // established by a parent callable test.
+/**
+ * Survey a test's connect steps: which connection names each family concretely
+ * produces, and which families produced a result we cannot resolve statically.
+ *
+ * Both are held PER FAMILY. A single global name set let a DbConnect result satisfy a
+ * `uiConnectionName`; a single global opaque flag let one dynamic DbConnect silence the
+ * rule for the whole file.
+ */
+function scanConnectSteps(calls: Array<Record<string, unknown>>): {
+  availableByFamily: Map<string, Set<string>>;
+  opaqueFamilies: Set<string>;
+  connectStepCount: number;
+} {
+  const availableByFamily = new Map<string, Set<string>>();
+  const opaqueFamilies = new Set<string>();
+  let connectStepCount = 0;
+
+  const addResult = (family: string, name: string): void => {
+    const set = availableByFamily.get(family) ?? new Set<string>();
+    set.add(name);
+    availableByFamily.set(family, set);
+  };
+
+  for (const c of calls) {
+    const apiId = (c['@_apiId'] as string | undefined) ?? '';
+    if (!isConnectStep(apiId)) continue;
+    connectStepCount++;
+    const family = connectFamily(apiId);
+    const resultName = literalArgValue(c, 'resultName');
+    const connectionName = literalArgValue(c, 'connectionName');
+    if (resultName) addResult(family, resultName);
+    else if (connectionName) addResult(family, connectionName);
+    // Neither name is a literal: a variable connectionName, a <value> with no class, or
+    // an empty argument resolved from project config. We cannot know what this step
+    // produces, so references of a compatible family become unverifiable.
+    else opaqueFamilies.add(family);
+  }
+  return { availableByFamily, opaqueFamilies, connectStepCount };
+}
+
 function validateConnectionReferenceConsistency(
   tc: Record<string, unknown>,
   issues: ValidationIssue[],
@@ -1160,26 +1219,7 @@ function validateConnectionReferenceConsistency(
   const calls: Array<Record<string, unknown>> = [];
   collectNodesByKey(tc, 'apiCall', calls);
 
-  const available = new Set<string>();
-  let connectStepCount = 0;
-  // Families whose connect step produced a result we cannot resolve statically. Held
-  // PER FAMILY, not file-wide: one dynamic DbConnect says nothing about whether a
-  // `uiConnectionName` resolves, and suppressing everything let genuinely dangling
-  // references through whenever a file contained any opaque connect step.
-  const opaqueFamilies = new Set<string>();
-  for (const c of calls) {
-    const apiId = (c['@_apiId'] as string | undefined) ?? '';
-    if (!isConnectStep(apiId)) continue;
-    connectStepCount++;
-    const resultName = literalArgValue(c, 'resultName');
-    const connectionName = literalArgValue(c, 'connectionName');
-    if (resultName) available.add(resultName);
-    else if (connectionName) available.add(connectionName);
-    // Neither name is a literal: a variable connectionName, a <value> with no class,
-    // or an empty argument resolved from project config. We cannot know what this
-    // step produces, so references of the SAME family become unverifiable.
-    else opaqueFamilies.add(connectFamily(apiId));
-  }
+  const { availableByFamily, opaqueFamilies, connectStepCount } = scanConnectSteps(calls);
   // Connections may be inherited from a parent callable test.
   if (connectStepCount === 0) return;
 
@@ -1188,9 +1228,13 @@ function validateConnectionReferenceConsistency(
     if (isConnectStep(apiId)) continue;
     for (const refId of CONNECT_REFERENCE_ARG_IDS) {
       const ref = literalArgValue(c, refId);
-      if (!ref || available.has(ref)) continue;
-      // An opaque connect step of this family could be what produces `ref`.
-      if (opaqueFamilies.has(REFERENCE_ARG_FAMILY[refId] ?? '')) continue;
+      if (!ref) continue;
+      const refFamily = REFERENCE_ARG_FAMILY[refId] ?? '';
+      const accepts = REFERENCE_ARG_ACCEPTS[refId] ?? new Set([refFamily]);
+      // Resolve only against connect steps of a COMPATIBLE family.
+      if ([...accepts].some((f) => availableByFamily.get(f)?.has(ref))) continue;
+      // An opaque connect step of a compatible family could be what produces `ref`.
+      if ([...accepts].some((f) => opaqueFamilies.has(f))) continue;
       // Provar resolves connection references against the PROJECT's connection list
       // too, not only against connect-step resultNames. A name declared in
       // .testproject is valid even though no connect step in this file produces it.
@@ -1199,9 +1243,11 @@ function validateConnectionReferenceConsistency(
       issues.push({
         rule_id: 'CONNECT-REF-CONSISTENCY-001',
         severity: 'WARNING',
-        message: `Step "${stepName}" references ${refId}="${ref}", but no connect step in this test produces that connection result${
+        message: `Step "${stepName}" references ${refId}="${ref}", but no ${refFamily} connect step in this test produces that connection result${
           projectConnectionNames ? ' and the project declares no connection of that name' : ''
-        } (available: ${[...available].map((n) => `"${n}"`).join(', ') || 'none'}).`,
+        } (available ${refFamily} results: ${
+          [...(availableByFamily.get(refFamily) ?? [])].map((n) => `"${n}"`).join(', ') || 'none'
+        }).`,
         applies_to: 'apiCall',
         suggestion: `Set the connect step's resultName to "${ref}", or change ${refId} to match a connect step's resultName or a connection declared in the project's .testproject. Downstream steps reference the connect step's resultName — which defaults to the connectionName when resultName is omitted.`,
       });

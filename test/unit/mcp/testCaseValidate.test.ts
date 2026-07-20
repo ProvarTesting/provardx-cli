@@ -1190,6 +1190,32 @@ describe('validateTestCase', () => {
       );
     });
 
+    // Connection results are family-scoped. A single global name set let a DbConnect
+    // result satisfy a uiConnectionName, suppressing a genuinely dangling reference
+    // whenever two families happened to share a name.
+    it('a DB connect result does not satisfy a UI connection reference of the same name', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Shared</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">Shared</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'a db result must not satisfy a ui reference merely by sharing a name'
+      );
+    });
+
     it('accepts a connection declared in the project rather than by a connect step', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <testCase id="x" guid="${GUID_TC}" registryId="r" name="T">

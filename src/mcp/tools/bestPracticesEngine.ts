@@ -1429,18 +1429,24 @@ function valueNodeIsMeaningful(v: XmlNode): boolean {
  * `valueList` / `namedValues` containers, meaningful only when an entry inside is.
  */
 function schemaArgumentHasValue(arg: XmlNode): boolean {
-  if (argumentHasMeaningfulValue(arg)) return true;
+  // Class-specific rules run FIRST. Delegating to the parity helper up front was a
+  // bypass: that helper accepts non-empty text for any class it does not recognise, so
+  // `<value class="uiLocator">junk</value>` satisfied the group without the uri the
+  // class actually requires, and the stricter check below never ran.
   for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
     if (value == null || typeof value !== 'object') continue;
     const vClass = (value['@_class'] as string | undefined) ?? '';
     if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
       const uri = value['@_uri'];
       if (typeof uri === 'string' && uri.trim().length > 0) return true;
-      continue;
+      continue; // text does not substitute for the uri this class carries its payload in
     }
     if (vClass === 'valueList' || value['namedValues'] != null) {
       if (containerHasMeaningfulEntry(value)) return true;
+      continue; // stray text inside a container is not a populated entry
     }
+    // Any other class: defer to the unchanged Quality Hub parity contract.
+    if (argumentHasMeaningfulValue({ value } as XmlNode)) return true;
   }
   return false;
 }
@@ -1458,7 +1464,10 @@ function containerHasMeaningfulEntry(container: XmlNode, depth = 0): boolean {
   for (const [key, child] of Object.entries(container)) {
     if (key.startsWith('@_') || child == null) continue;
     if (key === '#text') {
-      if (String(child).trim().length > 0) return true;
+      // The container's OWN text is not an entry — a valueList holds namedValues, so
+      // `<value class="valueList">stray text</value>` carries nothing usable. Text on a
+      // nested entry (a namedValue's assigned value) does count, hence the depth check.
+      if (depth > 0 && String(child).trim().length > 0) return true;
       continue;
     }
     for (const entry of toArr(child as XmlNode | string | Array<XmlNode | string>)) {
@@ -2574,10 +2583,25 @@ function collectMissingTierArgs(
  * 5 x 0.75 x (1 + log2 71) = 26.8. This also matches the Quality Hub Lambda, which
  * emits one violation per rule with a count.
  */
+/**
+ * Identity scope for an aggregate violation: the test case it came from. Falls back to
+ * the name, then to a stable marker, so a file lacking a guid still gets a key that is
+ * at least consistent within its own run.
+ */
+function testCaseScope(tc: XmlNode): string {
+  const root = (tc['testCase'] as XmlNode | undefined) ?? tc;
+  const guid = root['@_guid'];
+  if (typeof guid === 'string' && guid.length > 0) return guid;
+  const name = root['@_name'];
+  if (typeof name === 'string' && name.length > 0) return name;
+  return 'unscoped';
+}
+
 function aggregateTierViolation(
   rule: BPRule,
   found: { steps: string[]; missingByArg: Map<string, number>; count: number },
-  lead: string
+  lead: string,
+  scope: string
 ): BPViolation[] {
   if (found.count === 0) return [];
   // Identity and presentation are separated. `diff_identity` is what validationDiff
@@ -2595,7 +2619,12 @@ function aggregateTierViolation(
     )}${more}`,
     found.count
   );
-  v.diff_identity = 'aggregate';
+  // Scoped to the test case, NOT a bare literal. Suite validation flattens every test
+  // case's violations into one array, so a constant identity made same-rule aggregates
+  // from different files collide on one diff key — computeDiff keeps a single sample
+  // per key, so an unchanged file could mask a partially-fixed one and updated[] would
+  // come back empty with work still outstanding.
+  v.diff_identity = `aggregate:${scope}`;
   v.details = {
     affected_steps: found.count,
     missing_arguments: missingArgs,
@@ -2611,7 +2640,8 @@ function validateSchemaRequiredArguments(tc: XmlNode, rule: BPRule): BPViolation
   return aggregateTierViolation(
     rule,
     found,
-    'One or more steps are missing an argument the Provar step schema lists as required.'
+    'One or more steps are missing an argument the Provar step schema lists as required.',
+    testCaseScope(tc)
   );
 }
 
@@ -2621,7 +2651,8 @@ function validateSchemaRecommendedArguments(tc: XmlNode, rule: BPRule): BPViolat
   return aggregateTierViolation(
     rule,
     found,
-    'One or more steps omit an argument that appears on 80-99% of real Provar steps of the same type.'
+    'One or more steps omit an argument that appears on 80-99% of real Provar steps of the same type.',
+    testCaseScope(tc)
   );
 }
 
@@ -2632,7 +2663,8 @@ function validateStepIdeParity(tc: XmlNode, rule: BPRule): BPViolation[] {
     rule,
     found,
     'One or more steps omit arguments the Provar IDE emits for that step type even when empty, ' +
-      'so the XML does not round-trip as IDE-authored.'
+      'so the XML does not round-trip as IDE-authored.',
+    testCaseScope(tc)
   );
 }
 

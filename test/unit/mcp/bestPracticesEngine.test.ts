@@ -2124,6 +2124,50 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.deepEqual((one[0].details as { missing_arguments: string[] }).missing_arguments, ['uiConnectionName']);
   });
 
+  // The schema tier must apply its OWN class rules before falling back to the parity
+  // helper. Delegating first was a bypass: the parity contract accepts non-empty text
+  // for any unrecognised class, so text inside a uiLocator or a valueList satisfied the
+  // group without the uri or populated entry those classes actually require.
+  it('required_one_of does not accept stray text in place of a class-specific payload', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(90)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+    const fires = (inner: string): boolean => stepArgsViolations(uiFill(inner)).length > 0;
+
+    assert.ok(fires('<argument id="locator"><value class="uiLocator">junk</value></argument>'), 'text is not a uri');
+    assert.ok(
+      fires('<argument id="values"><value class="valueList">stray text</value></argument>'),
+      'text is not a populated container entry'
+    );
+    // The legitimate forms still satisfy it.
+    assert.ok(!fires('<argument id="locator"><value class="uiLocator" uri="ui:locator?name=N"/></argument>'));
+    assert.ok(
+      !fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="N">v</namedValue></namedValues></value></argument>'
+      )
+    );
+  });
+
+  // diff_identity must be scoped to the test case. Suite validation flattens every
+  // test case's violations into one array, so a constant identity made same-rule
+  // aggregates from different files collide on one diff key — computeDiff keeps a
+  // single sample per key, so an unchanged file could mask a partially-fixed one.
+  it('aggregate diff_identity is scoped per test case, not a shared constant', () => {
+    const mk = (guid: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${guid}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(95)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S" testItemId="1">
+    <arguments/>
+  </apiCall>
+</steps></testCase>`;
+    const a = stepArgsViolations(mk(TC))[0];
+    const b = stepArgsViolations(mk('550e8400-e29b-41d4-a716-4466554409ff'))[0];
+    assert.ok(a?.diff_identity && b?.diff_identity, 'both aggregates carry an identity');
+    assert.notEqual(a.diff_identity, b.diff_identity, 'different test cases must not share a diff key');
+  });
+
   // PARITY GUARD. argumentHasMeaningfulValue mirrors the Quality Hub
   // MustContainArgumentValidator, and every mustContainArgument rule shares it, so
   // widening it silently desynchronises local and API scores. An earlier revision
