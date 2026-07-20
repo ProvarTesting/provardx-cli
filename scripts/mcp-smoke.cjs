@@ -191,6 +191,14 @@ async function runTests() {
       output_path: path.join(TMP, 'steps-required-smoke-rejected.testcase'),
     });
 
+  // ── 6c. provar_step_schema (by api_id) ────────────────────────────────────
+  // Registered in authoring, validation AND qualityhub: all three name it as the
+  // recovery path when generation or validation hits a step it cannot shape. Gate on
+  // any of them, or a PROVAR_MCP_TOOLS=validation smoke run would skip the very case
+  // this covers — guidance pointing at a tool the session does not expose.
+  if (inGroup('authoring') || inGroup('validation') || inGroup('qualityhub'))
+    await callTool('provar_step_schema', { api_id: 'UiConnect' });
+
   // ── 7. provar_testcase_validate ───────────────────────────────────────────
   if (inGroup('validation')) await callTool('provar_testcase_validate', { content: '<testCase/>' });
 

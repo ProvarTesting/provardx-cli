@@ -35,6 +35,7 @@ import { registerAllNitroXTools } from './tools/nitroXTools.js';
 import { registerAllTestCaseStepTools } from './tools/testCaseStepTools.js';
 import { registerAllConnectionTools } from './tools/connectionTools.js';
 import { registerAllOrgDescribeTools } from './tools/orgDescribeTools.js';
+import { registerAllStepSchemaTools } from './tools/stepSchemaTools.js';
 import { registerAllPrompts } from './prompts/index.js';
 import {
   createDepthGuardState,
@@ -49,7 +50,18 @@ import { desc } from './tools/descHelper.js';
 const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig) => void>> = {
   nitrox: [registerAllNitroXTools],
   automation: [registerAllAutomationTools],
-  qualityhub: [registerAllQualityHubTools, registerAllQualityHubApiTools, registerAllDefectTools],
+  // provar_step_schema is read-only, offline, and named as the recovery path by
+  // guidance in three different groups: provar_testcase_validate's structural-error
+  // text (validation), examples_retrieve's no-key fallback (qualityhub), and the
+  // generator (authoring). Registering it in each means that guidance resolves to a
+  // tool the session actually exposes, instead of naming one it does not — the same
+  // dead-end this change set out to remove, just relocated.
+  qualityhub: [
+    registerAllQualityHubTools,
+    registerAllQualityHubApiTools,
+    registerAllDefectTools,
+    registerAllStepSchemaTools,
+  ],
   validation: [
     registerProjectValidateFromPath,
     registerAllAntTools,
@@ -58,12 +70,14 @@ const TOOL_GROUPS: Record<string, Array<(server: McpServer, config: ServerConfig
     registerTestSuiteValidate,
     registerTestPlanValidate,
     registerPageObjectValidate,
+    registerAllStepSchemaTools,
   ],
   authoring: [
     registerTestCaseGenerate,
     registerPageObjectGenerate,
     registerAllTestCaseStepTools,
     registerAllTestPlanTools,
+    registerAllStepSchemaTools,
   ],
   inspect: [registerProjectInspect, registerAllOrgDescribeTools],
   connection: [registerAllConnectionTools],
@@ -165,9 +179,16 @@ export function createProvarMcpServer(config: ServerConfig): McpServer {
 
   // ── Provar tools ─────────────────────────────────────────────────────────────
   const activeGroups = parseActiveGroups();
+  // A registrar may legitimately appear in more than one group (provar_step_schema is
+  // the recovery path named by validation, qualityhub AND authoring guidance). Run
+  // each distinct registrar at most once — registering the same tool name twice is an
+  // SDK error, and with no PROVAR_MCP_TOOLS set every group is active.
+  const alreadyRegistered = new Set<(server: McpServer, config: ServerConfig) => void>();
   for (const [group, registrars] of Object.entries(TOOL_GROUPS)) {
     if (activeGroups === null || activeGroups.has(group)) {
       for (const register of registrars) {
+        if (alreadyRegistered.has(register)) continue;
+        alreadyRegistered.add(register);
         register(server, config);
       }
     }

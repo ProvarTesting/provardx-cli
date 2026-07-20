@@ -406,13 +406,49 @@ NitroX is Provar's Hybrid Model for locators — it maps Salesforce component-ba
 **Without an API key configured:**
 
 - `isError` must be `false` (NOT `true`) — the generation workflow must continue
-- `examples` must be `[]`
+- `source` is present on every path: `corpus`, `bundled`, or `none`
+- For a **Salesforce UI** query, `source` is `bundled` and `examples` carries a
+  known-correct offline example (`quality_tier: "bundled"`), so a brand-new project
+  still has a validated structural pattern to follow
+- For an **unrelated** query (REST, database, NitroX), `source` is `none` and
+  `examples` is `[]` — the bundled set is deliberately withheld off-topic, because a
+  mismatched example steers generation worse than no example at all
 - `warning` must mention `sf provar auth login`
+
+**On rate limit or network failure:** `source` is `none` and `examples` is `[]` —
+bundled examples are withheld so a transient outage is never disguised as "no matches".
 
 **What to look for:**
 
-- The AI acknowledges the missing key and offers to continue without grounding
+- The AI acknowledges the missing key and either uses the bundled example or falls
+  back to `provar_step_schema` for the step types it needs
 - No error is thrown that would abort the session
+
+---
+
+### Scenario 10a: Step Schema Lookup Without Corpus Access
+
+**Goal:** Confirm an agent with no API key can still author correct steps, and that the
+fallback named in error messages actually resolves to a callable tool.
+
+> "What arguments does a UiWithScreen step require? Then list every UI step type."
+
+**What to look for:**
+
+- The AI calls `provar_step_schema` with `api_id: "UiWithScreen"`, then `category: "UI"`
+- Required arguments come back as `uiConnectionName` and `target` — **not** a phantom
+  `screenName`
+- The response separates three tiers: `required_arguments` (Provar fails without
+  these), `recommended_arguments` (present on 80-99% of real steps), and
+  `ide_emitted_arguments` (what the Provar IDE writes even when empty)
+- The tool is reachable regardless of `PROVAR_MCP_TOOLS` — it is registered in the
+  `validation`, `qualityhub` and `authoring` groups, because all three name it as a
+  recovery path
+
+**Also verify the recovery loop end to end:** validate a test case with a structural
+error, confirm the error text names `provar_step_schema`, then confirm that tool is
+callable in the same session. Guidance naming an unavailable tool is a dead end — the
+exact failure this scenario guards against.
 
 ---
 

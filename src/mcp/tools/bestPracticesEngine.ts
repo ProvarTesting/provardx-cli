@@ -151,12 +151,24 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.bundled.apis.list.ListCompare',
   // Provar Labs
   'com.provar.plugins.bundled.apis.provarlabs.PageObjectCleaner',
-  // Forcedotcom — AI / agent
-  'com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentSession',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentConversation',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.GenerateUtterance',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.IntentValidator',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.ImageValidator',
+  // Provar AI — current namespace. Verified against a freshly IDE-minted test case
+  // (2026): the IDE writes `com.provar.core.ai.api.*`. The previously-listed
+  // `...forcedotcom.core.testapis.ai.*` form appears in no real file anywhere and was
+  // never valid — listing it here made API-UNKNOWN-001 (critical, weight 10) reject
+  // genuine IDE-authored XML as "does not exist in Provar", gating is_valid=false.
+  'com.provar.core.ai.api.AIAgentSession',
+  'com.provar.core.ai.api.AIAgentConversation',
+  'com.provar.core.ai.api.GenerateUtterance',
+  'com.provar.core.ai.api.IntentValidator',
+  'com.provar.core.ai.api.ImageValidator',
+  'com.provar.core.ai.api.GenerateTestData',
+  // Provar AI — legacy namespace, kept for backward compatibility: pre-rollout files
+  // in the corpus still carry these (AIAgentConversation x8, IntentValidator x8,
+  // GenerateTestData x18, AIAgentSession x3, GenerateUtterance x3).
+  'com.provar.plugins.forcedotcom.core.testapis.generate.AIAgentSession',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.AIAgentConversation',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.GenerateUtterance',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.IntentValidator',
   'com.provar.plugins.forcedotcom.core.testapis.generate.GenerateTestData',
   'com.provar.plugins.forcedotcom.core.testapis.GenerateTestCase',
   // Forcedotcom — Apex / API
@@ -2304,6 +2316,217 @@ function validateUiAssertMissingArguments(tc: XmlNode, rule: BPRule): BPViolatio
   );
 }
 
+// STEP-REQUIRED-ARGS-001 — schema-driven required-argument check for ALL step types.
+//
+// The dedicated hardcoded UiAssert rule (UI-ASSERT-STRUCT-001, above) only ever fired
+// for UiAssert, so a test case could omit required arguments on UiConnect, UiWithScreen,
+// UiDoAction, etc. and still score 100/100. This rule derives the required-argument set
+// for every apiId from provar_test_step_schema.json and flags any step missing one — the
+// same data source read by the provar://schema/test-step resource, so the validator and
+// the schema reference can never drift apart. It runs at `major` severity (docks
+// quality_score, does not gate is_valid), because the schema is a doc-derived reference
+// rather than the authoritative Quality Hub ruleset.
+//
+// Step types with a dedicated required-argument rule are excluded here to avoid
+// double-reporting: UiAssert (UI-ASSERT-STRUCT-001) and the NitroX MS connect variants
+// (UI-NITROX-VARIANT-ARG-001).
+const REQUIRED_ARGS_EXCLUDED_API_IDS: ReadonlySet<string> = new Set([UI_ASSERT_API_ID]);
+
+// Categories whose argument contracts are still moving. Descriptive schema entries are
+// retained (provar_step_schema can still answer questions about them) but nothing in
+// them is scored, so experimental steps do not generate churn.
+const UNSCORED_SCHEMA_CATEGORIES: ReadonlySet<string> = new Set(['ProvarLabs']);
+
+interface SchemaArgTiers {
+  category: string;
+  required: readonly string[];
+  recommended: readonly string[];
+  ideEmitted: readonly string[];
+  /**
+   * Groups where at least ONE member must be present. Used where no single argument
+   * is individually load-blocking but the step is inert without any of them — e.g.
+   * UiFill needs either `values` (a namedValues list) or `locator` (a single field).
+   */
+  requiredOneOf: ReadonlyArray<readonly string[]>;
+}
+
+/** Build apiId → argument tiers from the bundled step schema. Cached after first read. */
+let schemaArgTiers: Map<string, SchemaArgTiers> | null = null;
+function getSchemaArgTiers(): Map<string, SchemaArgTiers> {
+  if (schemaArgTiers) return schemaArgTiers;
+  const map = new Map<string, SchemaArgTiers>();
+  const ids = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v
+          .map((r) => (typeof r === 'string' ? r : r && typeof r === 'object' ? (r as { id?: unknown }).id : undefined))
+          .filter((id): id is string => typeof id === 'string')
+      : [];
+  try {
+    const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_test_step_schema.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { apiCalls?: Record<string, unknown> };
+    for (const [categoryName, category] of Object.entries(parsed.apiCalls ?? {})) {
+      if (!category || typeof category !== 'object') continue;
+      for (const entry of Object.values(category as Record<string, unknown>)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const e = entry as {
+          apiId?: unknown;
+          category?: unknown;
+          required_arguments?: unknown;
+          recommended_arguments?: unknown;
+          ide_emitted_arguments?: unknown;
+          required_one_of?: unknown;
+        };
+        if (typeof e.apiId !== 'string') continue;
+        const oneOf = Array.isArray(e.required_one_of)
+          ? e.required_one_of
+              .filter(Array.isArray)
+              .map((g) => (g as unknown[]).filter((x): x is string => typeof x === 'string'))
+          : [];
+        map.set(e.apiId, {
+          category: typeof e.category === 'string' ? e.category : categoryName,
+          required: ids(e.required_arguments),
+          recommended: ids(e.recommended_arguments),
+          ideEmitted: ids(e.ide_emitted_arguments),
+          requiredOneOf: oneOf.filter((g) => g.length > 0),
+        });
+      }
+    }
+  } catch {
+    // Schema missing/corrupt → empty map → rules silently pass (graceful degradation).
+  }
+  schemaArgTiers = map;
+  return schemaArgTiers;
+}
+
+/*
+ * (apiId, argumentId) pairs already enforced by a dedicated `mustContainArgument` rule.
+ * Read from the rule catalogue at runtime rather than hardcoded, so adding a new
+ * mustContainArgument rule automatically suppresses the schema-driven duplicate.
+ *
+ * Without this, one defect is scored twice — a WebConnect missing `connectionName`
+ * fires both REST-CONN-001 (critical, weight 8) and the schema rule (major, weight 5).
+ */
+let coveredArgPairs: Set<string> | null = null;
+function getCoveredArgPairs(): Set<string> {
+  if (coveredArgPairs) return coveredArgPairs;
+  const set = new Set<string>();
+  try {
+    const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_best_practices_rules.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { rules?: Array<{ check?: Record<string, unknown> }> };
+    for (const rule of parsed.rules ?? []) {
+      const check = rule.check;
+      if (!check || check['type'] !== 'mustContainArgument') continue;
+      const apiId = check['apiId'];
+      // The catalogue uses `argument`; `argumentId` is tolerated for forward-compat.
+      const arg = typeof check['argument'] === 'string' ? check['argument'] : check['argumentId'];
+      if (typeof apiId === 'string' && typeof arg === 'string') set.add(`${apiId}::${arg}`);
+    }
+  } catch {
+    // Catalogue unreadable → no suppression; duplicates are preferable to silence.
+  }
+  coveredArgPairs = set;
+  return coveredArgPairs;
+}
+
+/** Steps whose declared tier args are absent, plus the total offending-step count. */
+function collectMissingTierArgs(
+  tc: XmlNode,
+  pick: (t: SchemaArgTiers) => readonly string[],
+  dedupeAgainstDedicatedRules: boolean,
+  checkOneOf = false
+): { steps: string[]; missingByArg: Map<string, number>; count: number } {
+  const tiers = getSchemaArgTiers();
+  const covered = dedupeAgainstDedicatedRules ? getCoveredArgPairs() : null;
+  const steps: string[] = [];
+  const missingByArg = new Map<string, number>();
+  let count = 0;
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || REQUIRED_ARGS_EXCLUDED_API_IDS.has(apiId) || apiId.includes('NitroXConnect')) continue;
+    const tier = tiers.get(apiId);
+    if (!tier || UNSCORED_SCHEMA_CATEGORIES.has(tier.category)) continue;
+    const wanted = pick(tier);
+    const oneOfGroups = checkOneOf ? tier.requiredOneOf : [];
+    if (wanted.length === 0 && oneOfGroups.length === 0) continue;
+    const present = new Set<string>();
+    for (const a of getCallArguments(call)) {
+      const id = a['@_id'] as string | undefined;
+      if (id) present.add(id);
+    }
+    const missing = wanted.filter((r) => !present.has(r) && !(covered && covered.has(`${apiId}::${r}`)));
+    // A one-of group contributes only when NONE of its members is present.
+    for (const group of oneOfGroups) {
+      if (!group.some((g) => present.has(g))) missing.push(`one of [${group.join(' | ')}]`);
+    }
+    if (!missing.length) continue;
+    count++;
+    const ctx = stepContext(call);
+    if (steps.length < 10) steps.push(`'${ctx.title}' (testItemId=${ctx.tid}): ${missing.join(', ')}`);
+    for (const m of missing) missingByArg.set(m, (missingByArg.get(m) ?? 0) + 1);
+  }
+  return { steps, missingByArg, count };
+}
+
+/*
+ * One aggregated violation per rule, carrying `count`, rather than one violation per
+ * offending step. calculateBPScore damps a single violation logarithmically
+ * (1 + log2(count)) but sums per-violation penalties linearly, so per-step emission
+ * bypassed the damping entirely: a file with 71 offending steps scored
+ * 71 x 5 x 0.75 = 266 points of deduction (score 0) where the aggregated form costs
+ * 5 x 0.75 x (1 + log2 71) = 26.8. This also matches the Quality Hub Lambda, which
+ * emits one violation per rule with a count.
+ */
+function aggregateTierViolation(
+  rule: BPRule,
+  found: { steps: string[]; missingByArg: Map<string, number>; count: number },
+  lead: string
+): BPViolation[] {
+  if (found.count === 0) return [];
+  const argSummary = [...found.missingByArg.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([id, n]) => `${id} (${n})`)
+    .join(', ');
+  const more = found.count > found.steps.length ? ` …and ${found.count - found.steps.length} more step(s)` : '';
+  return [
+    makeViolation(
+      rule,
+      `${lead} Missing by argument: ${argSummary}. Steps: ${found.steps.join('; ')}${more}`,
+      found.count
+    ),
+  ];
+}
+
+/** STEP-REQUIRED-ARGS-001 — schema-declared load-blocking arguments (major). */
+function validateSchemaRequiredArguments(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.required, true, true);
+  return aggregateTierViolation(
+    rule,
+    found,
+    `${found.count} step(s) are missing an argument the Provar step schema lists as required.`
+  );
+}
+
+/** STEP-RECOMMENDED-ARGS-001 — strongly conventional but not load-blocking (minor). */
+function validateSchemaRecommendedArguments(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.recommended, true);
+  return aggregateTierViolation(
+    rule,
+    found,
+    `${found.count} step(s) omit an argument that appears on 80-99% of real Provar steps of the same type.`
+  );
+}
+
+/** STEP-IDE-PARITY-001 — arguments the Provar IDE always emits, even when empty (info). */
+function validateStepIdeParity(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.ideEmitted, false);
+  return aggregateTierViolation(
+    rule,
+    found,
+    `${found.count} step(s) omit arguments the Provar IDE emits for that step type even when empty, ` +
+      'so the XML does not round-trip as IDE-authored.'
+  );
+}
+
 // UI-BINDING-ORDER-001 — binding URIs must list object= before action=/field= (percent-encoded).
 const BINDING_WRONG_ACTION_FIRST = /object%3Faction%3D[^%]+%26object%3D/;
 const BINDING_WRONG_FIELD_FIRST = /object%3Ffield%3D[^%]+%26object%3D/;
@@ -2428,6 +2651,9 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
 type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
 
 const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
+  schemaRequiredArguments: validateSchemaRequiredArguments,
+  schemaRecommendedArguments: validateSchemaRecommendedArguments,
+  stepIdeParity: validateStepIdeParity,
   uiActionNestingStructure: validateUiActionNestingStructure,
   uiAssertScreenContext: validateUiAssertScreenContext,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,

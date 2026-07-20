@@ -241,7 +241,7 @@ const TOOL_DESCRIPTION = [
   'Cleanup warning: ApexDeleteObject steps near end of test will be skipped if an earlier step fails (stopOnError=false). Use a TearDown callable.',
   'Validation: when validate_after_edit=true (default) the response includes a validation field and returns TESTCASE_INVALID if the generated XML fails structural checks.',
   'Grounding: call provar_qualityhub_examples_retrieve before generating to get corpus examples for the scenario — correct XML structure for the step types you need.',
-  'If the response has count: 0 with a warning field (API unavailable or not configured), fall back: read the provar://docs/step-reference MCP resource for step types and attribute formats, then continue.',
+  'If the response has count: 0 with a warning field (API unavailable or not configured), fall back: call the provar_step_schema tool (api_id or category) for step types and their required/optional arguments, then continue.',
 ].join(' ');
 
 export function registerTestCaseGenerate(server: McpServer, config: ServerConfig): void {

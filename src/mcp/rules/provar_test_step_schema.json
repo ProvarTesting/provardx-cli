@@ -119,12 +119,20 @@
             "id": "failureMessage",
             "type": "string",
             "description": "Custom failure message"
-          },
-          {
-            "id": "continueOnFailure",
-            "type": "boolean",
-            "default": "false"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "expectedValue",
+          "comparisonType",
+          "actualValue",
+          "caseSensitive",
+          "numeric",
+          "retainDecimals",
+          "nullGreater",
+          "matchMultiLine",
+          "matchDotAll",
+          "failureMessage"
         ],
         "validation_rules": [
           "expectedValue and actualValue types should be compatible",
@@ -144,6 +152,8 @@
         "category": "Control",
         "required_arguments": [],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": ["Must be inside a ForEach or While loop"],
         "best_practices": [
           "Use Break sparingly - consider loop conditions instead",
@@ -163,6 +173,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["message"],
         "validation_rules": ["message should be descriptive"],
         "best_practices": ["Use for critical validation failures", "Provide clear, actionable failure messages"]
       },
@@ -173,6 +185,8 @@
         "category": "Control",
         "required_arguments": [],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": ["Should be at end of test", "Typically contains cleanup operations"],
         "best_practices": [
@@ -188,17 +202,17 @@
         "category": "Control",
         "required_arguments": [
           {
-            "id": "valuePath",
-            "type": "variable",
-            "description": "Collection to iterate over"
+            "id": "list",
+            "type": "string"
           },
           {
-            "id": "iterationPathName",
-            "type": "string",
-            "description": "Variable name for current item"
+            "id": "valueName",
+            "type": "string"
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["list", "fromItem", "valueName", "continueOnFailure"],
         "substeps": true,
         "validation_rules": [
           "valuePath must reference a valid list/collection",
@@ -216,13 +230,7 @@
         "apiId": "com.provar.plugins.bundled.apis.control.StepGroup",
         "description": "Organize related steps into logical groups",
         "category": "Control",
-        "required_arguments": [
-          {
-            "id": "name",
-            "type": "string",
-            "description": "Group name"
-          }
-        ],
+        "required_arguments": [],
         "optional_arguments": [
           {
             "id": "description",
@@ -230,6 +238,8 @@
             "description": "Detailed group description"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": ["name should be descriptive", "Should contain multiple related steps"],
         "best_practices": ["Use for tests with 10+ steps", "Group by logical functionality", "Add clear descriptions"]
@@ -247,6 +257,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["condition"],
         "substeps": true,
         "clauses": ["then", "else"],
         "validation_rules": [
@@ -267,6 +279,8 @@
         "category": "Control",
         "required_arguments": [],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["values"],
         "child_elements": {
           "namedValues": {
             "description": "Container for namedValue elements",
@@ -301,14 +315,9 @@
             "description": "Sleep duration"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "unit",
-            "type": "string",
-            "default": "seconds",
-            "description": "Time unit (seconds)"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["sleepSecs"],
         "validation_rules": ["duration must be positive number", "Avoid long sleep durations"],
         "best_practices": [
           "Prefer WaitFor over fixed Sleep",
@@ -329,6 +338,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["value"],
         "substeps": false,
         "clauses": ["case"],
         "structure": "Switch contains clause name='case' with steps containing multiple SwitchCase apiCalls",
@@ -373,6 +384,8 @@
             "description": "Internal reference to parent Switch value"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["value", "caseSensitive", "alreadyMatched", "switchValue"],
         "substeps": true,
         "clauses": ["steps"],
         "validation_rules": [
@@ -395,22 +408,13 @@
         "required_arguments": [],
         "optional_arguments": [
           {
-            "id": "duration",
-            "type": "decimal",
-            "description": "Maximum wait duration"
-          },
-          {
             "id": "condition",
             "type": "boolean",
             "description": "Condition to wait for"
-          },
-          {
-            "id": "pollInterval",
-            "type": "decimal",
-            "default": "1",
-            "description": "How often to check condition (seconds)"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["condition", "testAtStart", "maxIterations", "sleepSecs", "continueOnFailure"],
         "validation_rules": ["Must specify duration OR condition", "duration should be reasonable (< 60 seconds)"],
         "best_practices": [
           "Prefer condition-based over fixed duration",
@@ -430,13 +434,9 @@
             "description": "Loop condition"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "maxIterations",
-            "type": "decimal",
-            "description": "Maximum loop iterations to prevent infinite loops"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["condition", "counterName", "counterStart", "counterEnd", "continueOnFailure"],
         "substeps": true,
         "validation_rules": [
           "condition must be boolean",
@@ -476,17 +476,37 @@
             "default": "true"
           },
           {
-            "id": "commitBehavior",
-            "type": "string",
-            "default": "AfterTest"
+            "id": "commitBehaviour",
+            "type": "string"
           },
           {
             "id": "ifAlreadyOpen",
             "type": "string",
             "default": "Fail"
+          },
+          {
+            "id": "resultName",
+            "type": "string"
+          },
+          {
+            "id": "resultScope",
+            "type": "string"
           }
         ],
-        "validation_rules": ["Should be first DB operation", "connectionName must be unique"],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "connectionName",
+          "autoCommit",
+          "ifAlreadyOpen",
+          "commitBehaviour",
+          "resultName",
+          "resultScope"
+        ],
+        "validation_rules": [
+          "Should be first DB operation",
+          "connectionName must be unique",
+          "The argument is spelled commitBehaviour (British spelling) — commitBehavior is not recognised."
+        ],
         "best_practices": ["Use connection pooling when possible", "Set appropriate commit behavior"]
       },
 
@@ -510,10 +530,13 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["dbConnectionName", "tableName"],
         "validation_rules": [
           "Must have DbConnect first",
           "tableName must be valid",
-          "Should have whereClause to avoid deleting all records"
+          "Should have whereClause to avoid deleting all records",
+          "Row selection is emitted as DYNAMICALLY-NAMED arguments prefixed with where__, one per predicate column — <argument id=\"where__JOB_ID\"> — NOT as a single whereClause argument."
         ],
         "best_practices": ["Always use WHERE clause", "Test with SELECT first"]
       },
@@ -539,10 +562,13 @@
             "description": "Column name/value pairs"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["dbConnectionName", "tableName", "resultName", "resultScope"],
         "validation_rules": [
           "Must have DbConnect first",
           "tableName must be valid",
-          "columnValues should match table schema"
+          "columnValues should match table schema",
+          "Column values are emitted as DYNAMICALLY-NAMED arguments, one per column — <argument id=\"JOB_ID\">, <argument id=\"MIN_SALARY\"> — NOT as a single container argument."
         ],
         "best_practices": ["Validate data before insert", "Handle insert failures gracefully"]
       },
@@ -571,7 +597,13 @@
             "type": "string"
           }
         ],
-        "validation_rules": ["Must have DbConnect first", "Should store results in variable"],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["dbConnectionName", "tableName", "resultName", "resultScope"],
+        "validation_rules": [
+          "Must have DbConnect first",
+          "Should store results in variable",
+          "Row selection is emitted as DYNAMICALLY-NAMED arguments prefixed with where__, one per predicate column — <argument id=\"where__JOB_ID\"> — NOT as a single whereClause argument."
+        ],
         "best_practices": ["Use WHERE clause to limit results", "Store in meaningful variable name"]
       },
 
@@ -599,7 +631,13 @@
             "type": "string"
           }
         ],
-        "validation_rules": ["Must have DbConnect first", "Should have WHERE clause"],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["dbConnectionName", "tableName"],
+        "validation_rules": [
+          "Must have DbConnect first",
+          "Should have WHERE clause",
+          "Column values are emitted as DYNAMICALLY-NAMED arguments, one per column — <argument id=\"JOB_ID\">, <argument id=\"MIN_SALARY\"> — NOT as a single container argument. Row selection is emitted as DYNAMICALLY-NAMED arguments prefixed with where__, one per predicate column — <argument id=\"where__JOB_ID\"> — NOT as a single whereClause argument."
+        ],
         "best_practices": ["Always use WHERE clause", "Verify update with SELECT"]
       },
 
@@ -624,6 +662,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["dbConnectionName", "query", "resultName", "resultScope"],
         "validation_rules": ["Must have DbConnect first", "query must be valid SQL"],
         "best_practices": ["Use parameterized queries", "Store results for verification"]
       },
@@ -648,6 +688,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["connectionName", "resultName", "resultScope"],
         "validation_rules": ["Required before RestRequest", "Required for Agentforce connections"],
         "best_practices": ["Reuse connections when possible", "Configure authentication properly"]
       },
@@ -658,32 +700,29 @@
         "category": "Data",
         "required_arguments": [
           {
-            "id": "webConnectionName",
+            "id": "connectionName",
             "type": "string"
           },
           {
-            "id": "endpoint",
+            "id": "restResourceUrl",
             "type": "string"
-          },
-          {
-            "id": "method",
-            "type": "string",
-            "description": "HTTP method (GET, POST, PUT, DELETE, PATCH)"
           }
         ],
         "optional_arguments": [
           {
-            "id": "body",
-            "type": "string"
-          },
-          {
-            "id": "headers",
-            "type": "object"
-          },
-          {
             "id": "resultName",
             "type": "string"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "connectionName",
+          "targetValue",
+          "resultName",
+          "resultScope",
+          "statusResultName",
+          "restResourceUrl",
+          "restRequestHeader"
         ],
         "validation_rules": [
           "Must have WebConnect first",
@@ -723,6 +762,19 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "connectionName",
+          "wsdlLocation",
+          "service",
+          "port",
+          "operation",
+          "tnsPrefix",
+          "requestBody",
+          "resultName",
+          "resultScope",
+          "statusResultName"
+        ],
         "validation_rules": [
           "Must have WebConnect first",
           "operation must be valid SOAP operation",
@@ -737,11 +789,11 @@
         "category": "Data",
         "required_arguments": [
           {
-            "id": "connectionName",
+            "id": "destinationConnectionName",
             "type": "string"
           },
           {
-            "id": "message",
+            "id": "body",
             "type": "string"
           }
         ],
@@ -755,6 +807,8 @@
             "type": "object"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["destinationConnectionName", "connectionId", "body", "payloadFormat"],
         "validation_rules": ["connectionName must be messaging connection", "message should be valid format"],
         "best_practices": ["Use for async testing", "Validate message format"]
       },
@@ -765,7 +819,7 @@
         "category": "Data",
         "required_arguments": [
           {
-            "id": "connectionName",
+            "id": "sourceConnectionName",
             "type": "string"
           }
         ],
@@ -786,6 +840,16 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "sourceConnectionName",
+          "connectionId",
+          "timeoutSecs",
+          "failOnTimeout",
+          "resultName",
+          "resultScope",
+          "resultFormat"
+        ],
         "validation_rules": ["timeout should be reasonable", "Store result for verification"],
         "best_practices": ["Set appropriate timeout", "Use selector to filter messages"]
       },
@@ -796,15 +860,11 @@
         "category": "Data",
         "required_arguments": [
           {
-            "id": "connectionName",
+            "id": "destinationConnectionName",
             "type": "string"
           },
           {
-            "id": "message",
-            "type": "string"
-          },
-          {
-            "id": "recipient",
+            "id": "body",
             "type": "string"
           }
         ],
@@ -814,6 +874,8 @@
             "type": "object"
           }
         ],
+        "recommended_arguments": ["to", "cc", "bcc", "subject", "signature"],
+        "ide_emitted_arguments": ["destinationConnectionName", "body", "payloadFormat", "attachments"],
         "validation_rules": ["recipient must be valid", "message format should be correct"],
         "best_practices": ["Validate recipient exists", "Handle send failures"]
       },
@@ -824,11 +886,7 @@
         "category": "Data",
         "required_arguments": [
           {
-            "id": "connectionName",
-            "type": "string"
-          },
-          {
-            "id": "topic",
+            "id": "sourceConnectionName",
             "type": "string"
           }
         ],
@@ -838,6 +896,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": ["folder", "from", "subject", "parseAttachment"],
+        "ide_emitted_arguments": ["sourceConnectionName", "resultName", "resultScope"],
         "validation_rules": ["topic must exist", "Subscribe before ReceiveMessage"],
         "best_practices": ["Unsubscribe in cleanup", "Handle subscription errors"]
       }
@@ -858,6 +918,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": [
           "Should be first BDD step in scenario",
@@ -883,6 +945,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": ["Should follow Given step", "Description should describe action", "Must contain substeps"],
         "best_practices": [
@@ -904,6 +968,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": [
           "Should follow When step",
@@ -929,6 +995,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": [
           "Should follow Given, When, or Then",
@@ -954,6 +1022,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["description"],
         "substeps": true,
         "validation_rules": [
           "Should follow Given, When, or Then",
@@ -973,12 +1043,13 @@
         "category": "Design",
         "required_arguments": [
           {
-            "id": "description",
-            "type": "string",
-            "description": "Actual result description"
+            "id": "result",
+            "type": "string"
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["result"],
         "substeps": true,
         "validation_rules": ["description should be descriptive"],
         "best_practices": [
@@ -1010,6 +1081,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["name", "description", "expectedResult"],
         "validation_rules": [
           "Should be replaced with actual implementation",
           "description should describe intended action"
@@ -1026,7 +1099,7 @@
       "description": "AI-powered testing capabilities including Agentforce and test data generation",
 
       "AIAgentSession": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentSession",
+        "apiId": "com.provar.core.ai.api.AIAgentSession",
         "description": "Create Agentforce AI agent session",
         "category": "ProvarAI",
         "required_arguments": [
@@ -1054,6 +1127,8 @@
             "description": "End session after creation"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["agentConnectionName", "agentId", "governmentCloud", "resultName", "resultScope"],
         "validation_rules": [
           "Must have WebConnect step first",
           "agentId must be valid GUID format",
@@ -1067,7 +1142,7 @@
       },
 
       "AIAgentConversation": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentConversation",
+        "apiId": "com.provar.core.ai.api.AIAgentConversation",
         "description": "Send message to AI agent and receive response",
         "category": "ProvarAI",
         "required_arguments": [
@@ -1098,6 +1173,16 @@
             "default": "false"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "agentConnectionName",
+          "sessionID",
+          "message",
+          "resultName",
+          "resultScope",
+          "endSession",
+          "governmentCloud"
+        ],
         "validation_rules": [
           "Must have AIAgentSession first",
           "sessionID must reference valid session",
@@ -1111,7 +1196,7 @@
       },
 
       "GenerateUtterance": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.GenerateUtterance",
+        "apiId": "com.provar.core.ai.api.GenerateUtterance",
         "description": "Generate AI-powered test utterances for intent testing",
         "category": "ProvarAI",
         "required_arguments": [
@@ -1139,6 +1224,8 @@
             "default": "false"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["intent", "count", "resultName", "resultScope", "generateCsvFile"],
         "validation_rules": ["intent should be descriptive", "count should be reasonable (1-100)"],
         "best_practices": [
           "Use for comprehensive intent testing",
@@ -1148,7 +1235,7 @@
       },
 
       "IntentValidator": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.IntentValidator",
+        "apiId": "com.provar.core.ai.api.IntentValidator",
         "description": "Validate that utterance matches expected intent",
         "category": "ProvarAI",
         "required_arguments": [
@@ -1175,6 +1262,8 @@
             "default": "false"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["intent", "utterance", "resultName", "resultScope", "continueOnFailure"],
         "validation_rules": ["intent must be valid", "utterance should be test input"],
         "best_practices": [
           "Use with GenerateUtterance",
@@ -1184,30 +1273,39 @@
       },
 
       "GenerateTestData": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.generate.GenerateTestData",
+        "apiId": "com.provar.core.ai.api.GenerateTestData",
         "description": "AI-powered test data generation",
         "category": "ProvarAI",
         "required_arguments": [
           {
-            "id": "dataType",
-            "type": "string",
-            "description": "Type of data to generate (email, name, address, etc.)"
+            "id": "apexConnectionName",
+            "type": "string"
           },
           {
-            "id": "resultName",
-            "type": "string",
-            "description": "Variable to store generated data"
+            "id": "objectType",
+            "type": "string"
           }
         ],
         "optional_arguments": [
           {
-            "id": "count",
-            "type": "decimal",
-            "default": "1",
-            "description": "Number of data items to generate"
+            "id": "totalRows",
+            "type": "string"
+          },
+          {
+            "id": "resultIdName",
+            "type": "string"
+          },
+          {
+            "id": "resultScope",
+            "type": "string"
           }
         ],
-        "validation_rules": ["dataType must be supported type", "count should be reasonable"],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["apexConnectionName", "objectType", "totalRows", "resultIdName", "resultScope"],
+        "validation_rules": [
+          "Row count is totalRows, not count (count belongs to GenerateUtterance).",
+          "The generated record id is stored in resultIdName; there is no dataType argument on this step."
+        ],
         "best_practices": [
           "Use for realistic test data",
           "Validate generated data format",
@@ -1216,7 +1314,7 @@
       },
 
       "ImageValidator": {
-        "apiId": "com.provar.plugins.forcedotcom.core.testapis.ai.ImageValidator",
+        "apiId": "com.provar.core.ai.api.ImageValidator",
         "description": "AI-powered image validation",
         "category": "ProvarAI",
         "required_arguments": [
@@ -1226,9 +1324,8 @@
             "description": "Path to image file"
           },
           {
-            "id": "validationCriteria",
-            "type": "string",
-            "description": "What to validate in image"
+            "id": "imageDescription",
+            "type": "string"
           },
           {
             "id": "resultName",
@@ -1241,8 +1338,15 @@
             "type": "decimal",
             "default": "0.8",
             "description": "Minimum confidence score (0.0-1.0)"
+          },
+          {
+            "id": "validationCriteria",
+            "type": "string",
+            "description": "What to validate in image"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["imagePath", "imageDescription", "resultName", "resultScope", "continueOnFailure"],
         "validation_rules": [
           "imagePath must be valid file path",
           "validationCriteria should be specific",
@@ -1263,18 +1367,7 @@
         "apiId": "com.provar.plugins.forcedotcom.core.testapis.GenerateTestCase",
         "description": "AI-powered test case generation from scenario",
         "category": "ProvarLabs",
-        "required_arguments": [
-          {
-            "id": "scenario",
-            "type": "string",
-            "description": "Test scenario description"
-          },
-          {
-            "id": "resultName",
-            "type": "string",
-            "description": "Variable to store generated test case"
-          }
-        ],
+        "required_arguments": [],
         "optional_arguments": [
           {
             "id": "template",
@@ -1287,6 +1380,8 @@
             "description": "Test framework (BDD, standard, etc.)"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": ["scenario should be clear and detailed", "Review generated test before use"],
         "best_practices": [
           "Use for rapid test creation",
@@ -1299,13 +1394,7 @@
         "apiId": "com.provar.plugins.bundled.apis.provarlabs.PageObjectCleaner",
         "description": "Clean up and optimize page object models",
         "category": "ProvarLabs",
-        "required_arguments": [
-          {
-            "id": "pageObjectPath",
-            "type": "string",
-            "description": "Path to page object file"
-          }
-        ],
+        "required_arguments": [],
         "optional_arguments": [
           {
             "id": "cleanupStrategy",
@@ -1318,6 +1407,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": ["pageObjectPath must be valid", "Backup page objects before cleaning"],
         "best_practices": [
           "Run periodically to maintain page objects",
@@ -1367,6 +1458,28 @@
             "default": "Test"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "connectionName",
+          "resultName",
+          "resultScope",
+          "uiApplicationName",
+          "quickUiLogin",
+          "closeAllPrimaryTabs",
+          "reuseConnectionName",
+          "alreadyOpenBehaviour",
+          "privateBrowsingMode",
+          "enableObjectIdLogging",
+          "autoCleanup",
+          "cleanupConnectionName",
+          "logFileLocation",
+          "username",
+          "password",
+          "securityToken",
+          "environment",
+          "lightningMode",
+          "webBrowser"
+        ],
         "validation_rules": [
           "Should be first step when using Apex API",
           "connectionName must be unique",
@@ -1399,17 +1512,20 @@
             "description": "Salesforce object type (Account, Contact, etc.)"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "fieldValues",
-            "type": "object",
-            "description": "Field values for the object"
-          }
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "objectType",
+          "resultIdName",
+          "apexConnectionName",
+          "assignmentRuleId",
+          "resultScope"
         ],
         "validation_rules": [
           "Must have ApexConnect first",
           "objectType must be valid SF object",
-          "Required fields must be provided"
+          "Required fields must be provided",
+          "Field values are emitted as DYNAMICALLY-NAMED arguments, one per field — <argument id=\"Name\">, <argument id=\"Type__c\"> — NOT as a single container argument. There is no fieldValues/columnValues argument; inventing one produces a step Provar ignores."
         ],
         "best_practices": ["Store result ID for later use", "Provide all required fields", "Use for test data setup"]
       },
@@ -1437,13 +1553,9 @@
             "description": "ID of object to read"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "fields",
-            "type": "array",
-            "description": "Fields to retrieve"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["objectType", "resultName", "apexConnectionName", "objectId", "resultScope"],
         "validation_rules": ["Must have ApexConnect first", "objectId must be valid 15 or 18 character SF ID"],
         "best_practices": ["Specify fields to retrieve", "Use for verification steps"]
       },
@@ -1466,13 +1578,21 @@
             "type": "variable"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "fieldValues",
-            "type": "object"
-          }
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "objectType",
+          "resultName",
+          "apexConnectionName",
+          "objectId",
+          "assignmentRuleId",
+          "resultScope"
         ],
-        "validation_rules": ["Must have ApexConnect first", "objectId must be valid"],
+        "validation_rules": [
+          "Must have ApexConnect first",
+          "objectId must be valid",
+          "Field values are emitted as DYNAMICALLY-NAMED arguments, one per field — <argument id=\"Name\">, <argument id=\"Type__c\"> — NOT as a single container argument. There is no fieldValues/columnValues argument; inventing one produces a step Provar ignores."
+        ],
         "best_practices": ["Only update fields that changed", "Verify update with ApexReadObject"]
       },
 
@@ -1491,6 +1611,8 @@
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["objectId", "apexConnectionName"],
         "validation_rules": ["Must have ApexConnect first", "Use only if autoCleanup=false"],
         "best_practices": [
           "Prefer autoCleanup over manual delete",
@@ -1526,6 +1648,8 @@
             "default": "Test"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["soqlQuery", "apexConnectionName", "resultListName", "resultScope"],
         "validation_rules": [
           "Must have ApexConnect first",
           "SOQL must have SELECT and FROM clauses",
@@ -1562,6 +1686,8 @@
             "description": "Variable to store execution results"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["apexConnectionName", "apexBlock", "results"],
         "validation_rules": ["Must have ApexConnect first", "apexBlock must be valid Apex syntax"],
         "best_practices": [
           "Use for complex operations not available via API",
@@ -1589,16 +1715,18 @@
             "description": "Bulk operation (insert, update, delete, etc.)"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "records",
-            "type": "array",
-            "description": "Records to process"
-          },
-          {
-            "id": "resultName",
-            "type": "string"
-          }
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "apexConnectionName",
+          "objectType",
+          "operation",
+          "externalIdFieldName",
+          "assignmentRuleId",
+          "data",
+          "contentType",
+          "resultIdName",
+          "resultScope"
         ],
         "validation_rules": [
           "Must have ApexConnect first",
@@ -1632,6 +1760,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["apexConnectionName", "workItemId", "comments"],
         "validation_rules": ["Must have ApexConnect first", "workItemId must be valid"],
         "best_practices": ["Add approval comments", "Verify approval status after"]
       },
@@ -1659,6 +1789,15 @@
             "id": "processName",
             "type": "string"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "apexConnectionName",
+          "objectId",
+          "comments",
+          "approver",
+          "resultWorkItemIdsName",
+          "resultScope"
         ],
         "validation_rules": ["Must have ApexConnect first", "Object must have approval process"],
         "best_practices": ["Verify record meets approval criteria", "Track approval process status"]
@@ -1705,6 +1844,23 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "apexConnectionName",
+          "leadId",
+          "accountId",
+          "contactId",
+          "ownerId",
+          "convertedStatus",
+          "createOpportunity",
+          "opportunityName",
+          "overwriteLeadSource",
+          "sendNotificationEmail",
+          "resultAccountIdName",
+          "resultContactIdName",
+          "resultOpportunityIdName",
+          "resultScope"
+        ],
         "validation_rules": ["Must have ApexConnect first", "convertedStatus must be valid lead status"],
         "best_practices": ["Verify lead meets conversion criteria", "Store converted IDs for verification"]
       },
@@ -1739,6 +1895,15 @@
             "type": "string",
             "description": "File path to save layout"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "apexConnectionName",
+          "objectName",
+          "extractRecordPageLayout",
+          "extractDynamicFormLayout",
+          "includeFieldPermissions",
+          "dataUrl"
         ],
         "validation_rules": ["Must have ApexConnect first", "objectName must be valid"],
         "best_practices": ["Use for layout validation tests", "Save layouts for regression testing"]
@@ -1775,6 +1940,19 @@
             "default": "false"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "apexConnectionName",
+          "objectName",
+          "extractRecordPageLayout",
+          "extractDynamicFormLayout",
+          "dataUrl",
+          "includeFieldPermissions",
+          "reportUnmatchedExpectedRecordTypes",
+          "reportUnmatchedActualRecordTypes",
+          "reportUnmatchedExpectedFields",
+          "reportUnmatchedActualFields"
+        ],
         "validation_rules": [
           "Must have ApexConnect first",
           "Must have ExtractSalesforceLayout first",
@@ -1805,6 +1983,8 @@
             "description": "Maximum records to log"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["apexConnectionName", "selector", "maxMatches"],
         "validation_rules": [
           "Must have ApexConnect first with enableObjectIdLogging=true",
           "selector must be valid SOQL",
@@ -1837,18 +2017,8 @@
             "type": "string"
           },
           {
-            "id": "uiApplicationName",
-            "type": "string",
-            "default": "LightningSales"
-          },
-          {
             "id": "reuseConnectionName",
             "type": "string"
-          },
-          {
-            "id": "closeAllOtherTabs",
-            "type": "boolean",
-            "default": "true"
           },
           {
             "id": "privateBrowsingMode",
@@ -1861,7 +2031,21 @@
             "default": "Chrome_Headless"
           }
         ],
-        "validation_rules": ["Should be first UI step", "connectionName must be unique"],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "connectionName",
+          "reuseConnectionName",
+          "privateBrowsingMode",
+          "resultName",
+          "resultScope",
+          "webBrowser"
+        ],
+        "validation_rules": [
+          "Browser-only: UiConnect opens a UI session but has NO Salesforce credential of its own — it reuses an existing ApexConnect result. For a Salesforce UI test use ApexConnect (with quickUiLogin=true, uiApplicationName=LightningSales), NOT UiConnect (rule SF-CONNECT-TYPE-001).",
+          "Add UiConnect only for a SECOND, browser-only session alongside an ApexConnect.",
+          "connectionName must be unique",
+          "Downstream steps reference this connection via uiConnectionName = this step's resultName (defaults to connectionName)."
+        ],
         "best_practices": [
           "Use headless mode for CI/CD",
           "Reuse connections when possible",
@@ -1897,10 +2081,23 @@
           }
         ],
         "optional_arguments": [
-          { "id": "reuseConnectionName", "type": "string" },
-          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
-          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+          {
+            "id": "reuseConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "privateBrowsingMode",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "webBrowser",
+            "type": "string",
+            "default": "Chrome_Headless"
+          }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": [
           "Use INSTEAD of UiConnect/ApexConnect for Microsoft Dynamics 365 targets",
           "resultName is required so downstream UI steps can set uiConnectionName",
@@ -1936,10 +2133,23 @@
           }
         ],
         "optional_arguments": [
-          { "id": "reuseConnectionName", "type": "string" },
-          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
-          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+          {
+            "id": "reuseConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "privateBrowsingMode",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "webBrowser",
+            "type": "string",
+            "default": "Chrome_Headless"
+          }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": [
           "Use INSTEAD of UiConnect/ApexConnect for Microsoft Dataverse targets",
           "resultName is required so downstream UI steps can set uiConnectionName",
@@ -1979,10 +2189,23 @@
           }
         ],
         "optional_arguments": [
-          { "id": "reuseConnectionName", "type": "string" },
-          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
-          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+          {
+            "id": "reuseConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "privateBrowsingMode",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "webBrowser",
+            "type": "string",
+            "default": "Chrome_Headless"
+          }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": [
           "Use INSTEAD of UiConnect/ApexConnect for Microsoft Power Apps targets",
           "resultName is required so downstream UI steps can set uiConnectionName",
@@ -2028,10 +2251,23 @@
           }
         ],
         "optional_arguments": [
-          { "id": "reuseConnectionName", "type": "string" },
-          { "id": "privateBrowsingMode", "type": "boolean", "default": "false" },
-          { "id": "webBrowser", "type": "string", "default": "Chrome_Headless" }
+          {
+            "id": "reuseConnectionName",
+            "type": "string"
+          },
+          {
+            "id": "privateBrowsingMode",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "webBrowser",
+            "type": "string",
+            "default": "Chrome_Headless"
+          }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [],
         "validation_rules": [
           "Use INSTEAD of UiConnect/ApexConnect for Microsoft Power Pages targets",
           "resultName is required so downstream UI steps can set uiConnectionName",
@@ -2049,11 +2285,6 @@
         "description": "Navigate to and interact with Salesforce screen",
         "category": "UI",
         "required_arguments": [
-          {
-            "id": "screenName",
-            "type": "string",
-            "description": "Screen name (e.g., 'Account Home', 'Account New')"
-          },
           {
             "id": "uiConnectionName",
             "type": "string"
@@ -2100,6 +2331,18 @@
             "type": "variable",
             "description": "Record ID to edit/view (required for Edit/View screens when navigate=Always)"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "uiConnectionName",
+          "target",
+          "targetDescription",
+          "navigate",
+          "windowSelection",
+          "windowSize",
+          "closeWindow",
+          "captureBefore",
+          "captureAfter"
         ],
         "substeps": true,
         "naming_convention": "On {ObjectName} {ScreenType} screen",
@@ -2150,10 +2393,22 @@
             "default": "false"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "locator",
+          "interaction",
+          "interactionDescription",
+          "beforeWait",
+          "afterWait",
+          "autoRetry",
+          "captureBefore",
+          "captureAfter"
+        ],
         "parent_required": "UiWithScreen",
         "validation_rules": [
           "Must be inside UiWithScreen substeps",
-          "value required for set/select interactions",
+          "interaction name MUST be one of: action (click a button or link), set (fill a field or pick a picklist value), file (upload a file). NEVER use name=click/type/select/enter — those are not valid Provar interactions and render the IDE Action widget blank (rule UI-INTERACTION-002).",
+          "value required for set interactions (a literal or a class=variable reference); omit value for action interactions",
           "Picklist: use ui:interaction?name=set",
           "Lead Conversion buttons: MUST use name=submitConvert and action=submitConvert (NOT Convert, ConvertButton, or action=convert)",
           "Dialog fields (e.g., OpportunityName): MUST bind to the TARGET object (object=Opportunity with field=name, NOT object=Lead with field=OpportunityName)"
@@ -2192,29 +2447,63 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "locator",
-            "type": "uiLocator"
+            "id": "fieldAssertions",
+            "type": "valueList",
+            "description": "Field-level assertions as namedValues (empty valueList when unused)"
           },
           {
-            "id": "assertionType",
+            "id": "columnAssertions",
+            "type": "valueList",
+            "description": "Column-level assertions (empty valueList when unused)"
+          },
+          {
+            "id": "pageAssertions",
+            "type": "valueList",
+            "description": "Page-level assertions (empty valueList when unused)"
+          },
+          {
+            "id": "resultScope",
             "type": "string",
-            "description": "Type of assertion (EqualTo, Contains, etc.)"
+            "default": "Test"
+          },
+          {
+            "id": "captureAfter",
+            "type": "boolean",
+            "default": "false"
+          },
+          {
+            "id": "beforeWait",
+            "type": "string",
+            "description": "Include even if empty (<argument id=\"beforeWait\"/>)"
+          },
+          {
+            "id": "autoRetry",
+            "type": "string",
+            "description": "Include even if empty (<argument id=\"autoRetry\"/>)"
           }
         ],
         "optional_arguments": [
           {
-            "id": "expectedValue",
-            "type": "value"
-          },
-          {
-            "id": "continueOnFailure",
-            "type": "boolean",
-            "default": "false"
+            "id": "resultName",
+            "type": "string"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "fieldAssertions",
+          "columnAssertions",
+          "pageAssertions",
+          "resultName",
+          "resultScope",
+          "captureAfter",
+          "beforeWait",
+          "autoRetry"
         ],
         "parent_required": "UiWithScreen",
         "validation_rules": [
           "Must be inside UiWithScreen substeps",
+          "fieldAssertions MUST nest a <uiFieldAssertion resultName=\"Field\"> containing a BARE <fieldLocator uri=\"ui:locator?name=Field&binding=...\"/> (NOT class=\"uiLocator\") and an <attributeAssertions> with a <uiAttributeAssertion attributeName=\"value\" comparisonType=\"EqualTo\"> holding the expected <value>. Do NOT use a <namedValues>/<namedValue> block (that is the UiFill/SetValues shape) or flat fieldLocator/attributeName arguments — either renders the IDE Result Assertions tab blank (rule UI-ASSERT-STRUCTURE-001).",
+          "comparisonType (UI Assert) must be one of: EqualTo, Contains, StartsWith, EndsWith, Matches, None.",
           "Currency fields: format as $1,000.00",
           "Phone fields: format as (123) 456-7890",
           "Date/time: use Contains or EqualTo based on format"
@@ -2230,19 +2519,10 @@
         "apiId": "com.provar.plugins.forcedotcom.core.ui.UiNavigate",
         "description": "Navigate to URL",
         "category": "UI",
-        "required_arguments": [
-          {
-            "id": "url",
-            "type": "string",
-            "description": "URL to navigate to"
-          }
-        ],
-        "optional_arguments": [
-          {
-            "id": "uiConnectionName",
-            "type": "string"
-          }
-        ],
+        "required_arguments": [],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["navigate", "captureBefore", "captureAfter"],
         "validation_rules": ["url must be valid", "Use for non-Salesforce sites or direct URLs"],
         "best_practices": [
           "Prefer UiWithScreen for Salesforce navigation",
@@ -2255,22 +2535,31 @@
         "apiId": "com.provar.plugins.forcedotcom.core.ui.UiFill",
         "description": "Auto-fill form fields",
         "category": "UI",
-        "required_arguments": [
-          {
-            "id": "formLocator",
-            "type": "uiLocator",
-            "description": "Form container locator"
-          }
-        ],
+        "required_arguments": [],
+        "required_one_of": [["values", "locator"]],
         "optional_arguments": [
           {
-            "id": "fieldValues",
-            "type": "object",
-            "description": "Field name/value pairs"
+            "id": "locator",
+            "type": "string"
+          },
+          {
+            "id": "values",
+            "type": "string"
+          },
+          {
+            "id": "ignoreFields",
+            "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["values", "ignoreFields"],
         "parent_required": "UiWithScreen",
-        "validation_rules": ["Must be inside UiWithScreen substeps", "Field names must match form fields"],
+        "validation_rules": [
+          "Must be inside UiWithScreen substeps",
+          "Field names must match form fields",
+          "Supply EITHER values (a namedValues valueList of field name/value pairs) OR locator (a single field to fill). A UiFill with neither does nothing at runtime.",
+          "There is no fieldValues or value argument on UiFill — those names appear in no real Provar test case."
+        ],
         "best_practices": ["Use for multi-field forms", "Verify all fields filled", "Handle required fields first"]
       },
 
@@ -2280,17 +2569,28 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "tableLocator",
+            "id": "locator",
             "type": "uiLocator",
             "description": "Table/list locator"
           },
           {
-            "id": "rowSelector",
-            "type": "string",
-            "description": "Row selection criteria"
+            "id": "uiRowLocator",
+            "type": "uiLocator",
+            "description": "Row selection locator"
           }
         ],
         "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "uiConnectionName",
+          "locator",
+          "uiRowLocator",
+          "locatorDescription",
+          "failIfNotFound",
+          "debugRowLocator",
+          "resultName",
+          "resultScope"
+        ],
         "substeps": true,
         "parent_required": "UiWithScreen",
         "validation_rules": [
@@ -2311,18 +2611,14 @@
         "category": "UI",
         "required_arguments": [
           {
-            "id": "action",
-            "type": "string",
-            "description": "Action to take (Accept, Dismiss, GetText)"
+            "id": "alerts",
+            "type": "valueList",
+            "description": "Alert handling entries (action per alert: Accept, Dismiss, GetText)"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "resultName",
-            "type": "string",
-            "description": "Variable to store alert text"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["alerts", "captureBefore", "captureAfter"],
         "validation_rules": ["action must be valid (Accept, Dismiss, GetText)", "Store text when using GetText"],
         "best_practices": ["Handle alerts promptly", "Validate alert text", "Use in Try/Catch for optional alerts"]
       }
@@ -2337,9 +2633,8 @@
         "category": "Utility",
         "required_arguments": [
           {
-            "id": "dataUrl",
-            "type": "string",
-            "description": "Path to Excel/CSV file"
+            "id": "urlString",
+            "type": "string"
           },
           {
             "id": "resultName",
@@ -2364,6 +2659,15 @@
             "default": "FirstRowOfRange",
             "description": "Where column names are located"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "urlString",
+          "contentFormat",
+          "contentEncoding",
+          "resultName",
+          "resultScope",
+          "storeAs"
         ],
         "validation_rules": [
           "dataUrl must be valid file path",
@@ -2403,6 +2707,8 @@
             "type": "string"
           }
         ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["data", "dataUrl", "targetDescription"],
         "validation_rules": ["data must be valid variable", "dataUrl must be writable path"],
         "best_practices": ["Use for test result recording", "Ensure output directory exists", "Handle write failures"]
       },
@@ -2418,9 +2724,8 @@
             "description": "Input string"
           },
           {
-            "id": "searchString",
-            "type": "string",
-            "description": "Text to find"
+            "id": "find",
+            "type": "string"
           },
           {
             "id": "replacement",
@@ -2432,19 +2737,9 @@
             "type": "string"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "caseSensitive",
-            "type": "boolean",
-            "default": "true"
-          },
-          {
-            "id": "replaceAll",
-            "type": "boolean",
-            "default": "true",
-            "description": "Replace all occurrences vs first only"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["input", "find", "replacement", "caseInsensitive", "resultName", "resultScope"],
         "validation_rules": ["searchString should not be empty", "Store result in variable"],
         "best_practices": ["Use for string formatting", "Consider regex for complex patterns", "Test with edge cases"]
       },
@@ -2460,9 +2755,8 @@
             "description": "String to split"
           },
           {
-            "id": "delimiter",
-            "type": "string",
-            "description": "Delimiter character/string"
+            "id": "separator",
+            "type": "string"
           },
           {
             "id": "resultName",
@@ -2470,13 +2764,9 @@
             "description": "Variable to store array"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "maxSplits",
-            "type": "decimal",
-            "description": "Maximum number of splits"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["input", "separator", "resultName", "resultScope"],
         "validation_rules": ["delimiter should not be empty", "Store result as list"],
         "best_practices": ["Use for parsing delimited data", "Iterate results with ForEach", "Handle empty splits"]
       },
@@ -2492,28 +2782,17 @@
             "description": "Input string to match against"
           },
           {
-            "id": "pattern",
-            "type": "string",
-            "description": "Regex pattern or match string"
+            "id": "regex",
+            "type": "string"
           },
           {
             "id": "resultName",
             "type": "string"
           }
         ],
-        "optional_arguments": [
-          {
-            "id": "isRegex",
-            "type": "boolean",
-            "default": "false",
-            "description": "Treat pattern as regex"
-          },
-          {
-            "id": "caseSensitive",
-            "type": "boolean",
-            "default": "true"
-          }
-        ],
+        "optional_arguments": [],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": ["input", "regex", "caseInsensitive", "resultName", "resultScope"],
         "validation_rules": ["pattern must be valid regex if isRegex=true", "Store match results"],
         "best_practices": [
           "Use for validation and extraction",
@@ -2536,11 +2815,6 @@
             "id": "list2",
             "type": "variable",
             "description": "Second list"
-          },
-          {
-            "id": "resultName",
-            "type": "string",
-            "description": "Variable to store comparison results"
           }
         ],
         "optional_arguments": [
@@ -2550,6 +2824,18 @@
             "default": "Equal",
             "description": "Comparison type (Equal, Contains, etc.)"
           }
+        ],
+        "recommended_arguments": [],
+        "ide_emitted_arguments": [
+          "list1",
+          "list2",
+          "matchColumns",
+          "compareColumns",
+          "ignoreColumns",
+          "differenceHandling",
+          "unmatched1Handling",
+          "unmatched2Handling",
+          "caseInsensitive"
         ],
         "validation_rules": ["Both lists must be valid", "Store comparison result"],
         "best_practices": [
@@ -2678,8 +2964,8 @@
       "category": "UI",
       "steps": [
         {
-          "step": "UiConnect",
-          "purpose": "Establish UI connection"
+          "step": "ApexConnect (quickUiLogin=true, uiApplicationName=LightningSales)",
+          "purpose": "Establish the Salesforce connection (API + Lightning UI). Use ApexConnect for Salesforce UI tests — NOT UiConnect, which is browser-only and needs an existing ApexConnect result as its credential. Downstream UI steps set uiConnectionName to this step's resultName (which defaults to connectionName)."
         },
         {
           "step": "UiWithScreen (navigate=Always)",

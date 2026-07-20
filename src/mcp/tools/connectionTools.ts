@@ -134,6 +134,28 @@ function buildConnectionMap(tp: Record<string, unknown>): Map<string, Connection
   return map;
 }
 
+/**
+ * Connection names declared in a `.testproject` file.
+ *
+ * Provar resolves a step's `uiConnectionName` / `apexConnectionName` against the
+ * PROJECT's connection list, not only against a connect step's `resultName` — so
+ * CONNECT-REF-CONSISTENCY-001 needs this to avoid reporting a perfectly valid
+ * project-level reference as a dangling connection. Returns an empty set rather
+ * than throwing when the file is unreadable or malformed: absent project context
+ * must degrade to "cannot tell", never to a false positive.
+ */
+export function parseProjectConnectionNames(testProjectXml: string): Set<string> {
+  const names = new Set<string>();
+  try {
+    for (const info of buildConnectionMap(parseTestProjectXml(testProjectXml)).values()) {
+      if (info.name) names.add(info.name);
+    }
+  } catch {
+    // Unparseable .testproject → empty set → rule stays silent.
+  }
+  return names;
+}
+
 function parseConnectionList(content: string): ConnectionEntry[] {
   const tp = parseTestProjectXml(content);
   const map = buildConnectionMap(tp);

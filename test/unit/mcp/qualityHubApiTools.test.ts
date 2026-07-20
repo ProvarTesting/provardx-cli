@@ -121,30 +121,41 @@ describe('qualityHubApiTools', () => {
       assert.equal(opts.prefer_high_quality, false);
     });
 
-    it('returns empty examples with no isError when API key is not configured', async () => {
+    it('returns BUNDLED examples (not empty) with no isError when API key is not configured', async () => {
       resolveKeyStub.returns(null);
 
-      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', {
+        query: 'Create and validate an Account via UI',
+      });
 
       // CRITICAL: must NOT be isError:true — the LLM workflow must continue
       assert.equal(isError(result), false, 'Must not set isError:true when key missing');
       const body = parseBody(result);
-      assert.deepEqual(body.examples, []);
-      assert.equal(body.count, 0);
+      const examples = body.examples as Array<{ source?: string; quality_tier?: string; xml?: string }>;
+      assert.ok(examples.length > 0, 'Should return bundled examples instead of empty');
+      assert.equal(body.count, examples.length);
+      assert.equal(body.source, 'bundled');
+      assert.ok(
+        examples.every((e) => e.source === 'bundled' && e.quality_tier === 'bundled'),
+        'Every example must be labelled bundled'
+      );
+      assert.ok(examples[0].xml && examples[0].xml.includes('<testCase'), 'Bundled example carries full XML');
       const warning = String(body.warning);
-      assert.ok(warning.length > 0, 'Should include warning message');
       assert.ok(warning.includes('sf provar auth login'), 'Warning should mention auth login');
+      assert.ok(warning.toLowerCase().includes('bundled'), 'Warning should flag examples as bundled');
     });
 
-    it('returns empty examples with no isError on 401 auth error', async () => {
+    it('returns BUNDLED examples with no isError on 401 auth error', async () => {
       retrieveStub.rejects(new QualityHubAuthError('Key invalid'));
 
-      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Opportunity' });
+      const result = await server.call('provar_qualityhub_examples_retrieve', { query: 'Create an Account via UI' });
 
       // CRITICAL: must NOT be isError:true — graceful degrade
       assert.equal(isError(result), false, 'Must not set isError:true on auth failure');
       const body = parseBody(result);
-      assert.deepEqual(body.examples, []);
+      const examples = body.examples as Array<{ source?: string }>;
+      assert.ok(examples.length > 0, 'Bad key should still yield bundled examples');
+      assert.equal(body.source, 'bundled');
       assert.ok(typeof body.warning === 'string', 'Should include warning');
     });
 
