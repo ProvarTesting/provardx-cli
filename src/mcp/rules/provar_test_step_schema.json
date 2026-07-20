@@ -2407,7 +2407,7 @@
         "parent_required": "UiWithScreen",
         "validation_rules": [
           "Must be inside UiWithScreen substeps",
-          "interaction name MUST be one of: action (click a button or link), set (fill a field or pick a picklist value), file (upload a file). NEVER use name=click/type/select/enter — those are not valid Provar interactions and render the IDE Action widget blank (rule UI-INTERACTION-002).",
+          "interaction name must be a real Provar interaction. The most common are action (activate a button or link), set (fill a field or pick a picklist value), click, check/uncheck, and file (upload); Provar ships many more (doubleClick, hover, invoke, clear, toggle, sfLookup, sfSelect, …), so treat this as a common subset, not an exhaustive list. Do NOT invent names borrowed from other frameworks — type, fill, enter, input, tap and press are not Provar interactions and render the IDE Action widget blank (rule UI-INTERACTION-002); use set for typing into a field and action or click to activate a control.",
           "value required for set interactions (a literal or a class=variable reference); omit value for action interactions",
           "Picklist: use ui:interaction?name=set",
           "Lead Conversion buttons: MUST use name=submitConvert and action=submitConvert (NOT Convert, ConvertButton, or action=convert)",

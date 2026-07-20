@@ -137,9 +137,26 @@ describe('step schema generation guidance (drift guard)', () => {
     assert.ok(t.includes('ApexConnect') && /browser-only/i.test(t), `UiConnect guidance missing steer: ${t}`);
   });
 
-  it('UiDoAction guidance lists valid interactions and forbids click (gap 3)', () => {
+  // The guidance served by provar_step_schema MUST agree with what the validator
+  // accepts. `click` is a real Provar interaction (1,240 corpus occurrences, emitted
+  // by the IDE recorder) and UI-INTERACTION-002 no longer rejects it — an earlier
+  // revision of this guard asserted the opposite and locked the contradiction in, so
+  // the tool told the model to rewrite interactions the validator accepts.
+  it('UiDoAction guidance names real interactions and does NOT forbid click (gap 3)', () => {
     const t = rulesText('UiDoAction');
-    assert.ok(t.includes('name=click') && t.includes('action') && t.includes('set'), `interaction vocab missing: ${t}`);
+    assert.ok(t.includes('action') && t.includes('set'), `interaction vocab missing: ${t}`);
+    assert.ok(!/NEVER use[^.]*click/i.test(t), `guidance must not forbid the real interaction "click": ${t}`);
+    assert.ok(/\btype\b/.test(t) && /\bfill\b/.test(t), `guidance should name the borrowed-name pitfalls: ${t}`);
+  });
+
+  // Drift guard tying the schema to the validator's denylist, so the two can never
+  // disagree about which interaction names are wrong.
+  it('schema guidance and UI-INTERACTION-002 agree on the invalid names', () => {
+    const t = rulesText('UiDoAction').toLowerCase();
+    for (const bad of ['type', 'fill', 'enter', 'input', 'tap', 'press']) {
+      assert.ok(t.includes(bad), `schema should warn against "${bad}" (the validator rejects it): ${t}`);
+    }
+    assert.ok(!t.includes('never use name=click'), 'schema must not contradict the validator on click');
   });
 
   it('UiAssert guidance requires nested uiFieldAssertion and warns off namedValues (gap 4)', () => {

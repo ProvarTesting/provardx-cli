@@ -70,6 +70,15 @@ export interface BPViolation {
    * empty means "no stable id" — such violations are never merged together.
    */
   test_item_id?: string;
+  /**
+   * Volatile, human-facing detail for aggregated violations: how many steps are
+   * affected, the per-argument breakdown, and a sample of offending steps.
+   *
+   * Deliberately kept OUT of `message`, because validationDiff keys baseline
+   * comparisons on the rendered message — putting counts or step names there makes
+   * every partial fix look like one finding resolved and a different one added.
+   */
+  details?: Record<string, unknown>;
 }
 
 export interface BPEngineResult {
@@ -2428,6 +2437,34 @@ function getCoveredArgPairs(): Set<string> {
   return coveredArgPairs;
 }
 
+/**
+ * True when an `<argument>` actually carries something Provar can use, as opposed to
+ * being declared empty (`<argument id="values"/>`), which is the IDE's convention for
+ * "this argument exists but is unset".
+ *
+ * Counts as carrying a value: a `<value>` child with text, a `uri` attribute (locator
+ * / target / interaction / wait nodes hold their payload there), or any nested
+ * element such as a `namedValues` / `valueList` container.
+ */
+function argumentCarriesValue(arg: XmlNode): boolean {
+  const value = arg['value'];
+  if (value == null) return false;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value).trim().length > 0;
+  }
+  if (typeof value !== 'object') return false;
+  const nodes = Array.isArray(value) ? (value as XmlNode[]) : [value as XmlNode];
+  return nodes.some((v) => {
+    if (!v || typeof v !== 'object') return false;
+    const uri = v['@_uri'];
+    if (typeof uri === 'string' && uri.trim().length > 0) return true;
+    const text = v['#text'];
+    if (text != null && String(text).trim().length > 0) return true;
+    // Any child element other than attributes means a populated container.
+    return Object.keys(v).some((k) => !k.startsWith('@_') && k !== '#text' && v[k] != null);
+  });
+}
+
 /** Steps whose declared tier args are absent, plus the total offending-step count. */
 function collectMissingTierArgs(
   tc: XmlNode,
@@ -2449,14 +2486,21 @@ function collectMissingTierArgs(
     const oneOfGroups = checkOneOf ? tier.requiredOneOf : [];
     if (wanted.length === 0 && oneOfGroups.length === 0) continue;
     const present = new Set<string>();
+    const populated = new Set<string>();
     for (const a of getCallArguments(call)) {
       const id = a['@_id'] as string | undefined;
-      if (id) present.add(id);
+      if (!id) continue;
+      present.add(id);
+      if (argumentCarriesValue(a)) populated.add(id);
     }
     const missing = wanted.filter((r) => !present.has(r) && !(covered && covered.has(`${apiId}::${r}`)));
-    // A one-of group contributes only when NONE of its members is present.
+    // A one-of group is satisfied only when a member is present AND carries a value.
+    // Presence alone is not enough: the group exists because the step is inert
+    // without one of them, and `<argument id="values"/>` is exactly as inert as
+    // omitting it. Required-tier args stay presence-based — Provar's convention is to
+    // declare them empty (see ide_emitted_arguments), so absence is the real signal.
     for (const group of oneOfGroups) {
-      if (!group.some((g) => present.has(g))) missing.push(`one of [${group.join(' | ')}]`);
+      if (!group.some((g) => populated.has(g))) missing.push(`one of [${group.join(' | ')}] with a value`);
     }
     if (!missing.length) continue;
     count++;
@@ -2482,18 +2526,24 @@ function aggregateTierViolation(
   lead: string
 ): BPViolation[] {
   if (found.count === 0) return [];
-  const argSummary = [...found.missingByArg.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, n]) => `${id} (${n})`)
-    .join(', ');
+  // The MESSAGE is the baseline-diff identity (validationDiff keys on
+  // rule_id||applies_to||message), so it must stay invariant while the underlying
+  // defect set is unchanged. Occurrence counts and the offending-step list are
+  // deliberately NOT in it: with them, fixing 1 of 13 offending steps changed the
+  // message, so the baseline diff reported the old aggregate "resolved" and a new
+  // one "added" — hiding real incremental progress. Keyed on the sorted SET of
+  // missing argument names instead, so partial fixes read as unchanged and the
+  // violation resolves only when the last one is fixed. The volatile detail lives
+  // in `count` and `details`, which the diff does not key on.
+  const missingArgs = [...found.missingByArg.keys()].sort();
   const more = found.count > found.steps.length ? ` …and ${found.count - found.steps.length} more step(s)` : '';
-  return [
-    makeViolation(
-      rule,
-      `${lead} Missing by argument: ${argSummary}. Steps: ${found.steps.join('; ')}${more}`,
-      found.count
-    ),
-  ];
+  const v = makeViolation(rule, `${lead} Missing argument(s): ${missingArgs.join(', ')}.`, found.count);
+  v.details = {
+    affected_steps: found.count,
+    missing_by_argument: Object.fromEntries([...found.missingByArg.entries()].sort((a, b) => b[1] - a[1])),
+    steps: `${found.steps.join('; ')}${more}`,
+  };
+  return [v];
 }
 
 /** STEP-REQUIRED-ARGS-001 — schema-declared load-blocking arguments (major). */
@@ -2502,7 +2552,7 @@ function validateSchemaRequiredArguments(tc: XmlNode, rule: BPRule): BPViolation
   return aggregateTierViolation(
     rule,
     found,
-    `${found.count} step(s) are missing an argument the Provar step schema lists as required.`
+    'One or more steps are missing an argument the Provar step schema lists as required.'
   );
 }
 
@@ -2512,7 +2562,7 @@ function validateSchemaRecommendedArguments(tc: XmlNode, rule: BPRule): BPViolat
   return aggregateTierViolation(
     rule,
     found,
-    `${found.count} step(s) omit an argument that appears on 80-99% of real Provar steps of the same type.`
+    'One or more steps omit an argument that appears on 80-99% of real Provar steps of the same type.'
   );
 }
 
@@ -2522,7 +2572,7 @@ function validateStepIdeParity(tc: XmlNode, rule: BPRule): BPViolation[] {
   return aggregateTierViolation(
     rule,
     found,
-    `${found.count} step(s) omit arguments the Provar IDE emits for that step type even when empty, ` +
+    'One or more steps omit arguments the Provar IDE emits for that step type even when empty, ' +
       'so the XML does not round-trip as IDE-authored.'
   );
 }

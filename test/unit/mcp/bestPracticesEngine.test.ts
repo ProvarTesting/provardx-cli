@@ -2063,6 +2063,59 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.equal(stepArgsViolations(xml).length, 0, 'required-args rule must not fire when required args are present');
   });
 
+  // The aggregated message is the baseline-diff identity (validationDiff keys on
+  // rule_id||applies_to||message). Counts and step names must stay OUT of it, or
+  // fixing one of many offending steps reads as "old finding resolved, new finding
+  // added" instead of "same finding, fewer steps".
+  it('keeps the aggregated message stable when only the number of offending steps changes', () => {
+    const step = (tid: number): string =>
+      `<apiCall guid="${G(
+        40 + tid
+      )}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S${tid}" testItemId="${tid}">
+        <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument></arguments>
+      </apiCall>`;
+    const wrap = (steps: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>${steps}</steps></testCase>`;
+
+    const three = stepArgsViolations(wrap(step(1) + step(2) + step(3)));
+    const two = stepArgsViolations(wrap(step(1) + step(2)));
+    assert.equal(three.length, 1);
+    assert.equal(two.length, 1);
+    assert.equal(three[0].message, two[0].message, 'message must not change when the step count changes');
+    assert.equal(three[0].count, 3);
+    assert.equal(two[0].count, 2);
+    // The volatile detail still reaches the caller, just not through the diff key.
+    assert.equal((three[0].details as { affected_steps: number }).affected_steps, 3);
+    assert.equal((two[0].details as { affected_steps: number }).affected_steps, 2);
+  });
+
+  // required_one_of exists because a UiFill with neither `values` nor `locator` is
+  // inert. An argument declared but left EMPTY is exactly as inert as an absent one.
+  it('required_one_of is not satisfied by an empty argument', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(50)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+
+    const empty = stepArgsViolations(uiFill('<argument id="values"/>'));
+    assert.equal(empty.length, 1, 'an empty `values` must not satisfy the one-of group');
+    assert.ok(empty[0].message.includes('one of'), empty[0].message);
+
+    const populated = stepArgsViolations(
+      uiFill(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name"/></namedValues></value></argument>'
+      )
+    );
+    assert.equal(populated.length, 0, 'a populated `values` satisfies the group');
+
+    const viaLocator = stepArgsViolations(
+      uiFill('<argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>')
+    );
+    assert.equal(viaLocator.length, 0, 'a populated `locator` also satisfies the group');
+  });
+
   // API-UNKNOWN-001 regression guard: the Provar AI namespace is real. A freshly
   // IDE-minted test case writes `com.provar.core.ai.api.*`; listing only the
   // never-real `...forcedotcom.core.testapis.ai.*` form made this critical/weight-10

@@ -126,7 +126,7 @@
       "id": "UI-INTERACTION-002",
       "severity": "ERROR",
       "applies_to": "apiCall",
-      "description": "UiDoAction interaction name is a real Provar interaction (action/set/file), not a hallucination like click/type."
+      "description": "UiDoAction interaction name is a real Provar interaction, not one borrowed from another framework (type/fill/enter/input/tap/press)."
     },
     {
       "id": "UI-ASSERT-STRUCTURE-001",

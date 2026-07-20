@@ -113,12 +113,27 @@ function deriveQualityVerdict(isValid: boolean, qualityScore: number, qualityThr
  * when no project is found or it cannot be read — CONNECT-REF-CONSISTENCY-001
  * then stays conservative instead of reporting valid project-level references as
  * dangling connections.
+ *
+ * EVERY candidate is checked against the path policy before any filesystem call.
+ * The walk ascends, so without this it would read `.testproject` from directories
+ * above `--allowed-paths` — and because a suppressed reference is observable in the
+ * output, that would also let a caller probe connection names outside the boundary.
+ * Leaving the allowed roots ends the walk rather than skipping the candidate: every
+ * further ancestor is outside too.
  */
-function resolveProjectConnectionNames(testCaseFilePath: string): ReadonlySet<string> | undefined {
+function resolveProjectConnectionNames(
+  testCaseFilePath: string,
+  allowedPaths: string[]
+): ReadonlySet<string> | undefined {
   try {
     let dir = path.dirname(path.resolve(testCaseFilePath));
     for (let depth = 0; depth < 12; depth++) {
       const candidate = path.join(dir, '.testproject');
+      try {
+        assertPathAllowed(candidate, allowedPaths);
+      } catch {
+        return undefined; // ascended out of the allowed roots — stop, do not read
+      }
       if (fs.existsSync(candidate)) {
         return parseProjectConnectionNames(fs.readFileSync(candidate, 'utf-8'));
       }
@@ -142,7 +157,7 @@ function resolveProjectContext(filePath: string | undefined, allowedPaths: strin
   if (!filePath) return { planMode: 'unknown' };
   return {
     planMode: resolveTestCasePlanMode({ testCaseFilePath: filePath, allowedPaths }).mode,
-    projectConnectionNames: resolveProjectConnectionNames(filePath),
+    projectConnectionNames: resolveProjectConnectionNames(filePath, allowedPaths),
   };
 }
 
@@ -1057,6 +1072,27 @@ function literalArgValue(call: Record<string, unknown>, id: string): string | un
 
 const CONNECT_REFERENCE_ARG_IDS = ['uiConnectionName', 'apexConnectionName', 'dbConnectionName', 'webConnectionName'];
 
+/** Which connection family each downstream reference argument draws from. */
+const REFERENCE_ARG_FAMILY: Record<string, string> = {
+  uiConnectionName: 'ui',
+  apexConnectionName: 'apex',
+  dbConnectionName: 'db',
+  webConnectionName: 'web',
+};
+
+/**
+ * The connection family a connect step produces, derived from its apiId. Used to scope
+ * "this step's result is unresolvable" to the references it could actually satisfy,
+ * instead of silencing the rule for the whole file.
+ */
+function connectFamily(apiId: string): string {
+  if (/\.db\.|DbConnect$/.test(apiId)) return 'db';
+  if (/restservice|WebConnect$/.test(apiId)) return 'web';
+  if (apiId.endsWith('ApexConnect')) return 'apex';
+  if (/UiConnect$|NitroXConnect/.test(apiId)) return 'ui';
+  return 'other';
+}
+
 /** True when this apiId opens a connection (its result is what later steps reference). */
 function isConnectStep(apiId: string): boolean {
   return /Connect(?::|$)/.test(apiId);
@@ -1114,7 +1150,11 @@ function validateConnectionReferenceConsistency(
 
   const available = new Set<string>();
   let connectStepCount = 0;
-  let opaqueConnectStep = false;
+  // Families whose connect step produced a result we cannot resolve statically. Held
+  // PER FAMILY, not file-wide: one dynamic DbConnect says nothing about whether a
+  // `uiConnectionName` resolves, and suppressing everything let genuinely dangling
+  // references through whenever a file contained any opaque connect step.
+  const opaqueFamilies = new Set<string>();
   for (const c of calls) {
     const apiId = (c['@_apiId'] as string | undefined) ?? '';
     if (!isConnectStep(apiId)) continue;
@@ -1123,15 +1163,13 @@ function validateConnectionReferenceConsistency(
     const connectionName = literalArgValue(c, 'connectionName');
     if (resultName) available.add(resultName);
     else if (connectionName) available.add(connectionName);
-    // Neither name is a literal: the step's result could be anything (a variable
-    // connectionName, a <value> with no class, or an empty argument resolved from
-    // project config). We cannot know what it produces, so we must not claim any
-    // downstream reference is dangling.
-    else opaqueConnectStep = true;
+    // Neither name is a literal: a variable connectionName, a <value> with no class,
+    // or an empty argument resolved from project config. We cannot know what this
+    // step produces, so references of the SAME family become unverifiable.
+    else opaqueFamilies.add(connectFamily(apiId));
   }
-  // Connections may be inherited from a parent callable test, or produced by a
-  // connect step whose name we cannot resolve statically.
-  if (connectStepCount === 0 || opaqueConnectStep) return;
+  // Connections may be inherited from a parent callable test.
+  if (connectStepCount === 0) return;
 
   for (const c of calls) {
     const apiId = (c['@_apiId'] as string | undefined) ?? '';
@@ -1139,6 +1177,8 @@ function validateConnectionReferenceConsistency(
     for (const refId of CONNECT_REFERENCE_ARG_IDS) {
       const ref = literalArgValue(c, refId);
       if (!ref || available.has(ref)) continue;
+      // An opaque connect step of this family could be what produces `ref`.
+      if (opaqueFamilies.has(REFERENCE_ARG_FAMILY[refId] ?? '')) continue;
       // Provar resolves connection references against the PROJECT's connection list
       // too, not only against connect-step resultNames. A name declared in
       // .testproject is valid even though no connect step in this file produces it.

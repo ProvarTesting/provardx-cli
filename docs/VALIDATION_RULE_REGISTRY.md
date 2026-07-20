@@ -15,34 +15,34 @@ Provar test-case validation runs in two layers. This registry is the single cano
 
 ## Layer 1 — Structural validity rules
 
-| Rule ID                       | Severity | Gates is_valid? | Applies to | Checks                                                                                                           |
-| ----------------------------- | -------- | --------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TC_001`                      | ERROR    | Yes             | document   | XML declaration present (<?xml …?> first line).                                                                  |
-| `TC_002`                      | ERROR    | Yes             | document   | XML is well-formed (parses without error).                                                                       |
-| `TC_003`                      | ERROR    | Yes             | document   | Root element is <testCase>.                                                                                      |
-| `TC_010`                      | ERROR    | Yes             | testCase   | testCase id, when present, is a non-negative integer (id is optional; guid is the identifier).                   |
-| `TC_011`                      | ERROR    | Yes             | testCase   | testCase has a guid attribute.                                                                                   |
-| `TC_012`                      | ERROR    | Yes             | testCase   | testCase guid is a valid UUID v4.                                                                                |
-| `TC_020`                      | ERROR    | Yes             | testCase   | testCase has a <steps> element.                                                                                  |
-| `TC_030`                      | ERROR    | Yes             | apiCall    | Each apiCall has a guid attribute.                                                                               |
-| `TC_031`                      | ERROR    | Yes             | apiCall    | Each apiCall guid is a valid UUID v4.                                                                            |
-| `TC_032`                      | ERROR    | Yes             | apiCall    | Each apiCall has an apiId attribute.                                                                             |
-| `TC_033`                      | WARNING  | No              | apiCall    | Each apiCall has a descriptive name attribute.                                                                   |
-| `TC_034`                      | ERROR    | Yes             | apiCall    | Each apiCall has a testItemId attribute.                                                                         |
-| `TC_035`                      | ERROR    | Yes             | apiCall    | apiCall testItemId is a whole number.                                                                            |
-| `DATA-001`                    | WARNING  | No              | testCase   | <dataTable> only iterates under a test plan; flags direct testCase-mode execution.                               |
-| `VAR-REF-001`                 | WARNING  | No              | argument   | A whole-token {Var} stored as valueClass="string" (use class="variable").                                        |
-| `VAR-REF-002`                 | WARNING  | No              | argument   | {Var} tokens embedded in a plain string (use class="compound").                                                  |
-| `UI-TARGET-001`               | ERROR    | Yes             | apiCall    | UiWithScreen/UiWithRow target uses class="uiTarget".                                                             |
-| `UI-LOCATOR-001`              | ERROR    | Yes             | apiCall    | UI action locator uses class="uiLocator".                                                                        |
-| `UI-INTERACTION-001`          | ERROR    | Yes             | apiCall    | UiDoAction interaction uses class="uiInteraction".                                                               |
-| `UI-INTERACTION-002`          | ERROR    | Yes             | apiCall    | UiDoAction interaction name is a real Provar interaction (action/set/file), not a hallucination like click/type. |
-| `UI-ASSERT-STRUCTURE-001`     | ERROR    | Yes             | apiCall    | UiAssert field assertions use a nested <uiFieldAssertion>, not a flat argument or a <namedValues> block.         |
-| `SF-CONNECT-TYPE-001`         | WARNING  | No              | testCase   | A Salesforce UI test connects via ApexConnect (API + UI), not a UiConnect with no ApexConnect.                   |
-| `CONNECT-REF-CONSISTENCY-001` | WARNING  | No              | apiCall    | Every connection reference (uiConnectionName/apexConnectionName/…) matches a connect step's resultName.          |
-| `SETVALUES-STRUCTURE-001`     | ERROR    | Yes             | apiCall    | SetValues values argument uses class="valueList" with <namedValues>.                                             |
-| `ASSERT-001`                  | WARNING  | No              | apiCall    | AssertValues namedValues format flagged for variable/Apex comparisons.                                           |
-| `COMPARISON-TYPE-001`         | ERROR    | Yes             | apiCall    | comparisonType is within the step-scoped enum subset (load-blocking otherwise).                                  |
+| Rule ID                       | Severity | Gates is_valid? | Applies to | Checks                                                                                                                               |
+| ----------------------------- | -------- | --------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `TC_001`                      | ERROR    | Yes             | document   | XML declaration present (<?xml …?> first line).                                                                                      |
+| `TC_002`                      | ERROR    | Yes             | document   | XML is well-formed (parses without error).                                                                                           |
+| `TC_003`                      | ERROR    | Yes             | document   | Root element is <testCase>.                                                                                                          |
+| `TC_010`                      | ERROR    | Yes             | testCase   | testCase id, when present, is a non-negative integer (id is optional; guid is the identifier).                                       |
+| `TC_011`                      | ERROR    | Yes             | testCase   | testCase has a guid attribute.                                                                                                       |
+| `TC_012`                      | ERROR    | Yes             | testCase   | testCase guid is a valid UUID v4.                                                                                                    |
+| `TC_020`                      | ERROR    | Yes             | testCase   | testCase has a <steps> element.                                                                                                      |
+| `TC_030`                      | ERROR    | Yes             | apiCall    | Each apiCall has a guid attribute.                                                                                                   |
+| `TC_031`                      | ERROR    | Yes             | apiCall    | Each apiCall guid is a valid UUID v4.                                                                                                |
+| `TC_032`                      | ERROR    | Yes             | apiCall    | Each apiCall has an apiId attribute.                                                                                                 |
+| `TC_033`                      | WARNING  | No              | apiCall    | Each apiCall has a descriptive name attribute.                                                                                       |
+| `TC_034`                      | ERROR    | Yes             | apiCall    | Each apiCall has a testItemId attribute.                                                                                             |
+| `TC_035`                      | ERROR    | Yes             | apiCall    | apiCall testItemId is a whole number.                                                                                                |
+| `DATA-001`                    | WARNING  | No              | testCase   | <dataTable> only iterates under a test plan; flags direct testCase-mode execution.                                                   |
+| `VAR-REF-001`                 | WARNING  | No              | argument   | A whole-token {Var} stored as valueClass="string" (use class="variable").                                                            |
+| `VAR-REF-002`                 | WARNING  | No              | argument   | {Var} tokens embedded in a plain string (use class="compound").                                                                      |
+| `UI-TARGET-001`               | ERROR    | Yes             | apiCall    | UiWithScreen/UiWithRow target uses class="uiTarget".                                                                                 |
+| `UI-LOCATOR-001`              | ERROR    | Yes             | apiCall    | UI action locator uses class="uiLocator".                                                                                            |
+| `UI-INTERACTION-001`          | ERROR    | Yes             | apiCall    | UiDoAction interaction uses class="uiInteraction".                                                                                   |
+| `UI-INTERACTION-002`          | ERROR    | Yes             | apiCall    | UiDoAction interaction name is a real Provar interaction, not one borrowed from another framework (type/fill/enter/input/tap/press). |
+| `UI-ASSERT-STRUCTURE-001`     | ERROR    | Yes             | apiCall    | UiAssert field assertions use a nested <uiFieldAssertion>, not a flat argument or a <namedValues> block.                             |
+| `SF-CONNECT-TYPE-001`         | WARNING  | No              | testCase   | A Salesforce UI test connects via ApexConnect (API + UI), not a UiConnect with no ApexConnect.                                       |
+| `CONNECT-REF-CONSISTENCY-001` | WARNING  | No              | apiCall    | Every connection reference (uiConnectionName/apexConnectionName/…) matches a connect step's resultName.                              |
+| `SETVALUES-STRUCTURE-001`     | ERROR    | Yes             | apiCall    | SetValues values argument uses class="valueList" with <namedValues>.                                                                 |
+| `ASSERT-001`                  | WARNING  | No              | apiCall    | AssertValues namedValues format flagged for variable/Apex comparisons.                                                               |
+| `COMPARISON-TYPE-001`         | ERROR    | Yes             | apiCall    | comparisonType is within the step-scoped enum subset (load-blocking otherwise).                                                      |
 
 ## Layer 2 — Best-practice rules
 

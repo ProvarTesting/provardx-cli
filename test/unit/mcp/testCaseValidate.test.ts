@@ -27,6 +27,7 @@ import {
 const GUID_TC = '550e8400-e29b-41d4-a716-446655440000';
 const GUID_S1 = '6ba7b810-9dad-4000-8000-00c04fd430c8';
 const GUID_S2 = '6ba7b811-9dad-4001-9001-00c04fd430c8';
+const GUID_S3 = '6ba7b812-9dad-4002-a002-00c04fd430c8';
 
 const VALID_TC = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <testCase guid="${GUID_TC}" id="1" registryId="abc123">
@@ -1109,6 +1110,83 @@ describe('validateTestCase', () => {
       assert.ok(
         !r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
         'must not fire without a connect step in the test'
+      );
+    });
+
+    // A connect step whose name is non-literal makes only its OWN family
+    // unverifiable. Suppressing the whole file let genuinely dangling references of
+    // unrelated families through — a real false negative on intentional-violation
+    // fixtures that carry a dynamic DbConnect alongside broken UI references.
+    it('an opaque DbConnect does not silence a dangling UI reference', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"/></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="2">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">RealUi</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S3}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="3">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">NoSuchConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'a dangling ui reference must still be reported despite an opaque db connect'
+      );
+    });
+
+    it('an opaque connect DOES silence a reference of its own family', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"/></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.bundled.apis.db.SqlQuery" name="Query" testItemId="2">
+      <arguments><argument id="dbConnectionName"><value class="value" valueClass="string">Unknown</value></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'the opaque db connect could be what produces this db reference'
+      );
+    });
+
+    it('accepts a connection declared in the project rather than by a connect step', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Local</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">ProjectLevel</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+      assert.ok(
+        validateTestCase(xml).issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'without project context the reference looks dangling'
+      );
+      assert.ok(
+        !validateTestCase(xml, undefined, { projectConnectionNames: new Set(['ProjectLevel']) }).issues.some(
+          (i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'
+        ),
+        'a project-declared connection is a valid reference target'
       );
     });
   });
