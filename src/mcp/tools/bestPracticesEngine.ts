@@ -313,7 +313,7 @@ function getDirectSteps(tc: XmlNode): XmlNode[] {
  * Handles simple (class="value"), variable (class="variable"), and compound values.
  */
 function getArgValue(call: XmlNode, argId: string): string | undefined {
-  for (const arg of toArr(call['argument'] as XmlNode | XmlNode[])) {
+  for (const arg of getArguments(call)) {
     if (!arg || typeof arg !== 'object') continue;
     const a = arg;
     if (a['@_id'] !== argId) continue;
@@ -337,8 +337,18 @@ function getArgValue(call: XmlNode, argId: string): string | undefined {
   return undefined;
 }
 
-/** Return all <argument> elements from an apiCall. */
+/**
+ * Return all <argument> elements from an apiCall, tolerating both the <arguments>
+ * wrapper that fast-xml-parser preserves on real IDE/generated files AND direct
+ * children. Real Provar XML nests arguments under <arguments>; reading only the bare
+ * form made DDT-VAR-001, NC-PARAM-001 and APEX-RESULTNAME-001 silently never fire on
+ * real test cases (false pass, inflated quality_score). The wrapper is preferred when
+ * present and the bare form is kept as a fallback so synthetic bare-form inputs still
+ * resolve, mirroring the both-readers tolerance in findArgumentById.
+ */
 function getArguments(call: XmlNode): XmlNode[] {
+  const wrapped = getCallArguments(call).filter((a) => a && typeof a === 'object');
+  if (wrapped.length) return wrapped;
   return toArr(call['argument'] as XmlNode | XmlNode[]).filter((a) => a && typeof a === 'object');
 }
 
@@ -1434,7 +1444,15 @@ function schemaArgumentHasValue(arg: XmlNode): boolean {
   // `<value class="uiLocator">junk</value>` satisfied the group without the uri the
   // class actually requires, and the stricter check below never ran.
   for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
-    if (value == null || typeof value !== 'object') continue;
+    if (value == null) continue;
+    if (typeof value === 'string') {
+      // Classless bare text value (fast-xml-parser yields a string for
+      // `<value>text</value>` with no attributes): a non-empty string is meaningful,
+      // mirroring argumentHasMeaningfulValue so a one-of member supplied as plain text
+      // is not falsely reported missing.
+      if (value.trim().length > 0) return true;
+      continue;
+    }
     const vClass = (value['@_class'] as string | undefined) ?? '';
     if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
       const uri = value['@_uri'];

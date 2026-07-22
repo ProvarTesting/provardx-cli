@@ -26,11 +26,27 @@ import {
 import { validateSuite, buildHierarchySummary, type TestSuiteInput, type SuiteResult } from './hierarchyValidate.js';
 import { desc } from './descHelper.js';
 
-function collectAllViolations(result: SuiteResult): DiffableViolation[] {
+export function collectAllViolations(result: SuiteResult): DiffableViolation[] {
   const all: DiffableViolation[] = [...(result.violations as unknown as DiffableViolation[])];
   for (const tc of result.test_cases) {
     all.push(...(tc.issues as unknown as DiffableViolation[]));
-    all.push(...(tc.best_practices_violations as unknown as DiffableViolation[]));
+    // Flattening every test case's violations into one array collapses the diff key
+    // space: an aggregate rule's `diff_identity` (e.g. `aggregate:unscoped` for a
+    // guid-less/name-less test case, or a copy-pasted shared guid) would collide across
+    // files, letting one unchanged test case mask a partially-fixed sibling so
+    // updated[] comes back empty with work outstanding. The test case's suite filename
+    // is a stable per-file discriminator that survives partial remediation (the file
+    // keeps its name while its steps are fixed), so namespace each aggregate identity
+    // with it. Copies keep the original violation objects (surfaced per-test-case)
+    // untouched.
+    for (const v of tc.best_practices_violations as unknown as DiffableViolation[]) {
+      const identity = v['diff_identity'];
+      if (typeof identity === 'string' && identity.length > 0) {
+        all.push({ ...v, diff_identity: `${tc.name}::${identity}` });
+      } else {
+        all.push(v);
+      }
+    }
   }
   for (const child of result.test_suites) {
     all.push(...collectAllViolations(child));

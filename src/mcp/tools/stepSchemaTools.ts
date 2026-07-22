@@ -122,7 +122,7 @@ function registerStepSchema(server: McpServer): void {
           .optional()
           .describe(
             desc(
-              'Category name (UI, Salesforce, Control, Data, Utility, ProvarAI, ProvarLabs). Lists steps in it.',
+              'Category name (UI, Salesforce, Control, Data, Design, Utility, ProvarAI, ProvarLabs). Lists steps in it.',
               'string, optional; category to list'
             )
           ),

@@ -2006,6 +2006,111 @@ describe('validateTestCaseXml', () => {
   });
 });
 
+// ── CONNECT-REF-CONSISTENCY-001 project-context walk honors the path policy ─────
+// resolveProjectConnectionNames ascends looking for a .testproject and checks the
+// path policy before every read. Ascending out of --allowed-paths must END the walk
+// (no read), otherwise a caller could probe connection names above the boundary via
+// the observable suppression side effect.
+describe('provar_testcase_validate handler — project connection walk respects --allowed-paths', () => {
+  let projectRoot: string;
+  let testsDir: string;
+  let testCasePath: string;
+
+  // UiConnect makes the UI family verifiable; the UiWithScreen references a connection
+  // ("ProjectLevel") that no in-file connect step declares — dangling unless the
+  // project itself declares it.
+  const TC_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="550e8400-e29b-41d4-a716-4466554400f0" registryId="r" name="T">
+  <steps>
+    <apiCall guid="550e8400-e29b-41d4-a716-4466554400f1" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Local</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="550e8400-e29b-41d4-a716-4466554400f2" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">ProjectLevel</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  const TEST_PROJECT = `<?xml version="1.0" encoding="UTF-8"?>
+<testProject>
+  <connectionClasses>
+    <connectionClass name="ui">
+      <connections>
+        <connection id="conn-proj" name="ProjectLevel">
+          <connectionUrls><connectionUrl url="selenium://chrome" /></connectionUrls>
+        </connection>
+      </connections>
+    </connectionClass>
+  </connectionClasses>
+</testProject>`;
+
+  let origHomedir: () => string;
+  let savedApiKey: string | undefined;
+
+  // The connection walk lives in the tool handler (resolveProjectContext), not in
+  // validateTestCaseXml, so this drives the registered handler with a file_path.
+  function handlerFor(allowedPaths: string[]): (args: Record<string, unknown>) => Promise<unknown> {
+    let captured: ((args: Record<string, unknown>) => Promise<unknown>) | null = null;
+    const srv = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      registerTool: (...a: any[]): void => {
+        captured = a[a.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tool: (...a: any[]): void => {
+        captured = a[a.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
+      },
+    };
+    registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths } as unknown as ServerConfig);
+    return captured!;
+  }
+
+  async function fires(allowedPaths: string[]): Promise<boolean> {
+    const res = (await handlerFor(allowedPaths)({ file_path: testCasePath, detail: 'full' })) as {
+      content: Array<{ text: string }>;
+    };
+    const body = JSON.parse(res.content[0].text) as { issues?: Array<{ rule_id: string }> };
+    return (body.issues ?? []).some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001');
+  }
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-walk-'));
+    testsDir = path.join(projectRoot, 'tests');
+    fs.mkdirSync(testsDir, { recursive: true });
+    testCasePath = path.join(testsDir, 'MyTest.testcase');
+    fs.writeFileSync(testCasePath, TC_XML);
+    fs.writeFileSync(path.join(projectRoot, '.testproject'), TEST_PROJECT);
+    // No API key and a creds-free home → local validation runs the CONNECT-REF rule.
+    savedApiKey = process.env.PROVAR_API_KEY;
+    delete process.env.PROVAR_API_KEY;
+    origHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = (): string => projectRoot;
+  });
+
+  afterEach(() => {
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
+    if (savedApiKey !== undefined) process.env.PROVAR_API_KEY = savedApiKey;
+    else delete process.env.PROVAR_API_KEY;
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('suppresses the dangling reference when the .testproject is inside --allowed-paths', async () => {
+    // projectRoot allowed → the ascending walk reaches and reads .testproject, which
+    // declares ProjectLevel, so the reference is a valid project-level target.
+    assert.equal(await fires([projectRoot]), false);
+  });
+
+  it('reports the reference and does NOT read the .testproject when it sits above --allowed-paths', async () => {
+    // Only tests/ allowed → the walk halts at the boundary before reading
+    // projectRoot/.testproject, so project context is undefined and the reference is
+    // reported rather than silently satisfied from beyond the sandbox.
+    assert.equal(await fires([testsDir]), true);
+  });
+});
+
 // ── PDX-489 handler-level DATA-001 integration ────────────────────────────────
 
 /**

@@ -2426,3 +2426,147 @@ describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
     assert.deepEqual(stepArgsViolations(xml), [], 'UiAssert must not be double-reported by STEP-REQUIRED-ARGS-001');
   });
 });
+
+// ── PDX-525: <arguments>-wrapper-aware reading (getArguments / getArgValue) ──────
+// Real Provar IDE/generated XML nests <argument> under an <arguments> wrapper. The
+// shared readers previously saw only the bare `call.argument` form, so these rules
+// silently never fired on real files (false pass, inflated quality_score). They now
+// prefer the wrapper and fall back to the bare form.
+describe('argument readers tolerate the <arguments> wrapper (PDX-525)', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-wrap" guid="tc-wrap" name="Wrapper Test">
+  <steps>${steps}</steps>
+</testCase>`;
+  }
+
+  function doActions(values: string[]): string {
+    return values
+      .map(
+        (val, i) => `
+    <apiCall guid="step-${i}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Step ${i}" testItemId="${i}" title="Step ${i}">
+      <arguments>
+        <argument id="value"><value class="value">${val}</value></argument>
+      </arguments>
+    </apiCall>`
+      )
+      .join('');
+  }
+
+  function apexConnects(resultNames: string[]): string {
+    return resultNames
+      .map(
+        (name, i) => `
+    <apiCall guid="conn-${i}" apiId="com.provar.plugins.forcedotcom.core.apex.ApexConnect" name="Connect ${i}" testItemId="${i}" title="Connect ${i}">
+      <arguments>
+        <argument id="resultName"><value class="value">${name}</value></argument>
+      </arguments>
+    </apiCall>`
+      )
+      .join('');
+  }
+
+  it('DDT-VAR-001 fires on duplicate literals nested under <arguments> (getArguments)', () => {
+    const v = runBestPractices(tc(doActions(['SharedLiteralValue123', 'SharedLiteralValue123']))).violations.find(
+      (x) => x.rule_id === 'DDT-VAR-001'
+    );
+    assert.ok(v, 'DDT-VAR-001 should fire on wrapped duplicate literals');
+  });
+
+  it('DDT-VAR-001 does not fire when wrapped literals are distinct', () => {
+    const v = runBestPractices(tc(doActions(['DistinctValueAaa', 'DistinctValueBbb']))).violations.find(
+      (x) => x.rule_id === 'DDT-VAR-001'
+    );
+    assert.ok(!v, 'no DDT-VAR-001 when literals differ');
+  });
+
+  it('APEX-RESULTNAME-001 fires on duplicate resultNames read from wrapped args (getArgValue)', () => {
+    const v = runBestPractices(tc(apexConnects(['DupConnResult', 'DupConnResult']))).violations.find(
+      (x) => x.rule_id === 'APEX-RESULTNAME-001'
+    );
+    assert.ok(v, 'APEX-RESULTNAME-001 should fire on wrapped duplicate resultNames');
+  });
+
+  it('APEX-RESULTNAME-001 does not fire when wrapped resultNames are unique', () => {
+    const v = runBestPractices(tc(apexConnects(['ConnA', 'ConnB']))).violations.find(
+      (x) => x.rule_id === 'APEX-RESULTNAME-001'
+    );
+    assert.ok(!v, 'no APEX-RESULTNAME-001 when resultNames are unique');
+  });
+});
+
+// ── STEP-IDE-PARITY-001 — ide_emitted tier, advisory (info / weight 1) ──────────
+describe('STEP-IDE-PARITY-001 (ide_emitted tier)', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-ide" guid="tc-ide" name="IDE Parity Test"><steps>${steps}</steps></testCase>`;
+  }
+  // UiDoAction's ide_emitted_arguments per provar_test_step_schema.json.
+  const IDE_EMITTED = [
+    'locator',
+    'interaction',
+    'interactionDescription',
+    'beforeWait',
+    'afterWait',
+    'autoRetry',
+    'captureBefore',
+    'captureAfter',
+  ];
+
+  it('fires at info/weight 1 when a UiDoAction omits IDE-emitted arguments', () => {
+    const step = `
+    <apiCall guid="s1" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1" title="Click">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=Save"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=click"/></argument>
+      </arguments>
+    </apiCall>`;
+    const v = runBestPractices(tc(step)).violations.find((x) => x.rule_id === 'STEP-IDE-PARITY-001');
+    assert.ok(v, 'STEP-IDE-PARITY-001 should fire when IDE-emitted args are missing');
+    assert.equal(v.severity, 'info');
+    assert.equal(v.weight, 1);
+  });
+
+  it('does not fire when every IDE-emitted argument is present (even if empty)', () => {
+    const args = IDE_EMITTED.map((id) => `<argument id="${id}"/>`).join('');
+    const step = `
+    <apiCall guid="s2" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1" title="Click">
+      <arguments>${args}</arguments>
+    </apiCall>`;
+    const v = runBestPractices(tc(step)).violations.find((x) => x.rule_id === 'STEP-IDE-PARITY-001');
+    assert.ok(!v, 'no STEP-IDE-PARITY-001 when all IDE-emitted args are present');
+  });
+});
+
+// ── STEP-REQUIRED-ARGS-001 one-of — schemaArgumentHasValue bare-string (PDX-525) ─
+describe('STEP-REQUIRED-ARGS-001 one-of value detection', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-oneof" guid="tc-oneof" name="One-Of Test"><steps>${steps}</steps></testCase>`;
+  }
+  const ONE_OF_MSG = 'one of [values | locator]';
+
+  it('a UiFill one-of member supplied as a bare-string <value> satisfies the group', () => {
+    const step = `
+    <apiCall guid="s1" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1" title="Fill">
+      <arguments>
+        <argument id="values"><value>Name=Acme</value></argument>
+      </arguments>
+    </apiCall>`;
+    const oneOf = runBestPractices(tc(step)).violations.find(
+      (x) => x.rule_id === 'STEP-REQUIRED-ARGS-001' && x.message.includes(ONE_OF_MSG)
+    );
+    assert.ok(!oneOf, 'a populated one-of member (bare string) must not be reported missing');
+  });
+
+  it('a UiFill with neither one-of member still reports the group missing', () => {
+    const step = `
+    <apiCall guid="s2" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1" title="Fill">
+      <arguments/>
+    </apiCall>`;
+    const oneOf = runBestPractices(tc(step)).violations.find(
+      (x) => x.rule_id === 'STEP-REQUIRED-ARGS-001' && x.message.includes(ONE_OF_MSG)
+    );
+    assert.ok(oneOf, 'UiFill with no values/locator must report the one-of group missing');
+  });
+});

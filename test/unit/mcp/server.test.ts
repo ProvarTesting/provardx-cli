@@ -10,7 +10,13 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { describe, it, afterEach } from 'mocha';
-import { resolveDocsDir, readCatalogSource, resolveRulesDir, readTestStepSchema } from '../../../src/mcp/server.js';
+import {
+  resolveDocsDir,
+  readCatalogSource,
+  resolveRulesDir,
+  readTestStepSchema,
+  createProvarMcpServer,
+} from '../../../src/mcp/server.js';
 
 describe('resolveDocsDir', () => {
   const tmpDirs: string[] = [];
@@ -202,5 +208,28 @@ describe('readTestStepSchema', () => {
     fs.writeFileSync(path.join(rulesDir, 'provar_test_step_schema.json'), '{ "truncated": ');
     const result = JSON.parse(readTestStepSchema(rulesDir)) as Record<string, unknown>;
     assert.equal(result['error'], 'schema_not_found', 'a corrupt file must not be served verbatim as application/json');
+  });
+});
+
+// ── Registrar dedup across tool groups (provar_step_schema in 3 groups) ─────────
+describe('createProvarMcpServer — registrar dedup', () => {
+  const saved = process.env['PROVAR_MCP_TOOLS'];
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env['PROVAR_MCP_TOOLS'];
+    else process.env['PROVAR_MCP_TOOLS'] = saved;
+  });
+
+  it('registers a shared registrar once when all groups are active (no PROVAR_MCP_TOOLS)', () => {
+    delete process.env['PROVAR_MCP_TOOLS'];
+    // provar_step_schema is registered by three groups (qualityhub, validation, authoring).
+    // A duplicate registerTool of the same name throws in the MCP SDK, so a clean build
+    // proves the alreadyRegistered guard runs each registrar at most once.
+    assert.doesNotThrow(() => createProvarMcpServer({ allowedPaths: [os.tmpdir()] }));
+  });
+
+  it('does not throw when two groups that share the registrar are both selected', () => {
+    process.env['PROVAR_MCP_TOOLS'] = 'validation,authoring';
+    assert.doesNotThrow(() => createProvarMcpServer({ allowedPaths: [os.tmpdir()] }));
   });
 });

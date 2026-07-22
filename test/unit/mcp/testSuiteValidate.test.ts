@@ -11,7 +11,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
-import { registerTestSuiteValidate } from '../../../src/mcp/tools/testSuiteValidate.js';
+import { registerTestSuiteValidate, collectAllViolations } from '../../../src/mcp/tools/testSuiteValidate.js';
+import type { SuiteResult, TestCaseResult } from '../../../src/mcp/tools/hierarchyValidate.js';
+import type { BPViolation } from '../../../src/mcp/tools/bestPracticesEngine.js';
 
 // ── Minimal McpServer mock ─────────────────────────────────────────────────────
 
@@ -537,5 +539,72 @@ describe('provar_testsuite_validate', () => {
       assert.ok('unchanged_count' in diffBody, 'diff should have unchanged_count');
       assert.ok('run_id' in diffBody, 'diff should have run_id');
     });
+  });
+});
+
+// ── collectAllViolations — per-test-case aggregate identity (PDX-525) ───────────
+// Flattening every test case's violations into one array collapses the diff key
+// space: an aggregate rule's diff_identity (e.g. `aggregate:unscoped` for a
+// guid-less/name-less test case) would collide across files, letting one unchanged
+// test case mask a partially-fixed sibling. The suite filename is a stable per-file
+// discriminator that survives partial remediation, so each aggregate identity is
+// namespaced with it.
+describe('collectAllViolations — per-test-case aggregate identity', () => {
+  function tcResult(name: string, bpViolations: Array<Record<string, unknown>>): TestCaseResult {
+    return {
+      name,
+      level: 'test_case',
+      status: 'invalid',
+      quality_score: 0,
+      validity_score: 0,
+      is_valid: false,
+      error_count: 1,
+      warning_count: 0,
+      step_count: 1,
+      issues: [],
+      best_practices_violations: bpViolations as unknown as BPViolation[],
+    };
+  }
+
+  function suite(name: string, testCases: TestCaseResult[]): SuiteResult {
+    return { name, level: 'suite', quality_score: 0, violations: [], test_cases: testCases, test_suites: [] };
+  }
+
+  it('namespaces each aggregate diff_identity by test case name so guid-less siblings never collide', () => {
+    const agg = {
+      rule_id: 'STEP-REQUIRED-ARGS-001',
+      applies_to: 'TestCase',
+      diff_identity: 'aggregate:unscoped',
+      message: '3 step(s) affected',
+      count: 3,
+    };
+    const result = suite('Suite', [
+      tcResult('AccountA.testcase', [{ ...agg }]),
+      tcResult('AccountB.testcase', [{ ...agg }]),
+    ]);
+    const identities = collectAllViolations(result)
+      .map((v) => v['diff_identity'])
+      .filter((d): d is string => typeof d === 'string')
+      .sort();
+    assert.deepEqual(
+      identities,
+      ['AccountA.testcase::aggregate:unscoped', 'AccountB.testcase::aggregate:unscoped'],
+      'two guid-less test cases must produce distinct, file-scoped diff identities'
+    );
+  });
+
+  it('leaves violations without a diff_identity untouched (per-step findings keep message identity)', () => {
+    const perStep = { rule_id: 'DDT-VAR-001', applies_to: 'TestCase', message: 'dup literal' };
+    const all = collectAllViolations(suite('Suite', [tcResult('X.testcase', [{ ...perStep }])]));
+    const found = all.find((v) => v['rule_id'] === 'DDT-VAR-001');
+    assert.ok(found);
+    assert.equal(found['diff_identity'], undefined, 'no diff_identity is added to per-step findings');
+  });
+
+  it('does not mutate the original per-test-case violation objects', () => {
+    const agg: Record<string, unknown> = { rule_id: 'R', applies_to: 'TestCase', diff_identity: 'aggregate:unscoped' };
+    const tc = tcResult('File.testcase', [agg]);
+    collectAllViolations(suite('S', [tc]));
+    assert.equal(agg['diff_identity'], 'aggregate:unscoped', 'the original object keeps its bare identity');
   });
 });
