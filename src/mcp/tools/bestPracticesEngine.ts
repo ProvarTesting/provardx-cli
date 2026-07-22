@@ -1505,7 +1505,9 @@ function containerHasMeaningfulEntry(container: XmlNode, depth = 0): boolean {
 
 /** Find an `<argument id=…>` for a call, tolerating both the `<arguments>` wrapper and direct children. */
 function findArgumentById(call: XmlNode, argId: string): XmlNode | undefined {
-  return getCallArguments(call).find((a) => a['@_id'] === argId) ?? getArguments(call).find((a) => a['@_id'] === argId);
+  // `getArguments` already encodes wrapper-preferred, bare-form-fallback selection, so a
+  // single search over it covers both shapes — no need to probe getCallArguments first.
+  return getArguments(call).find((a) => a['@_id'] === argId);
 }
 
 /** Human-readable step label for a violation message: `'<title|name>' (testItemId=N)`. */
@@ -2528,19 +2530,17 @@ let coveredArgPairs: Set<string> | null = null;
 function getCoveredArgPairs(): Set<string> {
   if (coveredArgPairs) return coveredArgPairs;
   const set = new Set<string>();
-  try {
-    const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_best_practices_rules.json'), 'utf-8');
-    const parsed = JSON.parse(raw) as { rules?: Array<{ check?: Record<string, unknown> }> };
-    for (const rule of parsed.rules ?? []) {
-      const check = rule.check;
-      if (!check || check['type'] !== 'mustContainArgument') continue;
-      const apiId = check['apiId'];
-      // The catalogue uses `argument`; `argumentId` is tolerated for forward-compat.
-      const arg = typeof check['argument'] === 'string' ? check['argument'] : check['argumentId'];
-      if (typeof apiId === 'string' && typeof arg === 'string') set.add(`${apiId}::${arg}`);
-    }
-  } catch {
-    // Catalogue unreadable → no suppression; duplicates are preferable to silence.
+  // Derived from the already-parsed rules singleton — no second read/parse of the
+  // catalogue. getRulesConfig degrades to an empty ruleset when the file is unreadable,
+  // which yields no suppression here (duplicates preferable to silence), matching the
+  // previous standalone try/catch.
+  for (const rule of getRulesConfig().rules) {
+    const check = rule.check;
+    if (check.type !== 'mustContainArgument') continue;
+    const apiId = check['apiId'];
+    // The catalogue uses `argument`; `argumentId` is tolerated for forward-compat.
+    const arg = typeof check['argument'] === 'string' ? check['argument'] : check['argumentId'];
+    if (typeof apiId === 'string' && typeof arg === 'string') set.add(`${apiId}::${arg}`);
   }
   coveredArgPairs = set;
   return coveredArgPairs;

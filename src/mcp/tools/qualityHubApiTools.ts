@@ -54,6 +54,32 @@ const CORPUS_UNREACHABLE_WARNING =
   'Check your network connection or try again later.\n' +
   CORPUS_FALLBACK_HINT;
 
+/**
+ * Build the tool response for the bundled-examples fallback (no key, or an auth error
+ * on an otherwise valid request). `warnWhenPresent` is the situation-specific warning
+ * shown when the bundle actually matched; an empty match always degrades to
+ * CORPUS_NO_BUNDLED_MATCH_WARNING and source 'none'.
+ */
+function bundledExamplesResponse(
+  requestId: string,
+  query: string,
+  n: number,
+  warnWhenPresent: string
+): { content: Array<{ type: 'text'; text: string }>; structuredContent: Record<string, unknown> } {
+  const examples = selectBundledExamples(query, n);
+  const result = {
+    requestId,
+    examples,
+    count: examples.length,
+    query_truncated: false,
+    // Relevance-gated: the bundle only covers Salesforce UI scenarios, so an off-topic
+    // query correctly yields nothing rather than a misleading match.
+    source: examples.length > 0 ? ('bundled' as const) : ('none' as const),
+    warning: examples.length > 0 ? warnWhenPresent : CORPUS_NO_BUNDLED_MATCH_WARNING,
+  };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
+}
+
 // ── Tool: provar_qualityhub_examples_retrieve ─────────────────────────────────
 
 export function registerCorpusExamplesRetrieve(server: McpServer): void {
@@ -140,18 +166,7 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
 
       if (!apiKey) {
         log('warn', 'provar_qualityhub_examples_retrieve: no api key — returning bundled examples', { requestId });
-        const examples = selectBundledExamples(query, n);
-        const result = {
-          requestId,
-          examples,
-          count: examples.length,
-          query_truncated: false,
-          // Relevance-gated: the bundle only covers Salesforce UI scenarios, so an
-          // off-topic query correctly yields nothing rather than a misleading match.
-          source: examples.length > 0 ? ('bundled' as const) : ('none' as const),
-          warning: examples.length > 0 ? CORPUS_ONBOARDING_WARNING : CORPUS_NO_BUNDLED_MATCH_WARNING,
-        };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
+        return bundledExamplesResponse(requestId, query, n, CORPUS_ONBOARDING_WARNING);
       }
 
       const baseUrl = getQualityHubBaseUrl();
@@ -184,16 +199,7 @@ export function registerCorpusExamplesRetrieve(server: McpServer): void {
         // bundled examples would mask a temporary outage as "no matches".
         if (err instanceof QualityHubAuthError) {
           log('warn', 'provar_qualityhub_examples_retrieve: auth error — returning bundled examples', { requestId });
-          const examples = selectBundledExamples(query, n);
-          const result = {
-            requestId,
-            examples,
-            count: examples.length,
-            query_truncated: false,
-            source: examples.length > 0 ? ('bundled' as const) : ('none' as const),
-            warning: examples.length > 0 ? CORPUS_AUTH_WARNING : CORPUS_NO_BUNDLED_MATCH_WARNING,
-          };
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }], structuredContent: result };
+          return bundledExamplesResponse(requestId, query, n, CORPUS_AUTH_WARNING);
         }
 
         let warning: string;
