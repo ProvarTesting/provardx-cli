@@ -593,6 +593,56 @@ describe('collectAllViolations — per-test-case aggregate identity', () => {
     );
   });
 
+  it('disambiguates same-named siblings with an occurrence suffix so the collision is not just relocated', () => {
+    // Two test cases with the SAME filename (itself a flagged condition) that are also
+    // guid-less would both scope to `aggregate:unscoped` — namespacing by name alone
+    // would still collapse them. The occurrence counter breaks the tie.
+    const agg = { rule_id: 'STEP-REQUIRED-ARGS-001', applies_to: 'TestCase', diff_identity: 'aggregate:unscoped' };
+    const result = suite('Suite', [tcResult('Dup.testcase', [{ ...agg }]), tcResult('Dup.testcase', [{ ...agg }])]);
+    const identities = collectAllViolations(result)
+      .map((v) => v['diff_identity'])
+      .filter((d): d is string => typeof d === 'string');
+    assert.equal(new Set(identities).size, 2, 'same-named siblings must NOT collapse onto one diff key');
+    assert.ok(identities.includes('Dup.testcase::aggregate:unscoped'), 'first occurrence keeps the bare name');
+    assert.ok(identities.includes('Dup.testcase#1::aggregate:unscoped'), 'the repeat gets an occurrence suffix');
+  });
+
+  it('disambiguates empty-name siblings too (zod permits name: "")', () => {
+    const agg = { rule_id: 'R', applies_to: 'TestCase', diff_identity: 'aggregate:unscoped' };
+    const result = suite('Suite', [tcResult('', [{ ...agg }]), tcResult('', [{ ...agg }])]);
+    const identities = collectAllViolations(result)
+      .map((v) => v['diff_identity'])
+      .filter((d): d is string => typeof d === 'string');
+    assert.equal(new Set(identities).size, 2, 'two empty-named test cases must not collide');
+  });
+
+  it('keeps unique names position-independent (no occurrence suffix on the common case)', () => {
+    // A repeated name in a CHILD suite still disambiguates against the parent via the
+    // shared counter, but unique names never get a suffix.
+    const agg = { rule_id: 'R', applies_to: 'TestCase', diff_identity: 'aggregate:g1' };
+    const child: SuiteResult = {
+      name: 'Child',
+      level: 'suite',
+      quality_score: 0,
+      violations: [],
+      test_cases: [tcResult('Only.testcase', [{ ...agg }])],
+      test_suites: [],
+    };
+    const result: SuiteResult = {
+      name: 'Root',
+      level: 'suite',
+      quality_score: 0,
+      violations: [],
+      test_cases: [tcResult('Root.testcase', [{ ...agg }])],
+      test_suites: [child],
+    };
+    const identities = collectAllViolations(result)
+      .map((v) => v['diff_identity'])
+      .filter((d): d is string => typeof d === 'string')
+      .sort();
+    assert.deepEqual(identities, ['Only.testcase::aggregate:g1', 'Root.testcase::aggregate:g1'], 'no #N suffix on unique names');
+  });
+
   it('leaves violations without a diff_identity untouched (per-step findings keep message identity)', () => {
     const perStep = { rule_id: 'DDT-VAR-001', applies_to: 'TestCase', message: 'dup literal' };
     const all = collectAllViolations(suite('Suite', [tcResult('X.testcase', [{ ...perStep }])]));

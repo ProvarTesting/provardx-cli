@@ -2493,6 +2493,28 @@ describe('argument readers tolerate the <arguments> wrapper (PDX-525)', () => {
     );
     assert.ok(!v, 'no APEX-RESULTNAME-001 when resultNames are unique');
   });
+
+  // NC-PARAM-001 (validateRegex, parameter branch) reads the FIRST argument's id — a
+  // distinct code path from DDT's value read and APEX's getArgValue, but still through
+  // getArguments, so it too silently never fired on wrapped args before the fix.
+  function paramStep(argId: string): string {
+    return `
+    <apiCall guid="np-1" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Step" testItemId="1" title="Step">
+      <arguments>
+        <argument id="${argId}"><value class="value">x</value></argument>
+      </arguments>
+    </apiCall>`;
+  }
+
+  it('NC-PARAM-001 fires on a non-camelCase parameter id read from wrapped <arguments>', () => {
+    const v = runBestPractices(tc(paramStep('Bad_Param'))).violations.find((x) => x.rule_id === 'NC-PARAM-001');
+    assert.ok(v, 'NC-PARAM-001 should fire on a non-camelCase id under the wrapper');
+  });
+
+  it('NC-PARAM-001 does not fire when the first wrapped parameter id is camelCase', () => {
+    const v = runBestPractices(tc(paramStep('goodName'))).violations.find((x) => x.rule_id === 'NC-PARAM-001');
+    assert.ok(!v, 'no NC-PARAM-001 for a camelCase parameter id');
+  });
 });
 
 // ── STEP-IDE-PARITY-001 — ide_emitted tier, advisory (info / weight 1) ──────────

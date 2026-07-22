@@ -2109,6 +2109,25 @@ describe('provar_testcase_validate handler — project connection walk respects 
     // reported rather than silently satisfied from beyond the sandbox.
     assert.equal(await fires([testsDir]), true);
   });
+
+  // Rule-firing alone is consistent with "walk halted" but does not PROVE no read
+  // happened. These spy on fs.readFileSync to prove the security property directly:
+  // the out-of-bounds .testproject is never read, and (differential) the in-bounds one is.
+  function readTheTestProject(allowedPaths: string[]): Promise<boolean> {
+    const testProjectPath = path.resolve(projectRoot, '.testproject');
+    const spy = sinon.spy(fs, 'readFileSync');
+    return handlerFor(allowedPaths)({ file_path: testCasePath, detail: 'full' })
+      .then(() => spy.getCalls().some((c) => path.resolve(String(c.args[0])) === testProjectPath))
+      .finally(() => spy.restore());
+  }
+
+  it('never reads the out-of-bounds .testproject (proves the path-policy check ran, not just a miss)', async () => {
+    assert.equal(await readTheTestProject([testsDir]), false, 'the .testproject above --allowed-paths must never be read');
+  });
+
+  it('does read the in-bounds .testproject (the spy discriminates — the differential is real)', async () => {
+    assert.equal(await readTheTestProject([projectRoot]), true, 'the in-bounds .testproject must be read');
+  });
 });
 
 // ── PDX-489 handler-level DATA-001 integration ────────────────────────────────
