@@ -274,7 +274,7 @@ export function registerProjectValidateFromPath(server: McpServer, config: Serve
           .string()
           .optional()
           .describe(
-            'run_id from a previous call. When provided, returns only project-level violations that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.'
+            'run_id from a previous call. When provided, returns only project-level violations that are new or resolved since that run: { added, resolved, updated, unchanged_count, run_id }. `updated` carries findings that survived but whose message or details changed, so a partially-fixed aggregate still tells you what remains without echoing every unchanged finding. If not found, returns error BASELINE_NOT_FOUND.'
           ),
       },
     },

@@ -70,6 +70,26 @@ export interface BPViolation {
    * empty means "no stable id" — such violations are never merged together.
    */
   test_item_id?: string;
+  /**
+   * Volatile, human-facing detail for aggregated violations: how many steps are
+   * affected, the per-argument breakdown, and a sample of offending steps.
+   *
+   * Deliberately kept OUT of `message`, because validationDiff keys baseline
+   * comparisons on the rendered message — putting counts or step names there makes
+   * every partial fix look like one finding resolved and a different one added.
+   */
+  details?: Record<string, unknown>;
+  /**
+   * Stable identity for baseline diffing, used INSTEAD of the rendered message when
+   * present (see validationDiff.violationKey).
+   *
+   * Aggregate rules emit one violation per file whose message necessarily changes as
+   * steps are fixed. Without a separate identity the diff treats each revision as a
+   * different finding and reports a resolution that has not happened. Set it to a
+   * value that is constant for "this rule, this file" — the message then stays free to
+   * carry the specifics a caller needs to act on.
+   */
+  diff_identity?: string;
 }
 
 export interface BPEngineResult {
@@ -151,12 +171,24 @@ const VALID_API_IDS = new Set<string>([
   'com.provar.plugins.bundled.apis.list.ListCompare',
   // Provar Labs
   'com.provar.plugins.bundled.apis.provarlabs.PageObjectCleaner',
-  // Forcedotcom — AI / agent
-  'com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentSession',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.AIAgentConversation',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.GenerateUtterance',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.IntentValidator',
-  'com.provar.plugins.forcedotcom.core.testapis.ai.ImageValidator',
+  // Provar AI — current namespace. Verified against a freshly IDE-minted test case
+  // (2026): the IDE writes `com.provar.core.ai.api.*`. The previously-listed
+  // `...forcedotcom.core.testapis.ai.*` form appears in no real file anywhere and was
+  // never valid — listing it here made API-UNKNOWN-001 (critical, weight 10) reject
+  // genuine IDE-authored XML as "does not exist in Provar", gating is_valid=false.
+  'com.provar.core.ai.api.AIAgentSession',
+  'com.provar.core.ai.api.AIAgentConversation',
+  'com.provar.core.ai.api.GenerateUtterance',
+  'com.provar.core.ai.api.IntentValidator',
+  'com.provar.core.ai.api.ImageValidator',
+  'com.provar.core.ai.api.GenerateTestData',
+  // Provar AI — legacy namespace, kept for backward compatibility: pre-rollout files
+  // in the corpus still carry these (AIAgentConversation x8, IntentValidator x8,
+  // GenerateTestData x18, AIAgentSession x3, GenerateUtterance x3).
+  'com.provar.plugins.forcedotcom.core.testapis.generate.AIAgentSession',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.AIAgentConversation',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.GenerateUtterance',
+  'com.provar.plugins.forcedotcom.core.testapis.generate.IntentValidator',
   'com.provar.plugins.forcedotcom.core.testapis.generate.GenerateTestData',
   'com.provar.plugins.forcedotcom.core.testapis.GenerateTestCase',
   // Forcedotcom — Apex / API
@@ -281,7 +313,7 @@ function getDirectSteps(tc: XmlNode): XmlNode[] {
  * Handles simple (class="value"), variable (class="variable"), and compound values.
  */
 function getArgValue(call: XmlNode, argId: string): string | undefined {
-  for (const arg of toArr(call['argument'] as XmlNode | XmlNode[])) {
+  for (const arg of getArguments(call)) {
     if (!arg || typeof arg !== 'object') continue;
     const a = arg;
     if (a['@_id'] !== argId) continue;
@@ -305,8 +337,18 @@ function getArgValue(call: XmlNode, argId: string): string | undefined {
   return undefined;
 }
 
-/** Return all <argument> elements from an apiCall. */
+/**
+ * Return all <argument> elements from an apiCall, tolerating both the <arguments>
+ * wrapper that fast-xml-parser preserves on real IDE/generated files AND direct
+ * children. Real Provar XML nests arguments under <arguments>; reading only the bare
+ * form made DDT-VAR-001, NC-PARAM-001 and APEX-RESULTNAME-001 silently never fire on
+ * real test cases (false pass, inflated quality_score). The wrapper is preferred when
+ * present and the bare form is kept as a fallback so synthetic bare-form inputs still
+ * resolve, mirroring the both-readers tolerance in findArgumentById.
+ */
 function getArguments(call: XmlNode): XmlNode[] {
+  const wrapped = getCallArguments(call).filter((a) => a && typeof a === 'object');
+  if (wrapped.length) return wrapped;
   return toArr(call['argument'] as XmlNode | XmlNode[]).filter((a) => a && typeof a === 'object');
 }
 
@@ -1353,29 +1395,119 @@ function argumentHasMeaningfulValue(arg: XmlNode): boolean {
       continue;
     }
     if (typeof value !== 'object') continue;
-    const v = value;
-    const vClass = (v['@_class'] as string | undefined) ?? '';
-    // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
-    const text = nodeText(v);
+    if (valueNodeIsMeaningful(value)) return true;
+  }
+  return false;
+}
 
-    if (vClass === 'variable') {
-      if (v['path'] != null || text.length > 0) return true;
-      continue; // bare <value class="variable"/> — not meaningful
-    }
-    if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
-    if (vClass === 'compound') {
-      const parts = v['parts'];
-      if (parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_'))) return true;
+/**
+ * Class-aware content check for a single `<value>` node. Split out of
+ * {@link argumentHasMeaningfulValue} to keep that function within the complexity
+ * budget as the class table grew.
+ */
+function valueNodeIsMeaningful(v: XmlNode): boolean {
+  const vClass = (v['@_class'] as string | undefined) ?? '';
+  // nodeText coerces a numeric #text to string first — a bare `.trim()` throws on it.
+  const text = nodeText(v);
+
+  if (vClass === 'variable') {
+    // Quality Hub parity: the presence of a <path> makes the reference meaningful.
+    return v['path'] != null || text.length > 0;
+  }
+  if (vClass === 'funcCall' || MEANINGFUL_VALUE_OPERATOR_CLASSES.has(vClass)) return true;
+  if (vClass === 'compound') {
+    const parts = v['parts'];
+    return Boolean(parts && typeof parts === 'object' && Object.keys(parts).some((k) => !k.startsWith('@_')));
+  }
+  return text.length > 0;
+}
+
+/**
+ * Schema-tier content check for `required_one_of`.
+ *
+ * Layered ON TOP of {@link argumentHasMeaningfulValue} rather than folded into it.
+ * That helper mirrors the Quality Hub `MustContainArgumentValidator` exactly, and the
+ * `mustContainArgument` rules share it — so widening it changes Layer-2 scoring and
+ * breaks the parity that makes local and API results agree. An earlier revision did
+ * exactly that: a `uiLocator` with text but no `uri` flipped to empty, and a uri-only
+ * one flipped to meaningful, with no backend evidence for either. The corpus could not
+ * detect the divergence because no real file carries those shapes in a rule-targeted
+ * argument, which is precisely why it must not be assumed safe.
+ *
+ * The additions here are OURS, used only by the schema tier this branch introduces:
+ * URI-bearing classes, checked per class so a plain `value` cannot claim a `uri`; and
+ * `valueList` / `namedValues` containers, meaningful only when an entry inside is.
+ */
+function schemaArgumentHasValue(arg: XmlNode): boolean {
+  // Class-specific rules run FIRST. Delegating to the parity helper up front was a
+  // bypass: that helper accepts non-empty text for any class it does not recognise, so
+  // `<value class="uiLocator">junk</value>` satisfied the group without the uri the
+  // class actually requires, and the stricter check below never ran.
+  for (const value of toArr(arg['value'] as XmlNode | string | Array<XmlNode | string>)) {
+    if (value == null) continue;
+    if (typeof value === 'string') {
+      // Classless bare text value (fast-xml-parser yields a string for
+      // `<value>text</value>` with no attributes): a non-empty string is meaningful,
+      // mirroring argumentHasMeaningfulValue so a one-of member supplied as plain text
+      // is not falsely reported missing.
+      if (value.trim().length > 0) return true;
       continue;
     }
-    if (text.length > 0) return true;
+    const vClass = (value['@_class'] as string | undefined) ?? '';
+    if (URI_PAYLOAD_VALUE_CLASSES.has(vClass)) {
+      const uri = value['@_uri'];
+      if (typeof uri === 'string' && uri.trim().length > 0) return true;
+      continue; // text does not substitute for the uri this class carries its payload in
+    }
+    if (vClass === 'valueList' || value['namedValues'] != null) {
+      if (containerHasMeaningfulEntry(value)) return true;
+      continue; // stray text inside a container is not a populated entry
+    }
+    // Any other class: defer to the unchanged Quality Hub parity contract.
+    if (argumentHasMeaningfulValue({ value } as XmlNode)) return true;
+  }
+  return false;
+}
+
+/** Value classes whose payload lives in the `uri` attribute rather than in text. */
+const URI_PAYLOAD_VALUE_CLASSES: ReadonlySet<string> = new Set(['uiLocator', 'uiTarget', 'uiInteraction', 'uiWait']);
+
+/**
+ * True when a `valueList` / `namedValues` container holds at least one entry that
+ * itself carries a value. A `<namedValue name="Name"/>` names a destination without
+ * assigning anything, so a container of those is as inert as an empty one.
+ */
+function containerHasMeaningfulEntry(container: XmlNode, depth = 0): boolean {
+  if (depth > 6) return false;
+  for (const [key, child] of Object.entries(container)) {
+    if (key.startsWith('@_') || child == null) continue;
+    if (key === '#text') {
+      // The container's OWN text is not an entry — a valueList holds namedValues, so
+      // `<value class="valueList">stray text</value>` carries nothing usable. Text on a
+      // nested entry (a namedValue's assigned value) does count, hence the depth check.
+      if (depth > 0 && String(child).trim().length > 0) return true;
+      continue;
+    }
+    for (const entry of toArr(child as XmlNode | string | Array<XmlNode | string>)) {
+      if (entry == null) continue;
+      if (typeof entry === 'string') {
+        if (entry.trim().length > 0) return true;
+        continue;
+      }
+      if (typeof entry !== 'object') continue;
+      // A nested <value> is judged by the same class-aware rules.
+      if (entry['value'] != null && argumentHasMeaningfulValue(entry)) return true;
+      if (containerHasMeaningfulEntry(entry, depth + 1)) return true;
+    }
   }
   return false;
 }
 
 /** Find an `<argument id=…>` for a call, tolerating both the `<arguments>` wrapper and direct children. */
 function findArgumentById(call: XmlNode, argId: string): XmlNode | undefined {
-  return getCallArguments(call).find((a) => a['@_id'] === argId) ?? getArguments(call).find((a) => a['@_id'] === argId);
+  // `getArguments` already encodes wrapper-preferred, bare-form-fallback selection, so a
+  // single search over it covers both shapes, so there is no need to probe getCallArguments first.
+  return getArguments(call).find((a) => a['@_id'] === argId);
 }
 
 /** Human-readable step label for a violation message: `'<title|name>' (testItemId=N)`. */
@@ -2304,6 +2436,257 @@ function validateUiAssertMissingArguments(tc: XmlNode, rule: BPRule): BPViolatio
   );
 }
 
+// STEP-REQUIRED-ARGS-001 — schema-driven required-argument check for ALL step types.
+//
+// The dedicated hardcoded UiAssert rule (UI-ASSERT-STRUCT-001, above) only ever fired
+// for UiAssert, so a test case could omit required arguments on UiConnect, UiWithScreen,
+// UiDoAction, etc. and still score 100/100. This rule derives the required-argument set
+// for every apiId from provar_test_step_schema.json and flags any step missing one — the
+// same data source read by the provar://schema/test-step resource, so the validator and
+// the schema reference can never drift apart. It runs at `major` severity (docks
+// quality_score, does not gate is_valid), because the schema is a doc-derived reference
+// rather than the authoritative Quality Hub ruleset.
+//
+// Step types with a dedicated required-argument rule are excluded here to avoid
+// double-reporting: UiAssert (UI-ASSERT-STRUCT-001) and the NitroX MS connect variants
+// (UI-NITROX-VARIANT-ARG-001).
+const REQUIRED_ARGS_EXCLUDED_API_IDS: ReadonlySet<string> = new Set([UI_ASSERT_API_ID]);
+
+// Categories whose argument contracts are still moving. Descriptive schema entries are
+// retained (provar_step_schema can still answer questions about them) but nothing in
+// them is scored, so experimental steps do not generate churn.
+const UNSCORED_SCHEMA_CATEGORIES: ReadonlySet<string> = new Set(['ProvarLabs']);
+
+interface SchemaArgTiers {
+  category: string;
+  required: readonly string[];
+  recommended: readonly string[];
+  ideEmitted: readonly string[];
+  /**
+   * Groups where at least ONE member must be present. Used where no single argument
+   * is individually load-blocking but the step is inert without any of them — e.g.
+   * UiFill needs either `values` (a namedValues list) or `locator` (a single field).
+   */
+  requiredOneOf: ReadonlyArray<readonly string[]>;
+}
+
+/** Build apiId → argument tiers from the bundled step schema. Cached after first read. */
+let schemaArgTiers: Map<string, SchemaArgTiers> | null = null;
+function getSchemaArgTiers(): Map<string, SchemaArgTiers> {
+  if (schemaArgTiers) return schemaArgTiers;
+  const map = new Map<string, SchemaArgTiers>();
+  const ids = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v
+          .map((r) => (typeof r === 'string' ? r : r && typeof r === 'object' ? (r as { id?: unknown }).id : undefined))
+          .filter((id): id is string => typeof id === 'string')
+      : [];
+  try {
+    const raw = readFileSync(join(dirPath, '..', 'rules', 'provar_test_step_schema.json'), 'utf-8');
+    const parsed = JSON.parse(raw) as { apiCalls?: Record<string, unknown> };
+    for (const [categoryName, category] of Object.entries(parsed.apiCalls ?? {})) {
+      if (!category || typeof category !== 'object') continue;
+      for (const entry of Object.values(category as Record<string, unknown>)) {
+        if (!entry || typeof entry !== 'object') continue;
+        const e = entry as {
+          apiId?: unknown;
+          category?: unknown;
+          required_arguments?: unknown;
+          recommended_arguments?: unknown;
+          ide_emitted_arguments?: unknown;
+          required_one_of?: unknown;
+        };
+        if (typeof e.apiId !== 'string') continue;
+        const oneOf = Array.isArray(e.required_one_of)
+          ? e.required_one_of
+              .filter(Array.isArray)
+              .map((g) => (g as unknown[]).filter((x): x is string => typeof x === 'string'))
+          : [];
+        map.set(e.apiId, {
+          category: typeof e.category === 'string' ? e.category : categoryName,
+          required: ids(e.required_arguments),
+          recommended: ids(e.recommended_arguments),
+          ideEmitted: ids(e.ide_emitted_arguments),
+          requiredOneOf: oneOf.filter((g) => g.length > 0),
+        });
+      }
+    }
+  } catch {
+    // Schema missing/corrupt → empty map → rules silently pass (graceful degradation).
+  }
+  schemaArgTiers = map;
+  return schemaArgTiers;
+}
+
+/*
+ * (apiId, argumentId) pairs already enforced by a dedicated `mustContainArgument` rule.
+ * Read from the rule catalogue at runtime rather than hardcoded, so adding a new
+ * mustContainArgument rule automatically suppresses the schema-driven duplicate.
+ *
+ * Without this, one defect is scored twice — a WebConnect missing `connectionName`
+ * fires both REST-CONN-001 (critical, weight 8) and the schema rule (major, weight 5).
+ */
+let coveredArgPairs: Set<string> | null = null;
+function getCoveredArgPairs(): Set<string> {
+  if (coveredArgPairs) return coveredArgPairs;
+  const set = new Set<string>();
+  // Derived from the already-parsed rules singleton, so there is no second read/parse of
+  // the catalogue. getRulesConfig degrades to an empty ruleset when the file is unreadable,
+  // which yields no suppression here (duplicates preferable to silence), matching the
+  // previous standalone try/catch. `check?.type` mirrors the defensive access in the main
+  // scoring loop so a rule authored without a `check` is skipped, not thrown on.
+  for (const rule of getRulesConfig().rules) {
+    const check = rule.check;
+    if (check?.type !== 'mustContainArgument') continue;
+    const apiId = check['apiId'];
+    // The catalogue uses `argument`; `argumentId` is tolerated for forward-compat.
+    const arg = typeof check['argument'] === 'string' ? check['argument'] : check['argumentId'];
+    if (typeof apiId === 'string' && typeof arg === 'string') set.add(`${apiId}::${arg}`);
+  }
+  coveredArgPairs = set;
+  return coveredArgPairs;
+}
+
+/** Steps whose declared tier args are absent, plus the total offending-step count. */
+function collectMissingTierArgs(
+  tc: XmlNode,
+  pick: (t: SchemaArgTiers) => readonly string[],
+  dedupeAgainstDedicatedRules: boolean,
+  checkOneOf = false
+): { steps: string[]; missingByArg: Map<string, number>; count: number } {
+  const tiers = getSchemaArgTiers();
+  const covered = dedupeAgainstDedicatedRules ? getCoveredArgPairs() : null;
+  const steps: string[] = [];
+  const missingByArg = new Map<string, number>();
+  let count = 0;
+  for (const call of getAllApiCalls(tc)) {
+    const apiId = call['@_apiId'] as string | undefined;
+    if (!apiId || REQUIRED_ARGS_EXCLUDED_API_IDS.has(apiId) || apiId.includes('NitroXConnect')) continue;
+    const tier = tiers.get(apiId);
+    if (!tier || UNSCORED_SCHEMA_CATEGORIES.has(tier.category)) continue;
+    const wanted = pick(tier);
+    const oneOfGroups = checkOneOf ? tier.requiredOneOf : [];
+    if (wanted.length === 0 && oneOfGroups.length === 0) continue;
+    const present = new Set<string>();
+    const populated = new Set<string>();
+    for (const a of getCallArguments(call)) {
+      const id = a['@_id'] as string | undefined;
+      if (!id) continue;
+      present.add(id);
+      if (schemaArgumentHasValue(a)) populated.add(id);
+    }
+    const missing = wanted.filter((r) => !present.has(r) && !(covered && covered.has(`${apiId}::${r}`)));
+    // A one-of group is satisfied only when a member is present AND carries a value.
+    // Presence alone is not enough: the group exists because the step is inert
+    // without one of them, and `<argument id="values"/>` is exactly as inert as
+    // omitting it. Required-tier args stay presence-based — Provar's convention is to
+    // declare them empty (see ide_emitted_arguments), so absence is the real signal.
+    for (const group of oneOfGroups) {
+      if (!group.some((g) => populated.has(g))) missing.push(`one of [${group.join(' | ')}] with a value`);
+    }
+    if (!missing.length) continue;
+    count++;
+    const ctx = stepContext(call);
+    if (steps.length < 10) steps.push(`'${ctx.title}' (testItemId=${ctx.tid}): ${missing.join(', ')}`);
+    for (const m of missing) missingByArg.set(m, (missingByArg.get(m) ?? 0) + 1);
+  }
+  return { steps, missingByArg, count };
+}
+
+/*
+ * One aggregated violation per rule, carrying `count`, rather than one violation per
+ * offending step. calculateBPScore damps a single violation logarithmically
+ * (1 + log2(count)) but sums per-violation penalties linearly, so per-step emission
+ * bypassed the damping entirely: a file with 71 offending steps scored
+ * 71 x 5 x 0.75 = 266 points of deduction (score 0) where the aggregated form costs
+ * 5 x 0.75 x (1 + log2 71) = 26.8. This also matches the Quality Hub Lambda, which
+ * emits one violation per rule with a count.
+ */
+/**
+ * Identity scope for an aggregate violation: the test case it came from. Falls back to
+ * the name, then to a stable marker, so a file lacking a guid still gets a key that is
+ * at least consistent within its own run.
+ */
+function testCaseScope(tc: XmlNode): string {
+  const root = (tc['testCase'] as XmlNode | undefined) ?? tc;
+  const guid = root['@_guid'];
+  if (typeof guid === 'string' && guid.length > 0) return guid;
+  const name = root['@_name'];
+  if (typeof name === 'string' && name.length > 0) return name;
+  return 'unscoped';
+}
+
+function aggregateTierViolation(
+  rule: BPRule,
+  found: { steps: string[]; missingByArg: Map<string, number>; count: number },
+  lead: string,
+  scope: string
+): BPViolation[] {
+  if (found.count === 0) return [];
+  // Identity and presentation are separated. `diff_identity` is what validationDiff
+  // keys on: constant for this rule over this file, so partial remediation reads as
+  // "still unresolved, fewer steps" instead of "resolved + added". The MESSAGE stays
+  // specific, because that is what a user or agent reads to decide the next fix —
+  // making it generic kept the diff honest but left partial-fix responses
+  // unactionable.
+  const missingArgs = [...found.missingByArg.keys()].sort();
+  const more = found.count > found.steps.length ? ` …and ${found.count - found.steps.length} more step(s)` : '';
+  const v = makeViolation(
+    rule,
+    `${lead} ${found.count} step(s) affected. Missing argument(s): ${missingArgs.join(', ')}. Steps: ${found.steps.join(
+      '; '
+    )}${more}`,
+    found.count
+  );
+  // Scoped to the test case, NOT a bare literal. Suite validation flattens every test
+  // case's violations into one array, so a constant identity made same-rule aggregates
+  // from different files collide on one diff key — computeDiff keeps a single sample
+  // per key, so an unchanged file could mask a partially-fixed one and updated[] would
+  // come back empty with work still outstanding.
+  v.diff_identity = `aggregate:${scope}`;
+  v.details = {
+    affected_steps: found.count,
+    missing_arguments: missingArgs,
+    missing_by_argument: Object.fromEntries([...found.missingByArg.entries()].sort((a, b) => b[1] - a[1])),
+    steps: `${found.steps.join('; ')}${more}`,
+  };
+  return [v];
+}
+
+/** STEP-REQUIRED-ARGS-001 — schema-declared load-blocking arguments (major). */
+function validateSchemaRequiredArguments(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.required, true, true);
+  return aggregateTierViolation(
+    rule,
+    found,
+    'One or more steps are missing an argument the Provar step schema lists as required.',
+    testCaseScope(tc)
+  );
+}
+
+/** STEP-RECOMMENDED-ARGS-001 — strongly conventional but not load-blocking (minor). */
+function validateSchemaRecommendedArguments(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.recommended, true);
+  return aggregateTierViolation(
+    rule,
+    found,
+    'One or more steps omit an argument that appears on 80-99% of real Provar steps of the same type.',
+    testCaseScope(tc)
+  );
+}
+
+/** STEP-IDE-PARITY-001 — arguments the Provar IDE always emits, even when empty (info). */
+function validateStepIdeParity(tc: XmlNode, rule: BPRule): BPViolation[] {
+  const found = collectMissingTierArgs(tc, (t) => t.ideEmitted, false);
+  return aggregateTierViolation(
+    rule,
+    found,
+    'One or more steps omit arguments the Provar IDE emits for that step type even when empty, ' +
+      'so the XML does not round-trip as IDE-authored.',
+    testCaseScope(tc)
+  );
+}
+
 // UI-BINDING-ORDER-001 — binding URIs must list object= before action=/field= (percent-encoded).
 const BINDING_WRONG_ACTION_FIRST = /object%3Faction%3D[^%]+%26object%3D/;
 const BINDING_WRONG_FIELD_FIRST = /object%3Ffield%3D[^%]+%26object%3D/;
@@ -2428,6 +2811,9 @@ const VALIDATOR_REGISTRY: Record<string, ValidatorFn> = {
 type MultiValidatorFn = (tc: XmlNode, rule: BPRule) => BPViolation[];
 
 const MULTI_VALIDATOR_REGISTRY: Record<string, MultiValidatorFn> = {
+  schemaRequiredArguments: validateSchemaRequiredArguments,
+  schemaRecommendedArguments: validateSchemaRecommendedArguments,
+  stepIdeParity: validateStepIdeParity,
   uiActionNestingStructure: validateUiActionNestingStructure,
   uiAssertScreenContext: validateUiAssertScreenContext,
   nitroxConnectInvalidArgs: validateNitroxConnectInvalidArgs,

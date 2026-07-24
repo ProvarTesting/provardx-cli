@@ -177,16 +177,14 @@ describe('runBestPractices', () => {
 
     it('passes for a valid SF target URI (sf:ui:target?object=Account&action=view)', () => {
       const result = runBestPractices(buildUwsXml('sf:ui:target?object=Account&amp;action=view'));
-      const uwsViolation = result.violations.find(
-        (v) => v.rule_id.includes('UI-SCREEN') || v.message.includes('UiWithScreen')
-      );
+      const uwsViolation = result.violations.find((v) => v.rule_id.includes('UI-SCREEN-TARGET'));
       assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
     });
 
     it('passes for a valid page object target URI (ui:pageobject:target?pageId=pageobjects.LoginPage)', () => {
       const result = runBestPractices(buildUwsXml('ui:pageobject:target?pageId=pageobjects.LoginPage'));
       const uwsViolation = result.violations.find(
-        (v) => v.message.includes('UiWithScreen') || v.message.includes('pageId')
+        (v) => v.rule_id.includes('UI-SCREEN-TARGET') || v.message.includes('pageId')
       );
       assert.ok(!uwsViolation, `Expected no uiWithScreenTarget violation, got: ${uwsViolation?.message}`);
     });
@@ -509,7 +507,11 @@ describe('runBestPractices', () => {
         vs[0].message.includes('testItemId=14'),
         `Expected the violation to name the offending UiAssert (testItemId=14): ${vs[0].message}`
       );
-      assert.equal(result.quality_score, 96.25, `Expected quality_score 96.25, got ${result.quality_score}`);
+      // Assert THIS rule's contribution, not the whole-file score: the global score
+      // also carries unrelated advisory rules (e.g. STEP-IDE-PARITY-001 on a
+      // hand-written fixture), so pinning it here would make the test fail whenever
+      // any other rule changes — while saying nothing about de-duplication.
+      assert.equal(calculateBPScore(vs), 96.25, `Expected a single major×5 deduction; got ${calculateBPScore(vs)}`);
     });
 
     // ─ NEGATIVE: good fixture (assert under action=View) does NOT fire ─
@@ -2025,5 +2027,568 @@ describe('reference doc ⇄ validator apiId parity (PDX-512)', () => {
       0,
       'control.Finally is the canonical try/catch/finally step and must be recognised'
     );
+  });
+});
+
+// ── STEP-REQUIRED-ARGS-001 (schema-driven required arguments, all step types) ──
+
+describe('STEP-REQUIRED-ARGS-001 schema-driven required arguments', () => {
+  const TC = '550e8400-e29b-41d4-a716-4466554409a0';
+  const G = (n: number): string => `550e8400-e29b-41d4-a716-4466554409${String(n).padStart(2, '0')}`;
+
+  const stepArgsViolations = (xml: string): BPViolation[] =>
+    runBestPractices(xml).violations.filter((v) => v.rule_id === 'STEP-REQUIRED-ARGS-001');
+
+  // STEP-RECOMMENDED-ARGS-001 — the 80-99% presence band, scored minor/weight 2.
+  it('STEP-RECOMMENDED-ARGS-001 fires on a conventionally-expected argument and stays minor', () => {
+    // SendMessage carries to/cc/bcc/subject/signature on 85.7% of real instances:
+    // conventional, not load-blocking. required (destinationConnectionName, body) present.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(20)}" apiId="com.provar.plugins.bundled.apis.messaging.SendMessage" name="Send" testItemId="1">
+      <arguments>
+        <argument id="destinationConnectionName"><value class="value" valueClass="string">Mail</value></argument>
+        <argument id="body"><value class="value" valueClass="string">hello</value></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = runBestPractices(xml).violations.filter((v) => v.rule_id === 'STEP-RECOMMENDED-ARGS-001');
+    assert.equal(vs.length, 1, 'one aggregated recommended-args violation');
+    assert.equal(vs[0].severity, 'minor');
+    assert.equal(vs[0].weight, 2);
+    // Argument names live in `details`, not the message: the message is the
+    // baseline-diff identity and must stay invariant across partial fixes.
+    assert.ok(
+      (vs[0].details as { missing_arguments: string[] }).missing_arguments.includes('to'),
+      `should name the missing conventional arg(s): ${JSON.stringify(vs[0].details)}`
+    );
+    // required args are satisfied, so the major rule must stay silent
+    assert.equal(stepArgsViolations(xml).length, 0, 'required-args rule must not fire when required args are present');
+  });
+
+  // The aggregated message is the baseline-diff identity (validationDiff keys on
+  // rule_id||applies_to||message). Counts and step names must stay OUT of it, or
+  // fixing one of many offending steps reads as "old finding resolved, new finding
+  // added" instead of "same finding, fewer steps".
+  it('keeps the aggregated message stable when only the number of offending steps changes', () => {
+    const step = (tid: number): string =>
+      `<apiCall guid="${G(
+        40 + tid
+      )}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S${tid}" testItemId="${tid}">
+        <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument></arguments>
+      </apiCall>`;
+    const wrap = (steps: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>${steps}</steps></testCase>`;
+
+    const three = stepArgsViolations(wrap(step(1) + step(2) + step(3)));
+    const two = stepArgsViolations(wrap(step(1) + step(2)));
+    assert.equal(three.length, 1);
+    assert.equal(two.length, 1);
+    assert.equal(three[0].diff_identity, two[0].diff_identity, 'diff identity must be stable across step counts');
+    assert.ok(three[0].message !== two[0].message, 'message stays specific and may differ');
+    assert.equal(three[0].count, 3);
+    assert.equal(two[0].count, 2);
+    // The volatile detail still reaches the caller, just not through the diff key.
+    assert.equal((three[0].details as { affected_steps: number }).affected_steps, 3);
+    assert.equal((two[0].details as { affected_steps: number }).affected_steps, 2);
+  });
+
+  // The partial-fix case one level up: fixing every instance of ONE missing argument
+  // while another remains shrinks the missing-name SET. An earlier fix keyed the
+  // message on that set, so this still reported a resolution that had not happened.
+  it('keeps the message stable when the SET of missing arguments shrinks', () => {
+    const wrap = (args: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(60)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S" testItemId="1">
+    <arguments>${args}</arguments>
+  </apiCall>
+</steps></testCase>`;
+
+    const both = stepArgsViolations(wrap(''));
+    const one = stepArgsViolations(
+      wrap(
+        '<argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument>'
+      )
+    );
+    assert.equal(both.length, 1);
+    assert.equal(one.length, 1);
+    assert.equal(both[0].diff_identity, one[0].diff_identity, 'diff identity must survive a shrinking missing-arg set');
+    assert.ok(both[0].message.includes('target'), 'message stays actionable');
+    assert.ok(!one[0].message.includes('target'), 'message reflects what is actually still missing');
+    assert.deepEqual((both[0].details as { missing_arguments: string[] }).missing_arguments, [
+      'target',
+      'uiConnectionName',
+    ]);
+    assert.deepEqual((one[0].details as { missing_arguments: string[] }).missing_arguments, ['uiConnectionName']);
+  });
+
+  // The schema tier must apply its OWN class rules before falling back to the parity
+  // helper. Delegating first was a bypass: the parity contract accepts non-empty text
+  // for any unrecognised class, so text inside a uiLocator or a valueList satisfied the
+  // group without the uri or populated entry those classes actually require.
+  it('required_one_of does not accept stray text in place of a class-specific payload', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(90)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+    const fires = (inner: string): boolean => stepArgsViolations(uiFill(inner)).length > 0;
+
+    assert.ok(fires('<argument id="locator"><value class="uiLocator">junk</value></argument>'), 'text is not a uri');
+    assert.ok(
+      fires('<argument id="values"><value class="valueList">stray text</value></argument>'),
+      'text is not a populated container entry'
+    );
+    // The legitimate forms still satisfy it.
+    assert.ok(!fires('<argument id="locator"><value class="uiLocator" uri="ui:locator?name=N"/></argument>'));
+    assert.ok(
+      !fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="N">v</namedValue></namedValues></value></argument>'
+      )
+    );
+  });
+
+  // diff_identity must be scoped to the test case. Suite validation flattens every
+  // test case's violations into one array, so a constant identity made same-rule
+  // aggregates from different files collide on one diff key — computeDiff keeps a
+  // single sample per key, so an unchanged file could mask a partially-fixed one.
+  it('aggregate diff_identity is scoped per test case, not a shared constant', () => {
+    const mk = (guid: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${guid}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(95)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="S" testItemId="1">
+    <arguments/>
+  </apiCall>
+</steps></testCase>`;
+    const a = stepArgsViolations(mk(TC))[0];
+    const b = stepArgsViolations(mk('550e8400-e29b-41d4-a716-4466554409ff'))[0];
+    assert.ok(a?.diff_identity && b?.diff_identity, 'both aggregates carry an identity');
+    assert.notEqual(a.diff_identity, b.diff_identity, 'different test cases must not share a diff key');
+  });
+
+  // PARITY GUARD. argumentHasMeaningfulValue mirrors the Quality Hub
+  // MustContainArgumentValidator, and every mustContainArgument rule shares it, so
+  // widening it silently desynchronises local and API scores. An earlier revision
+  // folded URI and container semantics into it: a uiLocator with text but no uri
+  // flipped to empty, a uri-only one flipped to meaningful. The corpus could not
+  // detect that — no real file carries those shapes in a rule-targeted argument —
+  // which is exactly why it needs a guard rather than a measurement.
+  it('the backend-parity helper is NOT widened by the schema tier', () => {
+    const assertStep = (valueXml: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(80)}" apiId="com.provar.plugins.bundled.apis.AssertValues" name="A" testItemId="1">
+    <arguments>
+      <argument id="actualValue"><value class="value" valueClass="string">x</value></argument>
+      <argument id="comparisonType"><value class="value" valueClass="string">EqualTo</value></argument>
+      <argument id="expectedValue">${valueXml}</argument>
+    </arguments>
+  </apiCall>
+</steps></testCase>`;
+    const expectedFires = (valueXml: string): boolean =>
+      runBestPractices(assertStep(valueXml)).violations.some((v) => v.rule_id === 'ASSERT-EXPECTED-001');
+
+    // Backend contract: a non-empty text value is meaningful whatever its class.
+    assert.ok(!expectedFires('<value class="uiLocator">some text</value>'), 'text is meaningful under parity rules');
+    // Backend contract: a uri-only value has no text, so the parity helper treats it
+    // as empty. The schema tier may disagree; ASSERT-EXPECTED-001 must not.
+    assert.ok(
+      expectedFires('<value class="uiLocator" uri="ui:locator?name=X"/>'),
+      'the parity helper must not start accepting uri-only values for mustContainArgument rules'
+    );
+  });
+
+  // Recursion guard: an empty container is not a value. Without recursion,
+  // `<namedValues/>` counted as populated and UiFill's one-of group passed on a step
+  // that does nothing at runtime.
+  it('required_one_of rejects empty nested containers', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(70)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+    const fires = (inner: string): boolean => stepArgsViolations(uiFill(inner)).length > 0;
+
+    // Metadata-only shapes: `valueClass` is a type and a namedValue's `name` is the
+    // destination field — neither assigns anything. A deny-list excluding only
+    // class/mutable let both count as values, so an inert UiFill still passed.
+    assert.ok(
+      fires('<argument id="values"><value class="value" valueClass="string"/></argument>'),
+      'valueClass alone is a type, not a value'
+    );
+    assert.ok(
+      fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name"/></namedValues></value></argument>'
+      ),
+      'a namedValue naming a destination but assigning nothing'
+    );
+    assert.ok(
+      fires('<argument id="values"><value class="valueList"><namedValues/></value></argument>'),
+      'empty namedValues'
+    );
+    assert.ok(
+      fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue/></namedValues></value></argument>'
+      ),
+      'empty namedValue'
+    );
+    assert.ok(fires('<argument id="locator"><value class="uiLocator"/></argument>'), 'uiLocator with no uri');
+    // NOT asserted as inert: argumentHasMeaningfulValue mirrors the Quality Hub
+    // MustContainArgumentValidator exactly, and there the presence of a <path> element
+    // makes a variable reference meaningful regardless of its contents. Diverging here
+    // would break the Layer-2 parity that makes local and API scores agree, so an empty
+    // <path/> is deliberately accepted — a different rule's concern, not this one's.
+    assert.ok(
+      !fires('<argument id="values"><value class="variable"><path/></value></argument>'),
+      'a <path> element is a variable reference (Quality Hub parity), so the one-of group is satisfied'
+    );
+
+    assert.ok(
+      !fires(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name">x</namedValue></namedValues></value></argument>'
+      ),
+      'a populated namedValue is a real value'
+    );
+    assert.ok(
+      !fires('<argument id="values"><value class="variable"><path element="AccountId"/></value></argument>'),
+      'a variable reference with a path element is a real value'
+    );
+  });
+
+  // required_one_of exists because a UiFill with neither `values` nor `locator` is
+  // inert. An argument declared but left EMPTY is exactly as inert as an absent one.
+  it('required_one_of is not satisfied by an empty argument', () => {
+    const uiFill = (inner: string): string => `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t"><steps>
+  <apiCall guid="${G(50)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1">
+    <arguments>${inner}</arguments>
+  </apiCall>
+</steps></testCase>`;
+
+    const empty = stepArgsViolations(uiFill('<argument id="values"/>'));
+    assert.equal(empty.length, 1, 'an empty `values` must not satisfy the one-of group');
+    assert.ok(
+      (empty[0].details as { missing_arguments: string[] }).missing_arguments.some((m) => m.startsWith('one of')),
+      JSON.stringify(empty[0].details)
+    );
+
+    // A namedValue that only NAMES a destination assigns nothing — this assertion
+    // originally expected it to pass, encoding the very bypass the recursive check
+    // now closes. It must carry an actual value.
+    const populated = stepArgsViolations(
+      uiFill(
+        '<argument id="values"><value class="valueList"><namedValues><namedValue name="Name">Acme Ltd</namedValue></namedValues></value></argument>'
+      )
+    );
+    assert.equal(populated.length, 0, 'a namedValue carrying a value satisfies the group');
+
+    const viaLocator = stepArgsViolations(
+      uiFill('<argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>')
+    );
+    assert.equal(viaLocator.length, 0, 'a populated `locator` also satisfies the group');
+  });
+
+  // API-UNKNOWN-001 regression guard: the Provar AI namespace is real. A freshly
+  // IDE-minted test case writes `com.provar.core.ai.api.*`; listing only the
+  // never-real `...forcedotcom.core.testapis.ai.*` form made this critical/weight-10
+  // rule reject genuine IDE-authored XML and gate is_valid=false.
+  it('API-UNKNOWN-001 does not fire on real Provar AI apiIds (current or legacy namespace)', () => {
+    for (const apiId of [
+      'com.provar.core.ai.api.AIAgentSession',
+      'com.provar.core.ai.api.AIAgentConversation',
+      'com.provar.core.ai.api.ImageValidator',
+      'com.provar.core.ai.api.GenerateTestData',
+      'com.provar.plugins.forcedotcom.core.testapis.generate.IntentValidator',
+    ]) {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(30)}" apiId="${apiId}" name="AI" testItemId="1"><arguments/></apiCall>
+  </steps>
+</testCase>`;
+      const unknown = runBestPractices(xml).violations.filter((v) => v.rule_id === 'API-UNKNOWN-001');
+      assert.equal(unknown.length, 0, `API-UNKNOWN-001 must not fire on the real apiId ${apiId}`);
+    }
+  });
+
+  it('fires when UiConnect uses `connection` instead of the required `connectionName` (the Appendix A bug)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(1)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1">
+      <arguments><argument id="connection"><value class="value" valueClass="string">AdminOauth</value></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 1, 'UiConnect missing connectionName should raise exactly one violation');
+    assert.ok(
+      (vs[0].details as { missing_arguments: string[] }).missing_arguments.includes('connectionName'),
+      `should name the missing arg: ${JSON.stringify(vs[0].details)}`
+    );
+    assert.equal(vs[0].severity, 'major', 'rule must be major (does not gate is_valid)');
+  });
+
+  // Aggregated, NOT one violation per step. calculateBPScore damps a single violation
+  // logarithmically (1 + log2 count) but sums per-violation penalties linearly, so
+  // per-step emission bypassed the damping: a 71-step file deducted 266 points
+  // (score 0) where the aggregated form costs 26.8. See STEP-REQUIRED-ARGS-001 notes.
+  it('aggregates into ONE violation carrying a count, covering every offending step', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(2)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument></arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${G(3)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="3">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:ui:locator?type=button&amp;label=New"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 1, 'one aggregated violation, not one per step');
+    assert.equal(vs[0].count, 2, 'count reflects both offending steps');
+    const missing = (vs[0].details as { missing_arguments: string[] }).missing_arguments;
+    assert.ok(missing.includes('uiConnectionName'), 'UiWithScreen missing uiConnectionName');
+    assert.ok(missing.includes('interaction'), 'UiDoAction missing interaction');
+  });
+
+  it('scores one aggregated violation far below the per-step equivalent', () => {
+    // Regression guard for the 10x over-penalty: 2 offending steps must cost
+    // 5 * 0.75 * (1 + log2 2) = 7.5 points, not 2 * 5 * 0.75 = 7.5 ... at 2 steps the
+    // two forms coincide; the divergence is what matters at scale, so assert the
+    // damping is actually applied by checking a high count.
+    const many = calculateBPScore([
+      { rule_id: 'STEP-REQUIRED-ARGS-001', severity: 'major', weight: 5, count: 71 } as never,
+    ]);
+    assert.ok(many > 70, `aggregated 71-step penalty should leave score > 70, got ${many}`);
+  });
+
+  it('does NOT fire when every required argument is present (no false positive on a correct file)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(4)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="Connect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">AdminOauth</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${G(5)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">UiConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=New"/></argument>
+      </arguments>
+      <clauses><clause name="substeps" testItemId="3"><steps>
+        <apiCall guid="${G(6)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="4">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:field:target?object=Account&amp;field=Name"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    assert.deepEqual(stepArgsViolations(xml), [], 'complete steps must not be flagged');
+  });
+
+  it('does NOT resurrect the removed phantom args (screenName on UiWithScreen, formLocator on UiFill)', () => {
+    // A UiWithScreen with target+uiConnectionName but NO screenName, and a UiFill with locator (not formLocator),
+    // are correct Provar steps — the pre-fix schema would have flagged both. Regression guard.
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(7)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">UiConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=Edit"/></argument>
+      </arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${G(8)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="3">
+          <arguments><argument id="locator"><value class="uiLocator" uri="sf:field:target?object=Account&amp;field=Name"/></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`;
+    const vs = stepArgsViolations(xml);
+    assert.equal(vs.length, 0, `must not flag screenName/formLocator: ${vs.map((v) => v.message).join(' | ')}`);
+  });
+
+  it('excludes UiAssert (covered by the dedicated UI-ASSERT-STRUCT-001 rule)', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc" guid="${TC}" registryId="tc" name="t">
+  <steps>
+    <apiCall guid="${G(9)}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Assert" testItemId="1">
+      <arguments><argument id="fieldAssertions"><value class="valueList" mutable="Mutable"/></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+    assert.deepEqual(stepArgsViolations(xml), [], 'UiAssert must not be double-reported by STEP-REQUIRED-ARGS-001');
+  });
+});
+
+// ── PDX-525: <arguments>-wrapper-aware reading (getArguments / getArgValue) ──────
+// Real Provar IDE/generated XML nests <argument> under an <arguments> wrapper. The
+// shared readers previously saw only the bare `call.argument` form, so these rules
+// silently never fired on real files (false pass, inflated quality_score). They now
+// prefer the wrapper and fall back to the bare form.
+describe('argument readers tolerate the <arguments> wrapper (PDX-525)', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-wrap" guid="tc-wrap" name="Wrapper Test">
+  <steps>${steps}</steps>
+</testCase>`;
+  }
+
+  function doActions(values: string[]): string {
+    return values
+      .map(
+        (val, i) => `
+    <apiCall guid="step-${i}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Step ${i}" testItemId="${i}" title="Step ${i}">
+      <arguments>
+        <argument id="value"><value class="value">${val}</value></argument>
+      </arguments>
+    </apiCall>`
+      )
+      .join('');
+  }
+
+  function apexConnects(resultNames: string[]): string {
+    return resultNames
+      .map(
+        (name, i) => `
+    <apiCall guid="conn-${i}" apiId="com.provar.plugins.forcedotcom.core.apex.ApexConnect" name="Connect ${i}" testItemId="${i}" title="Connect ${i}">
+      <arguments>
+        <argument id="resultName"><value class="value">${name}</value></argument>
+      </arguments>
+    </apiCall>`
+      )
+      .join('');
+  }
+
+  it('DDT-VAR-001 fires on duplicate literals nested under <arguments> (getArguments)', () => {
+    const v = runBestPractices(tc(doActions(['SharedLiteralValue123', 'SharedLiteralValue123']))).violations.find(
+      (x) => x.rule_id === 'DDT-VAR-001'
+    );
+    assert.ok(v, 'DDT-VAR-001 should fire on wrapped duplicate literals');
+  });
+
+  it('DDT-VAR-001 does not fire when wrapped literals are distinct', () => {
+    const v = runBestPractices(tc(doActions(['DistinctValueAaa', 'DistinctValueBbb']))).violations.find(
+      (x) => x.rule_id === 'DDT-VAR-001'
+    );
+    assert.ok(!v, 'no DDT-VAR-001 when literals differ');
+  });
+
+  it('APEX-RESULTNAME-001 fires on duplicate resultNames read from wrapped args (getArgValue)', () => {
+    const v = runBestPractices(tc(apexConnects(['DupConnResult', 'DupConnResult']))).violations.find(
+      (x) => x.rule_id === 'APEX-RESULTNAME-001'
+    );
+    assert.ok(v, 'APEX-RESULTNAME-001 should fire on wrapped duplicate resultNames');
+  });
+
+  it('APEX-RESULTNAME-001 does not fire when wrapped resultNames are unique', () => {
+    const v = runBestPractices(tc(apexConnects(['ConnA', 'ConnB']))).violations.find(
+      (x) => x.rule_id === 'APEX-RESULTNAME-001'
+    );
+    assert.ok(!v, 'no APEX-RESULTNAME-001 when resultNames are unique');
+  });
+
+  // NC-PARAM-001 (validateRegex, parameter branch) reads the FIRST argument's id — a
+  // distinct code path from DDT's value read and APEX's getArgValue, but still through
+  // getArguments, so it too silently never fired on wrapped args before the fix.
+  function paramStep(argId: string): string {
+    return `
+    <apiCall guid="np-1" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Step" testItemId="1" title="Step">
+      <arguments>
+        <argument id="${argId}"><value class="value">x</value></argument>
+      </arguments>
+    </apiCall>`;
+  }
+
+  it('NC-PARAM-001 fires on a non-camelCase parameter id read from wrapped <arguments>', () => {
+    const v = runBestPractices(tc(paramStep('Bad_Param'))).violations.find((x) => x.rule_id === 'NC-PARAM-001');
+    assert.ok(v, 'NC-PARAM-001 should fire on a non-camelCase id under the wrapper');
+  });
+
+  it('NC-PARAM-001 does not fire when the first wrapped parameter id is camelCase', () => {
+    const v = runBestPractices(tc(paramStep('goodName'))).violations.find((x) => x.rule_id === 'NC-PARAM-001');
+    assert.ok(!v, 'no NC-PARAM-001 for a camelCase parameter id');
+  });
+});
+
+// ── STEP-IDE-PARITY-001 — ide_emitted tier, advisory (info / weight 1) ──────────
+describe('STEP-IDE-PARITY-001 (ide_emitted tier)', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-ide" guid="tc-ide" name="IDE Parity Test"><steps>${steps}</steps></testCase>`;
+  }
+  // UiDoAction's ide_emitted_arguments per provar_test_step_schema.json.
+  const IDE_EMITTED = [
+    'locator',
+    'interaction',
+    'interactionDescription',
+    'beforeWait',
+    'afterWait',
+    'autoRetry',
+    'captureBefore',
+    'captureAfter',
+  ];
+
+  it('fires at info/weight 1 when a UiDoAction omits IDE-emitted arguments', () => {
+    const step = `
+    <apiCall guid="s1" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1" title="Click">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=Save"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=click"/></argument>
+      </arguments>
+    </apiCall>`;
+    const v = runBestPractices(tc(step)).violations.find((x) => x.rule_id === 'STEP-IDE-PARITY-001');
+    assert.ok(v, 'STEP-IDE-PARITY-001 should fire when IDE-emitted args are missing');
+    assert.equal(v.severity, 'info');
+    assert.equal(v.weight, 1);
+  });
+
+  it('does not fire when every IDE-emitted argument is present (even if empty)', () => {
+    const args = IDE_EMITTED.map((id) => `<argument id="${id}"/>`).join('');
+    const step = `
+    <apiCall guid="s2" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click" testItemId="1" title="Click">
+      <arguments>${args}</arguments>
+    </apiCall>`;
+    const v = runBestPractices(tc(step)).violations.find((x) => x.rule_id === 'STEP-IDE-PARITY-001');
+    assert.ok(!v, 'no STEP-IDE-PARITY-001 when all IDE-emitted args are present');
+  });
+});
+
+// ── STEP-REQUIRED-ARGS-001 one-of — schemaArgumentHasValue bare-string (PDX-525) ─
+describe('STEP-REQUIRED-ARGS-001 one-of value detection', () => {
+  function tc(steps: string): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="tc-oneof" guid="tc-oneof" name="One-Of Test"><steps>${steps}</steps></testCase>`;
+  }
+  const ONE_OF_MSG = 'one of [values | locator]';
+
+  it('a UiFill one-of member supplied as a bare-string <value> satisfies the group', () => {
+    const step = `
+    <apiCall guid="s1" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1" title="Fill">
+      <arguments>
+        <argument id="values"><value>Name=Acme</value></argument>
+      </arguments>
+    </apiCall>`;
+    const oneOf = runBestPractices(tc(step)).violations.find(
+      (x) => x.rule_id === 'STEP-REQUIRED-ARGS-001' && x.message.includes(ONE_OF_MSG)
+    );
+    assert.ok(!oneOf, 'a populated one-of member (bare string) must not be reported missing');
+  });
+
+  it('a UiFill with neither one-of member still reports the group missing', () => {
+    const step = `
+    <apiCall guid="s2" apiId="com.provar.plugins.forcedotcom.core.ui.UiFill" name="Fill" testItemId="1" title="Fill">
+      <arguments/>
+    </apiCall>`;
+    const oneOf = runBestPractices(tc(step)).violations.find(
+      (x) => x.rule_id === 'STEP-REQUIRED-ARGS-001' && x.message.includes(ONE_OF_MSG)
+    );
+    assert.ok(oneOf, 'UiFill with no values/locator must report the one-of group missing');
   });
 });

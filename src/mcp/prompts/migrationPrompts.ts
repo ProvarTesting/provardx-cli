@@ -69,7 +69,7 @@ Follow these steps in order:
    describe the source test's main scenario (e.g. "create opportunity", "close case", "convert lead").
    Use the returned examples as few-shot grounding for the Provar XML format and step patterns.
    If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured),
-   fall back: read the \`provar://docs/step-reference\` MCP resource for step types and attribute
+   fall back: call the \`provar_step_schema\` tool (api_id or category) for step types and attribute
    formats, then continue with generation based on that reference.
 
 2. **Generate the test case** — produce a valid Provar XML test case that faithfully captures

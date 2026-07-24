@@ -27,6 +27,7 @@ import {
 const GUID_TC = '550e8400-e29b-41d4-a716-446655440000';
 const GUID_S1 = '6ba7b810-9dad-4000-8000-00c04fd430c8';
 const GUID_S2 = '6ba7b811-9dad-4001-9001-00c04fd430c8';
+const GUID_S3 = '6ba7b812-9dad-4002-a002-00c04fd430c8';
 
 const VALID_TC = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <testCase guid="${GUID_TC}" id="1" registryId="abc123">
@@ -955,6 +956,292 @@ describe('validateTestCase', () => {
         'UI-ASSERT-STRUCTURE-001 must only apply to UiAssert steps'
       );
     });
+
+    // Recursion coverage: UI steps live nested under UiWithScreen substeps. The
+    // per-call structural rules must run there too, not just at the top level.
+    it('fires for a NESTED UiAssert with the flat namedValues shape', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments><argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument></arguments>
+      <clauses><clause name="substeps" testItemId="2"><steps>
+        <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiAssert" name="Nested Assert" testItemId="3">
+          <arguments><argument id="fieldAssertions"><value class="valueList" mutable="Mutable">
+            <namedValues><namedValue name="sf:field:target?object=Account&amp;field=Name"><value class="value" valueClass="string">X</value></namedValue></namedValues>
+          </value></argument></arguments>
+        </apiCall>
+      </steps></clause></clauses>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'UI-ASSERT-STRUCTURE-001'),
+        'nested UiAssert must be reached by the structural rule'
+      );
+    });
+  });
+
+  // Phase-2 generation-gap rules, dogfooded against the account-ui fixtures.
+  describe('generation-gap rules (account-ui fixtures)', () => {
+    const bad = fs.readFileSync(
+      path.resolve(process.cwd(), 'test', 'fixtures', 'account-ui-gaps-bad.testcase'),
+      'utf-8'
+    );
+    const good = fs.readFileSync(
+      path.resolve(process.cwd(), 'test', 'fixtures', 'account-ui-gaps-good.testcase'),
+      'utf-8'
+    );
+    const GAP_RULES = [
+      'SF-CONNECT-TYPE-001',
+      'CONNECT-REF-CONSISTENCY-001',
+      'UI-INTERACTION-002',
+      'UI-ASSERT-STRUCTURE-001',
+    ];
+
+    it('bad fixture: all four gap rules fire and is_valid is false', () => {
+      const r = validateTestCase(bad);
+      for (const rule of GAP_RULES) {
+        assert.ok(
+          r.issues.some((i) => i.rule_id === rule),
+          `expected ${rule} to fire on the bad fixture`
+        );
+      }
+      assert.equal(r.is_valid, false, 'ERROR-tier gap rules must gate is_valid');
+    });
+
+    it('good fixture: none of the gap rules fire and is_valid is true', () => {
+      const r = validateTestCase(good);
+      const fired = r.issues.filter((i) => GAP_RULES.includes(i.rule_id)).map((i) => i.rule_id);
+      assert.deepEqual(
+        [...new Set(fired)],
+        [],
+        `no gap rule should fire on the good fixture, got: ${fired.join(', ')}`
+      );
+      assert.equal(r.is_valid, true);
+    });
+  });
+
+  describe('UI-INTERACTION-002 (invalid interaction name)', () => {
+    it('errors on interaction name="type" and suggests "set"', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Type Name" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=type"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-002');
+      assert.ok(issue, 'expected UI-INTERACTION-002');
+      assert.equal(issue.severity, 'ERROR');
+      assert.ok(issue.message.includes('set'), 'should steer to name="set"');
+    });
+
+    // The EMITTED suggestion is user-visible and is what an agent acts on. An earlier
+    // fix corrected the denylist, the schema and the docs but left this text saying
+    // "Valid UiDoAction interactions are: action, set, file" — exhaustive phrasing
+    // that still reads as declaring `click` invalid. The drift guard checked schema
+    // text only, so this escaped.
+    it('the emitted suggestion does not present an exhaustive list that excludes click', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Type" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=Name"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=type"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      const issue = r.issues.find((i) => i.rule_id === 'UI-INTERACTION-002');
+      assert.ok(issue?.suggestion, 'expected a suggestion');
+      const s = issue.suggestion;
+      assert.ok(!/valid[^.]*interactions are:/i.test(s), `suggestion must not read as exhaustive: ${s}`);
+      assert.ok(s.includes('click'), `suggestion should name click as valid: ${s}`);
+      assert.ok(s.includes('set'), `suggestion should still steer to the correction: ${s}`);
+    });
+
+    // `click` is a REAL Provar interaction, not a hallucination: 1,240 well-formed
+    // occurrences across the 2,701-file corpus, third only to action (15,983) and
+    // set (11,787), emitted by the IDE recorder. Denylisting it flipped 164 real
+    // customer test cases to is_valid=false. Regression guard for that.
+    it('does NOT fire on name="click" — a real IDE-emitted Provar interaction', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Click New" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=New"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=click"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-002'),
+        'UI-INTERACTION-002 must not fire on the real interaction name "click"'
+      );
+    });
+
+    it('does not fire for valid interaction names (action, set)', () => {
+      for (const name of ['action', 'set']) {
+        const r = validateTestCase(
+          `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiDoAction" name="Act" testItemId="1">
+      <arguments>
+        <argument id="locator"><value class="uiLocator" uri="ui:locator?name=X"/></argument>
+        <argument id="interaction"><value class="uiInteraction" uri="ui:interaction?name=${name}"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+        );
+        assert.ok(
+          !r.issues.some((i) => i.rule_id === 'UI-INTERACTION-002'),
+          `UI-INTERACTION-002 must not fire for valid name="${name}"`
+        );
+      }
+    });
+  });
+
+  describe('CONNECT-REF-CONSISTENCY-001', () => {
+    it('does not fire when no connect step exists (connection inherited from parent)', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="1">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">Inherited</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'must not fire without a connect step in the test'
+      );
+    });
+
+    // A connect step whose name is non-literal makes only its OWN family
+    // unverifiable. Suppressing the whole file let genuinely dangling references of
+    // unrelated families through — a real false negative on intentional-violation
+    // fixtures that carry a dynamic DbConnect alongside broken UI references.
+    it('an opaque DbConnect does not silence a dangling UI reference', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"/></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="2">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">RealUi</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S3}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="3">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">NoSuchConnection</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'a dangling ui reference must still be reported despite an opaque db connect'
+      );
+    });
+
+    it('an opaque connect DOES silence a reference of its own family', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"/></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.bundled.apis.db.SqlQuery" name="Query" testItemId="2">
+      <arguments><argument id="dbConnectionName"><value class="value" valueClass="string">Unknown</value></argument></arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        !r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'the opaque db connect could be what produces this db reference'
+      );
+    });
+
+    // Connection results are family-scoped. A single global name set let a DbConnect
+    // result satisfy a uiConnectionName, suppressing a genuinely dangling reference
+    // whenever two families happened to share a name.
+    it('a DB connect result does not satisfy a UI connection reference of the same name', () => {
+      const r = validateTestCase(
+        `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.bundled.apis.db.DbConnect" name="DbConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Shared</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">Shared</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`
+      );
+      assert.ok(
+        r.issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'a db result must not satisfy a ui reference merely by sharing a name'
+      );
+    });
+
+    it('accepts a connection declared in the project rather than by a connect step', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="${GUID_TC}" registryId="r" name="T">
+  <steps>
+    <apiCall guid="${GUID_S1}" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Local</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="${GUID_S2}" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">ProjectLevel</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+      assert.ok(
+        validateTestCase(xml).issues.some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'),
+        'without project context the reference looks dangling'
+      );
+      assert.ok(
+        !validateTestCase(xml, undefined, { projectConnectionNames: new Set(['ProjectLevel']) }).issues.some(
+          (i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001'
+        ),
+        'a project-declared connection is a valid reference target'
+      );
+    });
   });
 
   describe('SETVALUES-STRUCTURE-001', () => {
@@ -1719,6 +2006,130 @@ describe('validateTestCaseXml', () => {
   });
 });
 
+// ── CONNECT-REF-CONSISTENCY-001 project-context walk honors the path policy ─────
+// resolveProjectConnectionNames ascends looking for a .testproject and checks the
+// path policy before every read. Ascending out of --allowed-paths must END the walk
+// (no read), otherwise a caller could probe connection names above the boundary via
+// the observable suppression side effect.
+describe('provar_testcase_validate handler — project connection walk respects --allowed-paths', () => {
+  let projectRoot: string;
+  let testsDir: string;
+  let testCasePath: string;
+
+  // UiConnect makes the UI family verifiable; the UiWithScreen references a connection
+  // ("ProjectLevel") that no in-file connect step declares — dangling unless the
+  // project itself declares it.
+  const TC_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<testCase id="x" guid="550e8400-e29b-41d4-a716-4466554400f0" registryId="r" name="T">
+  <steps>
+    <apiCall guid="550e8400-e29b-41d4-a716-4466554400f1" apiId="com.provar.plugins.forcedotcom.core.ui.UiConnect" name="UiConnect" testItemId="1">
+      <arguments><argument id="connectionName"><value class="value" valueClass="string">Local</value></argument></arguments>
+    </apiCall>
+    <apiCall guid="550e8400-e29b-41d4-a716-4466554400f2" apiId="com.provar.plugins.forcedotcom.core.ui.UiWithScreen" name="Screen" testItemId="2">
+      <arguments>
+        <argument id="uiConnectionName"><value class="value" valueClass="string">ProjectLevel</value></argument>
+        <argument id="target"><value class="uiTarget" uri="sf:ui:target?object=Account&amp;action=View"/></argument>
+      </arguments>
+    </apiCall>
+  </steps>
+</testCase>`;
+
+  const TEST_PROJECT = `<?xml version="1.0" encoding="UTF-8"?>
+<testProject>
+  <connectionClasses>
+    <connectionClass name="ui">
+      <connections>
+        <connection id="conn-proj" name="ProjectLevel">
+          <connectionUrls><connectionUrl url="selenium://chrome" /></connectionUrls>
+        </connection>
+      </connections>
+    </connectionClass>
+  </connectionClasses>
+</testProject>`;
+
+  let origHomedir: () => string;
+  let savedApiKey: string | undefined;
+
+  // The connection walk lives in the tool handler (resolveProjectContext), not in
+  // validateTestCaseXml, so this drives the registered handler with a file_path.
+  function handlerFor(allowedPaths: string[]): (args: Record<string, unknown>) => Promise<unknown> {
+    let captured: ((args: Record<string, unknown>) => Promise<unknown>) | null = null;
+    const srv = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      registerTool: (...a: any[]): void => {
+        captured = a[a.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tool: (...a: any[]): void => {
+        captured = a[a.length - 1] as (args: Record<string, unknown>) => Promise<unknown>;
+      },
+    };
+    registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths } as unknown as ServerConfig);
+    return captured!;
+  }
+
+  async function fires(allowedPaths: string[]): Promise<boolean> {
+    const res = (await handlerFor(allowedPaths)({ file_path: testCasePath, detail: 'full' })) as {
+      content: Array<{ text: string }>;
+    };
+    const body = JSON.parse(res.content[0].text) as { issues?: Array<{ rule_id: string }> };
+    return (body.issues ?? []).some((i) => i.rule_id === 'CONNECT-REF-CONSISTENCY-001');
+  }
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'tc-walk-'));
+    testsDir = path.join(projectRoot, 'tests');
+    fs.mkdirSync(testsDir, { recursive: true });
+    testCasePath = path.join(testsDir, 'MyTest.testcase');
+    fs.writeFileSync(testCasePath, TC_XML);
+    fs.writeFileSync(path.join(projectRoot, '.testproject'), TEST_PROJECT);
+    // No API key and a creds-free home → local validation runs the CONNECT-REF rule.
+    savedApiKey = process.env.PROVAR_API_KEY;
+    delete process.env.PROVAR_API_KEY;
+    origHomedir = os.homedir;
+    (os as unknown as { homedir: () => string }).homedir = (): string => projectRoot;
+  });
+
+  afterEach(() => {
+    (os as unknown as { homedir: () => string }).homedir = origHomedir;
+    if (savedApiKey !== undefined) process.env.PROVAR_API_KEY = savedApiKey;
+    else delete process.env.PROVAR_API_KEY;
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('suppresses the dangling reference when the .testproject is inside --allowed-paths', async () => {
+    // projectRoot allowed → the ascending walk reaches and reads .testproject, which
+    // declares ProjectLevel, so the reference is a valid project-level target.
+    assert.equal(await fires([projectRoot]), false);
+  });
+
+  it('reports the reference and does NOT read the .testproject when it sits above --allowed-paths', async () => {
+    // Only tests/ allowed → the walk halts at the boundary before reading
+    // projectRoot/.testproject, so project context is undefined and the reference is
+    // reported rather than silently satisfied from beyond the sandbox.
+    assert.equal(await fires([testsDir]), true);
+  });
+
+  // Rule-firing alone is consistent with "walk halted" but does not PROVE no read
+  // happened. These spy on fs.readFileSync to prove the security property directly:
+  // the out-of-bounds .testproject is never read, and (differential) the in-bounds one is.
+  function readTheTestProject(allowedPaths: string[]): Promise<boolean> {
+    const testProjectPath = path.resolve(projectRoot, '.testproject');
+    const spy = sinon.spy(fs, 'readFileSync');
+    return handlerFor(allowedPaths)({ file_path: testCasePath, detail: 'full' })
+      .then(() => spy.getCalls().some((c) => path.resolve(String(c.args[0])) === testProjectPath))
+      .finally(() => spy.restore());
+  }
+
+  it('never reads the out-of-bounds .testproject (proves the path-policy check ran, not just a miss)', async () => {
+    assert.equal(await readTheTestProject([testsDir]), false, 'the .testproject above --allowed-paths must never be read');
+  });
+
+  it('does read the in-bounds .testproject (the spy discriminates — the differential is real)', async () => {
+    assert.equal(await readTheTestProject([projectRoot]), true, 'the in-bounds .testproject must be read');
+  });
+});
+
 // ── PDX-489 handler-level DATA-001 integration ────────────────────────────────
 
 /**
@@ -1842,13 +2253,13 @@ describe('provar_testcase_validate description', () => {
     }
   }
 
-  it('includes step-reference guidance', () => {
+  it('includes step-schema tool guidance', () => {
     const srv = new DescriptionCapturingServer();
     registerTestCaseValidate(srv as unknown as McpServer, { allowedPaths: [] });
     assert.ok(srv.capturedDescription, 'description should be captured');
     assert.ok(
-      String(srv.capturedDescription).includes('provar://docs/step-reference'),
-      'description should include step-reference guidance'
+      String(srv.capturedDescription).includes('provar_step_schema'),
+      'description should point at the provar_step_schema tool for step attribute schemas'
     );
   });
 });

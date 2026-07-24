@@ -123,10 +123,28 @@
       "description": "UiDoAction interaction uses class=\"uiInteraction\"."
     },
     {
+      "id": "UI-INTERACTION-002",
+      "severity": "ERROR",
+      "applies_to": "apiCall",
+      "description": "UiDoAction interaction name is a real Provar interaction, not one borrowed from another framework (type/fill/enter/input/tap/press)."
+    },
+    {
       "id": "UI-ASSERT-STRUCTURE-001",
       "severity": "ERROR",
       "applies_to": "apiCall",
-      "description": "UiAssert uses nested field/column/page assertion containers, not a flat argument."
+      "description": "UiAssert field assertions use a nested <uiFieldAssertion>, not a flat argument or a <namedValues> block."
+    },
+    {
+      "id": "SF-CONNECT-TYPE-001",
+      "severity": "WARNING",
+      "applies_to": "testCase",
+      "description": "A Salesforce UI test connects via ApexConnect (API + UI), not a UiConnect with no ApexConnect."
+    },
+    {
+      "id": "CONNECT-REF-CONSISTENCY-001",
+      "severity": "WARNING",
+      "applies_to": "apiCall",
+      "description": "Every connection reference (uiConnectionName/apexConnectionName/…) matches a connect step's resultName."
     },
     {
       "id": "SETVALUES-STRUCTURE-001",

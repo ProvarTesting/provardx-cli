@@ -347,9 +347,16 @@ describe('loopPrompts — provar.loop.db', () => {
     assert.ok(text.includes('ApexConnect'), 'should name ApexConnect in the forbidden list');
   });
 
-  it('includes step-reference fallback instruction', () => {
+  // The fallback must name a TOOL, not an MCP resource: a tools-only client cannot
+  // read resources, so `provar://docs/step-reference` was a dead end for exactly the
+  // clients most likely to need the fallback.
+  it('falls back to the provar_step_schema tool, not the unreadable resource', () => {
     const result = server.call('provar.loop.db', { story: 'any db test' });
     const text = getMessageText(result);
-    assert.ok(text.includes('provar://docs/step-reference'), 'should include step-reference fallback');
+    assert.ok(text.includes('provar_step_schema'), 'should route the fallback to the step-schema tool');
+    assert.ok(
+      !text.includes('provar://docs/step-reference'),
+      'must not send a tools-only client to an MCP resource it cannot read'
+    );
   });
 });

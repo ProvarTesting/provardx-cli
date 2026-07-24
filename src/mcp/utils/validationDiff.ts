@@ -24,6 +24,19 @@ export interface DiffResult {
   added: DiffableViolation[];
   resolved: DiffableViolation[];
   unchanged_count: number;
+  /**
+   * Findings that survived the diff but whose CONTENT changed — same stable identity,
+   * different message, count or details.
+   *
+   * `unchanged_count` alone is not actionable for aggregate rules: one violation per
+   * file with a stable identity stays "unchanged" while its remaining work shrinks, so
+   * a bare count says something is left but not what. Returning every surviving
+   * finding instead would make a large unchanged suite echo back its entire violation
+   * set — testsuite validation collects issues from every test case with no size
+   * bound. Only findings that actually moved are emitted, so this stays bounded by how
+   * much changed rather than by suite size.
+   */
+  updated: DiffableViolation[];
   run_id: string;
 }
 
@@ -53,14 +66,40 @@ function shortHash(input: string): string {
   return createHash('sha1').update(input).digest('hex').slice(0, 8);
 }
 
-/** Build a unique key for a violation so additions/resolutions can be detected. */
+/**
+ * Build a unique key for a violation so additions/resolutions can be detected.
+ *
+ * Prefers an explicit `diff_identity` when a rule supplies one. Aggregate rules emit
+ * one violation per file carrying a count, and those need an identity that survives
+ * partial remediation: keying on the rendered message made "13 steps missing X" and
+ * "12 steps missing X" two different findings, so the baseline diff reported a
+ * resolution that had not happened. Supplying `diff_identity` lets such a rule keep a
+ * specific, actionable message while remaining ONE stable finding across fixes.
+ *
+ * Falls back to the message for every rule that does not set it, preserving existing
+ * behaviour for per-step rules where the message is the natural identity.
+ */
 function violationKey(v: DiffableViolation): string {
   const rule_id = String(v['rule_id'] ?? '');
   const applies_to = Array.isArray(v['applies_to'])
     ? (v['applies_to'] as string[]).join(',')
     : String(v['applies_to'] ?? '');
+  const explicit = v['diff_identity'];
+  if (typeof explicit === 'string' && explicit.length > 0) {
+    return `${rule_id}||${applies_to}||${explicit}`;
+  }
   const message = String(v['message'] ?? '');
   return `${rule_id}||${applies_to}||${message}`;
+}
+
+/**
+ * True when two occurrences sharing a stable identity differ in what they report.
+ * Compares the fields a caller acts on; ignores ordering-insensitive metadata.
+ */
+function violationContentChanged(before: DiffableViolation, after: DiffableViolation): boolean {
+  if (String(before['message'] ?? '') !== String(after['message'] ?? '')) return true;
+  if (String(before['count'] ?? '') !== String(after['count'] ?? '')) return true;
+  return JSON.stringify(before['details'] ?? null) !== JSON.stringify(after['details'] ?? null);
 }
 
 function loadIndex(storageDir: string): RunsIndex {
@@ -224,13 +263,25 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
   }
 
   const added: DiffableViolation[] = [];
+  const updated: DiffableViolation[] = [];
   const resolved: DiffableViolation[] = [];
   let unchanged_count = 0;
 
   // Tally additions: occurrences in current that exceed baseline count
   for (const [key, { count: curr, sample }] of currentCounts) {
-    const base = baselineCounts.get(key)?.count ?? 0;
+    const baseEntry = baselineCounts.get(key);
+    const base = baseEntry?.count ?? 0;
     unchanged_count += Math.min(base, curr);
+    // A finding that survived but whose CONTENT moved. Only these are emitted — not
+    // every surviving finding. A stable identity keeps a partially-fixed aggregate in
+    // unchanged_count, and a bare count cannot tell the caller what still needs work;
+    // but returning every unchanged finding made a large unchanged suite echo back its
+    // entire violation set, which is what the count exists to avoid. Emitting only the
+    // ones that actually changed solves the stale-message problem and stays bounded by
+    // the number of findings that moved, not the size of the suite.
+    if (baseEntry && Math.min(base, curr) > 0 && violationContentChanged(baseEntry.sample, sample)) {
+      updated.push(sample);
+    }
     const addedCount = curr - base;
     for (let i = 0; i < addedCount; i++) added.push(sample);
   }
@@ -242,5 +293,5 @@ export function computeDiff(baseline: DiffableViolation[], current: DiffableViol
     for (let i = 0; i < resolvedCount; i++) resolved.push(sample);
   }
 
-  return { added, resolved, unchanged_count };
+  return { added, resolved, unchanged_count, updated };
 }
