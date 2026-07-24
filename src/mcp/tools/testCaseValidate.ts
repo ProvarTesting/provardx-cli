@@ -47,6 +47,7 @@ import {
   UI_ASSERT_COMPARISON_TYPE_SET,
 } from '../rules/comparisonTypeSets.js';
 import { runBestPractices } from './bestPracticesEngine.js';
+import { parseProjectConnectionNames } from './connectionTools.js';
 import { desc } from './descHelper.js';
 import { UI_ACTION_API_IDS, UI_SCREEN_CONTAINER_API_IDS, UI_LOCATOR_BEARING_API_IDS } from './uiActionApiIds.js';
 
@@ -104,16 +105,72 @@ function deriveQualityVerdict(isValid: boolean, qualityScore: number, qualityThr
   return { status, quality_threshold, meets_quality_threshold };
 }
 
+/**
+ * Connection names declared in the project that owns `testCaseFilePath`.
+ *
+ * Walks up from the test case looking for a `.testproject` marker, the same way
+ * the plan-mode resolver locates `provardx-properties.json`. Returns undefined
+ * when no project is found or it cannot be read — CONNECT-REF-CONSISTENCY-001
+ * then stays conservative instead of reporting valid project-level references as
+ * dangling connections.
+ *
+ * EVERY candidate is checked against the path policy before any filesystem call.
+ * The walk ascends, so without this it would read `.testproject` from directories
+ * above `--allowed-paths` — and because a suppressed reference is observable in the
+ * output, that would also let a caller probe connection names outside the boundary.
+ * Leaving the allowed roots ends the walk rather than skipping the candidate: every
+ * further ancestor is outside too.
+ */
+function resolveProjectConnectionNames(
+  testCaseFilePath: string,
+  allowedPaths: string[]
+): ReadonlySet<string> | undefined {
+  try {
+    let dir = path.dirname(path.resolve(testCaseFilePath));
+    for (let depth = 0; depth < 12; depth++) {
+      const candidate = path.join(dir, '.testproject');
+      try {
+        assertPathAllowed(candidate, allowedPaths);
+      } catch {
+        return undefined; // ascended out of the allowed roots — stop, do not read
+      }
+      if (fs.existsSync(candidate)) {
+        return parseProjectConnectionNames(fs.readFileSync(candidate, 'utf-8'));
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // Unreadable project → undefined → rule stays conservative.
+  }
+  return undefined;
+}
+
+/**
+ * Everything the validator can learn from the test case's project on disk: whether it
+ * runs under a plan (DATA-001) and which connections the project declares
+ * (CONNECT-REF-CONSISTENCY-001). Returns empty options for content-only validation,
+ * where there is no project to inspect.
+ */
+function resolveProjectContext(filePath: string | undefined, allowedPaths: string[]): ValidateTestCaseOptions {
+  if (!filePath) return { planMode: 'unknown' };
+  return {
+    planMode: resolveTestCasePlanMode({ testCaseFilePath: filePath, allowedPaths }).mode,
+    projectConnectionNames: resolveProjectConnectionNames(filePath, allowedPaths),
+  };
+}
+
 /** Resolve validation result from QualityHub API or fall back to local. */
 async function resolveBaseResult(
   source: string,
   apiKey: string | null,
   requestId: string,
-  planMode: TestCasePlanMode = 'unknown'
+  opts: ValidateTestCaseOptions = {}
 ): Promise<TestCaseValidationResult> {
   if (!apiKey) {
     return {
-      ...validateTestCase(source, undefined, { planMode }),
+      ...validateTestCase(source, undefined, opts),
       validation_source: 'local',
       validation_warning: ONBOARDING_MESSAGE,
     };
@@ -121,7 +178,7 @@ async function resolveBaseResult(
   const baseUrl = getQualityHubBaseUrl();
   try {
     const apiResult = await qualityHubClient.validateTestCaseViaApi(source, apiKey, baseUrl);
-    const localMeta = validateTestCase(source, undefined, { planMode });
+    const localMeta = validateTestCase(source, undefined, opts);
     log('info', 'provar_testcase_validate: quality_hub', { requestId });
     return {
       ...apiResult,
@@ -146,7 +203,7 @@ async function resolveBaseResult(
       log('warn', 'provar_testcase_validate: api unreachable, falling back', { requestId });
     }
     return {
-      ...validateTestCase(source, undefined, { planMode }),
+      ...validateTestCase(source, undefined, opts),
       validation_source: 'local_fallback',
       validation_warning: warning,
     };
@@ -165,7 +222,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
     {
       title: 'Validate Test Case',
       description: desc(
-        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Returns a tri-state status: 'invalid' (a critical defect — the test will not load in Provar, is_valid=false), 'needs_improvement' (loads but quality_score is below quality_threshold), or 'valid' (loads and clears the bar); meets_quality_threshold and the effective quality_threshold are also returned. Note: a critical best-practice violation (e.g. an unknown apiId) now gates is_valid the same way a structural error does — it surfaces in issues[] as an ERROR. major/minor/info best-practice violations affect quality_score (and the status verdict) only. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, consult the provar://docs/step-reference MCP resource for correct step attribute schemas.",
+        "Validate a Provar XML test case for structural correctness and quality. Checks XML declaration, root element, required attributes (guid UUID v4, testItemId integer), <steps> presence, and applies best-practice rules. When a Provar API key is configured (via sf provar auth login or PROVAR_API_KEY env var), calls the Quality Hub API for full 170-rule scoring. Falls back to local validation if no key is set or the API is unavailable. Returns validity_score (schema compliance), quality_score (best practices, 0–100), and validation_source indicating which ruleset was applied. Returns a tri-state status: 'invalid' (a critical defect — the test will not load in Provar, is_valid=false), 'needs_improvement' (loads but quality_score is below quality_threshold), or 'valid' (loads and clears the bar); meets_quality_threshold and the effective quality_threshold are also returned. Note: a critical best-practice violation (e.g. an unknown apiId) now gates is_valid the same way a structural error does — it surfaces in issues[] as an ERROR. major/minor/info best-practice violations affect quality_score (and the status verdict) only. Every response includes run_id — pass it as baseline_run_id in the next call to receive only new/resolved issues. Data-driven note (DATA-001): when file_path is supplied and the project's provardx-properties.json references the test case directly via top-level `testCase` / `testCases` rather than via a `.testinstance` inside a plan, the validator emits DATA-001 warning a <dataTable> declaration will resolve all variables to null in direct testCase-mode — wire the test into a plan via provar_testplan_add-instance to enable data-driven iteration. When structural errors are returned, call the provar_step_schema tool (api_id or category) for correct step attribute schemas.",
         'Validate a Provar XML test case: structure, UUIDs, steps, quality scoring; run_id for baseline diff.'
       ),
       inputSchema: {
@@ -204,7 +261,7 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
           .optional()
           .describe(
             desc(
-              'run_id from a previous call. When provided, returns only issues that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.',
+              'run_id from a previous call. When provided, returns only issues that are new or resolved since that run: { added, resolved, updated, unchanged_count, run_id }. `updated` carries findings that survived but whose message or details changed, so a partially-fixed aggregate still tells you what remains without echoing every unchanged finding. If not found, returns error BASELINE_NOT_FOUND.',
               'string, optional; prev run_id for diff response'
             )
           ),
@@ -234,10 +291,8 @@ export function registerTestCaseValidate(server: McpServer, config: ServerConfig
         }
 
         const apiKey = resolveApiKey();
-        const planMode: TestCasePlanMode = file_path
-          ? resolveTestCasePlanMode({ testCaseFilePath: file_path, allowedPaths: config.allowedPaths }).mode
-          : 'unknown';
-        const baseResult = await resolveBaseResult(source, apiKey, requestId, planMode);
+        const projectContext = resolveProjectContext(file_path, config.allowedPaths);
+        const baseResult = await resolveBaseResult(source, apiKey, requestId, projectContext);
 
         const storageDir = tcStorageDir();
         const context = tcRunContext(file_path, source);
@@ -474,6 +529,14 @@ function maybeEmitDataTableWarning(
  */
 export interface ValidateTestCaseOptions {
   planMode?: TestCasePlanMode;
+  /**
+   * Connection names declared in the project's `.testproject`, resolved by the MCP
+   * handler when `file_path` is supplied. CONNECT-REF-CONSISTENCY-001 treats these
+   * as valid reference targets alongside connect-step resultNames — Provar resolves
+   * against both. Omitted (content-only validation) means "no project context", and
+   * the rule stays conservative rather than guessing.
+   */
+  projectConnectionNames?: ReadonlySet<string>;
 }
 
 /** Pure function — exported for unit testing */
@@ -566,7 +629,15 @@ export function validateTestCase(
     ? ((Array.isArray(rawApiCalls) ? rawApiCalls : [rawApiCalls]) as Array<Record<string, unknown>>)
     : [];
 
-  for (const call of apiCalls) {
+  // Validate EVERY apiCall in the tree, not just top-level ones. UI action and
+  // assertion steps (UiDoAction, UiFill, UiAssert, …) live nested inside a
+  // UiWithScreen `<clause name="substeps">`, so a top-level-only walk silently
+  // skipped every real UI step — the per-call structural rules (UI-INTERACTION-*,
+  // UI-ASSERT-STRUCTURE-001, UI-LOCATOR-001) never fired on them. Collect
+  // recursively so those rules apply wherever the step actually sits.
+  const allApiCalls: Array<Record<string, unknown>> = [];
+  collectNodesByKey(tc, 'apiCall', allApiCalls);
+  for (const call of allApiCalls) {
     validateApiCall(call, issues);
   }
 
@@ -575,6 +646,11 @@ export function validateTestCase(
   // UiWithScreen substeps clause, or an AssertValues inside an If/ForEach) are
   // covered too, not just top-level apiCalls.
   validateComparisonTypes(tc, issues);
+
+  // SF-CONNECT-TYPE-001 / CONNECT-REF-CONSISTENCY-001: connection-topology checks
+  // that need the whole test (all connect steps + all downstream references).
+  validateSalesforceConnectType(tc, issues);
+  validateConnectionReferenceConsistency(tc, issues, options.projectConnectionNames);
 
   // VAR-REF-001 / VAR-REF-002: detect {VarName} tokens inside valueClass="string" elements.
   // Provar does not interpolate {…} tokens in plain string values at runtime — they must use
@@ -739,8 +815,63 @@ function checkUiInteraction(call: Record<string, unknown>, stepName: string, iss
         'Emit the interaction as: <value class="uiInteraction" uri="ui:interaction?name=action"/>. ' +
         'In provar_testcase_generate the "interaction" attribute is converted automatically.',
     });
+    return;
+  }
+  // UI-INTERACTION-002: the interaction NAME must be a real Provar interaction.
+  // Provar ships a large interaction vocabulary — the corpus alone carries 39
+  // distinct names (action, set, click, check, invoke, doubleClick, sfLookup,
+  // hover, file, clear, toggle, uncheck, …) — so this deliberately denylists only
+  // names with zero corpus evidence that are known LLM analogies from other
+  // frameworks. Allow-listing would false-fire on the long tail of valid-but-rare
+  // interactions; see INVALID_INTERACTION_NAMES for the evidence behind each entry.
+  const uri = (interactionNode['@_uri'] as string | undefined) ?? '';
+  const nameMatch = /[?&]name=([^&"]+)/.exec(uri);
+  const interactionName = nameMatch ? nameMatch[1] : '';
+  const correction = INVALID_INTERACTION_NAMES[interactionName.toLowerCase()];
+  if (correction) {
+    issues.push({
+      rule_id: 'UI-INTERACTION-002',
+      severity: 'ERROR',
+      message: `"${stepName}" uses interaction name="${interactionName}", which is not a valid Provar UI interaction — use name="${correction}" instead.`,
+      applies_to: 'apiCall',
+      suggestion: `Emit <value class="uiInteraction" uri="ui:interaction?name=${correction}"/>. ${INTERACTION_VOCABULARY_HINT}`,
+    });
   }
 }
+
+/**
+ * The single canonical description of Provar's interaction vocabulary, shared by every
+ * surface that mentions it so schema, registry and emitted suggestions cannot drift.
+ *
+ * Deliberately NON-exhaustive: an earlier revision listed "action, set, file" as if
+ * complete, which reads as declaring the other 36 real interactions invalid — `click`
+ * among them, contradicting the validator that now accepts it.
+ */
+export const INTERACTION_VOCABULARY_HINT =
+  'Provar interaction names are an open vocabulary — action, set, click, check/uncheck, ' +
+  'doubleClick, hover, invoke, clear, file and more are all real. Only names borrowed from ' +
+  'other frameworks (type, fill, enter, input, tap, press) are rejected: use set to type ' +
+  'into a field, and action or click to activate a control.';
+
+// Known-wrong interaction names → the correct Provar interaction they map to.
+//
+// Corpus evidence (2,701 real .testcase files): 39 distinct interaction names appear
+// in well-formed <value class="uiInteraction"> nodes. The three most common are
+// action (15,983), set (11,787) and click (1,240). `click` is a REAL Provar
+// interaction emitted by the IDE recorder — denylisting it invalidated 164 real
+// customer test cases — so it must never appear here. Likewise `select`: the corpus
+// carries sfSelect/sfLookup/sfIleActivate, so a bare `select` is too close to a real
+// family to reject at ERROR tier. The names kept below have zero corpus occurrences
+// in either direction and are the shapes an LLM reaches for by analogy with
+// Selenium/Playwright.
+const INVALID_INTERACTION_NAMES: Record<string, string> = {
+  tap: 'action',
+  press: 'action',
+  type: 'set',
+  fill: 'set',
+  enter: 'set',
+  input: 'set',
+};
 
 // Flat-form argument ids that the broken/CLI-only UiAssert shape carries at the
 // top level. The IDE-renderable contract nests these inside a uiFieldAssertion.
@@ -755,9 +886,32 @@ const UI_ASSERT_FLAT_ARG_IDS = ['fieldLocator', 'attributeName', 'comparisonType
 // (Named "-STRUCTURE-001" to match the local SETVALUES-STRUCTURE-001 convention
 // and avoid colliding with the best-practice JSON rule UI-ASSERT-STRUCT-001.)
 function checkUiAssertStructure(call: Record<string, unknown>, stepName: string, issues: ValidationIssue[]): void {
-  const flatArg = getArgList(call).find((a) =>
-    UI_ASSERT_FLAT_ARG_IDS.includes((a['@_id'] as string | undefined) ?? '')
-  );
+  const args = getArgList(call);
+
+  // Shape B: fieldAssertions present but filled with <namedValues>/<namedValue>
+  // instead of the required <uiFieldAssertion>. This is the shape an LLM reaches
+  // for by analogy with UiFill/SetValues; it renders the IDE Result Assertions
+  // tab blank exactly like the flat form. Detected here because the flat-arg
+  // check below only covers top-level fieldLocator-style arguments.
+  const fieldAssertionsArg = args.find((a) => (a['@_id'] as string | undefined) === 'fieldAssertions');
+  const faValue = fieldAssertionsArg?.['value'] as Record<string, unknown> | undefined;
+  if (faValue && typeof faValue === 'object' && faValue['namedValues'] != null && faValue['uiFieldAssertion'] == null) {
+    issues.push({
+      rule_id: 'UI-ASSERT-STRUCTURE-001',
+      severity: 'ERROR',
+      message: `UiAssert step "${stepName}" fieldAssertions uses <namedValues> — field assertions must be nested inside a <uiFieldAssertion> (with a bare <fieldLocator uri="…"/>), or the Provar IDE Result Assertions tab renders blank.`,
+      applies_to: 'apiCall',
+      suggestion:
+        'Replace the namedValues block with: <value class="valueList" mutable="Mutable"><uiFieldAssertion resultName="Field">' +
+        '<fieldLocator uri="ui:locator?name=Field&binding=..."/><attributeAssertions>' +
+        '<uiAttributeAssertion attributeName="value" comparisonType="EqualTo"><value .../></uiAttributeAssertion>' +
+        '</attributeAssertions></uiFieldAssertion></value>. In provar_testcase_generate pass fieldLocator/attributeName/' +
+        'comparisonType/expectedValue as flat attributes — the generator builds this structure automatically.',
+    });
+    return;
+  }
+
+  const flatArg = args.find((a) => UI_ASSERT_FLAT_ARG_IDS.includes((a['@_id'] as string | undefined) ?? ''));
   if (!flatArg) return;
   const offendingId = (flatArg['@_id'] as string | undefined) ?? '';
   issues.push({
@@ -917,6 +1071,191 @@ function literalValueText(valueNode: Record<string, unknown> | undefined): strin
  * ...ComparisonType.<value>`), so this is emitted at ERROR tier — not as a
  * best-practices quality warning — to mirror the runtime failure offline.
  */
+/** Read an argument's literal string value; returns undefined for missing/variable/non-literal values. */
+function literalArgValue(call: Record<string, unknown>, id: string): string | undefined {
+  const arg = getArgList(call).find((a) => (a['@_id'] as string | undefined) === id);
+  const v = arg?.['value'] as Record<string, unknown> | undefined;
+  if (!v || typeof v !== 'object' || v['@_class'] !== 'value') return undefined;
+  const text = v['#text'];
+  if (typeof text === 'string') return text;
+  if (typeof text === 'number' || typeof text === 'boolean') return String(text);
+  return undefined;
+}
+
+const CONNECT_REFERENCE_ARG_IDS = ['uiConnectionName', 'apexConnectionName', 'dbConnectionName', 'webConnectionName'];
+
+/** Which connection family each downstream reference argument draws from. */
+const REFERENCE_ARG_FAMILY: Record<string, string> = {
+  uiConnectionName: 'ui',
+  apexConnectionName: 'apex',
+  dbConnectionName: 'db',
+  webConnectionName: 'web',
+};
+
+/**
+ * Which connect-step families can satisfy each reference.
+ *
+ * Not simple equality: `ApexConnect` with `quickUiLogin` opens the Lightning UI as well
+ * as the API connection, so a `uiConnectionName` legitimately resolves to an
+ * ApexConnect result — that is the canonical Salesforce pattern SF-CONNECT-TYPE-001
+ * actively steers people toward. Requiring an exact family match made these two rules
+ * contradict each other, flagging the very shape the other one recommends.
+ *
+ * `other` (an unclassified connect apiId) satisfies everything: an unknown connect type
+ * is a reason to stay quiet, not to accuse.
+ */
+const REFERENCE_ARG_ACCEPTS: Record<string, ReadonlySet<string>> = {
+  uiConnectionName: new Set(['ui', 'apex', 'other']),
+  apexConnectionName: new Set(['apex', 'other']),
+  dbConnectionName: new Set(['db', 'other']),
+  webConnectionName: new Set(['web', 'other']),
+};
+
+/**
+ * The connection family a connect step produces, derived from its apiId. Used to scope
+ * "this step's result is unresolvable" to the references it could actually satisfy,
+ * instead of silencing the rule for the whole file.
+ */
+function connectFamily(apiId: string): string {
+  if (/\.db\.|DbConnect$/.test(apiId)) return 'db';
+  if (/restservice|WebConnect$/.test(apiId)) return 'web';
+  if (apiId.endsWith('ApexConnect')) return 'apex';
+  if (/UiConnect$|NitroXConnect/.test(apiId)) return 'ui';
+  return 'other';
+}
+
+/** True when this apiId opens a connection (its result is what later steps reference). */
+function isConnectStep(apiId: string): boolean {
+  return /Connect(?::|$)/.test(apiId);
+}
+
+// SF-CONNECT-TYPE-001: a Salesforce UI test authenticates through ApexConnect
+// (which opens an API connection AND, via quickUiLogin, the Lightning UI).
+// UiConnect opens a browser only and needs an existing ApexConnect result as its
+// Salesforce credential — so a test that drives Salesforce UI (sf:ui:target) but
+// has UiConnect and NO ApexConnect has no Salesforce credential. WARNING, not
+// ERROR: UiConnect is syntactically valid and the connection could, in rare
+// setups, be supplied by a parent callable test.
+function validateSalesforceConnectType(tc: Record<string, unknown>, issues: ValidationIssue[]): void {
+  const calls: Array<Record<string, unknown>> = [];
+  collectNodesByKey(tc, 'apiCall', calls);
+  const apiIds = calls.map((c) => (c['@_apiId'] as string | undefined) ?? '');
+  const hasUiConnect = apiIds.some((a) => a.endsWith('.UiConnect'));
+  const hasApexConnect = apiIds.some((a) => a.endsWith('.ApexConnect'));
+  if (!hasUiConnect || hasApexConnect) return;
+  const hasSalesforceUi = calls.some((c) =>
+    getArgList(c).some((a) => {
+      const v = a['value'] as Record<string, unknown> | undefined;
+      const uri = (v?.['@_uri'] as string | undefined) ?? '';
+      return uri.startsWith('sf:ui:');
+    })
+  );
+  if (!hasSalesforceUi) return;
+  issues.push({
+    rule_id: 'SF-CONNECT-TYPE-001',
+    severity: 'WARNING',
+    message:
+      'This test drives the Salesforce UI (sf:ui: targets) but connects with UiConnect and no ApexConnect. ' +
+      'UiConnect opens a browser only and has no Salesforce credential of its own.',
+    applies_to: 'testCase',
+    suggestion:
+      'Use ApexConnect as the Salesforce connection step (it opens the API connection and, with quickUiLogin=true ' +
+      'and uiApplicationName=LightningSales, the Lightning UI too). Add UiConnect only when you need a second, ' +
+      'browser-only session that reuses the ApexConnect result.',
+  });
+}
+
+// CONNECT-REF-CONSISTENCY-001: every literal connection reference
+// (uiConnectionName / apexConnectionName / …) must match the resultName produced
+// by a connect step in this test (a connect step's result defaults to its
+// connectionName when resultName is omitted). A reference to a name no connect
+// step produced is a dangling connection. WARNING, since the connection could be
+// established by a parent callable test.
+/**
+ * Survey a test's connect steps: which connection names each family concretely
+ * produces, and which families produced a result we cannot resolve statically.
+ *
+ * Both are held PER FAMILY. A single global name set let a DbConnect result satisfy a
+ * `uiConnectionName`; a single global opaque flag let one dynamic DbConnect silence the
+ * rule for the whole file.
+ */
+function scanConnectSteps(calls: Array<Record<string, unknown>>): {
+  availableByFamily: Map<string, Set<string>>;
+  opaqueFamilies: Set<string>;
+  connectStepCount: number;
+} {
+  const availableByFamily = new Map<string, Set<string>>();
+  const opaqueFamilies = new Set<string>();
+  let connectStepCount = 0;
+
+  const addResult = (family: string, name: string): void => {
+    const set = availableByFamily.get(family) ?? new Set<string>();
+    set.add(name);
+    availableByFamily.set(family, set);
+  };
+
+  for (const c of calls) {
+    const apiId = (c['@_apiId'] as string | undefined) ?? '';
+    if (!isConnectStep(apiId)) continue;
+    connectStepCount++;
+    const family = connectFamily(apiId);
+    const resultName = literalArgValue(c, 'resultName');
+    const connectionName = literalArgValue(c, 'connectionName');
+    if (resultName) addResult(family, resultName);
+    else if (connectionName) addResult(family, connectionName);
+    // Neither name is a literal: a variable connectionName, a <value> with no class, or
+    // an empty argument resolved from project config. We cannot know what this step
+    // produces, so references of a compatible family become unverifiable.
+    else opaqueFamilies.add(family);
+  }
+  return { availableByFamily, opaqueFamilies, connectStepCount };
+}
+
+function validateConnectionReferenceConsistency(
+  tc: Record<string, unknown>,
+  issues: ValidationIssue[],
+  projectConnectionNames?: ReadonlySet<string>
+): void {
+  const calls: Array<Record<string, unknown>> = [];
+  collectNodesByKey(tc, 'apiCall', calls);
+
+  const { availableByFamily, opaqueFamilies, connectStepCount } = scanConnectSteps(calls);
+  // Connections may be inherited from a parent callable test.
+  if (connectStepCount === 0) return;
+
+  for (const c of calls) {
+    const apiId = (c['@_apiId'] as string | undefined) ?? '';
+    if (isConnectStep(apiId)) continue;
+    for (const refId of CONNECT_REFERENCE_ARG_IDS) {
+      const ref = literalArgValue(c, refId);
+      if (!ref) continue;
+      const refFamily = REFERENCE_ARG_FAMILY[refId] ?? '';
+      const accepts = REFERENCE_ARG_ACCEPTS[refId] ?? new Set([refFamily]);
+      // Resolve only against connect steps of a COMPATIBLE family.
+      if ([...accepts].some((f) => availableByFamily.get(f)?.has(ref))) continue;
+      // An opaque connect step of a compatible family could be what produces `ref`.
+      if ([...accepts].some((f) => opaqueFamilies.has(f))) continue;
+      // Provar resolves connection references against the PROJECT's connection list
+      // too, not only against connect-step resultNames. A name declared in
+      // .testproject is valid even though no connect step in this file produces it.
+      if (projectConnectionNames?.has(ref)) continue;
+      const stepName = (c['@_name'] as string | undefined) ?? '(unnamed)';
+      issues.push({
+        rule_id: 'CONNECT-REF-CONSISTENCY-001',
+        severity: 'WARNING',
+        message: `Step "${stepName}" references ${refId}="${ref}", but no ${refFamily} connect step in this test produces that connection result${
+          projectConnectionNames ? ' and the project declares no connection of that name' : ''
+        } (available ${refFamily} results: ${
+          [...(availableByFamily.get(refFamily) ?? [])].map((n) => `"${n}"`).join(', ') || 'none'
+        }).`,
+        applies_to: 'apiCall',
+        suggestion: `Set the connect step's resultName to "${ref}", or change ${refId} to match a connect step's resultName or a connection declared in the project's .testproject. Downstream steps reference the connect step's resultName — which defaults to the connectionName when resultName is omitted.`,
+      });
+      break; // one violation per step is enough
+    }
+  }
+}
+
 function validateComparisonTypes(tc: Record<string, unknown>, issues: ValidationIssue[]): void {
   // AssertValues steps → the 16-value AssertValues subset.
   const apiCalls: Array<Record<string, unknown>> = [];

@@ -66,7 +66,7 @@ Follow these steps in order:
    (e.g. "close opportunity" or "create lead"). Use the returned XML examples as the sole reference for
    Provar step structure and argument patterns. Do not invent XML structure from prior knowledge.
    If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured),
-   fall back: read the \`provar://docs/step-reference\` MCP resource for step types and attribute
+   fall back: call the \`provar_step_schema\` tool (api_id or category) for step types and attribute
    formats, then continue.
 
 3. **Map acceptance criteria to steps** — for each acceptance criterion, identify the corresponding Provar
@@ -165,7 +165,7 @@ Follow these steps in order:
    failing step's scenario (e.g. "close opportunity UiDoAction" or "assert field value UiAssert").
    Use the returned examples to verify the correct structure for the failing step type.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
-   \`provar://docs/step-reference\` MCP resource for the correct attribute schema for the failing
+   \`provar_step_schema\` tool (api_id) for the correct attribute schema for the failing
    step type, then continue.
 
 4. **Diagnose the root cause** — compare the failing step's XML against the corpus examples. Common issues:
@@ -236,7 +236,7 @@ Follow these steps in order:
 3. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with keywords describing the
    test scenario (e.g. "create opportunity", "close opportunity"). Use the returned examples as a
    quality baseline. If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read
-   the \`provar://docs/step-reference\` MCP resource for step type schemas, then continue the review
+   the \`provar_step_schema\` tool (api_id or category) for step type schemas, then continue the review
    using that as the quality baseline.
 
 4. **Review for quality gaps** — check for each of the following, noting pass or fail:
@@ -343,11 +343,11 @@ ${
 3. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with "${objectName.toLowerCase()}"
    as the query to understand what test patterns exist in the corpus for this object.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
-   \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
+   \`provar_step_schema\` tool (api_id or category) for step type schemas, then continue.`
     : `2. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with "${objectName.toLowerCase()}"
    as the query to understand what test patterns exist in the corpus for this object.
    If the response has \`"count": 0\` with a \`"warning"\` field, fall back: read the
-   \`provar://docs/step-reference\` MCP resource for step type schemas, then continue.`
+   \`provar_step_schema\` tool (api_id or category) for step type schemas, then continue.`
 }
 
 ${targetOrg ? '4' : '3'}. **Build the coverage matrix** — define the standard test scenarios for "${objectName}":
@@ -438,7 +438,7 @@ This is a **database test**, NOT a Salesforce UI or Apex test. Do not use UiConn
 Follow these steps in order:
 
 1. **Get corpus examples** — call \`provar_qualityhub_examples_retrieve\` with a query that includes "database DbConnect SqlQuery" plus keywords from the story (e.g. "database SQL Server verify record count"). Use the returned XML examples as the reference for correct step structure.
-   If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured), fall back: read the \`provar://docs/step-reference\` MCP resource — specifically the Database Steps section — for the correct attribute schema, then continue.
+   If the response has \`"count": 0\` with a \`"warning"\` field (API unavailable or not configured), fall back: call the \`provar_step_schema\` tool with category="Data" for the correct attribute schema, then continue.
 
 2. **Generate the test case** — produce valid Provar XML. Apply these database-specific rules:
 

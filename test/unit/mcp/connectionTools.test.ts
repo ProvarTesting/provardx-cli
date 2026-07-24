@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, beforeEach, afterEach } from 'mocha';
-import { registerConnectionList } from '../../../src/mcp/tools/connectionTools.js';
+import { registerConnectionList, parseProjectConnectionNames } from '../../../src/mcp/tools/connectionTools.js';
 import type { ServerConfig } from '../../../src/mcp/server.js';
 
 // ── Minimal McpServer mock ────────────────────────────────────────────────────
@@ -338,5 +338,33 @@ describe('provar_connection_list', () => {
       assert.equal(isError(result), true);
       assert.equal(parseText(result)['error_code'], 'CONNECTION_XML_PARSE_ERROR');
     });
+  });
+});
+
+// ── parseProjectConnectionNames — undefined (unknown) vs empty-set (authoritative) ──
+
+describe('parseProjectConnectionNames', () => {
+  it('returns the set of project-declared connection names for a valid .testproject', () => {
+    const names = parseProjectConnectionNames(BASIC_TEST_PROJECT);
+    assert.ok(names, 'expected a defined set for a valid project');
+    // Every connection across every class is surfaced, not just Salesforce ones.
+    assert.deepEqual([...names].sort(), ['AdminOrg', 'Chrome', 'MyOrg', 'OktaSso']);
+  });
+
+  it('returns undefined (not an empty set) for malformed XML — "unknown", never a false dangling reference', () => {
+    // The undefined vs empty-set distinction is the whole reason this helper exists:
+    // a parse failure must degrade to "cannot tell", so the caller does NOT emit a
+    // dangling-connection warning off a project file it could not read.
+    assert.equal(parseProjectConnectionNames('<unclosed'), undefined);
+  });
+
+  it('returns an empty (authoritative) set for a well-formed project that declares no connections', () => {
+    const empty = `<?xml version="1.0" encoding="UTF-8"?>
+<testProject>
+  <connectionClasses/>
+</testProject>`;
+    const names = parseProjectConnectionNames(empty);
+    assert.ok(names, 'a well-formed project yields a defined set, even when empty');
+    assert.equal(names.size, 0, 'empty set = "this project declares no connections" (authoritative)');
   });
 });

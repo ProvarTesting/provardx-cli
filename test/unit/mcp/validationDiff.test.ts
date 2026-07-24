@@ -145,6 +145,86 @@ describe('computeDiff', () => {
     assert.equal(diff.resolved.length, 2, 'two occurrences resolved');
     assert.equal(diff.unchanged_count, 1);
   });
+
+  it('a message-only change with no diff_identity is a resolved + added pair (per-step identity)', () => {
+    const before = { rule_id: 'STEP-R', applies_to: 'TestCase', message: 'old text' };
+    const after = { rule_id: 'STEP-R', applies_to: 'TestCase', message: 'new text' };
+    const diff = computeDiff([before], [after]);
+    assert.equal(diff.added.length, 1, 'no stable identity → the new message is a new finding');
+    assert.equal(diff.resolved.length, 1, 'no stable identity → the old message resolved');
+    assert.deepEqual(diff.updated, [], 'updated requires a shared identity');
+  });
+});
+
+// ── diff_identity / updated[] — aggregate-rule stability across partial fixes ──
+
+describe('computeDiff — diff_identity and updated[]', () => {
+  // An aggregate rule emits ONE violation per test case carrying a count. Its
+  // diff_identity is constant for the rule over that file, so a partial fix reads as
+  // "still unresolved, fewer steps" (updated) rather than "resolved + added".
+  const AGG_13 = {
+    rule_id: 'STEP-REQUIRED-ARGS-001',
+    applies_to: 'TestCase',
+    diff_identity: 'aggregate:guid-123',
+    message: '13 step(s) affected. Missing argument(s): connectionName.',
+    count: 13,
+    details: { affected_steps: 13 },
+  };
+  const AGG_12 = {
+    rule_id: 'STEP-REQUIRED-ARGS-001',
+    applies_to: 'TestCase',
+    diff_identity: 'aggregate:guid-123',
+    message: '12 step(s) affected. Missing argument(s): connectionName.',
+    count: 12,
+    details: { affected_steps: 12 },
+  };
+
+  it('keys on diff_identity so a partially-fixed aggregate stays one finding, not resolved+added', () => {
+    const diff = computeDiff([AGG_13], [AGG_12]);
+    assert.deepEqual(diff.added, [], 'partial fix is not a new finding');
+    assert.deepEqual(diff.resolved, [], 'partial fix is not a resolution');
+    assert.equal(diff.unchanged_count, 1, 'the finding survives under its stable identity');
+  });
+
+  it('emits the surviving-but-moved finding in updated[] carrying the current sample', () => {
+    const diff = computeDiff([AGG_13], [AGG_12]);
+    assert.equal(diff.updated.length, 1);
+    assert.equal(diff.updated[0]['count'], 12, 'updated reflects the CURRENT state, not the baseline');
+    assert.equal(diff.updated[0]['message'], AGG_12.message);
+  });
+
+  it('does not emit updated[] when a diff_identity finding is byte-for-byte unchanged', () => {
+    const diff = computeDiff([AGG_13], [AGG_13]);
+    assert.deepEqual(diff.updated, []);
+    assert.equal(diff.unchanged_count, 1);
+  });
+
+  it('detects a content change via count alone (message identical)', () => {
+    const base = { ...AGG_13, message: 'same', count: 5 };
+    const curr = { ...AGG_13, message: 'same', count: 4 };
+    const diff = computeDiff([base], [curr]);
+    assert.equal(diff.updated.length, 1, 'count moved → updated');
+    assert.equal(diff.added.length, 0);
+    assert.equal(diff.resolved.length, 0);
+  });
+
+  it('detects a content change via details alone (message and count identical)', () => {
+    const base = { ...AGG_13, message: 'same', count: 7, details: { steps: 'a; b' } };
+    const curr = { ...AGG_13, message: 'same', count: 7, details: { steps: 'a' } };
+    const diff = computeDiff([base], [curr]);
+    assert.equal(diff.updated.length, 1, 'details moved → updated');
+  });
+
+  it('keeps distinct diff_identity values under the same rule independent', () => {
+    const fileA = { ...AGG_13, diff_identity: 'aggregate:A' };
+    const fileB = { ...AGG_13, diff_identity: 'aggregate:B' };
+    // Fully fix file A, leave file B untouched → A resolved, B unchanged.
+    const diff = computeDiff([fileA, fileB], [fileB]);
+    assert.equal(diff.resolved.length, 1);
+    assert.equal(diff.resolved[0]['diff_identity'], 'aggregate:A');
+    assert.equal(diff.unchanged_count, 1);
+    assert.deepEqual(diff.updated, []);
+  });
 });
 
 // ── H3: cross-context scoping ─────────────────────────────────────────────────

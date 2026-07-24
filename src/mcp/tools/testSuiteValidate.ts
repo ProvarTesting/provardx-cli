@@ -26,14 +26,43 @@ import {
 import { validateSuite, buildHierarchySummary, type TestSuiteInput, type SuiteResult } from './hierarchyValidate.js';
 import { desc } from './descHelper.js';
 
-function collectAllViolations(result: SuiteResult): DiffableViolation[] {
+export function collectAllViolations(
+  result: SuiteResult,
+  // Occurrence counter shared across the whole recursive walk. A test case's suite
+  // filename is the discriminator (see below); the count makes a REPEATED name (two
+  // "Same.testcase" entries, or two empty names) still resolve to distinct keys so the
+  // collision the discriminator eliminates is not merely relocated one level up.
+  nameSeen: Map<string, number> = new Map()
+): DiffableViolation[] {
   const all: DiffableViolation[] = [...(result.violations as unknown as DiffableViolation[])];
   for (const tc of result.test_cases) {
     all.push(...(tc.issues as unknown as DiffableViolation[]));
-    all.push(...(tc.best_practices_violations as unknown as DiffableViolation[]));
+    // Flattening every test case's violations into one array collapses the diff key
+    // space: an aggregate rule's `diff_identity` (e.g. `aggregate:unscoped` for a
+    // guid-less/name-less test case, or a copy-pasted shared guid) would collide across
+    // files, letting one unchanged test case mask a partially-fixed sibling so
+    // updated[] comes back empty with work outstanding. The test case's suite filename
+    // is a stable per-file discriminator that survives partial remediation (the file
+    // keeps its name while its steps are fixed), so namespace each aggregate identity
+    // with it. The first occurrence of a name uses the bare name — so unique names
+    // (the common case) stay position-independent and churn-free on reorder — while a
+    // duplicate or empty name gets a `#N` suffix so same-named siblings never collapse
+    // onto one diff key. Copies keep the original violation objects (surfaced
+    // per-test-case) untouched.
+    const seen = nameSeen.get(tc.name) ?? 0;
+    nameSeen.set(tc.name, seen + 1);
+    const discriminator = seen === 0 ? tc.name : `${tc.name}#${seen}`;
+    for (const v of tc.best_practices_violations as unknown as DiffableViolation[]) {
+      const identity = v['diff_identity'];
+      if (typeof identity === 'string' && identity.length > 0) {
+        all.push({ ...v, diff_identity: `${discriminator}::${identity}` });
+      } else {
+        all.push(v);
+      }
+    }
   }
   for (const child of result.test_suites) {
-    all.push(...collectAllViolations(child));
+    all.push(...collectAllViolations(child, nameSeen));
   }
   return all;
 }
@@ -135,7 +164,7 @@ export function registerTestSuiteValidate(server: McpServer): void {
           .optional()
           .describe(
             desc(
-              'run_id from a previous call. When provided, returns only violations that are new or resolved since that run: { added, resolved, unchanged_count, run_id }. If not found, returns error BASELINE_NOT_FOUND.',
+              'run_id from a previous call. When provided, returns only violations that are new or resolved since that run: { added, resolved, updated, unchanged_count, run_id }. `updated` carries findings that survived but whose message or details changed, so a partially-fixed aggregate still tells you what remains without echoing every unchanged finding. If not found, returns error BASELINE_NOT_FOUND.',
               'string, optional; prev run_id for diff response'
             )
           ),
